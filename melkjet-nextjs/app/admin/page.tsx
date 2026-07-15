@@ -219,11 +219,11 @@ function GoldButton({ children, onClick, style, disabled }: { children: React.Re
   )
 }
 
-function OutlineButton({ children, onClick, style }: { children: React.ReactNode; onClick?: () => void; style?: React.CSSProperties }) {
+function OutlineButton({ children, onClick, style, disabled }: { children: React.ReactNode; onClick?: () => void; style?: React.CSSProperties; disabled?: boolean }) {
   return (
-    <button onClick={onClick} style={{
+    <button onClick={onClick} disabled={disabled} style={{
       background: 'transparent', color: 'var(--text)', border: '1px solid var(--line2)',
-      borderRadius: 11, padding: '9px 18px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', ...style
+      borderRadius: 11, padding: '9px 18px', fontWeight: 600, fontSize: 13, cursor: disabled ? 'wait' : 'pointer', fontFamily: 'inherit', ...style
     }}>
       {children}
     </button>
@@ -2764,6 +2764,7 @@ function ModerationView() {
   const [cfgOpen, setCfgOpen] = useState(false)
   const [savingCfg, setSavingCfg] = useState(false)
   const [cfgMsg, setCfgMsg] = useState('')
+  const [requeueBusy, setRequeueBusy] = useState(false)   // فاز ۱۴۷: بازخوردِ زندهٔ بازممیزی
   const [defCrit, setDefCrit] = useState('')
 
   const load = async () => {
@@ -2787,13 +2788,23 @@ function ModerationView() {
     } catch { setCfgMsg('⚠ خطا در ذخیره') } finally { setSavingCfg(false); setTimeout(() => setCfgMsg(''), 4000) }
   }
   // فاز ۱۳۸: ردشده‌های خودکارِ قبلی (نه ردهای دستیِ خودت) با قانونِ جدید دوباره داوری شوند.
+  // فاز ۱۴۷ (فیدبک: «می‌زنم هیچ اتفاقی نمی‌افتد») — عملیات روی هزاران آگهی چند ثانیه طول می‌کشد؛
+  // بدونِ حالتِ busy و نتیجهٔ واضح، «هیچ اتفاقی» به نظر می‌رسید. حالا: دکمه قفل + وضعیتِ زنده + نتیجهٔ صریح.
   const requeueRejected = async () => {
-    if (!confirm('همهٔ آگهی‌هایی که «به‌صورتِ خودکار» رد یا تکراری شده‌اند به صفِ ممیزی برگردند تا با قوانینِ جدید (رد فقط با مدرکِ قطعیِ تماس؛ تکرار با وتوی طبقه و کفِ شواهد) دوباره داوری شوند؟ حکم‌های دستیِ خودت دست نمی‌خورند.')) return
+    if (requeueBusy) return
+    if (!confirm('همهٔ آگهی‌هایی که «به‌صورتِ خودکار» رد یا تکراری شده‌اند به صفِ ممیزی برگردند تا با قوانینِ جدید (رد فقط با مدرکِ قطعیِ تماس؛ تکرار با وتوی شهر/طبقه/نوعِ ملک/GPS و کفِ شواهد) دوباره داوری شوند؟ حکم‌های دستیِ خودت دست نمی‌خورند.')) return
+    setRequeueBusy(true); setCfgMsg('⏳ بازممیزی در حال اجراست — روی آگهی‌های زیاد چند ثانیه طول می‌کشد…')
     try {
       const r = await fetch('/api/admin/moderation-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requeueAutoRejected: true }) })
-      const d = await r.json()
-      if (d.ok) { setCfgMsg(`✓ ${Number(d.requeued || 0).toLocaleString('fa-IR')} آگهیِ ردشدهٔ خودکار به صفِ بازممیزی برگشت`); load() } else setCfgMsg('⚠ خطا')
-    } catch { setCfgMsg('⚠ خطا') } finally { setTimeout(() => setCfgMsg(''), 6000) }
+      const d = await r.json().catch(() => ({}))
+      if (d.ok) {
+        const n = Number(d.requeued || 0)
+        setCfgMsg(n > 0
+          ? `✓ بازممیزی انجام شد: ${n.toLocaleString('fa-IR')} آگهی به صفِ ممیزی برگشت — حالا دکمهٔ «بررسی آگهی‌های منتظر» را بزن تا با قوانینِ جدید داوری شوند`
+          : '✓ اجرا شد ولی هیچ ردِ خودکار یا تکراریِ خودکاری پیدا نشد (حکم‌های موجود دستی‌اند یا قبلاً بازممیزی شده‌اند)')
+        load(); loadCfg()
+      } else setCfgMsg('⚠ ' + (d.error || `خطا (${r.status}) — دوباره امتحان کن`))
+    } catch { setCfgMsg('⚠ خطا در ارتباط با سرور — دوباره امتحان کن') } finally { setRequeueBusy(false); setTimeout(() => setCfgMsg(''), 20000) }
   }
   const resetMlModel = async () => {
     if (!confirm('مدلِ یادگیرنده کاملاً پاک شود؟ (وقتی مدل «مسموم» شده و همه‌چیز را رد می‌کند مفید است — از صفر با تصمیم‌های درست دوباره یاد می‌گیرد.)')) return
@@ -2922,7 +2933,7 @@ function ModerationView() {
                 <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 6 }}>قانونِ ردِ خودکار (فاز ۱۳۸): فقط <b>مدرکِ قطعیِ تماس</b> (شماره/لینک/آیدیِ واقعی داخلِ متن — عیناً در دلیل نقل می‌شود) مجوزِ ردِ بی‌انسان دارد. شباهتِ واژه‌ای، قیمتِ نامعتبر و توضیحِ کوتاه هرگز رد نمی‌کنند — با دلیلِ روشن به صفِ بازبینیِ خودت می‌آیند. برگرداندنِ هر تصمیم، مدل را واقعاً اصلاح می‌کند (unlearn از کلاسِ غلط).</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                   <span style={{ color: 'var(--faint)', fontSize: 11 }}>هر بار که دستی «تأیید» یا «رد» می‌زنی، مدل قوی‌تر یاد می‌گیرد.</span>
-                  <button onClick={requeueRejected} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', marginInlineStart: 'auto' }}>🔁 بازممیزیِ ردشده‌ها و تکراری‌های خودکار</button>
+                  <button onClick={requeueRejected} disabled={requeueBusy} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: requeueBusy ? 'wait' : 'pointer', opacity: requeueBusy ? 0.6 : 1, fontFamily: 'inherit', marginInlineStart: 'auto' }}>{requeueBusy ? '⏳ در حال بازممیزی…' : '🔁 بازممیزیِ ردشده‌ها و تکراری‌های خودکار'}</button>
                   <button onClick={resetMlModel} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>♻️ ریستِ مدلِ یادگیرنده</button>
                 </div>
                 <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 4 }}>اگر مدل «مسموم» شده (از دادهٔ غلطِ قبلی رد یاد گرفته و همه را رد می‌کند)، ریست کن تا از صفر شروع کند.</div>
@@ -2974,9 +2985,9 @@ function ModerationView() {
           <div>
             <div style={{ fontWeight: 700, fontSize: 14 }}>🔁 بازممیزیِ ردشده‌ها و تکراری‌های خودکار</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, maxWidth: 560, lineHeight: 1.6 }}>همهٔ آگهی‌هایی که «به‌صورتِ خودکار» رد یا تکراری شده‌اند به صفِ ممیزی برمی‌گردند تا با قوانینِ جدید (رد فقط با مدرکِ قطعیِ تماس؛ تکرار با وتوی شهر/طبقه/نوعِ ملک/GPS و کفِ شواهد) از نو داوری شوند. آگهی‌های سالمِ حذف‌شده برمی‌گردند؛ تکراری/ردیِ واقعی دوباره همان می‌شود. حکم‌های دستیِ خودت دست نمی‌خورند.</div>
-            {cfgMsg && cfgMsg.includes('بازممیزی') && <div style={{ fontSize: 12.5, color: cfgMsg.startsWith('✓') ? '#5fd98a' : '#e7674a', marginTop: 8, fontWeight: 600 }}>{cfgMsg}</div>}
+            {cfgMsg && (cfgMsg.includes('بازممیزی') || cfgMsg.startsWith('⏳') || cfgMsg.startsWith('⚠')) && <div style={{ fontSize: 13, color: cfgMsg.startsWith('✓') ? '#5fd98a' : cfgMsg.startsWith('⏳') ? 'var(--gold)' : '#e7674a', marginTop: 8, fontWeight: 700 }}>{cfgMsg}</div>}
           </div>
-          <OutlineButton onClick={requeueRejected} style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>🔁 بازممیزی</OutlineButton>
+          <OutlineButton onClick={requeueRejected} disabled={requeueBusy} style={{ borderColor: 'var(--gold)', color: 'var(--gold)', opacity: requeueBusy ? 0.6 : 1 }}>{requeueBusy ? '⏳ در حال بازممیزی…' : '🔁 بازممیزی'}</OutlineButton>
         </div>
       </Card>
 
