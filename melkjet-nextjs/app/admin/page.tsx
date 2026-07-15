@@ -1132,6 +1132,39 @@ function DivarProxyConfig() {
   )
 }
 
+// فاز ۱۴۱ — شناسهٔ Google Analytics 4: تگِ gtag با این شناسه در همهٔ صفحات می‌نشیند.
+function Ga4Config() {
+  const [id141, setId141] = useState('')
+  const [saved, setSaved] = useState('')
+  const [msg, setMsg] = useState('')
+  const [open, setOpen] = useState(false)
+  useEffect(() => { fetch('/api/admin/ga4-config').then(r => r.ok ? r.json() : null).then(d => d && setSaved(d.ga4Id || '')) }, [])
+  const save = async () => {
+    setMsg('')
+    const r = await fetch('/api/admin/ga4-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ga4Id: id141 }) })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok) { setMsg('✓ ذخیره شد — بعد از دیپلویِ بعدی روی همهٔ صفحات فعال است'); setSaved(d.ga4Id || '') } else setMsg('⚠ ' + (d.error || 'خطا'))
+  }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>📈 گوگل آنالیتیکس (GA4) {saved ? <span style={{ color: '#5fd98a', fontSize: 12 }}>● {saved}</span> : <span style={{ color: 'var(--muted)', fontSize: 12 }}>● پیش‌فرضِ سایت فعال است</span>}</div>
+        <span style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>شناسهٔ Measurement از پنلِ آنالیتیکس (Admin → Data Streams، به شکلِ <span style={{ direction: 'ltr', display: 'inline-block' }}>G-XXXXXXXXXX</span>). تگِ gtag به‌صورتِ خودکار در {'<head>'} همهٔ صفحات می‌نشیند — نیازی به چسباندنِ دستیِ کد نیست.</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input value={id141} onChange={e => setId141(e.target.value)} placeholder={saved || 'G-E7HCXKSREJ'} style={{ flex: 1, minWidth: 220, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+            <GoldButton onClick={save}>ذخیره</GoldButton>
+          </div>
+          {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function ScraperView() {
   const [tab, setTab] = useState<ScrTab>('listing')
   const [sources, setSources] = useState<ScrSource[]>([])
@@ -3732,7 +3765,7 @@ function ConnectionsView() {
     <div style={{ animation: 'fade .35s ease' }}>
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>اتصال‌ها و سرویس‌ها</div>
-        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>سرویس‌های بیرونی: نقشه (نشان)، ایمیل (SMTP)، پرداخت و پروکسی دیوار. تنظیماتِ <b>پیامک و الگوها</b> (IPPanel، هشدار، تکمیل پروفایل، مذاکره، دعوت) در منوی «پیامک و الگوها» و <b>ترکر</b> در منوی خودش است. کلید هوش مصنوعی در «API و مدل‌های AI».</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>سرویس‌های بیرونی: نقشه (نشان)، ایمیل (SMTP)، پرداخت، پروکسی دیوار و گوگل آنالیتیکس. تنظیماتِ <b>پیامک و الگوها</b> (IPPanel، هشدار، تکمیل پروفایل، مذاکره، دعوت) در منوی «پیامک و الگوها» و <b>ترکر</b> در منوی خودش است. کلید هوش مصنوعی در «API و مدل‌های AI».</div>
       </Card>
       <PodiumConfig />
       <NeshanConfig />
@@ -3740,6 +3773,7 @@ function ConnectionsView() {
       <ZarinpalConfig />
       <ImgbbConfig />
       <DivarProxyConfig />
+      <Ga4Config />
     </div>
   )
 }

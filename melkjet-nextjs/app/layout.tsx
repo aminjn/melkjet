@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { getAdminData } from './lib/admin-store'
 import BottomNav from './components/BottomNav'
 import SessionKeeper from './components/SessionKeeper'
 import LocationDetector from './components/LocationDetector'
@@ -39,9 +40,17 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // فاز ۱۴۱ — Google Analytics 4: شناسه از پنلِ ادمین (اتصال‌ها) می‌آید؛ پیش‌فرض = پراپرتیِ melkjet.com.
+  // ذخیرهٔ رشتهٔ خالی در ادمین = خاموش. (صفحه‌های استاتیک مقدارِ لحظهٔ build را دارند — تغییرِ شناسه دیپلوی می‌خواهد.)
+  let ga4 = 'G-E7HCXKSREJ'
+  try { const v = getAdminData().ga4Id; if (v !== undefined) ga4 = v } catch {}
   return (
     <html lang="fa" dir="rtl">
       <head>
+        {ga4 && <>
+          <script async src={`https://www.googletagmanager.com/gtag/js?id=${ga4}`} />
+          <script dangerouslySetInnerHTML={{ __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${ga4}');` }} />
+        </>}
         {/* Theme init — runs before render to prevent flash of wrong theme.
             فاز ۱۲۹: بدونِ انتخابِ صریحِ کاربر، تم از ساعتِ خودِ او می‌آید (۷ تا ۱۹ = روز)؛ انتخابِ دستی ('light'/'dark') همیشه مقدم است. */}
         <script dangerouslySetInnerHTML={{__html:`(function(){try{var t=localStorage.getItem('melkjet-theme');var h=(new Date()).getHours();if(t==='light'||(t!=='dark'&&h>=7&&h<19))document.documentElement.classList.add('light')}catch(e){}})()`}}/>

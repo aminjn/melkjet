@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { addUserListing, deleteItem, getItemById, setItemDealStatus } from './scraper-store'
+import { addUserListing, updateUserListing, deleteItem, getItemById, setItemDealStatus } from './scraper-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { aiFor, agentModel, agentProvider } from './gapgpt'
 const { chatCompleteSafe } = aiFor('پنلِ مشاور')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
@@ -283,12 +283,23 @@ export async function publishListing(o: string, fid: string): Promise<Listing | 
   const a0 = await getAdvisor(o)
   const l0 = a0.listings.find(x => x.id === fid)
   if (!l0) return null
-  if (l0.publicId && await getItemById(l0.publicId)) await deleteItem(l0.publicId) // بازسازی برای اعمالِ تغییرات
-  const item = await addUserListing(publicPayload(l0, a0.profile.name || 'مشاور', o))
+  const payload = publicPayload(l0, a0.profile.name || 'مشاور', o)
+  // فاز ۱۴۰ (فیدبک: «تأیید می‌کنم دوباره خودش برمی‌گردد»): بازانتشار قبلاً حذف+ساختِ دوباره بود —
+  // هر سینکِ دیوار (autoPublish) حکمِ ممیزی و تأیید/ردِ دستیِ ادمین را پاک می‌کرد و آگهی دوباره
+  // pending می‌شد. حالا آیتمِ موجود «درجا» به‌روزرسانی می‌شود و حکم می‌ماند؛ فقط اگر متنِ
+  // ممیزی‌شونده (عنوان/توضیح) واقعاً عوض شده باشد، دوباره به صفِ ممیزی می‌رود.
+  const prev = l0.publicId ? await getItemById(l0.publicId) : null
+  let item = null as Awaited<ReturnType<typeof addUserListing>> | null
+  if (prev && prev.type === 'listing') {
+    const textChanged = prev.title !== payload.title || (prev.excerpt || '') !== (payload.excerpt || '')
+    item = await updateUserListing(prev.id, payload, { remoderate: textChanged })
+  }
+  if (!item) item = await addUserListing(payload)
+  const itemId = item.id
   let res: Listing | null = null
   await mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
-    l.publicId = item.id; l.published = true; res = l
+    l.publicId = itemId; l.published = true; res = l
   })
   return res
 }

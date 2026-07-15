@@ -562,6 +562,28 @@ export function addUserListing(raw: {
     return item
   })
 }
+// فاز ۱۴۰ (فیدبک: «تأیید می‌کنم دوباره خودش برمی‌گردد») — به‌روزرسانیِ «درجای» آگهیِ عمومیِ کاربر.
+// بازانتشار قبلاً حذف+ساختِ دوباره بود → هر سینکِ دیوار حکمِ ممیزی (تأیید/ردِ دستیِ ادمین) را پاک می‌کرد.
+// حالا فیلدها درجا آپدیت می‌شوند و حکم می‌ماند؛ فقط اگر متنِ ممیزی‌شونده عوض شده باشد (remoderate)
+// دوباره به صفِ ممیزی می‌رود. وضعیتِ duplicate دست نمی‌خورد.
+export async function updateUserListing(itemId: string, raw: {
+  title: string; price?: string; location?: string; image?: string; excerpt?: string;
+  phone?: string; owner?: string; url?: string; meta?: Record<string, string>
+}, opts?: { remoderate?: boolean }): Promise<Item | null> {
+  return mutate(db => {
+    const it = db.items.find(i => i.id === itemId && i.type === 'listing')
+    if (!it) return null
+    it.title = raw.title; it.price = raw.price; it.location = raw.location; it.image = raw.image
+    it.excerpt = raw.excerpt; it.phone = raw.phone; it.owner = raw.owner
+    it.meta = raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined
+    it.scrapedAt = Date.now(); it.expiresAt = Date.now() + LISTING_TTL
+    if (opts?.remoderate && it.status !== 'duplicate') {
+      it.status = 'pending'; it.moderatedAt = undefined; it.aiScore = undefined
+      it.aiReason = 'متنِ آگهی تغییر کرد — در صفِ ممیزیِ دوباره'
+    }
+    return it
+  })
+}
 // تمدیدِ آگهی برای ۳۰ روزِ دیگر
 export async function renewListing(itemId: string): Promise<Item | null> {
   return mutate(db => {

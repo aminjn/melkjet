@@ -41,6 +41,7 @@ export interface AdminData {
   divar?: {
     proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server
   }
+  ga4Id?: string          // فاز ۱۴۱: شناسهٔ Google Analytics 4 (G-…) — تگ در <head> همهٔ صفحات
   gapgpt?: {              // ارائه‌دهندهٔ پیش‌فرض (گپ) — همهٔ ایجنت‌ها مگر آن‌ها که provider خاص دارند
     baseUrl: string      // e.g. https://api.gapgpt.app/v1
     apiKey: string
