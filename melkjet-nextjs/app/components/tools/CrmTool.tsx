@@ -448,15 +448,13 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
       .catch(() => {})
   }, [])
 
+  // فاز ۱۲۹: همگام با تمِ سراسری — init از کلاسِ اعمال‌شده و انتخابِ دستی ماندگار (کلیدِ مشترکِ melkjet-theme)
+  useEffect(() => { setTheme(document.documentElement.classList.contains('light') ? 'light' : 'dark') }, [])
   const toggleTheme = () => {
-    const html = document.documentElement
-    if (theme === 'dark') {
-      html.classList.add('light')
-      setTheme('light')
-    } else {
-      html.classList.remove('light')
-      setTheme('dark')
-    }
+    const next = document.documentElement.classList.contains('light') ? 'dark' : 'light'
+    document.documentElement.classList.toggle('light', next === 'light')
+    try { localStorage.setItem('melkjet-theme', next) } catch {}
+    setTheme(next)
   }
 
   const addTask = async () => {

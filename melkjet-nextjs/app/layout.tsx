@@ -6,6 +6,7 @@ import LocationDetector from './components/LocationDetector'
 import Tracker from './components/Tracker'
 import AuthModal from './components/AuthModal'
 import DeferredShell from './components/DeferredShell'
+import ThemeFab from './components/ThemeFab'
 
 export const metadata: Metadata = {
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
@@ -41,8 +42,9 @@ export default function RootLayout({
   return (
     <html lang="fa" dir="rtl">
       <head>
-        {/* Theme init — runs before render to prevent flash of wrong theme */}
-        <script dangerouslySetInnerHTML={{__html:`(function(){try{var t=localStorage.getItem('melkjet-theme');if(t==='light')document.documentElement.classList.add('light')}catch(e){}})()`}}/>
+        {/* Theme init — runs before render to prevent flash of wrong theme.
+            فاز ۱۲۹: بدونِ انتخابِ صریحِ کاربر، تم از ساعتِ خودِ او می‌آید (۷ تا ۱۹ = روز)؛ انتخابِ دستی ('light'/'dark') همیشه مقدم است. */}
+        <script dangerouslySetInnerHTML={{__html:`(function(){try{var t=localStorage.getItem('melkjet-theme');var h=(new Date()).getHours();if(t==='light'||(t!=='dark'&&h>=7&&h<19))document.documentElement.classList.add('light')}catch(e){}})()`}}/>
         {/* فونت‌ها کاملاً لوکال‌اند (public/fonts) — هیچ وابستگی به گوگل. @font-face در globals.css */}
         <link rel="preload" href="/fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/fonts/Vazirmatn-Bold.woff2" as="font" type="font/woff2" crossOrigin="" />
@@ -56,6 +58,8 @@ export default function RootLayout({
         {children}
         <AuthModal />
         <BottomNav />
+        {/* فاز ۱۲۹ — دکمهٔ تمِ شناور برای پوسته‌های بدونِ Nav (پنل‌ها/ادمین/ابزارها) */}
+        <ThemeFab />
         {/* فاز ۱۰۸: هفت overlay غیرِحیاتی بعد از idle/اولین تعامل mount می‌شوند (TBT موبایل) */}
         <DeferredShell />
       </body>

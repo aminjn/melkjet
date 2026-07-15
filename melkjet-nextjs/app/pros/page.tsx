@@ -658,7 +658,9 @@ export default function ProsPage() {
     try { const r = await fetch('/api/advisor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiInsights' }) }); const d = await r.json(); if (d.ok) setCrmAi({ callNow: d.callNow || [], health: d.health || '', tips: d.tips || [] }) } catch {} finally { setCrmAiBusy(false) }
   }, [])
 
-  const toggleTheme = () => { const html = document.documentElement; if (theme === 'dark') { html.classList.add('light'); setTheme('light') } else { html.classList.remove('light'); setTheme('dark') } }
+  // فاز ۱۲۹: همگام با تمِ سراسری — init از کلاسِ اعمال‌شده (انتخابِ ذخیره‌شده یا ساعتِ کاربر) و انتخابِ دستی ماندگار
+  useEffect(() => { setTheme(document.documentElement.classList.contains('light') ? 'light' : 'dark') }, [])
+  const toggleTheme = () => { const next = document.documentElement.classList.contains('light') ? 'dark' : 'light'; document.documentElement.classList.toggle('light', next === 'light'); try { localStorage.setItem('melkjet-theme', next) } catch {}; setTheme(next) }
 
   if (loading) return <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>در حال بارگذاری پنل مشاور…</div>
   if (unauth || !data) return (
