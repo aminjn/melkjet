@@ -113,6 +113,9 @@ export interface AdminData {
     priceMissing?: 'reject' | 'review'  // اگر قیمت نبود چه‌کار (پیش‌فرض reject)
     autoMl?: boolean      // آیا مدلِ یادگیرنده وقتی مطمئن شد خودش تصمیم بگیرد (پیش‌فرض true)
     autoRejectContact?: boolean  // فاز ۱۳۸: ردِ خودکار با مدرکِ قطعیِ شماره/لینک/آیدیِ تماس در متن (پیش‌فرض true)
+    // فاز ۱۴۹: اختیارِ اکتسابیِ ردِ ML — رد فقط وقتی دقتِ سنجیده‌شده روی داوریِ ادمین بالا باشد
+    mlRejectMode?: 'off' | 'cautious' | 'full'
+    mlRejectMin?: number; mlRejectAgreeMin?: number; mlRejectReviewedMin?: number
   }
   // تخصیصِ مدل به‌ازای هر ایجنت + (اختیاری) provider به‌ازای هر اسلات. provider خالی = پیش‌فرض (گپ).
   agentModels?: Record<string, { text?: string; image?: string; textProvider?: string; imageProvider?: string }>

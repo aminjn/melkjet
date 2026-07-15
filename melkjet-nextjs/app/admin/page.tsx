@@ -2816,6 +2816,7 @@ function ModerationView() {
   const [savingCfg, setSavingCfg] = useState(false)
   const [cfgMsg, setCfgMsg] = useState('')
   const [requeueBusy, setRequeueBusy] = useState(false)   // فاز ۱۴۷: بازخوردِ زندهٔ بازممیزی
+  const [trainBusy, setTrainBusy] = useState(false)       // فاز ۱۴۹: آموزش از آرشیو
   const [defCrit, setDefCrit] = useState('')
 
   const load = async () => {
@@ -2856,6 +2857,18 @@ function ModerationView() {
         load(); loadCfg()
       } else setCfgMsg('⚠ ' + (d.error || `خطا (${r.status}) — دوباره امتحان کن`))
     } catch { setCfgMsg('⚠ خطا در ارتباط با سرور — دوباره امتحان کن') } finally { setRequeueBusy(false); setTimeout(() => setCfgMsg(''), 20000) }
+  }
+  // فاز ۱۴۹: آموزشِ یک‌جا از همهٔ تأیید/ردشده‌های موجودِ سایت — سریع‌ترین راهِ «بهتر آموزش‌دیدن».
+  const trainArchive = async () => {
+    if (trainBusy) return
+    if (!confirm('مدل از همهٔ آگهی‌های تأیید/ردشدهٔ فعلیِ سایت یک‌جا آموزش ببیند؟ (حکم‌های موجود تغییری نمی‌کنند — فقط مدل از آن‌ها الگو می‌گیرد)')) return
+    setTrainBusy(true); setCfgMsg('⏳ آموزش از آرشیو در حال اجراست…')
+    try {
+      const r = await fetch('/api/admin/moderation-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trainArchive: true }) })
+      const d = await r.json().catch(() => ({}))
+      if (d.ok) { setMl(d.ml); setCfgMsg(`✓ آموزش انجام شد: ${Number(d.trained?.approved || 0).toLocaleString('fa-IR')} تأییدی + ${Number(d.trained?.rejected || 0).toLocaleString('fa-IR')} ردی به مدل آموزش داده شد`) }
+      else setCfgMsg('⚠ ' + (d.error || 'خطا'))
+    } catch { setCfgMsg('⚠ خطا در ارتباط') } finally { setTrainBusy(false); setTimeout(() => setCfgMsg(''), 15000) }
   }
   const resetMlModel = async () => {
     if (!confirm('مدلِ یادگیرنده کاملاً پاک شود؟ (وقتی مدل «مسموم» شده و همه‌چیز را رد می‌کند مفید است — از صفر با تصمیم‌های درست دوباره یاد می‌گیرد.)')) return
@@ -2957,6 +2970,26 @@ function ModerationView() {
               <span>ردِ خودکار وقتی <b>شماره/لینک/آیدیِ تماسِ واقعی</b> داخلِ متنِ آگهی باشد (مدرک عیناً در دلیل نقل می‌شود)</span>
             </label>
 
+            {/* فاز ۱۴۹ (فیدبک: «می‌خواهم ML خودش تأیید و رد کند») — اختیارِ اکتسابیِ رد */}
+            <div style={{ background: 'var(--bg2)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700 }}>🤖 ردِ خودکارِ ماشین لرنینگ — «اختیارِ اکتسابی»</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.7 }}>مدل وقتی حقِ ردِ بی‌انسان می‌گیرد که دقتش <b>روی داوری‌های خودِ تو</b> اندازه گرفته و از آستانه بالاتر شده باشد — نه کورکورانه. هرچه بیشتر دستی تأیید/رد کنی، زودتر و مطمئن‌تر این مجوز را می‌گیرد.</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 12 }}>
+                <select value={cfg.mlRejectMode || 'cautious'} onChange={e => setCfg({ ...cfg, mlRejectMode: e.target.value })}
+                  style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 10px', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12.5 }}>
+                  <option value="off">خاموش — رد همیشه با انسان/AI</option>
+                  <option value="cautious">محتاط — رد فقط با نشانهٔ ساختاری + دقتِ کافی</option>
+                  <option value="full">کامل — هر وقت مطمئن و دقیق بود</option>
+                </select>
+                <label>اطمینان ≥ <input type="number" min={50} max={100} value={cfg.mlRejectMin ?? 97} onChange={e => setCfg({ ...cfg, mlRejectMin: Number(e.target.value) })} style={{ width: 58, background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 7, padding: '4px 6px', color: 'var(--text)', fontFamily: 'inherit' }} />٪</label>
+                <label>دقتِ اخیر ≥ <input type="number" min={50} max={100} value={cfg.mlRejectAgreeMin ?? 85} onChange={e => setCfg({ ...cfg, mlRejectAgreeMin: Number(e.target.value) })} style={{ width: 58, background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 7, padding: '4px 6px', color: 'var(--text)', fontFamily: 'inherit' }} />٪</label>
+                <label>از حداقل <input type="number" min={0} max={500} value={cfg.mlRejectReviewedMin ?? 20} onChange={e => setCfg({ ...cfg, mlRejectReviewedMin: Number(e.target.value) })} style={{ width: 58, background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 7, padding: '4px 6px', color: 'var(--text)', fontFamily: 'inherit' }} /> بازبینیِ انسانی</label>
+              </div>
+              {ml && <div style={{ fontSize: 11.5, color: (ml.recentAgreePct ?? 0) >= (cfg.mlRejectAgreeMin ?? 85) && (ml.recentReviewed ?? 0) >= (cfg.mlRejectReviewedMin ?? 20) ? '#5fd98a' : 'var(--faint)' }}>
+                وضعیتِ فعلی: {ml.recentAgreePct == null ? 'هنوز بازبینیِ انسانی ثبت نشده — با تأیید/ردهای دستی شروع کن' : `دقتِ اخیر ${Number(ml.recentAgreePct).toLocaleString('fa-IR')}٪ از ${Number(ml.recentReviewed).toLocaleString('fa-IR')} بازبینی`} {ml.recentAgreePct != null && ((ml.recentAgreePct >= (cfg.mlRejectAgreeMin ?? 85) && (ml.recentReviewed ?? 0) >= (cfg.mlRejectReviewedMin ?? 20)) ? '— ✅ مجوزِ رد فعال است' : '— ⏳ هنوز به آستانه نرسیده')}
+              </div>}
+            </div>
+
             {ml && (
               <div style={{ background: 'var(--bg2)', borderRadius: 10, padding: 14, fontSize: 12, lineHeight: 1.9 }}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>وضعیتِ یادگیریِ ماشین</div>
@@ -2981,10 +3014,11 @@ function ModerationView() {
                     </div>
                   ))}
                 </div>
-                <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 6 }}>قانونِ ردِ خودکار (فاز ۱۳۸): فقط <b>مدرکِ قطعیِ تماس</b> (شماره/لینک/آیدیِ واقعی داخلِ متن — عیناً در دلیل نقل می‌شود) مجوزِ ردِ بی‌انسان دارد. شباهتِ واژه‌ای، قیمتِ نامعتبر و توضیحِ کوتاه هرگز رد نمی‌کنند — با دلیلِ روشن به صفِ بازبینیِ خودت می‌آیند. برگرداندنِ هر تصمیم، مدل را واقعاً اصلاح می‌کند (unlearn از کلاسِ غلط).</div>
+                <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 6 }}>قانونِ ردِ خودکار: <b>مدرکِ قطعیِ تماس</b> همیشه رد می‌کند (عیناً در دلیل نقل می‌شود). خودِ مدل هم با «اختیارِ اکتسابی» رد می‌کند — فقط وقتی دقتِ اندازه‌گیری‌شده‌اش روی داوری‌های خودت از آستانه گذشته باشد (تنظیمش بالاست). برگرداندنِ هر تصمیم، مدل را واقعاً اصلاح می‌کند (unlearn از کلاسِ غلط).</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                   <span style={{ color: 'var(--faint)', fontSize: 11 }}>هر بار که دستی «تأیید» یا «رد» می‌زنی، مدل قوی‌تر یاد می‌گیرد.</span>
-                  <button onClick={requeueRejected} disabled={requeueBusy} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: requeueBusy ? 'wait' : 'pointer', opacity: requeueBusy ? 0.6 : 1, fontFamily: 'inherit', marginInlineStart: 'auto' }}>{requeueBusy ? '⏳ در حال بازممیزی…' : '🔁 بازممیزیِ ردشده‌ها و تکراری‌های خودکار'}</button>
+                  <button onClick={trainArchive} disabled={trainBusy} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid #5fd98a', color: '#5fd98a', background: 'transparent', cursor: trainBusy ? 'wait' : 'pointer', opacity: trainBusy ? 0.6 : 1, fontFamily: 'inherit', marginInlineStart: 'auto' }}>{trainBusy ? '⏳ در حال آموزش…' : '🎓 آموزش از آرشیوِ تصمیم‌های موجود'}</button>
+                  <button onClick={requeueRejected} disabled={requeueBusy} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: requeueBusy ? 'wait' : 'pointer', opacity: requeueBusy ? 0.6 : 1, fontFamily: 'inherit' }}>{requeueBusy ? '⏳ در حال بازممیزی…' : '🔁 بازممیزیِ ردشده‌ها و تکراری‌های خودکار'}</button>
                   <button onClick={resetMlModel} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>♻️ ریستِ مدلِ یادگیرنده</button>
                 </div>
                 <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 4 }}>اگر مدل «مسموم» شده (از دادهٔ غلطِ قبلی رد یاد گرفته و همه را رد می‌کند)، ریست کن تا از صفر شروع کند.</div>

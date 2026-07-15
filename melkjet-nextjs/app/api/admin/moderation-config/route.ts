@@ -25,6 +25,12 @@ export async function POST(req: NextRequest) {
     const requeued = await requeueAutoRejected()
     return NextResponse.json({ ok: true, requeued })
   }
+  // فاز ۱۴۹: آموزشِ یک‌جا از آرشیوِ تصمیم‌های موجود (تأیید/ردشده‌های فعلی، حکمِ ادمین یا AI).
+  if (b.trainArchive) {
+    const { trainFromArchive } = await import('@/app/lib/moderation')
+    const r = await trainFromArchive()
+    return NextResponse.json({ ok: true, trained: r, ml: mlStats() })
+  }
   // فاز ۱۴۸ (فیدبک: «راهی بذار ماشین لرنینگ را بسنجم») — سنجشِ زندهٔ یک آگهیِ فرضی، بدونِ هیچ ذخیره/آموزشی:
   // پیش‌بینیِ مدل + دلایل + مدرکِ تماس + حکمی که پایپ‌لاین می‌گرفت. قبل/بعدِ آموزشِ دستی قابلِ مقایسه است.
   if (b.test && typeof b.test === 'object') {
@@ -57,6 +63,11 @@ export async function POST(req: NextRequest) {
     autoMl: b.autoMl !== undefined ? !!b.autoMl : (cur.autoMl !== false),
     // فاز ۱۳۸: ردِ خودکار با مدرکِ قطعیِ تماس در متن (شماره/لینک/آیدی) — قابلِ خاموش‌کردن
     autoRejectContact: b.autoRejectContact !== undefined ? !!b.autoRejectContact : ((cur as any).autoRejectContact !== false),
+    // فاز ۱۴۹: اختیارِ اکتسابیِ ردِ ML
+    mlRejectMode: ['off', 'cautious', 'full'].includes(b.mlRejectMode) ? b.mlRejectMode : ((cur as any).mlRejectMode || 'cautious'),
+    mlRejectMin: b.mlRejectMin !== undefined ? clamp(b.mlRejectMin, 97) : ((cur as any).mlRejectMin ?? 97),
+    mlRejectAgreeMin: b.mlRejectAgreeMin !== undefined ? clamp(b.mlRejectAgreeMin, 85) : ((cur as any).mlRejectAgreeMin ?? 85),
+    mlRejectReviewedMin: b.mlRejectReviewedMin !== undefined ? Math.max(0, Math.min(500, Math.round(Number(b.mlRejectReviewedMin) || 20))) : ((cur as any).mlRejectReviewedMin ?? 20),
   }
   saveAdminData(data)
   return NextResponse.json({ ok: true, config: modConfig() })

@@ -194,6 +194,31 @@ export function rejectEvidenceOf(it: Partial<Item>): { hard: string[]; hardFa: s
   return { hard, hardFa: hard.map(t => FEATURE_FA[t]), wordsOnly: hard.length === 0 }
 }
 
+// فاز ۱۴۹ — دقتِ اخیرِ مدل روی داوریِ انسانی (پنجرهٔ ۱۰۰تاییِ فاز ۷۷): مبنای «اختیارِ اکتسابیِ رد».
+export function recentAccuracy(): { pct: number | null; reviewed: number } {
+  const win = load().recent.slice(-100)
+  if (!win.length) return { pct: null, reviewed: 0 }
+  const agree = win.filter(x => x.pred === x.final).length
+  return { pct: Math.round((agree / win.length) * 100), reviewed: win.length }
+}
+
+// فاز ۱۴۹ — آموزشِ دسته‌ای (یک بار load/save، نه یک نوشت به‌ازای هر آیتم) برای «آموزش از آرشیو».
+export function learnBatch(list: { it: Partial<Item>; label: MLabel }[]): number {
+  if (!list.length) return 0
+  const d = load()
+  let n = 0
+  for (const { it, label } of list) {
+    if (label !== 'approved' && label !== 'rejected') continue
+    const c = d[label]
+    c.docs++
+    for (const t of featuresOf(it)) { c.tok[t] = (c.tok[t] || 0) + 1; c.total++ }
+    n++
+  }
+  d.updatedAt = Date.now()
+  save(d)
+  return n
+}
+
 export function noteDecision(via: 'ml' | 'ai'): void {
   const d = load()
   if (via === 'ml') d.autoDecided++; else d.aiDecided++
