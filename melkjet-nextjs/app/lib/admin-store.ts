@@ -111,6 +111,7 @@ export interface AdminData {
     requirePrice?: boolean // آگهیِ بدونِ قیمت به‌صورتِ خودکار رد/بازبینی شود
     priceMissing?: 'reject' | 'review'  // اگر قیمت نبود چه‌کار (پیش‌فرض reject)
     autoMl?: boolean      // آیا مدلِ یادگیرنده وقتی مطمئن شد خودش تصمیم بگیرد (پیش‌فرض true)
+    autoRejectContact?: boolean  // فاز ۱۳۸: ردِ خودکار با مدرکِ قطعیِ شماره/لینک/آیدیِ تماس در متن (پیش‌فرض true)
   }
   // تخصیصِ مدل به‌ازای هر ایجنت + (اختیاری) provider به‌ازای هر اسلات. provider خالی = پیش‌فرض (گپ).
   agentModels?: Record<string, { text?: string; image?: string; textProvider?: string; imageProvider?: string }>

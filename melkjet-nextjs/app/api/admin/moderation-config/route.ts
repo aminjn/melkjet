@@ -19,6 +19,12 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   // ریستِ مدلِ یادگیرنده (وقتی مسموم شده و همه‌چیز را رد می‌کند).
   if (b.resetMl) { resetMl(); return NextResponse.json({ ok: true, reset: true, ml: mlStats() }) }
+  // فاز ۱۳۸: بازممیزیِ ردشده‌های خودکارِ قبلی با قانونِ جدید (رد فقط با مدرکِ قطعیِ تماس).
+  if (b.requeueAutoRejected) {
+    const { requeueAutoRejected } = await import('@/app/lib/scraper-store')
+    const requeued = await requeueAutoRejected()
+    return NextResponse.json({ ok: true, requeued })
+  }
   const data = getAdminData()
   const cur = data.moderation || {}
   const clamp = (n: any, d: number) => { const x = Number(n); return Number.isFinite(x) ? Math.max(0, Math.min(100, Math.round(x))) : d }
@@ -33,6 +39,8 @@ export async function POST(req: NextRequest) {
     requirePrice: b.requirePrice !== undefined ? !!b.requirePrice : !!cur.requirePrice,
     priceMissing: (b.priceMissing === 'review' || b.priceMissing === 'reject') ? b.priceMissing : (cur.priceMissing || 'reject'),
     autoMl: b.autoMl !== undefined ? !!b.autoMl : (cur.autoMl !== false),
+    // فاز ۱۳۸: ردِ خودکار با مدرکِ قطعیِ تماس در متن (شماره/لینک/آیدی) — قابلِ خاموش‌کردن
+    autoRejectContact: b.autoRejectContact !== undefined ? !!b.autoRejectContact : ((cur as any).autoRejectContact !== false),
   }
   saveAdminData(data)
   return NextResponse.json({ ok: true, config: modConfig() })

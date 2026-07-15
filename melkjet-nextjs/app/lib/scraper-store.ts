@@ -346,6 +346,22 @@ export async function setModerationBatch(verdicts: { id: string; status: ItemSta
   })
 }
 
+// فاز ۱۳۸ — بازممیزیِ ردشده‌های «خودکار»: آگهی‌هایی که ماشین/قاعدهٔ قدیمی رد کرده (نه ادمینِ انسانی)
+// دوباره به صفِ ممیزی برمی‌گردند تا با قانونِ جدید (رد فقط با مدرکِ قطعیِ تماس) از نو داوری شوند.
+export async function requeueAutoRejected(): Promise<number> {
+  return mutate(db => {
+    let n = 0
+    for (const it of db.items) {
+      if (it.status === 'rejected' && /^ردِ خودکار|ممیزیِ خودکارِ یادگیری/.test(it.aiReason || '')) {
+        it.status = 'pending'; it.moderatedAt = undefined
+        it.aiReason = 'در صفِ بازممیزی با قانونِ جدید (ردِ قبلی خودکار بود)'
+        n++
+      }
+    }
+    return n
+  })
+}
+
 export async function setItemStatus(itemId: string, status: ItemStatus) {
   return mutate(db => {
     const it = db.items.find(i => i.id === itemId)

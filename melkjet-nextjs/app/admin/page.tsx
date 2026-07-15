@@ -2753,6 +2753,15 @@ function ModerationView() {
       if (d.ok) { setCfg(d.config); setCfgMsg('✓ معیارها ذخیره شد') } else setCfgMsg('⚠ ' + (d.error || 'خطا'))
     } catch { setCfgMsg('⚠ خطا در ذخیره') } finally { setSavingCfg(false); setTimeout(() => setCfgMsg(''), 4000) }
   }
+  // فاز ۱۳۸: ردشده‌های خودکارِ قبلی (نه ردهای دستیِ خودت) با قانونِ جدید دوباره داوری شوند.
+  const requeueRejected = async () => {
+    if (!confirm('همهٔ آگهی‌هایی که «به‌صورتِ خودکار» رد شده‌اند به صفِ ممیزی برگردند تا با قانونِ جدید (رد فقط با مدرکِ قطعیِ شماره/لینکِ تماس) دوباره داوری شوند؟ ردهای دستیِ خودت دست نمی‌خورند.')) return
+    try {
+      const r = await fetch('/api/admin/moderation-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requeueAutoRejected: true }) })
+      const d = await r.json()
+      if (d.ok) { setCfgMsg(`✓ ${Number(d.requeued || 0).toLocaleString('fa-IR')} آگهیِ ردشدهٔ خودکار به صفِ بازممیزی برگشت`); load() } else setCfgMsg('⚠ خطا')
+    } catch { setCfgMsg('⚠ خطا') } finally { setTimeout(() => setCfgMsg(''), 6000) }
+  }
   const resetMlModel = async () => {
     if (!confirm('مدلِ یادگیرنده کاملاً پاک شود؟ (وقتی مدل «مسموم» شده و همه‌چیز را رد می‌کند مفید است — از صفر با تصمیم‌های درست دوباره یاد می‌گیرد.)')) return
     try {
@@ -2845,7 +2854,12 @@ function ModerationView() {
 
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}>
               <input type="checkbox" checked={cfg.autoMl} onChange={e => setCfg({ ...cfg, autoMl: e.target.checked })} style={{ accentColor: 'var(--gold)' }} />
-              <span>وقتی ماشین لرنینگ به‌قدرِ کافی مطمئن شد، خودش تصمیم بگیرد (بدونِ فراخوانیِ هوش مصنوعی)</span>
+              <span>وقتی ماشین لرنینگ به‌قدرِ کافی مطمئن شد، خودش تصمیم بگیرد (فقط تأیید — رد هرگز خودکارِ ماشینی نیست)</span>
+            </label>
+
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}>
+              <input type="checkbox" checked={cfg.autoRejectContact !== false} onChange={e => setCfg({ ...cfg, autoRejectContact: e.target.checked })} style={{ accentColor: 'var(--gold)' }} />
+              <span>ردِ خودکار وقتی <b>شماره/لینک/آیدیِ تماسِ واقعی</b> داخلِ متنِ آگهی باشد (مدرک عیناً در دلیل نقل می‌شود)</span>
             </label>
 
             {ml && (
@@ -2872,10 +2886,11 @@ function ModerationView() {
                     </div>
                   ))}
                 </div>
-                <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 6 }}>قانونِ ردِ خودکار (فاز ۷۷): فقط نشانهٔ اسپمِ واقعی (شماره/لینکِ تماس در متن) مجوزِ ردِ بی‌انسان دارد — قیمتِ نامعتبر/توضیحِ کوتاه/شباهتِ واژه‌ای حداکثر به صفِ بازبینیِ خودت می‌آید. برگرداندنِ هر تصمیم، مدل را واقعاً اصلاح می‌کند (unlearn از کلاسِ غلط).</div>
+                <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 6 }}>قانونِ ردِ خودکار (فاز ۱۳۸): فقط <b>مدرکِ قطعیِ تماس</b> (شماره/لینک/آیدیِ واقعی داخلِ متن — عیناً در دلیل نقل می‌شود) مجوزِ ردِ بی‌انسان دارد. شباهتِ واژه‌ای، قیمتِ نامعتبر و توضیحِ کوتاه هرگز رد نمی‌کنند — با دلیلِ روشن به صفِ بازبینیِ خودت می‌آیند. برگرداندنِ هر تصمیم، مدل را واقعاً اصلاح می‌کند (unlearn از کلاسِ غلط).</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                   <span style={{ color: 'var(--faint)', fontSize: 11 }}>هر بار که دستی «تأیید» یا «رد» می‌زنی، مدل قوی‌تر یاد می‌گیرد.</span>
-                  <button onClick={resetMlModel} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', marginInlineStart: 'auto' }}>♻️ ریستِ مدلِ یادگیرنده</button>
+                  <button onClick={requeueRejected} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', marginInlineStart: 'auto' }}>🔁 بازممیزیِ ردشده‌های خودکار</button>
+                  <button onClick={resetMlModel} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>♻️ ریستِ مدلِ یادگیرنده</button>
                 </div>
                 <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 4 }}>اگر مدل «مسموم» شده (از دادهٔ غلطِ قبلی رد یاد گرفته و همه را رد می‌کند)، ریست کن تا از صفر شروع کند.</div>
               </div>

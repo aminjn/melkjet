@@ -52,7 +52,9 @@ export function featuresOf(it: Partial<Item>): string[] {
   // فاز ۵۴ (فیکسِ باگ): وجودِ فیلدِ متراژ یعنی متراژ دارد — قبلاً واژهٔ «متر» را در «مقدارِ عددی» می‌گشت
   // و هر آگهیِ متراژدار #no_area می‌گرفت (یکی از پایه‌های ردهای الکی).
   f.push(/متر|متراژ/.test(title) || !!String(it.meta?.['متراژ'] || '').trim() ? '#has_area' : '#no_area')
-  if (/(?:^|\D)0?9\d{9}/.test(faToEn(ex + ' ' + title))) f.push('#phone_in_text')     // شمارهٔ تماس در متن = نشانهٔ اسپم
+  // فاز ۱۳۸: موبایل فقط با پیشوندِ 0/+98 و بدونِ رقمِ بعدی — قیمتِ بی‌جداکنندهٔ ۱۰+رقمی که با ۹ شروع
+  // می‌شود (مثل «۹۵۰۰۰۰۰۰۰۰ تومان») دیگر «شماره» حساب نمی‌شود (یکی از پایه‌های ردِ الکی).
+  if (/(?:^|[^\d+])(?:\+?98\s?|0)9\d{9}(?!\d)/.test(faToEn(ex + ' ' + title))) f.push('#phone_in_text')     // شمارهٔ تماس در متن = نشانهٔ اسپم
   if (/https?:\/\/|www\.|@\w|تلگرام|واتساپ|اینستا/.test(ex)) f.push('#contact_in_text')
   if (it.meta?.['نوع معامله']) f.push('#has_deal')
   if (ex.length < 20) f.push('#thin_desc')
@@ -162,6 +164,23 @@ export function explainPrediction(it: Partial<Item>, top = 3): { label: MLabel; 
       : 'شباهت به آگهی‌های سالمِ تأییدشده')
   }
   return { label: p.label, prob: p.prob, reasons: reasons.slice(0, top) }
+}
+
+// ── فاز ۱۳۸ (فیدبک: «کلی آگهی را به‌خاطرِ واژه‌هایی که مشکل نیست رد می‌کند») ─────────────
+// مدرکِ «قطعی و قابلِ‌نمایشِ» تماس در متن — تنها مجوزِ ردِ خودکار. هر مدرک، خودِ تکهٔ مچ‌شده را
+// نقل می‌کند تا ادمین دقیقاً ببیند چه چیزی رد را رقم زده؛ نه پرچمِ فازی، نه شباهتِ واژه‌ای.
+// نکته: صرفِ آمدنِ واژهٔ «تلگرام/واتساپ/اینستاگرام» بدونِ لینک/آیدی/شماره مدرک نیست (→ بازبینیِ انسانی).
+export function contactEvidenceOf(it: Partial<Item>): string[] {
+  const text = `${it.title || ''}\n${(it.excerpt || '').slice(0, 1200)}`
+  const en = faToEn(text)
+  const out: string[] = []
+  const phone = en.match(/(?:^|[^\d+])((?:\+?98\s?|0)9\d{9})(?!\d)/)
+  if (phone) out.push(`شمارهٔ موبایلِ «${phone[1].trim()}» داخلِ متن`)
+  const link = text.match(/https?:\/\/[^\s]{4,60}|www\.[^\s]{3,60}|t\.me\/[^\s]{2,40}|instagram\.com\/[^\s]{2,40}|wa\.me\/[^\s]{2,40}/i)
+  if (link) out.push(`لینکِ «${link[0].slice(0, 48)}» داخلِ متن`)
+  const idm = en.match(/@[a-z][a-z0-9_.]{3,31}/i)
+  if (idm) out.push(`آیدیِ «${idm[0]}» داخلِ متن`)
+  return out
 }
 
 // فاز ۵۴ — قانونِ سختِ جدید: «شباهتِ صرفاً واژه‌ای هرگز حقِ ردِ خودکار ندارد». این تابع می‌گوید شواهدِ
