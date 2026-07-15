@@ -100,12 +100,12 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   //    (متن+متراژ+قیمت+اتاق+محله، شباهت≥۰٫۸۵ — نه فقط عنوانِ دقیقاً یکسان) → همان فایل به‌روزرسانی
   //    و توکنِ جدید به آن نگاشت می‌شود (نه ساختِ نسخهٔ دوم). ──
   const { fieldsFromParts, similarity, DUP_THRESHOLD } = await import('./listing-similarity')
-  const probe = fieldsFromParts({ deal: payload.deal, title: payload.title, hood: payload.neighborhood || payload.district, price: payload.price, area: payload.area, rooms: payload.rooms, floor: payload.floor })
+  const probe = fieldsFromParts({ deal: payload.deal, title: payload.title, hood: payload.neighborhood || payload.district, price: payload.price, area: payload.area, rooms: payload.rooms, floor: payload.floor, city: payload.city, province: payload.province, yearBuilt: payload.yearBuilt, lat: payload.lat, lng: payload.lng })
   const mineListings = (await getAdvisor(o)).listings || []
   let twin: (typeof mineListings)[number] | undefined
   let bestSim = DUP_THRESHOLD - 1e-9
   for (const l of mineListings) {
-    const s = similarity(fieldsFromParts({ deal: l.deal, title: l.title, hood: l.neighborhood || l.district, price: l.price, area: l.area, rooms: l.rooms, floor: l.floor }), probe)
+    const s = similarity(fieldsFromParts({ deal: l.deal, title: l.title, hood: l.neighborhood || l.district, price: l.price, area: l.area, rooms: l.rooms, floor: l.floor, city: l.city, province: l.province, ptype: l.ptype, yearBuilt: l.yearBuilt, lat: l.lat, lng: l.lng }), probe)
     if (s > bestSim) { bestSim = s; twin = l }
   }
   if (twin) {
