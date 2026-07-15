@@ -1,6 +1,9 @@
 'use client'
 // 📞 فاز ۱۱۶ — CRM مرکزیِ پرسنل: همهٔ مشتریانِ واقعیِ سایت + ثبت/پیگیریِ تماس‌ها توسطِ پرسنل.
 import { useCallback, useEffect, useState } from 'react'
+// فاز ۱۳۹ (فیدبک: «خیلی جاها مثل CRM تاریخ میلادی است»): اینپوتِ خامِ datetime-local مرورگر
+// همیشه میلادی نشان می‌دهد — به‌جایش تقویمِ شمسیِ خودمان.
+import JalaliDatePicker from './JalaliDatePicker'
 
 // برچسب‌های وضعیت (کپیِ کلاینتیِ staff-crm-store — آن استور سروری است و fs دارد)
 const STAFF_CRM_STATUS_FA: Record<string, string> = { new: 'جدید', follow: 'در حالِ پیگیری', customer: 'مشتری شد', lost: 'از دست رفت' }
@@ -27,6 +30,7 @@ export default function StaffCrmView() {
   const [actKind, setActKind] = useState('call')
   const [actText, setActText] = useState('')
   const [actDue, setActDue] = useState('')
+  const [actDueTs, setActDueTs] = useState(0)   // فاز ۱۳۹: تایم‌استمپِ انتخابِ تقویمِ شمسی
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [mine, setMine] = useState(false)          // «فقط کارهای من»
@@ -43,6 +47,7 @@ export default function StaffCrmView() {
   const [tAssign, setTAssign] = useState('')
   const [tPhone, setTPhone] = useState('')
   const [tDue, setTDue] = useState('')
+  const [tDueTs, setTDueTs] = useState(0)   // فاز ۱۳۹: تایم‌استمپِ انتخابِ تقویمِ شمسی
 
   const load = useCallback(() => {
     fetch(`/api/admin/staff-crm?q=${encodeURIComponent(q)}&status=${status}&mine=${mine ? 1 : 0}`, { cache: 'no-store' })
@@ -53,7 +58,7 @@ export default function StaffCrmView() {
   useEffect(() => { load() }, [load])
 
   const openCustomer = async (r: any) => {
-    setSel(r); setEntry(null); setProf(null); setActText(''); setActDue(''); setSmsTxt('')
+    setSel(r); setEntry(null); setProf(null); setActText(''); setActDue(''); setActDueTs(0); setSmsTxt('')
     const d = await fetch('/api/admin/staff-crm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'entry', phone: r.phone }) }).then(x => x.ok ? x.json() : null).catch(() => null)
     if (d?.ok) { setEntry(d.entry); setProf(d) }
   }
@@ -101,11 +106,11 @@ export default function StaffCrmView() {
               <input value={tAssign} onChange={e => setTAssign(e.target.value)} placeholder={meName || 'خالی = همه'} style={{ ...inp, width: '100%', marginTop: 4 }} /></label>
             <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 150 }}>مشتریِ مرتبط (شماره — اختیاری)<br />
               <input value={tPhone} onChange={e => setTPhone(e.target.value.replace(/[^\d]/g, ''))} placeholder="09…" style={{ ...inp, width: '100%', marginTop: 4, direction: 'ltr' }} /></label>
-            <label style={{ fontSize: 11, color: 'var(--muted)' }}>سررسید<br />
-              <input type="datetime-local" value={tDue} onChange={e => setTDue(e.target.value)} style={{ ...inp, marginTop: 4 }} /></label>
+            <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 190 }}>سررسید (شمسی)<br />
+              <div style={{ marginTop: 4 }}><JalaliDatePicker value={tDue} onChange={setTDue} onPickTs={setTDueTs} withTime placeholder="انتخابِ تاریخ و ساعت" /></div></label>
             <button style={btn} disabled={busy || !tTitle.trim()} onClick={async () => {
-              const d = await post({ action: 'taskAdd', title: tTitle, assignedTo: tAssign, forPhone: tPhone, dueAt: tDue ? new Date(tDue).getTime() : undefined })
-              if (d) { setTasks(d.tasks || []); setTTitle(''); setTAssign(''); setTPhone(''); setTDue('') }
+              const d = await post({ action: 'taskAdd', title: tTitle, assignedTo: tAssign, forPhone: tPhone, dueAt: tDueTs || undefined })
+              if (d) { setTasks(d.tasks || []); setTTitle(''); setTAssign(''); setTPhone(''); setTDue(''); setTDueTs(0) }
             }}>ثبتِ وظیفه</button>
           </div>
         </div>
@@ -345,11 +350,12 @@ export default function StaffCrmView() {
             </div>
             <textarea value={actText} onChange={e => setActText(e.target.value)} rows={3} placeholder="چه گذشت؟ (نتیجهٔ تماس، قرارِ بعدی، …)" style={{ ...inp, width: '100%', marginTop: 8, resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-              <label style={{ fontSize: 11, color: 'var(--muted)' }}>یادآوریِ پیگیری: <input type="datetime-local" value={actDue} onChange={e => setActDue(e.target.value)} style={{ ...inp, padding: '5px 8px' }} /></label>
+              <label style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>یادآوریِ پیگیری (شمسی):
+                <span style={{ minWidth: 185, display: 'inline-block' }}><JalaliDatePicker value={actDue} onChange={setActDue} onPickTs={setActDueTs} withTime placeholder="انتخابِ تاریخ و ساعت" style={{ padding: '5px 8px', fontSize: 12 }} /></span></label>
               <span style={{ flex: 1 }} />
               <button style={btn} disabled={busy || !actText.trim()} onClick={async () => {
-                const d = await post({ action: 'act', phone: sel.phone, kind: actKind, text: actText, dueAt: actDue ? new Date(actDue).getTime() : undefined })
-                if (d) { setEntry(d.entry); setActText(''); setActDue(''); load() }
+                const d = await post({ action: 'act', phone: sel.phone, kind: actKind, text: actText, dueAt: actDueTs || undefined })
+                if (d) { setEntry(d.entry); setActText(''); setActDue(''); setActDueTs(0); load() }
               }}>ثبت</button>
             </div>
           </div>

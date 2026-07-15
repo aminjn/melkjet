@@ -9,7 +9,8 @@ const FONT = 'Vazirmatn, system-ui, sans-serif'
 const J_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
 const J_WEEK = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']
 const JF = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: 'numeric', day: 'numeric' })
-const fa = (n: number) => n.toLocaleString('fa-IR')
+// فاز ۱۳۹: سال بدونِ جداکنندهٔ هزارگان — «۱۴۰۵» نه «۱٬۴۰۵»
+const fa = (n: number) => n.toLocaleString('fa-IR', { useGrouping: false })
 const pad = (n: number) => fa(n).padStart(2, '۰')
 
 function jParts(d: Date): { jy: number; jm: number; jd: number } {
