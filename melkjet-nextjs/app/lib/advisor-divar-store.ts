@@ -71,6 +71,22 @@ export function getDivar(o: string): AdvisorDivar {
   return cur
 }
 
+// فاز ۱۴۲ — ادغامِ تنظیمات/تاریخچهٔ دیوارِ from در to: منابع (بدونِ تکرارِ لینک) و importها جمع می‌شوند.
+export function mergeDivarData(from: string, to: string): number {
+  const db = load()
+  const src = db.advisors[from]
+  if (!src) return 0
+  const dst = db.advisors[to] = migrate({ ...seed(), ...(db.advisors[to] || {}) })
+  const srcM = migrate({ ...seed(), ...src })
+  const haveUrls = new Set((dst.sources || []).map(s => s.searchUrl))
+  let moved = 0
+  for (const s of srcM.sources || []) { if (!haveUrls.has(s.searchUrl)) { dst.sources.push(s); moved++ } }
+  dst.imports = [...(dst.imports || []), ...(srcM.imports || [])]
+  delete db.advisors[from]
+  save(db)
+  return moved
+}
+
 // ── مدیریتِ منابعِ اسکرپ ──
 export function addSource(o: string, input: Partial<DivarSource>): DivarSource {
   const db = load(); const cur = migrate(db.advisors[o] || seed())

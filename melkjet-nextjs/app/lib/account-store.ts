@@ -39,6 +39,34 @@ function save(db: DB) { writeJsonCached(FILE, db, true) }
 
 export function getAccount(phone: string): Account | null { return load()[phone] || null }
 
+// فاز ۱۴۲ (فیدبک: «دیوار احراز نمی‌کند؛ یک نفر دو شماره/دو حساب دارد — امکانِ مرج لازم است»)
+// ادغامِ حسابِ secondary در primary: هویتِ احرازشده/نام/نقش/پلنِ بهتر به اصلی می‌رود؛ حسابِ دوم
+// تعلیق می‌شود (با دلیلِ روشن) تا تاریخچه بماند ولی دیگر واردِ چرخه نشود. adminSections هرگز منتقل نمی‌شود.
+export function mergeAccounts(primary: string, secondary: string): { ok: boolean; error?: string } {
+  const db = load()
+  const p = db[primary]; const s = db[secondary]
+  if (!p || !s) return { ok: false, error: 'یکی از دو حساب پیدا نشد' }
+  if (primary === secondary) return { ok: false, error: 'دو حساب یکی هستند' }
+  if (!p.name && s.name) p.name = s.name
+  if (!p.role && s.role) p.role = s.role
+  // هویتِ احرازشدهٔ شاهکار: اگر اصلی احراز نشده و دومی شده، همهٔ فیلدهای هویتی منتقل می‌شوند
+  if (!p.identityVerifiedAt && s.identityVerifiedAt) {
+    for (const k of ['nationalId', 'firstName', 'lastName', 'gender', 'fatherName', 'birthDate', 'birthPlace', 'idNumber', 'idSerial', 'birthPlaceCode', 'fullName', 'issuancePlace', 'issuancePlaceCode', 'officeCode', 'identityVerifiedAt', 'identityRaw'] as const) {
+      if (s[k] !== undefined) (p as any)[k] = s[k]
+    }
+  }
+  // پلن: اگر دومی پلنِ فعالِ دیرپاتری دارد، به اصلی می‌رود (هیچ پلنی از دست نرود)
+  const sActive = s.plan && (!s.planExpiresAt || s.planExpiresAt > Date.now())
+  if (sActive && (!p.plan || (p.planExpiresAt || 0) < (s.planExpiresAt || Infinity))) {
+    p.plan = s.plan; p.planStartedAt = s.planStartedAt; p.planExpiresAt = s.planExpiresAt
+  }
+  s.suspended = true; s.suspendedAt = Date.now(); s.gateExempt = false
+  s.suspendReason = `ادغام‌شده در حسابِ ${primary} — این حساب دیگر استفاده نمی‌شود`
+  delete s.adminSections
+  save(db)
+  return { ok: true }
+}
+
 // دسترسی‌های ویژه (caps) که سوپرادمین به کاربر می‌دهد.
 export function hasCap(phone: string, cap: string): boolean {
   const a = load()[phone]

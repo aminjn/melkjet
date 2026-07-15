@@ -96,6 +96,22 @@ export function saveProfile(phone: string, patch: Partial<BusinessProfile>): Bus
 }
 
 // درصدِ تکمیلِ پروفایل (برای نوارِ پیشرفت)
+// فاز ۱۴۲ — ادغامِ پروفایلِ عمومی: فیلدهای خالیِ مقصد از مبدأ پر می‌شود؛ مبدأ حذف.
+export function mergeProfiles(from: string, to: string): void {
+  const db = load()
+  const src = db[from]
+  if (!src) return
+  const dst = db[to] = { ...emptyProfile(), ...(db[to] || {}) }
+  for (const k of Object.keys(src) as (keyof BusinessProfile)[]) {
+    const v = src[k]
+    const cur = dst[k]
+    const empty = cur === undefined || cur === '' || (Array.isArray(cur) && cur.length === 0)
+    if (empty && v !== undefined && v !== '') (dst as any)[k] = v
+  }
+  delete db[from]
+  save(db)
+}
+
 export function completeness(p: BusinessProfile): number {
   const checks = [p.displayName || p.businessName, p.businessType, p.tagline, p.about, p.logo, p.contactPhone || p.landline, p.city, p.address, p.specialties.length > 0, p.workHours, p.social.instagram || p.social.telegram || p.social.whatsapp]
   const done = checks.filter(Boolean).length

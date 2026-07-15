@@ -81,6 +81,16 @@ export async function PATCH(req: NextRequest) {
     logAudit(s.phone, secs.length ? 'اعطای دسترسیِ پنلِ ادمین (پرسنل)' : 'لغوِ دسترسیِ پنلِ ادمین', `${phone115} → ${secs.join('، ') || 'هیچ'}`)
     return NextResponse.json({ ok: true, adminSections: a115.adminSections || [] })
   }
+  // فاز ۱۴۲ (فیدبک: «دیوار احراز نمی‌کند؛ یک نفر دو شماره/دو حساب دارد») — ادغامِ دو حساب.
+  // b.phone = حسابِ اصلی (می‌ماند)، b.mergeFrom = حسابِ دوم (داده‌اش منتقل و خودش تعلیق می‌شود).
+  if (b.mergeFrom !== undefined) {
+    if (s.role !== 'super_admin') return NextResponse.json({ error: 'ادغامِ حساب فقط کارِ سوپرادمین است' }, { status: 403 })
+    const { mergeUserAccounts } = await import('@/app/lib/account-merge')
+    const r = await mergeUserAccounts(String(b.phone || ''), String(b.mergeFrom || ''))
+    if (!r.ok) return NextResponse.json({ error: r.error || 'ادغام ناموفق بود' }, { status: 400 })
+    logAudit(s.phone, 'ادغامِ دو حساب', `${b.mergeFrom} ← ${b.phone} (فایل ${r.advisorListings ?? 0}، لید ${(r.advisorLeads ?? 0) + (r.leads ?? 0)}، آگهیِ عمومی ${r.publicListings ?? 0}، وظیفه ${r.tasks ?? 0}، منبعِ دیوار ${r.divarSources ?? 0})`)
+    return NextResponse.json({ ok: true, merged: r })
+  }
   // فاز ۵۶ (فیدبک: «هر پلنی را برای هر کاربر چند روزِ خاص رایگان بدهم»): هدیهٔ پلنِ زمان‌دار.
   // همان مسیرِ فعال‌سازیِ خریدِ تأییدشده (setPlan با انقضا + شارژِ اعتبارِ AI پلن)، فقط بدونِ پول.
   if (b.grantPlan !== undefined) {

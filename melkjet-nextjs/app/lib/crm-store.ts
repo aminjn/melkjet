@@ -40,6 +40,15 @@ export async function listAllTasks(): Promise<Task[]> {
   return (await load()).tasks.sort((a, b) => b.createdAt - a.createdAt)
 }
 
+// فاز ۱۴۲ — انتقالِ مالکیتِ وظایف در ادغامِ دو حساب
+export async function reassignTasksOwner(from: string, to: string): Promise<number> {
+  return mutate(db => {
+    let n = 0
+    for (const t of db.tasks) if (t.owner === from) { t.owner = to; n++ }
+    return n
+  })
+}
+
 export async function listTasks(owner: string): Promise<Task[]> {
   return (await load()).tasks.filter(t => t.owner === owner).sort((a, b) => b.createdAt - a.createdAt)
 }

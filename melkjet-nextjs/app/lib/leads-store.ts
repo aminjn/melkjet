@@ -150,6 +150,15 @@ export async function listAllLeads(): Promise<Lead[]> {
   return (await load()).leads.map(migrate).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
 }
 
+// فاز ۱۴۲ — انتقالِ مالکیتِ لیدها در ادغامِ دو حساب
+export async function reassignLeadsOwner(from: string, to: string): Promise<number> {
+  return mutate(db => {
+    let n = 0
+    for (const l of db.leads) if (l.owner === from) { l.owner = to; n++ }
+    return n
+  })
+}
+
 export async function listLeads(owner: string): Promise<Lead[]> {
   return (await load()).leads.filter(l => l.owner === owner).map(migrate).sort((a, b) => (b.score - a.score) || (b.updatedAt - a.updatedAt))
 }

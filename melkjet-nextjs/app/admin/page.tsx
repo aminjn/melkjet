@@ -4708,6 +4708,7 @@ function UsersView() {
   const [planFilter, setPlanFilter] = useState('')
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [viewUser, setViewUser] = useState<any>(null)
+  const [mergePrimary, setMergePrimary] = useState('')   // فاز ۱۴۲: حسابِ اصلی در ادغامِ دو حساب
   // فاز ۱۲۵ — صداقتِ UI: پرسنل نباید دکمه/کارتی ببیند که برایش کار نمی‌کند (اعطای دسترسی، impersonateِ اعطانشده، حساب‌های محافظت‌شده)
   const [meStaff, setMeStaff] = useState<string[] | null>(null)
   useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.staff) && d.role !== 'super_admin') setMeStaff(d.staff) }).catch(() => {}) }, [])
@@ -4803,6 +4804,27 @@ function UsersView() {
             <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ role: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ نقش…</option><option value="__none">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
             <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ plan: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ پلن…</option><option value="__none">— بدون پلن</option>{planOptions(plans)}</select>
             <button onClick={bulkDel} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>حذف</button>
+            {/* فاز ۱۴۲ (فیدبک: «یک نفر دو شماره دارد — امکانِ مرج لازم است»): دقیقاً ۲ انتخاب → ادغام */}
+            {sel.size === 2 && !meStaff && (() => {
+              const pair142 = [...sel]
+              const primary142 = pair142.includes(mergePrimary) ? mergePrimary : pair142[0]
+              const nameOf142 = (ph: string) => { const u = users.find((x: any) => x.phone === ph); return u?.name ? `${u.name} (${ph})` : ph }
+              const doMerge142 = async () => {
+                const secondary = pair142.find(p => p !== primary142)!
+                if (!confirm(`حسابِ «${nameOf142(secondary)}» در «${nameOf142(primary142)}» ادغام شود؟\n\nهویتِ احرازشده، پلنِ فعال، فایل‌ها/لیدها/قرارها، آگهی‌های عمومی، CRM و پروفایل به حسابِ اصلی می‌رود و حسابِ دوم تعلیق می‌شود. این کار برگشت‌پذیر نیست.`)) return
+                const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: primary142, mergeFrom: secondary }) })
+                const d = await r.json().catch(() => ({}))
+                if (d.ok) { const m = d.merged || {}; alert(`✓ ادغام شد — فایلِ مشاور: ${m.advisorListings ?? 0}، لید: ${(m.advisorLeads ?? 0) + (m.leads ?? 0)}، آگهیِ عمومی: ${m.publicListings ?? 0}، وظیفهٔ CRM: ${m.tasks ?? 0}`); setMergePrimary(''); load() }
+                else alert('⚠ ' + (d.error || 'ادغام ناموفق بود'))
+              }
+              return <>
+                <select value={primary142} onChange={e => setMergePrimary(e.target.value)} title="کدام حساب اصلی بماند؟"
+                  style={{ ...inp, padding: '5px 10px', fontSize: 12, maxWidth: 230 }}>
+                  {pair142.map(p => <option key={p} value={p}>اصلی: {nameOf142(p)}</option>)}
+                </select>
+                <button onClick={doMerge142} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700 }}>🔗 ادغامِ دو حساب</button>
+              </>
+            })()}
           </>}
         </div>
       </Card>

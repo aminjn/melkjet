@@ -584,6 +584,17 @@ export async function updateUserListing(itemId: string, raw: {
     return it
   })
 }
+// فاز ۱۴۲ — در ادغامِ دو حساب، مالکیتِ آگهی‌های عمومی (نگاشتِ «آگهی‌های من») به شمارهٔ اصلی می‌رود.
+export async function reassignListingOwnerPhone(from: string, to: string): Promise<number> {
+  return mutate(db => {
+    let n = 0
+    for (const it of db.items) {
+      if (it.type === 'listing' && it.meta?.['__ownerPhone'] === from) { it.meta['__ownerPhone'] = to; n++ }
+    }
+    return n
+  })
+}
+
 // تمدیدِ آگهی برای ۳۰ روزِ دیگر
 export async function renewListing(itemId: string): Promise<Item | null> {
   return mutate(db => {

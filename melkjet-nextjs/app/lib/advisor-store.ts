@@ -63,6 +63,27 @@ async function withDb<R>(fn: (db: DB) => R): Promise<R> {
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
+// فاز ۱۴۲ — ادغامِ دادهٔ مشاورِ from در to: همهٔ فهرست‌ها (لید/فایل/قرار/کمیسیون/آمار ماهانه)
+// جمع می‌شوند؛ فیلدهای خالیِ پروفایلِ مقصد از مبدأ پر می‌شود؛ کلیدِ مبدأ حذف می‌شود.
+export async function mergeAdvisorData(from: string, to: string): Promise<{ listings: number; leads: number }> {
+  return withDb(db => {
+    const src = db.advisors[from]
+    if (!src) return { listings: 0, leads: 0 }
+    const dst = db.advisors[to] = db.advisors[to] || { profile: { name: '' }, leads: [], listings: [], appts: [], commissions: [], monthlyDeals: [], createdAt: Date.now() }
+    dst.leads = [...(dst.leads || []), ...(src.leads || [])]
+    dst.listings = [...(dst.listings || []), ...(src.listings || [])]
+    dst.appts = [...(dst.appts || []), ...(src.appts || [])]
+    dst.commissions = [...(dst.commissions || []), ...(src.commissions || [])]
+    dst.monthlyDeals = [...(dst.monthlyDeals || []), ...(src.monthlyDeals || [])]
+    for (const k of Object.keys(src.profile || {}) as (keyof AdvisorData['profile'])[]) {
+      if (!dst.profile[k] && src.profile[k]) (dst.profile as any)[k] = src.profile[k]
+    }
+    const counts = { listings: (src.listings || []).length, leads: (src.leads || []).length }
+    delete db.advisors[from]
+    return counts
+  })
+}
+
 export const STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'closed', 'lost']
 const LISTING_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
 const APPT_STATUSES: ApptStatus[] = ['scheduled', 'done', 'canceled']
