@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listAccounts } from '@/app/lib/account-store'
 import { listRoles } from '@/app/lib/role-store'
 import { getProfile } from '@/app/lib/profile-store'
-import { getAdvisor } from '@/app/lib/advisor-store'
-import { listReviews } from '@/app/lib/reviews-store'
+import { allApprovedReviews } from '@/app/lib/reviews-store'
+import { allAdvisorProfiles } from '@/app/lib/advisor-store'
 
 // دایرکتوریِ متخصصانِ «ثبت‌شده در سایت» — تا کاربران واقعیِ نقش‌دار (مشاور/آژانس/سازنده/
 // مصالح/حقوقی) در دایرکتوری دیده شوند و به پروفایلِ عمومی‌شان لینک شوند.
@@ -24,6 +24,11 @@ const ROLE_CAT: Record<string, string> = {
   'دفترخانه': 'دفترخانه',
 }
 
+// فاز ۱۳۲ — کشِ درون‌حافظه‌ایِ ۶۰ثانیه‌ای: بدونِ آن، هر بازدید/کلیکِ دسته = اسکنِ کاملِ اکانت‌ها +
+// پرشین‌سازه (~۶MB) + آگهی‌ها؛ روی prod چند ثانیه طول می‌کشید («خیلی طول می‌کشد لود کند»).
+const DIR_TTL = 60_000
+const dirCache = new Map<string, { at: number; body: any }>()
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const category = (url.searchParams.get('category') || '').trim()
@@ -32,6 +37,8 @@ export async function GET(req: NextRequest) {
 
   // فاز ۱۳۰ — شمارشِ واقعیِ هر دسته برای سایدبارِ دایرکتوری (اکانت‌های نقش‌دار + سازنده‌های پرشین‌سازه + اسکرپ)
   if (url.searchParams.get('counts') === '1') {
+    const hit = dirCache.get('counts')
+    if (hit && Date.now() - hit.at < DIR_TTL) return NextResponse.json(hit.body, { headers: { 'Cache-Control': 'no-store, private' } })
     const counts: Record<string, number> = {}
     for (const a of listAccounts()) {
       const cat = ROLE_CAT[roleName(a.role)]
@@ -51,10 +58,24 @@ export async function GET(req: NextRequest) {
         if (c) counts[c] = (counts[c] || 0) + 1
       }
     } catch {}
+    dirCache.set('counts', { at: Date.now(), body: { counts } })
     return NextResponse.json({ counts }, { headers: { 'Cache-Control': 'no-store, private' } })
   }
 
+  const cacheKey = 'cat:' + category
+  const hit = dirCache.get(cacheKey)
+  if (hit && Date.now() - hit.at < DIR_TTL) return NextResponse.json(hit.body, { headers: { 'Cache-Control': 'no-store, private' } })
+
   const items: any[] = []
+  // فاز ۱۳۲ — یک خواندن برای همه: پروفایل‌های مشاور (قبلاً برای هر مشاور یک کوئریِ PG!) و نظراتِ تأییدشده
+  const advisors132 = await allAdvisorProfiles().catch(() => ({} as Awaited<ReturnType<typeof allAdvisorProfiles>>))
+  const reviewsByOwner = new Map<string, { n: number; rated: number; sum: number }>()
+  for (const r of allApprovedReviews()) {
+    const cur = reviewsByOwner.get(r.ownerPhone) || { n: 0, rated: 0, sum: 0 }
+    cur.n++
+    if (Number(r.rating) >= 1) { cur.rated++; cur.sum += Number(r.rating) }
+    reviewsByOwner.set(r.ownerPhone, cur)
+  }
 
   // شمارشِ آگهی‌ها و معاملاتِ موفق به‌ازای هر مالک — سیگنالِ نشان‌های اعتبار (یک‌بار خوانده می‌شود).
   const listingAgg = new Map<string, { count: number; sold: number }>()
@@ -110,7 +131,7 @@ export async function GET(req: NextRequest) {
     // غنی‌سازیِ مشاور از advisor-store (نام/عکس/تخصص/منطقه).
     if (cat === 'مشاور') {
       try {
-        const ap = (await getAdvisor(a.phone)).profile
+        const ap = advisors132[a.phone]?.profile
         if (ap) {
           if (!name && ap.name) name = ap.name.trim()
           if (!photo && ap.photo) photo = ap.photo
@@ -133,16 +154,15 @@ export async function GET(req: NextRequest) {
       responsive: hasPhone,
     })
     // فاز ۱۳۰ — آمارِ واقعیِ کارت (هیچ عددی ساختگی نیست): نظرها/امتیاز از نظراتِ تأییدشده، معامله از آگهی‌های فروخته/اجاره‌رفته، عضویت از createdAt
-    const revs = listReviews(a.phone)
-    const rated = revs.filter(r => Number(r.rating) >= 1)
-    const avgRating = rated.length ? Math.round(rated.reduce((t, r) => t + Number(r.rating), 0) / rated.length * 10) / 10 : 0
+    const rv = reviewsByOwner.get(String(a.phone).replace(/\D/g, '')) || { n: 0, rated: 0, sum: 0 }
+    const avgRating = rv.rated ? Math.round(rv.sum / rv.rated * 10) / 10 : 0
     const memberYears = a.createdAt ? Math.max(0, Math.floor((Date.now() - a.createdAt) / (365.25 * 864e5))) : 0
     items.push({
       id: a.phone, sourceName: 'ملک‌جت', type: 'directory', category: cat,
       title: name, location: city, image: photo, excerpt: tagline,
       tags: specialties.slice(0, 4), hasPhone, url: `/profile/${encodeURIComponent(a.phone)}`,
       badges,
-      stats: { reviews: revs.length, rating: avgRating, deals: agg.sold, listings: agg.count, memberYears, memberSince: a.createdAt || 0 },
+      stats: { reviews: rv.n, rating: avgRating, deals: agg.sold, listings: agg.count, memberYears, memberSince: a.createdAt || 0 },
       // شماره از /api/listing-reveal با kind=advisor — برای هر اکانت (مشاور یا غیرِ آن) خودِ
       // شمارهٔ اکانت را برمی‌گرداند (اگر پروفایلِ مشاور نباشد). شناسه = تلفنِ اکانت.
       revealKind: 'advisor', revealId: a.phone,
@@ -158,5 +178,6 @@ export async function GET(req: NextRequest) {
   } catch { /* پروموت در دسترس نبود */ }
   // ویژه‌ها اول، سپس تازه‌ترها / کامل‌ترها (عکس‌دار/تخصص‌دار).
   items.sort((x, y) => (Number(!!y.promoted) - Number(!!x.promoted)) || (Number(!!y.image) - Number(!!x.image)) || (y.scrapedAt - x.scrapedAt))
+  dirCache.set(cacheKey, { at: Date.now(), body: { items } })
   return NextResponse.json({ items }, { headers: { 'Cache-Control': 'no-store, private' } })
 }

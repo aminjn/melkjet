@@ -86,6 +86,12 @@ function applyAdvisor(db: DB, o: string): boolean {
   return false
 }
 
+// فاز ۱۳۲ (پرفِ دایرکتوری): کلِ دیتابیسِ مشاوران با «یک» خواندن — به‌جای getAdvisor در حلقه
+// که روی PG برای هر مشاور یک رفت‌وبرگشت می‌شد و /api/directory را چند ثانیه‌ای می‌کرد.
+export async function allAdvisorProfiles(): Promise<Record<string, AdvisorData>> {
+  return (await load()).advisors || {}
+}
+
 export async function getAdvisor(o: string): Promise<AdvisorData> {
   const db = await load()
   // اگر seed/پاک‌سازی لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی dirty بود ذخیره می‌شد).

@@ -47,6 +47,9 @@ export function applyReviewModeration(id: string, approved: boolean, reason: str
 }
 
 // نظراتِ یک کسب‌وکار (پیش‌فرض: فقط تأییدشده‌ها).
+// فاز ۱۳۲ (پرفِ دایرکتوری): همهٔ نظراتِ تأییدشده با یک بار خواندنِ فایل — گروه‌بندی سمتِ مصرف‌کننده.
+export function allApprovedReviews(): Review[] { return load().reviews.filter(r => r.approved) }
+
 export function listReviews(ownerPhone: string, opts?: { all?: boolean }): Review[] {
   const phone = String(ownerPhone || '').replace(/\D/g, '')
   if (!phone) return []
