@@ -4709,6 +4709,7 @@ function UsersView() {
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [viewUser, setViewUser] = useState<any>(null)
   const [mergePrimary, setMergePrimary] = useState('')   // فاز ۱۴۲: حسابِ اصلی در ادغامِ دو حساب
+  const [mergeMsg, setMergeMsg] = useState('')           // فاز ۱۴۳: نتیجهٔ ادغام به‌جای alert آزاردهنده
   // فاز ۱۲۵ — صداقتِ UI: پرسنل نباید دکمه/کارتی ببیند که برایش کار نمی‌کند (اعطای دسترسی، impersonateِ اعطانشده، حساب‌های محافظت‌شده)
   const [meStaff, setMeStaff] = useState<string[] | null>(null)
   useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.staff) && d.role !== 'super_admin') setMeStaff(d.staff) }).catch(() => {}) }, [])
@@ -4743,7 +4744,10 @@ function UsersView() {
     load()
   }
 
+  // فاز ۱۴۳ (فیدبک: «ادغام هم نمی‌شود!»): حسابِ ادغام‌شده دیگر در لیست نمی‌آید — یک نفر، یک ردیف.
+  const mergedCount = users.filter(u => u.mergedInto).length
   const filtered = users.filter(u => {
+    if (u.mergedInto) return false
     if (q.trim()) { const t = q.trim(); if (!(u.phone.includes(t) || (u.name || '').includes(t))) return false }
     if (roleFilter && u.role !== roleFilter) return false
     if (planFilter === '__none') { if (u.plan) return false }
@@ -4799,6 +4803,8 @@ function UsersView() {
         </div>
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span>{loading ? 'در حال بارگذاری…' : `${filtered.length.toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')} کاربر`}</span>
+          {mergedCount > 0 && <span style={{ fontSize: 11, color: 'var(--faint)' }} title="حساب‌هایی که در حسابِ دیگری ادغام شده‌اند از این لیست پنهان‌اند">({mergedCount.toLocaleString('fa-IR')} حسابِ ادغام‌شده پنهان است)</span>}
+          {mergeMsg && <span style={{ fontSize: 12, fontWeight: 700, color: mergeMsg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{mergeMsg}</span>}
           {sel.size > 0 && <>
             <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{sel.size.toLocaleString('fa-IR')} انتخاب‌شده:</span>
             <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ role: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ نقش…</option><option value="__none">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
@@ -4811,11 +4817,13 @@ function UsersView() {
               const nameOf142 = (ph: string) => { const u = users.find((x: any) => x.phone === ph); return u?.name ? `${u.name} (${ph})` : ph }
               const doMerge142 = async () => {
                 const secondary = pair142.find(p => p !== primary142)!
-                if (!confirm(`حسابِ «${nameOf142(secondary)}» در «${nameOf142(primary142)}» ادغام شود؟\n\nهویتِ احرازشده، پلنِ فعال، فایل‌ها/لیدها/قرارها، آگهی‌های عمومی، CRM و پروفایل به حسابِ اصلی می‌رود و حسابِ دوم تعلیق می‌شود. این کار برگشت‌پذیر نیست.`)) return
+                if (!confirm(`حسابِ «${nameOf142(secondary)}» در «${nameOf142(primary142)}» ادغام شود؟\n\nهویتِ احرازشده، پلنِ فعال، فایل‌ها/لیدها/قرارها، آگهی‌های عمومی، CRM و پروفایل به حسابِ اصلی می‌رود و حسابِ دوم از لیست حذف می‌شود. این کار برگشت‌پذیر نیست.`)) return
                 const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: primary142, mergeFrom: secondary }) })
                 const d = await r.json().catch(() => ({}))
-                if (d.ok) { const m = d.merged || {}; alert(`✓ ادغام شد — فایلِ مشاور: ${m.advisorListings ?? 0}، لید: ${(m.advisorLeads ?? 0) + (m.leads ?? 0)}، آگهیِ عمومی: ${m.publicListings ?? 0}، وظیفهٔ CRM: ${m.tasks ?? 0}`); setMergePrimary(''); load() }
-                else alert('⚠ ' + (d.error || 'ادغام ناموفق بود'))
+                // فاز ۱۴۳: نتیجه بی‌صدا و درجا — نه alertِ آزاردهنده
+                if (d.ok) { setMergeMsg(`✓ ادغام شد و حسابِ ${secondary} از لیست حذف شد`); setMergePrimary(''); load() }
+                else setMergeMsg('⚠ ' + (d.error || 'ادغام ناموفق بود'))
+                setTimeout(() => setMergeMsg(''), 8000)
               }
               return <>
                 <select value={primary142} onChange={e => setMergePrimary(e.target.value)} title="کدام حساب اصلی بماند؟"

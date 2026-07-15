@@ -17,6 +17,8 @@ export interface Account {
   suspended?: boolean; profileWarnAt?: number; suspendReason?: string; suspendedAt?: number
   // فاز ۱۲۷ (فیدبک: «رفع تعلیق می‌کنم دوباره تعلیق می‌شود»): رفعِ تعلیقِ دستیِ ادمین = معافیتِ ماندگار از تعلیقِ خودکار
   gateExempt?: boolean
+  // فاز ۱۴۳: این حساب در حسابِ دیگری ادغام شده — از لیست‌ها پنهان و هرگز دوباره طرفِ ادغام نمی‌شود
+  mergedInto?: string
   // پرچمِ بررسیِ ضدتقلب (هنوز معلق نشده — در صفِ بازبینیِ سوپرادمین)
   flagged?: boolean; flagReason?: string; flaggedAt?: number
   // دسترسی‌های ویژه که سوپرادمین می‌دهد (مثلِ 'catalog' برای مدیریتِ کاتالوگ و اسکرپِ هایپرساز)
@@ -47,6 +49,9 @@ export function mergeAccounts(primary: string, secondary: string): { ok: boolean
   const p = db[primary]; const s = db[secondary]
   if (!p || !s) return { ok: false, error: 'یکی از دو حساب پیدا نشد' }
   if (primary === secondary) return { ok: false, error: 'دو حساب یکی هستند' }
+  // فاز ۱۴۳ (فیدبک: ادغامِ برعکس/دوباره): حسابِ ادغام‌شده نه «اصلی» می‌شود، نه دوباره ادغام‌شونده.
+  if (p.mergedInto) return { ok: false, error: `حسابِ ${primary} خودش قبلاً در ${p.mergedInto} ادغام شده و نمی‌تواند حسابِ اصلی باشد` }
+  if (s.mergedInto) return { ok: false, error: `حسابِ ${secondary} قبلاً در ${s.mergedInto} ادغام شده است` }
   if (!p.name && s.name) p.name = s.name
   if (!p.role && s.role) p.role = s.role
   // هویتِ احرازشدهٔ شاهکار: اگر اصلی احراز نشده و دومی شده، همهٔ فیلدهای هویتی منتقل می‌شوند
@@ -61,6 +66,7 @@ export function mergeAccounts(primary: string, secondary: string): { ok: boolean
     p.plan = s.plan; p.planStartedAt = s.planStartedAt; p.planExpiresAt = s.planExpiresAt
   }
   s.suspended = true; s.suspendedAt = Date.now(); s.gateExempt = false
+  s.mergedInto = primary   // فاز ۱۴۳: از لیستِ کاربران پنهان می‌شود و دیگر طرفِ هیچ ادغامی نیست
   s.suspendReason = `ادغام‌شده در حسابِ ${primary} — این حساب دیگر استفاده نمی‌شود`
   delete s.adminSections
   save(db)

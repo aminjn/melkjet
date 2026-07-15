@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
   for (const l of allLeads) { const o = l.owner || ''; if (o) crmLeadsByOwner[o] = (crmLeadsByOwner[o] || 0) + 1 }
 
   const rows = listAccounts()
+    .filter(a => !a.mergedInto)   // فاز ۱۴۳: حسابِ ادغام‌شده «همان مشتری» است — دوبار در CRM نیاید
     .map(a => {
       const e = crm[a.phone]
       const lastAct = e?.acts[e.acts.length - 1]
