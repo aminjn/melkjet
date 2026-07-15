@@ -52,12 +52,17 @@ export async function POST(req: NextRequest) {
     case 'probe': {
       const steps: { id: string; label: string; ok: boolean | null; detail: string; ms?: number }[] = []
       const cfg = getDivar(o)
-      // ۱) تنظیماتِ خودِ مشاور
+      // ۱) تنظیماتِ خودِ مشاور — هم فیلدِ قدیمی، هم «اسکرپ‌های ذخیره‌شده» (فاز ۱۳۳: لینک معمولاً در اسکرپ است)
       const { divarProfileSlug } = await import('@/app/lib/divar-post')
-      const slug = cfg.searchUrl ? divarProfileSlug(cfg.searchUrl) : ''
-      steps.push(cfg.searchUrl
-        ? { id: 'cfg', label: 'تنظیماتِ لینکِ دیوار', ok: true, detail: slug ? `پروفایلِ کارشناس شناسایی شد (${slug})` : 'لینکِ جستجو — نامِ دیوار هم لازم است' }
-        : { id: 'cfg', label: 'تنظیماتِ لینکِ دیوار', ok: false, detail: 'لینکِ دیوار تنظیم نشده — اول لینکِ پروفایل/جستجو را ذخیره کن' })
+      const links = [
+        ...(cfg.searchUrl ? [{ name: 'تنظیماتِ اصلی', url: cfg.searchUrl }] : []),
+        ...((cfg.sources || []).filter(x => (x.searchUrl || '').trim()).map(x => ({ name: x.name || 'اسکرپ', url: x.searchUrl }))),
+      ]
+      const withSlug = links.map(l => ({ ...l, slug: divarProfileSlug(l.url) || '' })).find(l => l.slug)
+      const slug = withSlug?.slug || ''
+      steps.push(links.length
+        ? { id: 'cfg', label: 'تنظیماتِ لینکِ دیوار', ok: true, detail: slug ? `${links.length.toLocaleString('fa-IR')} لینک — پروفایلِ کارشناس شناسایی شد (${slug}${withSlug!.name ? ` در «${withSlug!.name}»` : ''})` : `${links.length.toLocaleString('fa-IR')} لینکِ جستجو — برای لینکِ جستجو «نام در دیوار» هم لازم است` }
+        : { id: 'cfg', label: 'تنظیماتِ لینکِ دیوار', ok: false, detail: 'هیچ لینکی تنظیم نشده — لینکِ پروفایل/جستجو را در «اسکرپ‌ها» ذخیره کن' })
       // ۲) پروکسیِ دیوار در ادمین
       const { getAdminData } = await import('@/app/lib/admin-store')
       const proxyUrl = getAdminData().divar?.proxyUrl || ''
@@ -80,7 +85,7 @@ export async function POST(req: NextRequest) {
           steps.push({ id: 'divar', label: 'تماسِ زنده با دیوار', ok: false, ms: Date.now() - t0, detail: e?.message === 'timeout' ? 'بیش از ۲۵ ثانیه پاسخ نیامد — پروکسی/شبکهٔ سرور' : (e?.message || 'خطای نامشخص') })
         }
       } else {
-        steps.push({ id: 'divar', label: 'تماسِ زنده با دیوار', ok: null, detail: 'برای تستِ زنده، لینکِ «پروفایلِ کارشناسِ» دیوار را در تنظیمات بگذار' })
+        steps.push({ id: 'divar', label: 'تماسِ زنده با دیوار', ok: null, detail: links.length ? 'لینک‌ها از نوعِ جستجو هستند — تستِ زنده فقط با لینکِ «پروفایلِ کارشناس» (divar.ir/pro/…) ممکن است؛ خودِ همگام‌سازی با لینکِ جستجو هم کار می‌کند' : 'برای تستِ زنده، لینکِ «پروفایلِ کارشناسِ» دیوار را در اسکرپ‌ها بگذار' })
       }
       // ۴) کارگرِ صف (اینستنسِ ۰) — ریشهٔ رایجِ «می‌زنم و هیچ اتفاقی نمی‌افتد»
       const { queueHeartbeat } = await import('@/app/lib/advisor-divar-job')
