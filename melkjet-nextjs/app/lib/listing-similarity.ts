@@ -11,7 +11,7 @@ function overlap(a: Set<string>, b: Set<string>): number { if (!a.size || !b.siz
 function near(a: number, b: number, tol: number): boolean { if (!a || !b) return false; return Math.abs(a - b) / Math.max(a, b) <= tol }
 function firstInt(s?: string): number { const m = faToEn(s || '').match(/\d[\d,]*/); return m ? parseInt(m[0].replace(/,/g, ''), 10) : 0 }
 
-export interface SimFields { deal: 'sale' | 'rent'; title: string; hood: string; price: number; area: number; rooms: number; priceStr: string }
+export interface SimFields { deal: 'sale' | 'rent'; title: string; hood: string; price: number; area: number; rooms: number; priceStr: string; floor: number }
 
 // از شکلِ آیتمِ اسکرپ‌شده ({title, price, location, meta}) بردارِ ویژگی می‌سازد.
 export function fieldsOf(it: { title?: string; price?: string; location?: string; meta?: Record<string, string> }): SimFields {
@@ -24,25 +24,32 @@ export function fieldsOf(it: { title?: string; price?: string; location?: string
   const hood = norm(it.meta?.['محله'] || (segs.length > 1 ? segs[segs.length - 1] : segs[0] || ''))
   const area = firstInt(it.meta?.['متراژ']) || (faToEn(it.title || '').match(/(\d+)\s*متر/) ? parseInt(faToEn(it.title || '').match(/(\d+)\s*متر/)![1], 10) : 0)
   const rooms = firstInt(it.meta?.['اتاق خواب']) || (faToEn(it.title || '').match(/(\d+)\s*خواب/) ? parseInt(faToEn(it.title || '').match(/(\d+)\s*خواب/)![1], 10) : 0)
-  return { deal, title: it.title || '', hood, price, area, rooms, priceStr: norm(it.price) }
+  // فاز ۱۴۴: طبقه — تنها تمایزِ واقعیِ دو واحدِ هم‌شکل در یک ساختمان (متای «طبقه» یا خودِ عنوان)
+  const floor = firstInt(it.meta?.['طبقه']) || (faToEn(it.title || '').match(/طبقه[یهٔ‌\s]*(\d+)/) ? parseInt(faToEn(it.title || '').match(/طبقه[یهٔ‌\s]*(\d+)/)![1], 10) : 0)
+  return { deal, title: it.title || '', hood, price, area, rooms, priceStr: norm(it.price), floor }
 }
 
 // ساختِ مستقیمِ بردارِ ویژگی از مقادیرِ عددی (برای فایل‌های مشاور که ساختارِ متفاوتی دارند).
-export function fieldsFromParts(p: { deal?: 'sale' | 'rent'; title?: string; hood?: string; price?: number; area?: number; rooms?: number }): SimFields {
-  return { deal: p.deal === 'rent' ? 'rent' : 'sale', title: p.title || '', hood: norm(p.hood), price: p.price || 0, area: p.area || 0, rooms: p.rooms || 0, priceStr: p.price ? String(p.price) : '' }
+export function fieldsFromParts(p: { deal?: 'sale' | 'rent'; title?: string; hood?: string; price?: number; area?: number; rooms?: number; floor?: number }): SimFields {
+  return { deal: p.deal === 'rent' ? 'rent' : 'sale', title: p.title || '', hood: norm(p.hood), price: p.price || 0, area: p.area || 0, rooms: p.rooms || 0, priceStr: p.price ? String(p.price) : '', floor: p.floor || 0 }
 }
 
 // امتیازِ شباهت (۰..۱). ≥ آستانه یعنی «همان ملک».
+// فاز ۱۴۴ (فیدبک: «آگهی‌های درست را تکراری می‌کند و حذف می‌کند») — دو اصلاحِ ریشه‌ای:
+//  ۱) وتوی طبقه: دو واحدِ هم‌شکلِ یک ساختمان (متراژ/قیمت/محلهٔ یکسان) با طبقهٔ متفاوت «همان ملک» نیستند.
+//  ۲) کفِ شواهد: وقتی مشخصات (متراژ/قیمت/محله) در دسترس نیست، صرفِ شباهتِ عنوان دیگر
+//     نمی‌تواند به آستانهٔ تکراری برسد — مخرج هرگز از 0.9 کمتر نمی‌شود.
 export function similarity(x: SimFields, y: SimFields): number {
   if (x.deal !== y.deal) return 0
   if (x.priceStr && x.priceStr === y.priceStr && norm(x.title) === norm(y.title)) return 1
+  if (x.floor && y.floor && x.floor !== y.floor) return 0   // طبقهٔ متفاوت = واحدِ متفاوت
   let s = 0, w = 0
   if (x.hood && y.hood) { w += 0.25; if (x.hood === y.hood || x.hood.includes(y.hood) || y.hood.includes(x.hood)) s += 0.25 }
   if (x.area && y.area) { w += 0.3; if (near(x.area, y.area, 0.05)) s += 0.3 }
   if (x.price && y.price) { w += 0.3; if (near(x.price, y.price, 0.03)) s += 0.3 }
   if (x.rooms && y.rooms) { w += 0.1; if (x.rooms === y.rooms) s += 0.1 }
   const ov = overlap(toks(x.title), toks(y.title)); w += 0.35; s += 0.35 * ov
-  return w ? s / w : 0
+  return w ? s / Math.max(w, 0.9) : 0
 }
 
 export const DUP_THRESHOLD = 0.85

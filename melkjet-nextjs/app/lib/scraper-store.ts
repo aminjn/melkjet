@@ -348,13 +348,17 @@ export async function setModerationBatch(verdicts: { id: string; status: ItemSta
 
 // فاز ۱۳۸ — بازممیزیِ ردشده‌های «خودکار»: آگهی‌هایی که ماشین/قاعدهٔ قدیمی رد کرده (نه ادمینِ انسانی)
 // دوباره به صفِ ممیزی برمی‌گردند تا با قانونِ جدید (رد فقط با مدرکِ قطعیِ تماس) از نو داوری شوند.
+// فاز ۱۴۴ (فیدبک: «آگهی‌های درست را تکراری می‌کند»): تکراری‌های خودکار هم برمی‌گردند تا با
+// موتورِ جدیدِ شباهت (وتوی طبقه + کفِ شواهد) از نو داوری شوند — تکراریِ واقعی دوباره تکراری می‌شود.
 export async function requeueAutoRejected(): Promise<number> {
   return mutate(db => {
     let n = 0
     for (const it of db.items) {
-      if (it.status === 'rejected' && /^ردِ خودکار|ممیزیِ خودکارِ یادگیری/.test(it.aiReason || '')) {
+      const autoRej = it.status === 'rejected' && /^ردِ خودکار|ممیزیِ خودکارِ یادگیری/.test(it.aiReason || '')
+      const autoDup = it.status === 'duplicate' && /تکراری/.test(it.aiReason || '')
+      if (autoRej || autoDup) {
         it.status = 'pending'; it.moderatedAt = undefined
-        it.aiReason = 'در صفِ بازممیزی با قانونِ جدید (ردِ قبلی خودکار بود)'
+        it.aiReason = autoDup ? 'در صفِ بازممیزی با موتورِ جدیدِ تشخیصِ تکرار' : 'در صفِ بازممیزی با قانونِ جدید (ردِ قبلی خودکار بود)'
         n++
       }
     }
