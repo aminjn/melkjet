@@ -4,11 +4,13 @@ import { getAll as geoAll, findNeighborhoodInGeo } from './geo-store'
 
 // ── Persian number / price / area parsing ──────────────────────────────────
 function faToEn(s: string): string {
-  return (s || '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+  return (s || '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
 }
 
 export function parsePrice(s: string): number {
-  const e = faToEn(s || '')
+  // فاز ۱۵۷ (قیفِ واقعیِ prod: از ۱۸٬۰۸۴ آگهی فقط ۲۸۴ قیمتِ قابلِ‌پارس): قیمت‌های دیوار با
+  // جداکنندهٔ هزارگانِ «فارسی» می‌آیند — «۲۰٬۶۰۰٬۰۰۰٬۰۰۰ تومان» (U+066C) قبلاً فقط «۲۰» پارس می‌شد.
+  const e = faToEn(s || '').replace(/[٬،]/g, ',').replace(/٫/g, '.')
   const m = e.match(/(\d[\d,]*\.?\d*)/)
   if (!m) return 0
   let n = parseFloat(m[1].replace(/,/g, ''))
