@@ -1,4 +1,6 @@
 import { listItems, type Item } from './scraper-store'
+import { dealOf } from './listing-filter'
+import { getAll as geoAll, findNeighborhoodInGeo } from './geo-store'
 
 // ── Persian number / price / area parsing ──────────────────────────────────
 function faToEn(s: string): string {
@@ -23,28 +25,35 @@ export function parseArea(s: string): number {
   return m ? parseInt(m[1], 10) : 0
 }
 
-function isSale(it: Item): boolean {
-  const cat = it.meta?.['category'] || ''
-  if (/sell/.test(cat)) return true
-  if (/rent/.test(cat)) return false
-  const t = `${it.price || ''} ${it.title || ''} ${it.meta?.['نوع معامله'] || ''}`
-  if (/ودیعه|اجاره|رهن/.test(t)) return false
-  return /فروش|خرید|قیمت کل|میلیارد/.test(t)
-}
-
 interface Rec { city: string; district: string; ppm: number; t: number }
 
+// فاز ۱۵۵ (فیدبکِ prod: «کلی آگهی داری چرا فقط شهران؟») — استخراجِ مقاوم:
+// (۱) فروش با منطقِ مشترکِ dealOf (قیمتِ «۴٬۵۰۰٬۰۰۰٬۰۰۰ تومان» بدونِ واژهٔ میلیارد/فروش هم فروش است)،
+// (۲) متراژ اول از متای «متراژ» بعد عنوان/چکیده، (۳) شهر از متا → بخش‌های لوکیشن با فهرستِ واقعیِ
+// شهرهای geo → و اگر فقط نامِ محله بود (مثلِ «شهران»)، شهرش از خودِ نقشهٔ geo پیدا می‌شود.
+function metaArea(s?: string): number {
+  const n = parseInt(faToEn(s || '').replace(/[^\d]/g, ''), 10) || 0
+  return n >= 15 && n <= 3000 ? n : 0
+}
+
 async function records(): Promise<Rec[]> {
+  const cityNames = new Set<string>()
+  try { for (const p of geoAll()) for (const c of p.cities) cityNames.add(normCity(c.name)) } catch {}
   const out: Rec[] = []
   for (const it of await listItems('listing')) {
-    if (!isSale(it)) continue
-    const area = parseArea(it.title) || parseArea(it.excerpt || '')
+    if (dealOf(it) !== 'sale') continue
+    const area = metaArea(it.meta?.['متراژ']) || parseArea(it.title) || parseArea(it.excerpt || '')
     const price = parsePrice(it.price || '')
     if (area < 15 || price < 1e8) continue
     const ppm = price / area
     if (ppm < 1e6 || ppm > 5e9) continue   // sanity bounds (toman/m²)
-    const city = it.meta?.['شهر'] || (it.location || '').split('،').slice(-1)[0]?.trim() || ''
-    const district = it.meta?.['محله'] || (it.location || '').split('،')[0]?.trim() || ''
+    let city = (it.meta?.['شهر'] || '').trim()
+    let district = (it.meta?.['محله'] || '').trim()
+    const parts = (it.location || '').split(/[،,]/).map(s => s.trim()).filter(Boolean)
+    if (!city) city = parts.find(p => cityNames.has(normCity(p))) || ''
+    if (!district) district = parts.find(p => normCity(p) !== normCity(city)) || ''
+    if (!city && district) { try { city = findNeighborhoodInGeo('', district)?.city || '' } catch {} }
+    if (district && normCity(district) === normCity(city)) district = ''
     out.push({ city, district, ppm, t: it.scrapedAt })
   }
   return out
