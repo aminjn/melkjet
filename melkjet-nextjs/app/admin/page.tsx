@@ -6515,6 +6515,20 @@ function SiteView() {
     <div style={{ maxWidth: 900 }}>
       {(saved || err) && <div style={{ position: 'sticky', top: 0, zIndex: 5, marginBottom: 12, padding: '9px 14px', borderRadius: 10, fontSize: 13, background: err ? 'rgba(231,74,74,.12)' : 'rgba(95,217,138,.12)', border: `1px solid ${err ? 'rgba(231,74,74,.4)' : 'rgba(95,217,138,.4)'}`, color: err ? '#e7674a' : '#5fd98a' }}>{err || saved}</div>}
 
+      {/* ── فاز ۱۵۰: بخش‌های صفحهٔ مقاله ── */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>📰 صفحهٔ مقاله</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>بخش‌های هوشمندِ صفحهٔ مقاله — خاموش کنی اصلاً رندر نمی‌شود. تبلیغاتِ مقاله از منوی «تبلیغات بنری» (با هدف‌گیریِ دسته یا تک‌مقاله) تنظیم می‌شود؛ اگر بنری تعریف نشده باشد هیچ‌چیزی نمایش داده نمی‌شود.</div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 8 }}>
+          <input type="checkbox" checked={cfg?.blog?.tldr !== false} onChange={async e => { const v = e.target.checked; setCfg(cfg ? { ...cfg, blog: { ...cfg.blog, tldr: v } } : cfg); await post({ action: 'save', blog: { tldr: v } }, '✓ ذخیره شد') }} style={{ accentColor: 'var(--gold)' }} />
+          <span>خلاصهٔ مقاله (TL;DR) بالای متن — از خلاصه/توضیحِ متایِ خودِ مقاله</span>
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+          <input type="checkbox" checked={cfg?.blog?.market !== false} onChange={async e => { const v = e.target.checked; setCfg(cfg ? { ...cfg, blog: { ...cfg.blog, market: v } } : cfg); await post({ action: 'save', blog: { market: v } }, '✓ ذخیره شد') }} style={{ accentColor: 'var(--gold)' }} />
+          <span>کارتِ «تحلیلِ بازارِ ملک‌جت» (آمارِ زندهٔ واقعیِ بازار + لینک به /market) — فقط وقتی داده هست</span>
+        </label>
+      </div>
+
       {/* ── فوتر ── */}
       <div style={card}>
         <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>🦶 فوترِ کلِ سایت</div>
@@ -6626,10 +6640,12 @@ function SiteView() {
 
 function AdsView() {
   const [banners, setBanners] = useState<any[]>([])
-  const [f, setF] = useState({ title: '', image: '', link: '', placement: 'home' })
+  const [f, setF] = useState({ title: '', image: '', link: '', placement: 'home', articleCategory: '', articleSlug: '' })
+  const [artCats, setArtCats] = useState<string[]>([])   // فاز ۱۵۰: دسته‌های واقعیِ مقالات برای هدف‌گیری
   const load = () => fetch('/api/admin/banners').then(r => r.ok ? r.json() : { banners: [] }).then(d => setBanners(d.banners || []))
+  useEffect(() => { fetch('/api/categories?type=article').then(r => r.ok ? r.json() : null).then(d => { const names = (d?.categories || []).map((c: any) => c.name || c).filter(Boolean); setArtCats(names) }).catch(() => {}) }, [])
   useEffect(() => { load() }, [])
-  const add = async () => { if (!f.title.trim() || !f.image.trim()) return; await fetch('/api/admin/banners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); setF({ title: '', image: '', link: '', placement: 'home' }); load() }
+  const add = async () => { if (!f.title.trim() || !f.image.trim()) return; await fetch('/api/admin/banners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); setF({ title: '', image: '', link: '', placement: 'home', articleCategory: '', articleSlug: '' }); load() }
   const patch = async (id: string, p: any) => { await fetch('/api/admin/banners', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...p }) }); load() }
   const del = async (id: string) => { if (!confirm('این بنر حذف شود؟')) return; await fetch(`/api/admin/banners?id=${id}`, { method: 'DELETE' }); load() }
   const PL: Record<string, string> = { home: 'صفحهٔ خانه', search: 'جستجو', sidebar: 'ساید‌بار', article: 'مقالات' }
@@ -6643,6 +6659,14 @@ function AdsView() {
           <select style={inp} value={f.placement} onChange={e => setF({ ...f, placement: e.target.value })}>{Object.entries(PL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
           <div><ImageUpload label="تصویر بنر" value={f.image} onChange={url => setF({ ...f, image: url })} height={90} /></div>
           <input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="لینک مقصد" value={f.link} onChange={e => setF({ ...f, link: e.target.value })} />
+          {/* فاز ۱۵۰ — هدف‌گیریِ اختیاری برای جایگاه‌های مقاله: خالی = همهٔ مقالات */}
+          {(f.placement === 'article' || f.placement === 'sidebar') && <>
+            <select style={inp} value={f.articleCategory} onChange={e => setF({ ...f, articleCategory: e.target.value })}>
+              <option value="">همهٔ دسته‌های مقاله</option>
+              {artCats.map(c => <option key={c} value={c}>فقط دستهٔ «{c}»</option>)}
+            </select>
+            <input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="فقط یک مقالهٔ خاص (slug — اختیاری)" value={f.articleSlug} onChange={e => setF({ ...f, articleSlug: e.target.value })} />
+          </>}
           <div style={{ gridColumn: '1 / -1' }}><GoldButton onClick={add}>＋ افزودن بنر</GoldButton></div>
         </div>
       </Card>
@@ -6652,7 +6676,7 @@ function AdsView() {
             {banners.map(b => (
               <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10, padding: 10, flexWrap: 'wrap', opacity: b.active ? 1 : .5 }}>
                 <img src={b.image} alt="" style={{ width: 120, height: 50, borderRadius: 8, objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
-                <div style={{ flex: 1, minWidth: 120 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>{b.title}</div><div style={{ fontSize: 11.5, color: 'var(--faint)' }}>{PL[b.placement] || b.placement} · {(b.clicks || 0).toLocaleString('fa-IR')} کلیک</div></div>
+                <div style={{ flex: 1, minWidth: 120 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>{b.title}</div><div style={{ fontSize: 11.5, color: 'var(--faint)' }}>{PL[b.placement] || b.placement}{b.articleSlug ? ` · فقط مقالهٔ ${b.articleSlug}` : b.articleCategory ? ` · فقط دستهٔ «${b.articleCategory}»` : ''} · {(b.clicks || 0).toLocaleString('fa-IR')} کلیک</div></div>
                 <button onClick={() => patch(b.id, { active: !b.active })} style={{ ...inp, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: b.active ? '#5fd98a' : 'var(--faint)' }}>{b.active ? 'فعال' : 'غیرفعال'}</button>
                 <button onClick={() => del(b.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>×</button>
               </div>

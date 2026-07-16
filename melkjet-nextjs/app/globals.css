@@ -331,3 +331,13 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 /* صفحهٔ آگهی: نوارِ اکشنِ چسبانِ پایین فقط روی موبایل (جای تب‌بار) + فاصلهٔ پایین تا محتوا پشتش نرود */
 .mjp-actionbar{display:none}
 @media(max-width:900px){.mjp-actionbar{display:flex!important}.mjp-page{padding-bottom:78px!important}}
+
+/* فاز ۱۵۰ — صفحهٔ مقاله (مجله): موبایل = سایدبار زیر می‌رود، کاشی‌ها و مرتبط‌ها تک/دوستونه */
+@media(max-width:920px){
+  .mjblog-grid{grid-template-columns:1fr!important}
+  .mjblog-side{position:static!important;order:2}
+  .mjblog-rel{grid-template-columns:1fr!important}
+}
+@media(max-width:560px){
+  .mjblog-tiles{grid-template-columns:1fr 1fr!important}
+}

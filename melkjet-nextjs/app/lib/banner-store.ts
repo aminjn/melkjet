@@ -17,6 +17,10 @@ export interface Banner {
   active: boolean
   clicks: number
   createdAt: number
+  // فاز ۱۵۰ — هدف‌گیریِ اختیاری برای جایگاه‌های مقاله: خالی = همه‌جا؛
+  // دستهٔ مقاله (نامِ فارسی) و/یا اسلاگِ یک مقالهٔ خاص.
+  articleCategory?: string
+  articleSlug?: string
 }
 
 interface DB { banners: Banner[] }
@@ -47,12 +51,34 @@ export function listActive(placement?: Placement): Banner[] {
   return listBanners().filter(b => b.active && (!placement || b.placement === placement))
 }
 
+// فاز ۱۵۰ — بنرهای فعالِ یک جایگاه با درنظرگرفتنِ زمینهٔ مقاله (دسته/اسلاگ).
+// اولویت: بنرِ مخصوصِ همین مقاله > بنرِ دستهٔ همین مقاله > بنرِ عمومیِ جایگاه. هیچ‌کدام نبود → [].
+const normFa = (s?: string) => String(s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
+export function listActiveFor(placement: Placement, ctx?: { category?: string; slug?: string }): Banner[] {
+  const all = listActive(placement)
+  const cat = normFa(ctx?.category); const slug = normFa(ctx?.slug)
+  const matches = all.filter(b => {
+    if (b.articleSlug && normFa(b.articleSlug) !== slug) return false
+    if (b.articleCategory && normFa(b.articleCategory) !== cat) return false
+    return true
+  })
+  const rank = (b: Banner) => (b.articleSlug ? 2 : b.articleCategory ? 1 : 0)
+  return matches.sort((a, b) => rank(b) - rank(a) || b.createdAt - a.createdAt)
+}
+
+export function getActiveBanner(bannerId: string): Banner | null {
+  const b = load().banners.find(x => x.id === bannerId)
+  return b && b.active ? b : null
+}
+
 export function addBanner(input: {
   title: string
   image: string
   link: string
   placement?: Placement
   active?: boolean
+  articleCategory?: string
+  articleSlug?: string
 }): Banner {
   const db = load()
   const banner: Banner = {
@@ -64,6 +90,8 @@ export function addBanner(input: {
     active: input.active !== false,
     clicks: 0,
     createdAt: Date.now(),
+    articleCategory: String(input.articleCategory || '').trim() || undefined,
+    articleSlug: String(input.articleSlug || '').trim() || undefined,
   }
   db.banners.unshift(banner)
   save(db)
@@ -82,6 +110,8 @@ export function updateBanner(
   if (patch.link !== undefined) b.link = String(patch.link).trim()
   if (patch.placement !== undefined) b.placement = normPlacement(patch.placement)
   if (patch.active !== undefined) b.active = !!patch.active
+  if (patch.articleCategory !== undefined) b.articleCategory = String(patch.articleCategory || '').trim() || undefined
+  if (patch.articleSlug !== undefined) b.articleSlug = String(patch.articleSlug || '').trim() || undefined
   save(db)
   return b
 }

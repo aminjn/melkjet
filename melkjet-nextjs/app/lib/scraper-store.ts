@@ -619,6 +619,7 @@ export interface ArticleInput {
   tags?: string[]; slug?: string; seoTitle?: string; metaDescription?: string
   focusKeyword?: string; status?: 'draft' | 'published'; author?: string; source?: string
   publishAt?: number   // زمان‌بندیِ انتشار (epoch ms)؛ اگر در آینده باشد، مقاله «زمان‌بندی‌شده» می‌شود
+  bannerId?: string    // فاز ۱۵۰: بنرِ اختصاصیِ همین مقاله (انتخاب در مقاله‌ساز؛ خالی = هدف‌گیریِ عمومی)
 }
 
 export function slugify(s: string): string {
@@ -668,6 +669,7 @@ export async function addArticle(raw: ArticleInput): Promise<Item> {
       metaDescription: raw.metaDescription || (raw.excerpt || raw.body).slice(0, 160),
       focusKeyword: raw.focusKeyword || '',
       summary: raw.excerpt || raw.body.replace(/[#*_>`-]/g, '').slice(0, 200),
+      ...(raw.bannerId ? { __bannerId: String(raw.bannerId) } : {}),
     }
     const item: Item = {
       id: id(), sourceId: 'cms', sourceName: raw.source || meta.author, type: 'article',
@@ -696,6 +698,7 @@ export async function updateArticle(itemId: string, patch: Partial<ArticleInput>
     if (patch.metaDescription !== undefined) meta.metaDescription = patch.metaDescription
     if (patch.focusKeyword !== undefined) meta.focusKeyword = patch.focusKeyword
     if (patch.author !== undefined) { meta.author = patch.author; it.sourceName = patch.author }
+    if (patch.bannerId !== undefined) { if (patch.bannerId) meta.__bannerId = String(patch.bannerId); else delete meta.__bannerId }
     // زمان‌بندی: اگر publishAt در آینده داده شد → scheduled؛ اگر منتشر شد → publishAt پاک می‌شود.
     if (patch.publishAt !== undefined && patch.publishAt > Date.now()) { meta.cmsStatus = 'scheduled'; meta.publishAt = String(patch.publishAt) }
     else if (patch.status !== undefined) { meta.cmsStatus = patch.status; if (patch.status === 'published' || patch.status === 'draft') delete meta.publishAt }

@@ -31,9 +31,12 @@ export interface SiteConfig {
   footer: SiteFooter
   contact: SiteContact
   pages: SitePage[]
+  // فاز ۱۵۰ — بخش‌های صفحهٔ مقاله (خاموش = اصلاً رندر نمی‌شود؛ هیچ دادهٔ فیکی هم در کار نیست)
+  blog: { tldr: boolean; market: boolean }
 }
 
 export const DEFAULT_SITE: SiteConfig = {
+  blog: { tldr: true, market: true },
   footer: {
     blurb: 'بزرگ‌ترین اکوسیستم هوشمند صنعت املاک و ساختمان ایران. تصمیم بهتر، با داده‌ی بهتر.',
     cols: [

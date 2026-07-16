@@ -11,6 +11,7 @@ function toArticle(it: Item) {
     slug: m.slug || '', seoTitle: m.seoTitle || it.title, metaDescription: m.metaDescription || '',
     focusKeyword: m.focusKeyword || '', status: m.cmsStatus || 'published', author: m.author || it.sourceName,
     excerpt: m.summary || '', updatedAt: it.scrapedAt, edited: !!it.edited,
+    bannerId: m.__bannerId || '',   // فاز ۱۵۰: بنرِ اختصاصیِ مقاله
   }
 }
 

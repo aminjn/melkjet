@@ -10,20 +10,25 @@ interface PublicBanner {
   link: string
 }
 
-export default function BannerSlot({ placement }: { placement: string }) {
+// فاز ۱۵۰: category/slug = زمینهٔ مقاله (بنرِ هدفمند)؛ bannerId = بنرِ مشخص‌شده در مقاله‌ساز.
+// اگر بنری تنظیم نشده باشد هیچ‌چیزی رندر نمی‌شود — نه جای خالی، نه placeholder.
+export default function BannerSlot({ placement, category, slug, bannerId }: { placement: string; category?: string; slug?: string; bannerId?: string }) {
   const [banner, setBanner] = useState<PublicBanner | null>(null)
   const [rawImg, setRawImg] = useState(false) // اگر بهینه‌ساز در دسترس نبود → آدرسِ اصلی
 
   useEffect(() => {
     let alive = true
-    fetch(`/api/banners?placement=${encodeURIComponent(placement)}`)
+    const q = bannerId
+      ? `id=${encodeURIComponent(bannerId)}`
+      : `placement=${encodeURIComponent(placement)}${category ? `&cat=${encodeURIComponent(category)}` : ''}${slug ? `&slug=${encodeURIComponent(slug)}` : ''}`
+    fetch(`/api/banners?${q}`)
       .then(r => r.json())
       .then((d: { banners?: PublicBanner[] }) => {
         if (alive && d?.banners?.length) setBanner(d.banners[0])
       })
       .catch(() => {})
     return () => { alive = false }
-  }, [placement])
+  }, [placement, category, slug, bannerId])
 
   if (!banner) return null
 

@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   const action = String(b.action || 'save')
   if (action === 'save') {
-    const cfg = saveSiteConfig({ footer: b.footer, contact: b.contact })
+    const cfg = saveSiteConfig({ footer: b.footer, contact: b.contact, blog: b.blog })
     return NextResponse.json({ ok: true, config: cfg })
   }
   if (action === 'page') {

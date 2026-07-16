@@ -12,9 +12,10 @@ interface Article {
   id: string; title: string; body: string; image: string; category: string; tags: string[]
   slug: string; seoTitle: string; metaDescription: string; focusKeyword: string
   status: 'draft' | 'published'; author: string; excerpt: string; updatedAt: number
+  bannerId: string   // فاز ۱۵۰: بنرِ اختصاصیِ این مقاله (خالی = هدف‌گیریِ عمومی/دسته)
 }
 const empty = (): Omit<Article, 'id' | 'author' | 'updatedAt'> & { id?: string } => ({
-  title: '', body: '', image: '', category: '', tags: [], slug: '', seoTitle: '', metaDescription: '', focusKeyword: '', status: 'draft', excerpt: '',
+  title: '', body: '', image: '', category: '', tags: [], slug: '', seoTitle: '', metaDescription: '', focusKeyword: '', status: 'draft', excerpt: '', bannerId: '',
 })
 
 const DEFAULT_CATS = ['راهنمای خرید', 'راهنمای اجاره', 'تحلیل بازار', 'سرمایه‌گذاری', 'حقوقی', 'وام و تسهیلات', 'معماری و دکوراسیون', 'اخبار']
@@ -42,7 +43,12 @@ export default function ArticleEditor({ compact, author }: { compact?: boolean; 
       .then(r => r.ok ? r.json() : { categories: [] })
       .then(d => { if (Array.isArray(d.categories) && d.categories.length) setCats(d.categories) })
       .catch(() => {})
+    // فاز ۱۵۰: فهرستِ بنرهای تعریف‌شده برای انتخابِ «تبلیغِ داخلِ این مقاله» — فقط ادمین/پرسنلِ مجاز می‌بیند
+    fetch('/api/admin/banners').then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.banners) setAdminBanners(d.banners.filter((b: any) => b.active).map((b: any) => ({ id: b.id, title: b.title }))) })
+      .catch(() => {})
   }, [])
+  const [adminBanners, setAdminBanners] = useState<{ id: string; title: string }[]>([])
 
   const set = (k: string, v: any) => setF(p => ({ ...p, [k]: v }))
   const newPost = () => { setF(empty()); setTab('edit'); setMsg('') }
@@ -373,6 +379,14 @@ export default function ArticleEditor({ compact, author }: { compact?: boolean; 
             <div style={{ ...lab, marginTop: 10 }}>توضیح متا ({f.metaDescription.length.toLocaleString('fa-IR')}/۱۶۰)</div>
             <textarea value={f.metaDescription} onChange={e => set('metaDescription', e.target.value.slice(0, 160))} placeholder="توضیح کوتاه برای نتایج گوگل" style={{ ...inp, height: 60, resize: 'none' }} />
             {seo.tips.length > 0 && <ul style={{ margin: '10px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>{seo.tips.slice(0, 4).map((t, i) => <li key={i} style={{ fontSize: 11, color: 'var(--faint)' }}>• {t}</li>)}</ul>}
+            {/* فاز ۱۵۰ — بنرِ اختصاصیِ این مقاله (فقط وقتی ادمین بنر تعریف کرده باشد؛ نبود = چیزی نمایش داده نمی‌شود) */}
+            {adminBanners.length > 0 && <>
+              <div style={{ ...lab, marginTop: 12 }}>تبلیغِ داخلِ این مقاله</div>
+              <select value={f.bannerId || ''} onChange={e => set('bannerId', e.target.value)} style={inp}>
+                <option value="">— طبقِ تنظیماتِ کلی (دسته/عمومی)</option>
+                {adminBanners.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+              </select>
+            </>}
           </div>
         </div>
       </div>

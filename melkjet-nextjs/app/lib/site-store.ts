@@ -24,11 +24,12 @@ export function siteConfig(): SiteConfig {
   const footer: SiteFooter = { ...DEFAULT_SITE.footer, ...(raw.footer || {}) }
   if (!Array.isArray(footer.cols) || !footer.cols.length) footer.cols = DEFAULT_SITE.footer.cols
   const contact: SiteContact = { ...DEFAULT_SITE.contact, ...(raw.contact || {}) }
+  const blog = { ...DEFAULT_SITE.blog, ...((raw as Partial<SiteConfig>).blog || {}) }
   const pages: SitePage[] = Array.isArray(raw.pages) && raw.pages.length ? raw.pages.slice() : DEFAULT_SITE.pages.slice()
   for (const def of DEFAULT_SITE.pages) {
     if (!pages.some(p => p.slug === def.slug)) pages.push({ ...def })
   }
-  return { footer, contact, pages }
+  return { footer, contact, pages, blog }
 }
 
 export function pageOf(slug: string): SitePage | null {
@@ -40,10 +41,11 @@ const SLUG_RE = /^[a-z0-9-]{2,60}$/
 // اسلاگ‌هایی که مسیرِ واقعیِ خودشان را دارند — صفحهٔ سفارشی نمی‌تواند رویشان بنشیند
 const RESERVED = new Set(['about', 'terms', 'privacy', 'faq', 'contact', 'search', 'blog', 'store', 'pricing', 'admin', 'api', 'auth', 'empire', 'page'])
 
-export function saveSiteConfig(patch: { footer?: Partial<SiteFooter>; contact?: Partial<SiteContact> }): SiteConfig {
+export function saveSiteConfig(patch: { footer?: Partial<SiteFooter>; contact?: Partial<SiteContact>; blog?: Partial<SiteConfig['blog']> }): SiteConfig {
   const cur = siteConfig()
   if (patch.footer) cur.footer = { ...cur.footer, ...patch.footer }
   if (patch.contact) cur.contact = { ...cur.contact, ...patch.contact }
+  if (patch.blog) cur.blog = { ...cur.blog, ...patch.blog }   // فاز ۱۵۰: knobهای صفحهٔ مقاله
   save(cur)
   return cur
 }

@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
     link: b.link ? String(b.link) : '',
     placement: b.placement as Placement | undefined,
     active: b.active,
+    articleCategory: b.articleCategory,   // فاز ۱۵۰: هدف‌گیریِ دسته/تک‌مقاله (خالی = همه‌جا)
+    articleSlug: b.articleSlug,
   })
   return NextResponse.json({ banner })
 }
