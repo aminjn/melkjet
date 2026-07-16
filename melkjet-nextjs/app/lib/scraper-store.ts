@@ -132,7 +132,7 @@ function fileSave(db: DB) {
 // بدونِ این کش هر رندر یک SELECT + دی‌سریالایزِ ~۱مگابایتی روی CPUِ تک‌هسته می‌شد.
 // نوشتن (mutate) کش را باطل می‌کند تا همان اینستنس نوشتهٔ خودش را فوری ببیند. کهنگیِ
 // چند-ثانیه‌ایِ فیدِ آگهی بینِ اینستنس‌ها بی‌ضرر است (نوشتن‌ها اتمیک روی PG می‌مانند).
-let pgCache: { at: number; data: DB } | null = null
+let pgCache: { at: number; data: DB; rev: number } | null = null
 // کش ۱۵ ثانیه‌ای رویِ مسیرِ PG: صفحاتِ عمومی در هر رندر listItems را صدا می‌زنند. کش بارِ
 // خواندنِ دیتابیس را شدیداً کم می‌کند؛ نوشتن کش را باطل می‌کند.
 const PG_TTL = 15_000
@@ -180,11 +180,20 @@ async function ensureMigrated(): Promise<void> {
 async function load(): Promise<DB> {
   if (!pgEnabled()) return fileLoad()
   const now = Date.now()
-  if (pgCache && now - pgCache.at < PG_TTL) return pgCache.data
+  if (pgCache && now - pgCache.at < PG_TTL) {
+    // فاز ۱۵۶ (B1 — «تأیید می‌زنم، رفرش که می‌کنم برمی‌گردد»): کش per-instance است و mutate فقط
+    // کشِ همان instance را باطل می‌کرد؛ رفرشِ ادمین که به instance دیگر می‌رسید تا ۱۵ ثانیه
+    // وضعیتِ قبل از تأیید را می‌دید. حالا اعتبارِ کش با revِ سراسری (یک کوئریِ ریزِ pk روی
+    // ردیفِ کوچکِ متادیتا) چک می‌شود: هر نوشتنی در هر instance، کشِ همه را نامعتبر می‌کند.
+    try {
+      const m = await kvGet<{ __rev?: number }>(KV_META, {})
+      if ((m.__rev || 0) === pgCache.rev) { pgCache.at = now; return pgCache.data }
+    } catch { return pgCache.data }
+  }
   try {
     await ensureMigrated()
     // متادیتای زنده از KV_META؛ اگر هنوز نبود (لحظهٔ گذار)، از بلابِ قدیمی bootstrap کن.
-    const [meta, items] = await Promise.all([kvGet<Partial<DB>>(KV_META, {}), pgListingsAll() as Promise<Item[]>])
+    const [meta, items] = await Promise.all([kvGet<Partial<DB> & { __rev?: number }>(KV_META, {}), pgListingsAll() as Promise<Item[]>])
     const m = (meta.sources || meta.owners || meta.categories) ? meta : await kvGet<Partial<DB>>(KV_KEY, {})
     const data: DB = {
       sources: m.sources && m.sources.length ? m.sources : DEFAULT_SOURCES,
@@ -192,7 +201,7 @@ async function load(): Promise<DB> {
       categories: m.categories,
       owners: m.owners || [],
     }
-    pgCache = { at: now, data }
+    pgCache = { at: now, data, rev: meta.__rev || 0 }
     return data
   } catch (e) {
     // تاب‌آوری: اگر دیتابیس لحظه‌ای کند/اشباع بود، کشِ کهنه را سِرو کن (نه ۵۰۰/۵۰۴).
@@ -221,7 +230,9 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
     const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
     const result = fn(db)
     // متادیتای زنده (کوچک) را در KV_META بنویس؛ بلابِ قدیمیِ KV_KEY دست‌نخورده می‌ماند.
-    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify(metaOf(db))])
+    // فاز ۱۵۶ (B1): rev سراسری با هر نوشتن بالا می‌رود تا کشِ خواندنِ همهٔ instanceها نامعتبر شود.
+    const rev156 = ((meta as { __rev?: number }).__rev || 0) + 1
+    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...metaOf(db), __rev: rev156 })])
     // فقط ردیف‌های اضافه‌شده/تغییرکرده را upsert کن
     const afterIds = new Set<string>()
     for (const it of db.items) {
@@ -334,14 +345,18 @@ export async function setModeration(itemId: string, status: ItemStatus, reason: 
 }
 
 // Persist many moderation verdicts in a single atomic write (avoids file races under concurrency).
-export async function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[]) {
+export async function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[], opts?: { onlyPending?: boolean }) {
   if (!verdicts.length) return
   return mutate(db => {
     const now = Date.now()
     const map = new Map(verdicts.map(v => [v.id, v]))
     for (const it of db.items) {
       const v = map.get(it.id)
-      if (v) { it.status = v.status; it.aiReason = v.reason; it.aiScore = v.score; it.moderatedAt = now }
+      if (!v) continue
+      // فاز ۱۵۶ (B2): حکمِ «خودکار» فقط روی آیتمی می‌نشیند که هنوز pending است — اگر ادمین
+      // بینِ خواندنِ صف و نوشتنِ دسته‌ای، خودش حکم داده باشد، حکمِ انسانی دست‌نخورده می‌ماند.
+      if (opts?.onlyPending && it.status !== 'pending') continue
+      it.status = v.status; it.aiReason = v.reason; it.aiScore = v.score; it.moderatedAt = now
     }
   })
 }
@@ -369,7 +384,12 @@ export async function requeueAutoRejected(): Promise<number> {
 export async function setItemStatus(itemId: string, status: ItemStatus) {
   return mutate(db => {
     const it = db.items.find(i => i.id === itemId)
-    if (it) it.status = status
+    if (!it) return
+    it.status = status
+    // فاز ۱۵۶ (B3): حکمِ دستیِ ادمین باید مثلِ حکمِ AI مهرِ ممیزی بخورد، وگرنه از جدولِ
+    // «ممیزی‌شده‌ها» و KPIها غیب می‌شود و به چشمِ ادمین «هیچ اتفاقی نیفتاد».
+    if (status === 'approved' || status === 'rejected' || status === 'duplicate') it.moderatedAt = Date.now()
+    else if (status === 'pending') it.moderatedAt = undefined
   })
 }
 
@@ -431,11 +451,15 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
   const newListingIds: string[] = []
   const fieldsOf = simFieldsOf
   const res = await mutate(db => {
-    const existingKeys = new Set(db.items.map(i => (i.url || '') + '|' + i.title))
-    // ایندکسِ هم‌ملک‌یابی روی آگهی‌های قابلِ‌نمایشِ موجود (تکراری/ردشده‌ها مبنا نیستند)
+    // فاز ۱۵۶ (A1): نگاشتِ کلید→آیتم تا اسکرپِ مجددِ «عینِ همان» آگهی، آیتمِ موجود را
+    // درجا تازه کند — نه اینکه فقط «تکراری» شمرده شود و ردیف کهنه بماند.
+    const existingByKey = new Map<string, Item>()
+    for (const i of db.items) existingByKey.set((i.url || '') + '|' + i.title, i)
+    // فاز ۱۵۶ (A2): تکراری‌ها هم مبنای هم‌ملک‌یابی‌اند — اسکرپِ تازهٔ همان ملک باید ردیفِ
+    // قبلاً-تکراری را «بازپس بگیرد» و به صفِ ممیزی برگرداند، نه اینکه ردیفِ سوم بسازد.
     const twinIdx = new TwinIndex<Item>()
     if (source.type === 'listing') {
-      for (const i of db.items) if (i.type === 'listing' && i.status !== 'duplicate' && i.status !== 'rejected') twinIdx.add(fieldsOf(i), i)
+      for (const i of db.items) if (i.type === 'listing' && i.status !== 'rejected') twinIdx.add(fieldsOf(i), i)
     }
     // کلیدِ هویتیِ غیرآگهی‌ها (محصول/پروفایل/قیمت/مقاله): نوع + عنوانِ نرمال + مالک (تلفن/نام/منبع)
     const identKey = (i: { type?: string; title?: string; phone?: string; owner?: string; sourceName?: string }) =>
@@ -448,8 +472,19 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
     db.owners = db.owners || []
     for (const r of raw) {
       const key = (r.url || '') + '|' + r.title
-      if (existingKeys.has(key)) { dup++; continue }
-      existingKeys.add(key)
+      const exact = existingByKey.get(key)
+      if (exact) {
+        // فاز ۱۵۶ (A1): همان آگهی (همان URL+عنوان) دوباره اسکرپ شد → آپدیتِ درجا (نه «تکراری»)
+        if (r.price) exact.price = r.price
+        if (r.image) exact.image = r.image
+        if (r.excerpt) exact.excerpt = r.excerpt
+        if (r.phone && !exact.phone) exact.phone = r.phone
+        exact.scrapedAt = Date.now()
+        if (exact.meta?.['__dealStatus']) { delete exact.meta['__dealStatus']; delete exact.meta['__soldAt'] }
+        if (exact.status === 'duplicate') { exact.status = 'pending'; exact.moderatedAt = undefined; exact.aiReason = 'اسکرپِ تازهٔ همان آگهی — بازگشت از تکراری برای ممیزی' }
+        updated++
+        continue
+      }
       // merge source meta (city/neighborhood/type/specialty) into the item
       const meta = source.meta && Object.keys(source.meta).length ? source.meta : undefined
       const loc = r.location
@@ -467,7 +502,9 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
           if (r.phone && !twin.phone) twin.phone = r.phone
           twin.scrapedAt = Date.now()
           // بازنشر = ملک هنوز فعال است → مهرِ فروخته/اجاره‌رفتهٔ قبلی برداشته می‌شود
-          if (twin.meta?.['__dealStatus']) delete twin.meta['__dealStatus']
+          if (twin.meta?.['__dealStatus']) { delete twin.meta['__dealStatus']; delete twin.meta['__soldAt'] }
+          // فاز ۱۵۶ (A2): ردیفِ قبلاً-تکراری با اسکرپِ تازه بازپس گرفته می‌شود → صفِ ممیزی
+          if (twin.status === 'duplicate') { twin.status = 'pending'; twin.moderatedAt = undefined; twin.aiReason = 'اسکرپِ تازهٔ همان ملک — بازگشت از تکراری برای ممیزی' }
           updated++
           continue
         }
@@ -505,6 +542,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
         ...r, location: loc, ownerId,
       }
       db.items.unshift(item)
+      existingByKey.set(key, item)
       if (source.type === 'listing') { newListingIds.push(newId); twinIdx.add(fieldsOf(item), item) }
       else identMap.set(identKey(item), item)
       added++

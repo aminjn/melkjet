@@ -245,7 +245,8 @@ export async function moderatePending(max = 300): Promise<{ moderated: number; r
   // هم با دلیلش ذخیره می‌شود — تا (۱) ادمین بداند چرا در صف است و (۲) هر تیکِ کرون دوباره AI خرجش نکند.
   // pendingِ گذرا (خطای مدل/مدلِ تنظیم‌نشده) ذخیره نمی‌شود تا تیکِ بعدی دوباره امتحان شود.
   const decided = results.filter(r => r.status === 'approved' || r.status === 'rejected' || r.status === 'duplicate' || (r.status === 'pending' && r.settled))
-  await setModerationBatch(decided.map(r => ({ id: r.id, status: r.status, reason: r.reason, score: r.score })))
+  // فاز ۱۵۶ (B2): ممیزیِ خودکار هرگز حکمِ تازهٔ ادمین را بازنویسی نمی‌کند (فقط pendingها)
+  await setModerationBatch(decided.map(r => ({ id: r.id, status: r.status, reason: r.reason, score: r.score })), { onlyPending: true })
   const err = (!model && decided.length === 0) ? 'مدلِ AI تنظیم نشده و دادهٔ یادگیری هنوز کافی نیست' : undefined
   return { moderated: decided.length, results, error: err }
 }

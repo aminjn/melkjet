@@ -473,7 +473,11 @@ function ListingsView() {
   const bulkStatus = async (status: string) => {
     if (!sel.size) return
     const ids = [...sel]; setItems(items.map(i => sel.has(i.id) ? { ...i, status } : i)); setSel(new Set())
-    await Promise.all(ids.map(id => fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) })))
+    // فاز ۱۵۶ (B4): نتیجهٔ ۲۰ درخواست دیگر دور ریخته نمی‌شود — شکست‌ها شمرده و لیست از سرور بازخوانی می‌شود
+    const rs = await Promise.all(ids.map(id => fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }).catch(() => null)))
+    const failed = rs.filter(r => !r || !r.ok).length
+    if (failed) alert(`${failed} از ${ids.length} حکم ثبت نشد — دوباره تلاش کنید`)
+    await load()
   }
   const bulkFeature = async (featured: boolean) => {
     if (!sel.size) return
@@ -2899,8 +2903,12 @@ function ModerationView() {
   }
 
   const setStatusOf = async (id: string, s: string) => {
-    setItems(items.map(i => i.id === id ? { ...i, status: s } : i))
-    await fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: s }) })
+    setItems(items.map(i => i.id === id ? { ...i, status: s, moderatedAt: Date.now() } : i))
+    // فاز ۱۵۶ (B4): پاسخِ سرور دیگر دور ریخته نمی‌شود — بعدِ ثبت، حقیقت بی‌صدا از سرور بازخوانی می‌شود
+    const r = await fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: s }) })
+    if (!r.ok) { setProgress(`❌ ثبتِ حکم ناموفق بود (HTTP ${r.status}) — دوباره بزنید`); return }
+    const rr = await fetch('/api/admin/scraper/items?type=listing')
+    if (rr.ok) { const d = await rr.json(); setItems(d.items as MItem[]) }
   }
 
   const pending = items.filter(i => i.status === 'pending')

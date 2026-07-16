@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { addUserListing, updateUserListing, deleteItem, getItemById, setItemDealStatus } from './scraper-store'
+import { addUserListing, updateUserListing, deleteItem, getItemById, setItemDealStatus, findPublicListingTwin } from './scraper-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { aiFor, agentModel, agentProvider } from './gapgpt'
 const { chatCompleteSafe } = aiFor('پنلِ مشاور')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
@@ -314,6 +314,12 @@ export async function publishListing(o: string, fid: string): Promise<Listing | 
   if (prev && prev.type === 'listing') {
     const textChanged = prev.title !== payload.title || (prev.excerpt || '') !== (payload.excerpt || '')
     item = await updateUserListing(prev.id, payload, { remoderate: textChanged })
+  }
+  if (!item) {
+    // فاز ۱۵۶ (A4): publicId شکسته (مثلاً آیتم با هرسِ سقف/پاک‌سازی رفته) → اول هم‌ملکِ عمومیِ
+    // موجود بازپس گرفته و publicId دوباره بسته می‌شود؛ وگرنه ردیفِ نو چرخهٔ «تکراری» راه می‌اندازد.
+    const twin = await findPublicListingTwin(payload)
+    if (twin) item = await updateUserListing(twin.id, payload, { remoderate: twin.title !== payload.title || (twin.excerpt || '') !== (payload.excerpt || '') })
   }
   if (!item) item = await addUserListing(payload)
   const itemId = item.id
