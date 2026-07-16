@@ -341,3 +341,11 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 @media(max-width:560px){
   .mjblog-tiles{grid-template-columns:1fr 1fr!important}
 }
+
+/* فاز ۱۵۳ — صفحهٔ تحلیل بازار مسکن: موبایل = سایدبار محلات بالای محتوا، KPI دوستونه، CTA زیرِ هم */
+@media(max-width:900px){
+  .mjmkt-grid{grid-template-columns:1fr!important}
+  .mjmkt-side{position:static!important;max-height:340px!important}
+  .mjmkt-kpis{grid-template-columns:1fr 1fr!important}
+  .mjmkt-cta{flex-direction:column!important}
+}

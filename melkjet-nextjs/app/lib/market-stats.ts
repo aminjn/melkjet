@@ -75,6 +75,28 @@ export async function neighbourhoodStats(city: string, district: string) {
   return { ...base, trend }
 }
 
+// فاز ۱۵۳ — آمارِ معامله‌های واقعاً ثبت‌شده («فروخته شد/اجاره رفت» + مهرِ __soldAt).
+// کمتر از minSamples نمونهٔ مهردار → null؛ کارتِ مربوط اصلاً رندر نمی‌شود (نه عددِ ساختگی).
+export async function soldStats(city?: string, district?: string, minSamples = 5) {
+  const now = Date.now()
+  const rows: { soldAt: number; days: number | null }[] = []
+  for (const it of await listItems('listing')) {
+    const soldAt = Number(it.meta?.['__soldAt']) || 0
+    if (!it.meta?.['__dealStatus'] || !soldAt) continue
+    const c = it.meta?.['شهر'] || (it.location || '').split('،').slice(-1)[0]?.trim() || ''
+    const d = it.meta?.['محله'] || (it.location || '').split('،')[0]?.trim() || ''
+    if (city && normCity(c) !== normCity(city) && !normCity(c).includes(normCity(city))) continue
+    if (district && d !== district) continue
+    const days = it.scrapedAt && soldAt > it.scrapedAt ? Math.round((soldAt - it.scrapedAt) / 86_400_000) : null
+    rows.push({ soldAt, days })
+  }
+  if (rows.length < minSamples) return null
+  const last30 = rows.filter(r => now - r.soldAt <= 30 * 86_400_000).length
+  const withDays = rows.map(r => r.days).filter((v): v is number => v !== null && v >= 0)
+  const avgDays = withDays.length >= minSamples ? Math.round(withDays.reduce((a, b) => a + b, 0) / withDays.length) : null
+  return { total: rows.length, last30, avgDays }
+}
+
 // Value score 0-10: cheaper than the neighbourhood average → higher score.
 export function valueScore(thisPpm: number, avgPpm: number): number {
   if (!avgPpm || !thisPpm) return 0
@@ -88,15 +110,26 @@ function normCity(s: string): string { return (s || '').replace(/‌/g, '').repl
 export async function marketOverview(city?: string) {
   let recs = await records()
   if (city) { const c = normCity(city); recs = recs.filter(r => { const rc = normCity(r.city); return rc === c || rc.includes(c) || c.includes(rc) }) }
-  const byKey: Record<string, number[]> = {}
+  const byKey: Record<string, Rec[]> = {}
   for (const r of recs) {
     const k = `${r.district || '—'}|${r.city || '—'}`
-    ;(byKey[k] = byKey[k] || []).push(r.ppm)
+    ;(byKey[k] = byKey[k] || []).push(r)
   }
-  const rows = Object.entries(byKey).map(([k, vals]) => {
+  const rows = Object.entries(byKey).map(([k, rs]) => {
     const [district, c] = k.split('|')
-    const a = agg(vals)!
-    return { district, city: c, count: a.count, avg: a.avg, median: a.median, min: a.min, max: a.max }
+    const a = agg(rs.map(r => r.ppm))!
+    // فاز ۱۵۳ — رشدِ واقعیِ مشاهده‌شده: میانگینِ اولین ماهِ ثبت‌شده → آخرین ماه. فقط وقتی
+    // دست‌کم ۲ ماهِ متمایز داده داریم؛ وگرنه null (هیچ درصدِ ساختگی نمایش داده نمی‌شود).
+    const byM: Record<string, number[]> = {}
+    for (const r of rs) { const d = new Date(r.t); const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; (byM[key] = byM[key] || []).push(r.ppm) }
+    const ms = Object.keys(byM).sort()
+    let growthPct: number | null = null
+    if (ms.length >= 2) {
+      const avgOf = (key: string) => byM[key].reduce((s, v) => s + v, 0) / byM[key].length
+      const first = avgOf(ms[0]); const last = avgOf(ms[ms.length - 1])
+      if (first > 0) growthPct = Math.round((last / first - 1) * 100)
+    }
+    return { district, city: c, count: a.count, avg: a.avg, median: a.median, min: a.min, max: a.max, growthPct }
   }).sort((a, b) => b.count - a.count)
   const cityAvg = recs.length ? Math.round(recs.reduce((s, r) => s + r.ppm, 0) / recs.length) : 0
   return { totalSaleListings: recs.length, neighbourhoods: rows.length, cityAvg, rows: rows.slice(0, 80) }

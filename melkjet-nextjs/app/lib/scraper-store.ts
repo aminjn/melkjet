@@ -393,8 +393,10 @@ export async function setItemDealStatus(itemId: string, status: 'sold' | 'rented
     const it = db.items.find(i => i.id === itemId)
     if (!it) return
     it.meta = it.meta || {}
-    if (status) it.meta['__dealStatus'] = status
-    else delete it.meta['__dealStatus']
+    // فاز ۱۵۳ — مهرِ زمانِ معامله: بدونِ این، «فروشِ ماهانه/زمانِ فروش» در تحلیلِ بازار
+    // هرگز قابلِ‌محاسبهٔ واقعی نیست. فقط بارِ اول ثبت می‌شود (تغییرِ sold↔rented زمان را نمی‌بَرد).
+    if (status) { it.meta['__dealStatus'] = status; if (!it.meta['__soldAt']) it.meta['__soldAt'] = String(Date.now()) }
+    else { delete it.meta['__dealStatus']; delete it.meta['__soldAt'] }
   })
 }
 
@@ -579,7 +581,10 @@ export async function updateUserListing(itemId: string, raw: {
     if (!it) return null
     it.title = raw.title; it.price = raw.price; it.location = raw.location; it.image = raw.image
     it.excerpt = raw.excerpt; it.phone = raw.phone; it.owner = raw.owner
+    // فاز ۱۵۳: مهرِ زمانِ معامله (__soldAt) نباید با بازنشرِ آگهی گم شود — تنها منبعِ «زمانِ فروش» است
+    const soldAt153 = it.meta?.['__soldAt']
     it.meta = raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined
+    if (soldAt153 && it.meta && it.meta['__dealStatus'] && !it.meta['__soldAt']) it.meta['__soldAt'] = soldAt153
     it.scrapedAt = Date.now(); it.expiresAt = Date.now() + LISTING_TTL
     if (opts?.remoderate && it.status !== 'duplicate') {
       it.status = 'pending'; it.moderatedAt = undefined; it.aiScore = undefined

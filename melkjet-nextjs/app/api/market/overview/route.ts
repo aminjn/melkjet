@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { marketOverview } from '@/app/lib/market-stats'
+import { marketOverview, soldStats } from '@/app/lib/market-stats'
 import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
 const { chatCompleteSafe } = aiFor('نمای بازار')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
   const u = new URL(req.url).searchParams
   const city = u.get('city') || ''
   const ov = await marketOverview(city || undefined)
+  // فاز ۱۵۳ — آمارِ معامله‌های واقعیِ ثبت‌شده (کمتر از حدِ نمونه → null → کارت رندر نمی‌شود)
+  const sold = await soldStats(city || undefined, u.get('district') || undefined)
 
   let analysis: string | null = null
   if (u.get('ai') === '1' && ov.rows.length) {
@@ -22,5 +24,5 @@ export async function GET(req: NextRequest) {
       analysis = await chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: user }], { temperature: 0.5, max_tokens: 500 }, provider)
     } catch { analysis = null }
   }
-  return NextResponse.json({ ok: true, ...ov, analysis })
+  return NextResponse.json({ ok: true, ...ov, sold, analysis })
 }
