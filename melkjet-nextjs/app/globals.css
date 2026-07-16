@@ -349,3 +349,17 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   .mjmkt-kpis{grid-template-columns:1fr 1fr!important}
   .mjmkt-cta{flex-direction:column!important}
 }
+
+/* فاز ۱۵۴ — ایندکسِ بلاگ: ردیفِ اسکرولیِ دسته‌ها (اسکرول‌بار پنهان) + هاورِ کارت + گریدِ واکنش‌گرا */
+.mjbi-chips{scrollbar-width:none}
+.mjbi-chips::-webkit-scrollbar{height:0;display:none}
+.mjbi-card{transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.mjbi-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,.28);border-color:var(--line2)!important}
+@media(max-width:980px){
+  .mjbi-grid{grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:640px){
+  .mjbi-grid{grid-template-columns:1fr!important}
+  .mjbi-feat{flex-direction:column!important}
+  .mjbi-featimg{width:100%!important;min-height:190px!important}
+}
