@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listItems, SourceType } from '@/app/lib/scraper-store'
 import { slimListing } from '@/app/lib/listing-slim'
+import { cityMatch, dealOf } from '@/app/lib/listing-filter'
 
 // Public read endpoint — feeds search, directory, store, home.
 // Returns all non-rejected, non-duplicate scraped items.
@@ -18,7 +19,11 @@ export async function GET(req: NextRequest) {
   // آگهی‌ها را ببیند نه فقط ۸۰ تای آخر (باگِ «در پنل هست ولی در جستجو نیست»).
   const slim = sp.get('slim') === '1'
   const limit = Math.min(parseInt(sp.get('limit') || '60', 10) || 60, slim ? 1000 : 200)
-  const cacheKey = `${type || ''}|${category || ''}|${owner}|${slim ? 1 : 0}|${limit}`
+  // فاز ۱۵۱ (فیدبک: «کلی ملک هست چرا ۲۸ تا؟»): فیلترِ شهر/نوعِ معامله سمتِ سرور و روی «کلِ» آگهی‌ها
+  // اعمال می‌شود، بعد سقف — نه اینکه فقط ۱۰۰۰ تای آخر به کلاینت برود و شهرِ کاربر از آن‌ها فیلتر شود.
+  const cityQ = (sp.get('city') || '').trim()
+  const dealQ = sp.get('deal') || ''
+  const cacheKey = `${type || ''}|${category || ''}|${owner}|${slim ? 1 : 0}|${limit}|${cityQ}|${dealQ}`
   const hit = RESP_CACHE.get(cacheKey)
   if (hit && Date.now() - hit.at < RESP_TTL) return new NextResponse(hit.body, { headers: { 'Content-Type': 'application/json' } })
   const valid = type && ['listing', 'directory', 'product', 'article', 'price'].includes(type)
@@ -32,6 +37,9 @@ export async function GET(req: NextRequest) {
     const n = norm(owner)
     items = items.filter(i => norm(i.owner || '') === n || norm(i.meta?.author || '') === n)
   }
+  // فاز ۱۵۱ — فیلترِ شهر/معامله؛ منطقِ مشترک با کلاینتِ جستجو در listing-filter.ts
+  if (type === 'listing' && cityQ) items = items.filter(i => cityMatch(i, cityQ))
+  if (type === 'listing' && ['sale', 'rent', 'presale'].includes(dealQ)) items = items.filter(i => dealOf(i) === dealQ)
   // featured first, then newest
   items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.scrapedAt - a.scrapedAt)
   // شماره هرگز در فهرستِ عمومی نمی‌رود؛ فقط با ورود از /api/listing-reveal دیده و ثبت می‌شود.

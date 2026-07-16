@@ -11,6 +11,7 @@ import CardImg from '@/app/components/CardImg'
 import LikeHeart from '@/app/components/home/LikeHeart'
 import NeighborhoodPicker from '@/app/components/NeighborhoodPicker'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
+import { dealOf } from '@/app/lib/listing-filter'
 import { readLoc } from '@/app/components/LocationDetector'
 import { readCity } from '@/app/components/CitySelector'
 import { openAuth } from '@/app/components/AuthModal'
@@ -84,11 +85,8 @@ function toProperty(it: ContentItem) {
   const priceNum = /میلیارد/.test(ptxt) ? rawPrice : /میلیون/.test(ptxt) ? rawPrice / 1000 : rawPrice / 1e9
   const bedsNum = (() => { const m = faToEn(`${it.title} ${it.excerpt || ''} ${it.meta?.['اتاق خواب'] || ''}`).match(/(\d+)\s*خواب/); return m ? parseInt(m[1], 10) : null })()
   const searchText = [it.title, it.location, it.excerpt, it.category, ...(it.tags || [])].filter(Boolean).join(' ').toLowerCase()
-  const dealTxt = `${it.price || ''} ${it.title || ''} ${it.category || ''} ${it.meta?.['نوع معامله'] || ''} ${(it.tags || []).join(' ')}`
-  const deal: 'sale' | 'rent' | 'presale' =
-    /پیش[‌\s]?فروش/.test(dealTxt) ? 'presale'
-      : (it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(dealTxt)) ? 'rent'
-        : 'sale'
+  // فاز ۱۵۱: همان دسته‌بندی‌ای که سرور در /api/content به‌کار می‌برد — تا شمارِ «N از total» با کارت‌ها بخواند
+  const deal = dealOf(it)
   const areaNum = firstInt(it.meta?.['متراژ']) ?? (enTitle.match(/(\d+)\s*متر/) ? parseInt(enTitle.match(/(\d+)\s*متر/)![1], 10) : 0)
   const floorNum = firstInt(it.meta?.['طبقه'])
   const yearNum = (() => { const y = firstInt(it.meta?.['سال ساخت']) ?? firstInt(it.meta?.['ساخت']); return y && y > 50 ? y : 0 })()
@@ -191,7 +189,9 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
   const [hood, setHood] = useState('')   // فیلترِ محله (انتخابِ کاربر)
-  const [nearMe, setNearMe] = useState(true)   // «نزدیکِ من» — فقط آگهی‌های محدودهٔ کاربر (GPS)
+  // فاز ۱۵۱ (فیدبک: «رفرش می‌کنم می‌رود توی یک محله، ۴ تا آگهی»): «نزدیکِ من» دیگر پیش‌فرض روشن نیست —
+  // موقعیت/سوابق فقط با انتخابِ صریحِ کاربر فیلتر می‌کند؛ وگرنه صرفاً مرتب‌سازی.
+  const [nearMe, setNearMe] = useState(false)
 
   // سوابقِ کاربر/موقعیتِ لحظه‌ای: محلهٔ کاربر + شهرِ انتخابی (یا تشخیص‌داده‌شده)
   const [userArea, setUserArea] = useState('')
@@ -218,6 +218,8 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
 
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [properties, setProperties] = useState<PropertyT[]>(() => initial.map(toProperty))
+  const [poolTotal, setPoolTotal] = useState(0)          // فاز ۱۵۱: کلِ نتیجهٔ واقعیِ فیلترِ شهر/تب در سرور
+  const gotOnce151 = useRef(false)                        // بعد از بارِ اول، تعویضِ شهر/تب بدونِ تأخیرِ ۲.۵ث
   // فاز ۹۲ (پرفورمنس: رندرِ ۱۰۰۰ کارت + ۱۰۰۰ تصویرِ background = ۴۴MB و LCP ~۱۰ث): رندرِ تدریجیِ ۲۴تایی
   const [visN, setVisN] = useState(24)
   const moreRef = useRef<HTMLDivElement>(null)
@@ -231,14 +233,21 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     let gotFull = false
     // فاز ۹۹: ۶۰ تای اول با SSR آمده؛ این واکشی فقط فالبکِ حالتِ خالی است
     if (!initial.length) fetchContent('listing', undefined, 60, true).then((d) => { if (alive && !gotFull) { setProperties(d.map(toProperty)); setLoading(false) } })
-    // فاز ۹۶ (TBT): دانلود/parse فهرستِ کامل با LCP رقابت نکند — چند ثانیه بعد از رندرِ اول
+    // فاز ۹۶ (TBT) + فاز ۱۵۱ (فیدبک: «کلی ملک هست چرا ۲۸ تا؟»): استخرِ کامل حالا «فیلترشدهٔ
+    // شهر/تبِ همین کاربر» است که سرور روی کلِ آگهی‌ها ساخته — نه ۱۰۰۰ تای آخرِ همهٔ شهرها.
+    const tab151 = dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
     const t96 = setTimeout(() => {
       if (!alive) return
-      fetchContent('listing', undefined, 1000, true).then((d) => { if (alive) { gotFull = true; setProperties(d.map(toProperty)); setLoading(false) } })
-    }, 2500)
+      const q = new URLSearchParams({ type: 'listing', limit: '1000', slim: '1', deal: tab151 })
+      if (selectedCity) q.set('city', selectedCity)
+      fetch(`/api/content?${q.toString()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : { items: [], total: 0 }).then((d) => {
+        if (alive) { gotFull = true; setProperties((d.items || []).map(toProperty)); setPoolTotal(Number(d.total) || 0); setLoading(false) }
+      }).catch(() => { if (alive) setLoading(false) })
+    }, gotOnce151.current ? 0 : 2500)
+    gotOnce151.current = true
     fetch('/api/promotions?slot=search_top', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { items: [] })).then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) }).catch(() => {})
     return () => { alive = false; clearTimeout(t96) }
-  }, [])
+  }, [selectedCity, dealType])
 
   // با هر تغییرِ نتیجه‌ها از اول ۲۴ تا؛ نگهبانِ انتهای لیست خودکار ۲۴ تای بعدی را می‌آورد
   useEffect(() => { setVisN(24) }, [dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, searchTerm, selectedCity])
@@ -314,8 +323,9 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     }
     const base = filteredProperties
     const city = selectedCity
-    // محلهٔ انتخابیِ کاربر = فیلترِ قطعی؛ وگرنه محلهٔ سوابق/موقعیت = اولویتِ نرم.
-    const area = hood || (parsed.area ? '' : prefArea)
+    // فاز ۱۵۱: فقط محلهٔ «انتخابِ صریحِ کاربر» فیلتر می‌کند؛ محلهٔ سوابق/موقعیت (prefArea)
+    // دیگر هرگز نتیجه را کم نمی‌کند — فقط در مرتب‌سازی اولویت می‌گیرد (پایین‌تر).
+    const area = hood
     const hard = !!hood
     const inArea = (p: PropertyT) => area ? areaMatch(p.location, area) : true
     // «نزدیکِ من» فعال است وقتی: GPS داریم، شهرِ انتخابی با شهرِ کاربر یکی است،
@@ -642,7 +652,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
           {/* «آگهی جدید اومد خبرم کن» */}
           <NotifyBar count={shownProperties.length} criteria={{ city: selectedCity, area: mapArea || prefArea, deal: (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'), kind: fKind, priceMax: fBudgetMax }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--goldText)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span> ملک پیدا شد{selectedCity ? <span style={{ color: 'var(--muted)' }}> · {selectedCity}</span> : ''}</div>
+            <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--goldText)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span>{poolTotal > properties.length ? <> از <span style={{ fontWeight: 700 }}>{toPersianDigits(poolTotal)}</span></> : null} ملک پیدا شد{selectedCity ? <span style={{ color: 'var(--muted)' }}> · {selectedCity}</span> : ''}</div>
             <div style={{ fontSize: 13, color: 'var(--muted)' }}>مرتب‌سازی: <span style={{ color: 'var(--text)' }}>{sortBy}</span></div>
           </div>
 
