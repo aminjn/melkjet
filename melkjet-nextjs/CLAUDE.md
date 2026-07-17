@@ -32,7 +32,7 @@ unstyled ("گرافیک ریخت"). next.config sets `no-cache` on HTML + `immut
 Quick check after deploy: Ctrl+Shift+R — if styling returns, it was the cache.
 
 ## Server
-- VPS: 185.206.95.40 (Arvan Cloud) — **4 vCPU / 8 GB RAM / 25 GB SSD**
+- VPS: 94.101.176.251 (Arvan Cloud — IP changed 1405/04, old: 185.206.95.40) — **4 vCPU / 8 GB RAM / 25 GB SSD**
   (the hostname `1-vcpu-2-gb` is stale/misleading; `free -h && nproc` confirm 4/8).
 - Path: /var/www/melkjet/melkjet-nextjs
 - Process: **4 pm2 fork instances** named "melkjet" on ports 3000–3003, behind

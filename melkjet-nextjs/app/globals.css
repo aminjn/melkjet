@@ -364,5 +364,8 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   .mjbi-featimg{width:100%!important;min-height:190px!important}
 }
 
-/* فاز ۱۵۸ — شهرِ ایزومتریکِ امپراتوری: موبایلِ باریک کلِ صحنه را کوچک می‌کند (فقط ظاهر) */
-@media(max-width:480px){.empIsoScene{transform:scale(.8)!important;transform-origin:50% 20%!important}}
+/* فاز ۱۵۸→۱۵۹ — شهرِ ایزومتریکِ «تمام‌صفحه»: بزرگ در دسکتاپ، متناسب در موبایل (فقط ظاهر) */
+.empIsoScene{transform:scale(1.25);transform-origin:50% 54%}
+@media(max-width:900px){.empIsoScene{transform:scale(1)!important}}
+@media(max-width:480px){.empIsoScene{transform:scale(.85)!important;transform-origin:50% 48%!important}}
+@media(prefers-reduced-motion:reduce){.empDot{display:none!important}}
