@@ -364,11 +364,12 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   .mjbi-featimg{width:100%!important;min-height:190px!important}
 }
 
-/* فاز ۱۵۸→۱۶۶ — شهرِ ایزومتریکِ «قابِ پر»: لنگرِ ۰×۰ (empIsoAnchor) + مقیاسِ صحنه؛ شهر از لبه‌ها بیرون می‌زند */
-.empIsoScene{transform:scale(1.45);transform-origin:0 0}
+/* فاز ۱۵۸→۱۶۹ — شهرِ ایزومتریک: لنگرِ ۰×۰ (empIsoAnchor)؛ مقیاسِ صحنه حالا inline از پهنای واقعیِ viewport
+   محاسبه می‌شود (فاز ۱۶۹ — بلاکِ فعالِ شهر همیشه داخلِ قاب) — این‌جا فقط origin و لنگر */
+.empIsoScene{transform-origin:0 0}
 .empIsoAnchor{top:66%!important}
-@media(max-width:900px){.empIsoScene{transform:scale(1.1)!important}.empIsoAnchor{top:61%!important}}
-@media(max-width:480px){.empIsoScene{transform:scale(1)!important}.empIsoAnchor{top:62%!important}}
+@media(max-width:900px){.empIsoAnchor{top:61%!important}}
+@media(max-width:480px){.empIsoAnchor{top:62%!important}}
 @media(prefers-reduced-motion:reduce){.empDot{display:none!important}}
 /* فاز ۱۶۲ — چیپِ ماموریتِ داخلِ سایت */
 @keyframes mjmPop{0%{transform:scale(.4);opacity:0}55%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
@@ -379,3 +380,19 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 
 /* فاز ۱۶۸ — تیکرِ رقابتِ محله‌ها: روی موبایل HUD بلندتر است؛ تیکر پایین‌تر و تمام‌پهنا (مرکزچین) تا نه زیرِ HUD بماند نه از لبه بزند */
 @media(max-width:640px){.empHoodTicker{top:186px!important;left:8px!important;right:8px!important;transform:none!important;max-width:none!important;justify-content:center!important;font-size:10.5px!important}}
+
+/* فاز ۱۶۹ — موبایلِ فشرده: HUD کوچک (یک بلوکِ باریک: نام+سطح+نوار)، قرص‌ها ~۶۰٪، ریلِ کوچک‌تر — فقط ظاهر */
+@media(max-width:640px){
+  .empHud{gap:6px!important;top:4px!important;left:6px!important;right:6px!important;padding:4px 2px!important}
+  .empHudAv{width:36px!important;height:36px!important}
+  .empHudAv>div{font-size:16px!important}
+  .empHudInfo{min-width:150px!important;padding:5px 10px!important;border-radius:12px!important}
+  .empHudName{font-size:13px!important}
+  .empHudMeta{display:none!important}
+  .empHudChip{display:none!important}
+  .empXpWrap{height:7px!important}
+  .empHudPills{gap:3px!important}
+  .empHudPills span,.empHudPills button{font-size:9.5px!important;padding:2px 6px!important}
+  .empRail{right:4px!important;top:44%!important;gap:7px!important}
+  .empRail>button{width:40px!important;height:40px!important;font-size:17px!important}
+}
