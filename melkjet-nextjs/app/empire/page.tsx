@@ -108,7 +108,7 @@ const qBar = (progress: number, target: number, done: boolean) => (
   </div>
 )
 // قرصِ منابعِ HUD (فاز ۱۵۸ — tycoon): چیپِ گردِ براق با گرادیانِ داخلیِ ظریف — طلایی برای کوین
-const pill = (gold = false): React.CSSProperties => ({ fontSize: 11, padding: '4px 11px', borderRadius: 99, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4, background: gold ? 'linear-gradient(180deg,rgba(255,215,106,.24),rgba(212,175,55,.08))' : 'linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.03))', border: `1px solid ${gold ? 'rgba(212,175,55,.45)' : 'rgba(255,255,255,.12)'}`, color: gold ? '#f0d47a' : 'var(--text)', fontWeight: gold ? 700 : 500, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' })
+const pill = (gold = false): React.CSSProperties => ({ fontSize: 11, padding: '4px 11px', borderRadius: 99, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4, background: (gold ? 'linear-gradient(180deg,rgba(255,215,106,.24),rgba(212,175,55,.08))' : 'linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.03))') + ', linear-gradient(rgba(12,10,34,.8),rgba(12,10,34,.8))', border: `1px solid ${gold ? 'rgba(212,175,55,.5)' : 'rgba(255,255,255,.16)'}`, color: gold ? '#f0d47a' : 'var(--text)', fontWeight: gold ? 700 : 500, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' })
 
 // ملک‌جت — دستیارِ هوشمندِ همراه؛ گفت‌وگوها متنِ قطعیِ سند است.
 // شمارشِ متحرکِ اعداد (جلد ۵۶ «پول فقط عدد نیست») — تغییرِ ارزش دیده می‌شود، نه فقط جایگزین.
@@ -185,6 +185,8 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
   // ارزشِ روزِ واقعی؛ بی‌داده = ۰ → برجِ یک‌طبقه بدونِ برچسب (هیچ عددِ ساختگی/NaN روی صحنه نمی‌آید)
   const vals = assets.map((a: any) => Number(a.current ?? a.buyPrice) || 0)
   const max = Math.max(1, ...vals)
+  // فاز ۱۶۱ (خوانایی): برچسبِ ارزش فقط برای ۳ برجِ باارزش‌ترِ همین پرتفوی همیشه روشن است؛ بقیه با hover/لمس
+  const labelIdx = new Set(vals.map((v, i) => [v, i] as const).sort((p, q) => q[0] - p[0]).slice(0, 3).map(p => p[1]))
   // چیدمان با ۴ خانهٔ اضافه برای سبزینهٔ تزئینی — خانهٔ هر دارایی همچنان قطعی و پایدار است
   const { gridN, spots } = cityLayoutOf(assets.length + 4)
   const tile = Math.max(42, Math.min(76, Math.floor(430 / gridN)))   // قوارهٔ شبکه — با رشدِ شهر خودکار جمع‌تر می‌شود
@@ -205,13 +207,17 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
       {[16, 50, 81].map((l, i) => (
         <span key={'p' + i} aria-hidden className="empDot" style={{ position: 'absolute', left: `${l}%`, bottom: '26%', width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,230,160,.8)', boxShadow: '0 0 8px rgba(255,230,160,.9)', animationDelay: `${i * 2.3}s` }} />
       ))}
+      {/* فاز ۱۶۱ — عمقِ آسمان: دو لکه‌ابرِ خیلی نرمِ محو (فقط وقتی ابرِ هوای واقعی روی صحنه نیست) */}
+      {!clouds && [['12%', '10%', 240, 70], ['62%', '20%', 300, 85]].map(([l, t, w2, h2], i) => (
+        <div key={'b' + i} aria-hidden className="empCloud" style={{ position: 'absolute', left: l as string, top: t as string, width: w2 as number, height: h2 as number, borderRadius: '50%', background: phase === 'night' ? 'rgba(190,200,255,.05)' : 'rgba(255,255,255,.12)', filter: 'blur(18px)', animationDelay: `${i * 5}s`, pointerEvents: 'none' }} />
+      ))}
       {/* صحنهٔ ایزومتریک — جعبهٔ ثابت وسطِ صفحه؛ در موبایل با کلاسِ empIsoScene کوچک می‌شود */}
-      <div style={{ position: 'absolute', left: '50%', top: '52%', width: W, height: HB, marginLeft: -W / 2, marginTop: -HB / 2 }}>
+      <div style={{ position: 'absolute', left: '50%', top: '55%', width: W, height: HB, marginLeft: -W / 2, marginTop: -HB / 2 }}>
       <div className="empIsoScene" style={{ position: 'absolute', inset: 0, perspective: 900 }}>
-        {/* هالهٔ نرمِ پشتِ شهر */}
-        <div style={{ position: 'absolute', left: cx, top: cy - 12, width: 440, height: 250, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(255,222,140,.26), transparent 72%)', pointerEvents: 'none' }} />
-        {/* زمینِ الماسیِ سبز */}
-        <div style={{ position: 'absolute', left: cx, top: cy, width: groundW, height: groundW, transform: 'translate(-50%,-50%) rotateX(60deg) rotateZ(45deg)', background: 'linear-gradient(135deg,#4fd06a,#2f9e46)', borderRadius: 8, boxShadow: '0 0 0 3px rgba(18,74,32,.6), 0 20px 34px rgba(0,0,0,.45), inset 0 0 26px rgba(255,255,255,.12)' }} />
+        {/* هالهٔ گرم و پهنِ افق پشتِ شهر (فاز ۱۶۱: پهن‌تر و پررنگ‌تر) */}
+        <div style={{ position: 'absolute', left: cx, top: cy - 16, width: 640, height: 320, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(255,222,140,.34), rgba(255,190,120,.12) 55%, transparent 75%)', pointerEvents: 'none' }} />
+        {/* زمینِ الماسیِ سبز — فاز ۱۶۱: شطرنجیِ دوپردهٔ ملایم + نورِ داخلی از مرکز + همان لبهٔ تیره */}
+        <div style={{ position: 'absolute', left: cx, top: cy, width: groundW, height: groundW, transform: 'translate(-50%,-50%) rotateX(60deg) rotateZ(45deg)', borderRadius: 8, background: `radial-gradient(closest-side at 50% 50%, rgba(255,255,255,.18), transparent 72%), repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 ${Math.round(groundW / gridN)}px, transparent ${Math.round(groundW / gridN)}px ${Math.round(groundW / gridN) * 2}px), repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 ${Math.round(groundW / gridN)}px, transparent ${Math.round(groundW / gridN)}px ${Math.round(groundW / gridN) * 2}px), linear-gradient(135deg,#4fd06a,#2f9e46)`, boxShadow: '0 0 0 3px rgba(18,74,32,.6), 0 20px 34px rgba(0,0,0,.45), inset 0 0 26px rgba(255,255,255,.12)' }} />
         {/* سبزینهٔ تزئینیِ قطعی روی خانه‌های خالیِ مارپیچ — صرفاً دکورِ زمین */}
         {spots.slice(assets.length, assets.length + 4).map((s2, k) => {
           const dx = (s2.col - s2.row) * tile / 2, dy = ((s2.col + s2.row) - 2 * c) * tile / 4
@@ -235,13 +241,16 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
             <div key={a.id} className="empTower" onClick={onTower ? () => onTower(a) : undefined}
               title={`${a.nickname ? `«${a.nickname}» — ` : ''}${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${building ? ' · در حال ساخت' : ''}${crown ? ' · 👑 نگینِ امپراتوری' : ''}`}
               style={{ position: 'absolute', left: cx + Math.round(x - bw / 2), top: Math.round(cy + y - H - bw / 4), width: bw, height: H + bw / 2, zIndex: 10 + spot.col + spot.row, opacity: building ? .6 : 1, animationDelay: `${i * 70}ms`, cursor: onTower ? 'pointer' : 'default' }}>
-              {vals[i] > 0 && <span style={{ position: 'absolute', top: -13, left: '50%', transform: 'translateX(-50%)', fontSize: 9, color: '#ffe9a3', whiteSpace: 'nowrap', textShadow: '0 1px 3px rgba(0,0,0,.75)' }}>{building ? '🏗 ' : ''}{faB(vals[i])}</span>}
-              {crown && <span className="empCrownFloat" style={{ position: 'absolute', top: -32, left: '50%', transform: 'translateX(-50%)', fontSize: 16, filter: 'drop-shadow(0 0 6px rgba(255,215,106,.85))' }}>👑</span>}
+              {/* سایهٔ بیضیِ نرم زیرِ برج — عمق (فاز ۱۶۱) */}
+              <div aria-hidden style={{ position: 'absolute', left: '50%', top: H + bw / 4 + 3, width: bw * 1.5, height: bw * 0.55, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(0,0,0,.28), transparent 72%)', filter: 'blur(2px)', pointerEvents: 'none' }} />
+              {/* برچسبِ ارزش = چیپِ تیرهٔ خوانا روی هر آسمانی؛ فقط ۳ برجِ برتر همیشه روشن، بقیه با hover (فاز ۱۶۱) */}
+              {vals[i] > 0 && <span className={'empValTag' + (labelIdx.has(i) ? ' empValOn' : '')} style={{ position: 'absolute', top: -21, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 700, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.72)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, padding: '2px 7px', backdropFilter: 'blur(2px)', zIndex: 4 }}>{building ? '🏗 ' : ''}{faB(vals[i])}</span>}
+              {crown && <span className="empCrownFloat" style={{ position: 'absolute', top: -37, left: '50%', transform: 'translateX(-50%)', fontSize: 16, filter: 'drop-shadow(0 0 6px rgba(255,215,106,.85))', zIndex: 5 }}>👑</span>}
               {/* حبابِ اقدامِ شناور — فقط از وضعیتِ واقعیِ همین دارایی (نبود = هیچ حبابی) */}
               {bub && <button title={bub.title} className={bub.bounce ? 'empBounce' : undefined} onClick={ev => { ev.stopPropagation(); bub.onClick() }}
-                style={{ position: 'absolute', top: crown ? -60 : -40, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', border: '1px solid rgba(255,215,106,.7)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 13, fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 14px rgba(255,215,106,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 5 }}>{bub.icon}</button>}
-              {/* بام (لوزی) */}
-              <div style={{ position: 'absolute', left: 0, top: 0, width: bw, height: bw / 2, background: pal.top, clipPath: 'polygon(50% 0,100% 50%,50% 100%,0 50%)', filter: 'brightness(1.12)' }} />
+                style={{ position: 'absolute', top: crown ? -64 : -46, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', border: '1px solid rgba(255,215,106,.7)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 13, fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 14px rgba(255,215,106,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 5 }}>{bub.icon}</button>}
+              {/* بام (لوزی) + نوارِ براقِ ظریف (فاز ۱۶۱) */}
+              <div style={{ position: 'absolute', left: 0, top: 0, width: bw, height: bw / 2, background: `linear-gradient(115deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,0) 40%), linear-gradient(0deg, ${pal.top}, ${pal.top})`, clipPath: 'polygon(50% 0,100% 50%,50% 100%,0 50%)', filter: 'brightness(1.12)' }} />
               {/* وجهِ چپ (تیره‌تر) + پنجره‌ها به تعدادِ طبقه‌های واقعی */}
               <div style={{ position: 'absolute', left: 0, top: bw / 4, width: bw / 2, height: H, background: `linear-gradient(180deg, ${pal.left}, ${pal.left})`, transform: `skewY(${skew}deg)`, transformOrigin: '0 0', display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', alignItems: 'center', boxShadow: 'inset 0 -6px 10px rgba(0,0,0,.25)' }}>
                 {Array.from({ length: floors }, (_, f) => <span key={f} style={winDot} />)}
@@ -267,9 +276,13 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
         </div>}
       </div>
       </div>
-      {/* چیپِ هوای واقعی + راهنمای کوچک — شناور روی صحنه */}
-      {wx && <span title={`هوای واقعیِ ${wx.city} — Open-Meteo`} style={{ position: 'absolute', left: 14, bottom: 'calc(170px + env(safe-area-inset-bottom))', fontSize: 11, color: '#eef1fb', background: 'rgba(15,12,41,.5)', border: '1px solid rgba(255,255,255,.2)', borderRadius: 10, padding: '3px 9px', backdropFilter: 'blur(4px)' }}>{wx.icon} {(Number(wx.tempC) || 0).toLocaleString('fa-IR')}° {wx.label}</span>}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 'calc(148px + env(safe-area-inset-bottom))', textAlign: 'center', fontSize: 10, color: 'rgba(240,240,255,.6)', textShadow: '0 1px 3px rgba(0,0,0,.5)', pointerEvents: 'none' }}>ارتفاعِ هر برج = ارزشِ روزِ واقعیِ همان دارایی · لمسِ برج = جزئیات</div>
+      {/* فاز ۱۶۱ — وینیتِ ملایمِ لبه‌ها: روکش‌ها روی هر آسمانی خوانا می‌مانند */}
+      <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(120% 92% at 50% 45%, transparent 55%, rgba(0,0,0,.18) 100%)', pointerEvents: 'none' }} />
+      {/* چیپِ هوای واقعی + راهنمای کوچک — چیپِ تیرهٔ خوانا روی هر آسمانی (فاز ۱۶۱) */}
+      {wx && <span title={`هوای واقعیِ ${wx.city} — Open-Meteo`} style={{ position: 'absolute', left: 14, bottom: 'calc(170px + env(safe-area-inset-bottom))', fontSize: 11, color: '#eef1fb', background: 'rgba(12,10,34,.72)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, padding: '3px 9px', backdropFilter: 'blur(2px)' }}>{wx.icon} {(Number(wx.tempC) || 0).toLocaleString('fa-IR')}° {wx.label}</span>}
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 'calc(148px + env(safe-area-inset-bottom))', textAlign: 'center', pointerEvents: 'none' }}>
+        <span style={{ display: 'inline-block', fontSize: 10, color: 'rgba(240,240,255,.85)', background: 'rgba(12,10,34,.72)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, padding: '2px 10px', backdropFilter: 'blur(2px)' }}>ارتفاعِ هر برج = ارزشِ روزِ واقعیِ همان دارایی · لمسِ برج = جزئیات</span>
+      </div>
       {/* لایه‌های هوای واقعی — روی کلِ صفحه (نبودِ داده = هیچ جلوه‌ای) */}
       {(fx === 'rain' || fx === 'storm') && <div className="empRain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 35 }} />}
       {fx === 'storm' && <div className="empFlash" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 35 }} />}
@@ -775,6 +788,8 @@ export default function EmpirePage() {
         @keyframes empTabPop{0%{transform:translateY(0) scale(.7)}60%{transform:translateY(-8px) scale(1.12)}100%{transform:translateY(-6px) scale(1)}}
         @keyframes empPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,215,106,.55)}50%{box-shadow:0 0 0 9px rgba(255,215,106,0)}}
         .empTower{animation:empIso .55s ease backwards;transition:transform .2s ease,filter .2s ease}
+        .empValTag{opacity:0;transition:opacity .2s ease}
+        .empTower:hover .empValTag,.empValOn{opacity:1}
         @keyframes empBounce{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-7px)}}
         .empBounce{animation:empBounce 1.1s ease-in-out infinite}
         @keyframes empDotFloat{0%{transform:translateY(0);opacity:0}25%{opacity:.85}100%{transform:translateY(-130px);opacity:0}}
@@ -1030,7 +1045,7 @@ export default function EmpirePage() {
           <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#1a2030', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{e.persona || '🏛'}</div>
           {ic && <span style={{ position: 'absolute', top: -7, left: -7, fontSize: 15 }}>{ic}</span>}
         </div>) })()}
-      <div style={{ flex: 1, minWidth: 180, ...(hudFloat ? { background: 'rgba(23,16,58,.6)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 16, padding: '7px 12px', backdropFilter: 'blur(6px)' } : {}) }}>
+      <div style={{ flex: 1, minWidth: 180, ...(hudFloat ? { background: 'rgba(12,10,34,.8)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 16, padding: '7px 12px', backdropFilter: 'blur(6px)' } : {}) }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 800, fontSize: 16, fontFamily: DISPLAY }}>{e.name}</span>
           {(() => { const ic = (st.cosmetics?.items || []).find((i: any) => i.id === st.cosmetics?.flair)?.icon; return ic ? <span title="نشانِ ظاهری">{ic}</span> : null })()}
