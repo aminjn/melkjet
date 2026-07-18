@@ -626,6 +626,7 @@ async function stateOf(userId: string, e00: EmpireData) {
         + (missions?.m1 && !missions.m1.claimed ? missions.m1.rewardXp : 0)
       return { xpToNext, potentialXp, pct: pathPct(xpToNext, potentialXp), morningHour: config().empire.morning.hour, morningEnabled: config().empire.morning.enabled }
     })(),
+    homeHood: e.homeHood || '',   // فاز ۱۶۸ — محلهٔ خانهٔ کاربر (لنگرِ تابلوی محله‌ها)
     nextDream: nextDreamOf(e),
     mentorLine: mentorLineOf(e, bank, missions, chestAvailable),
     welcomeBack: absentDays >= 7 || e.pendingComeback ? { days: Math.max(absentDays, 7), gift: !!e.pendingComeback } : null,
@@ -734,6 +735,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(await stateOf(userId, e))
     }
     case 'rename': { const r = await renameEmpire(userId, String(b.name || '')); return r.ok ? NextResponse.json({ ok: true, name: r.empire!.name }) : NextResponse.json({ error: r.reason }, { status: 400 }) }
+    // ⚔️ فاز ۱۶۸ — تابلوی محله‌ها: رقابتِ واقعی بر سرِ محله‌ها + پلِ مستقیم به آگهی‌های واقعیِ همان محله
+    case 'hoodBoard': {
+      const { hoodBoardOf } = await import('@/app/lib/empire-territory')
+      const em = await getEmpire(userId)
+      return NextResponse.json({ ok: true, board: await hoodBoardOf(userId, config().empire.hoodBoard), homeHood: em?.homeHood || '' })
+    }
+    // محلهٔ خانهٔ کاربر (پاسخِ واقعیِ خودش؛ خالی = پاک‌کردن)
+    case 'setHomeHood': {
+      const { setHomeHood } = await import('@/app/lib/empire-store')
+      const r = await setHomeHood(userId, String(b.hood || ''))
+      return r.ok ? NextResponse.json({ ok: true, homeHood: r.empire!.homeHood || '' }) : NextResponse.json({ error: r.reason }, { status: 400 })
+    }
     case 'persona': { const r = await setPersona(userId, String(b.persona || '')); return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.reason }, { status: 400 }) }
     case 'mentor': { const r = await setMentor(userId, String(b.mentor || '')); return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.reason }, { status: 400 }) }
     case 'style': {

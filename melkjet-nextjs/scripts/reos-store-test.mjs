@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, markBriefMorning, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest, effectiveTransferTaxPct , openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions, followEmpire } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, setHomeHood, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, markBriefMorning, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest, effectiveTransferTaxPct , openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions, followEmpire } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -855,6 +855,11 @@ async function main() {
     ok('سبک‌ها ذخیره می‌شوند', (await getEmpire(uid)).stylePicks.length === 3)
     const rn = await renameEmpire(uid, 'Noyan Group')
     ok('تغییرِ نام', rn.ok && (await getEmpire(uid)).name === 'Noyan Group')
+    // فاز ۱۶۸: محلهٔ خانهٔ کاربر — ثبت و پاک‌کردن روی PG
+    await setHomeHood(uid, '  گیشا ')
+    ok('محلهٔ خانه ثبت و trim می‌شود', (await getEmpire(uid)).homeHood === 'گیشا')
+    await setHomeHood(uid, '')
+    ok('محلهٔ خانه با ورودیِ خالی پاک می‌شود', (await getEmpire(uid)).homeHood === '')
     await bumpRejects(uid); await bumpRejects(uid)
     ok('دو ردِ پیشنهاد → rejects=2 (کنترلِ آزاد)', (await getEmpire(uid)).rejects === 2)
     ok('empireCount ≥ 1', (await empireCount()) >= 1)

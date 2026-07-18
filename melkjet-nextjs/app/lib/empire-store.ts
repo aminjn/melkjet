@@ -110,6 +110,7 @@ export interface EmpireData {
   lastUpkeepAt?: number       // آخرین کسرِ هزینهٔ مالکیت (GDD جلد۵)
   mentor: Mentor              // دستیارِ هوشمندِ همراه — همیشه «ملک‌جت»
   answers: { city: string; tenB: string; risk: number; ptype: string; goal: string }
+  homeHood?: string           // فاز ۱۶۸ — محلهٔ خانهٔ خودِ کاربر (پاسخِ واقعیِ خودش): لنگرِ حسِ «این محله باید مالِ من باشد»
   dream: { picks: string[]; sentence: string }        // Dream Board (فصل ۳)
   identity: Record<string, number>                    // امتیازهای هویتی ۰..۱۰۰ (Identity Engine)
   dna: string                                         // Digital DNA (Explorer/Investor/…)
@@ -1004,6 +1005,11 @@ export async function createEmpire(userId: string, input: {
 
 export async function renameEmpire(userId: string, name: string) {
   return mutateEmpire(userId, e => { const n = String(name || '').trim().slice(0, 60); if (!n) return 'نام خالی است'; e.name = n })
+}
+
+// فاز ۱۶۸ — محلهٔ خانهٔ کاربر (پاسخِ واقعیِ خودش؛ خالی = پاک‌کردن): لنگرِ تابلوی محله‌ها
+export async function setHomeHood(userId: string, hood: string) {
+  return mutateEmpire(userId, e => { e.homeHood = String(hood || '').trim().slice(0, 60) })
 }
 
 // خریدِ دارایی = انتخابِ یک آگهیِ واقعی با قیمتِ واقعی؛ سرمایهٔ شبیه‌سازی کم می‌شود (فصل ۳ + §6.5).
