@@ -19,13 +19,15 @@ export async function GET() {
   return NextResponse.json({ account: a, phone: s.phone, role: s.role, staff: s.staff || [], dash, name: a?.name || '', suspended: !!a?.suspended, profileCompletion, access })   // staff: فاز ۱۱۵
 }
 
-// تکمیل پروفایل (آنبوردینگ): نام + نقش
+// تکمیل پروفایل (آنبوردینگ): نام (+ نقش، اختیاری).
+// فاز ۱۷۱ (فیدبک: «ثبت‌نام با کلی پروفایل گیج‌کننده است»): ثبت‌نام فقط نام می‌خواهد؛ همه با
+// «کاربر عادی» شروع می‌کنند و نوعِ کسب‌وکار بعداً داخلِ پنل (BizPicker) انتخاب/عوض می‌شود.
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'وارد نشده‌اید' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
   const name = String(b.name || '').trim()
-  const role = String(b.role || '').trim()
+  const role = String(b.role || '').trim() || 'کاربر عادی'
   if (!name) return NextResponse.json({ error: 'نام را وارد کنید' }, { status: 400 })
   if (!isValidRole(role)) return NextResponse.json({ error: 'نقش را انتخاب کنید' }, { status: 400 })
   const a = setProfile(s.phone, { name, role })

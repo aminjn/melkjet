@@ -15,6 +15,7 @@ const CompareBar = dynamic(() => import('./CompareBar'), { ssr: false })
 const SupportLauncher = dynamic(() => import('./SupportLauncher'), { ssr: false })
 const LegalAssistant = dynamic(() => import('./LegalAssistant'), { ssr: false })
 const PWAInstall = dynamic(() => import('./PWAInstall'), { ssr: false })
+const BizPicker = dynamic(() => import('./BizPicker'), { ssr: false })   // فاز ۱۷۱ — انتخابِ کسب‌وکار بعد از ورود
 
 export default function DeferredShell() {
   const [on, setOn] = useState(false)
@@ -38,6 +39,7 @@ export default function DeferredShell() {
       <ImpersonationBar />
       <SuspensionGate />
       <PlanLock />
+      <BizPicker />
       <CompareBar />
       <SupportLauncher />
       <LegalAssistant />

@@ -8,13 +8,6 @@ import { useRouter } from 'next/navigation'
 type Tab = 'phone' | 'email'
 type OtpStep = 'enter-phone' | 'shahkar' | 'enter-code' | 'onboard'
 const faToEn = (v: string) => (v || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-const ROLE_ICONS: Record<string, string> = { '/buyer': '🔑', '/pros': '🤝', '/agency': '🏢', '/builder': '🏗', '/materials': '🧱', '/legal': '⚖', '/architect': '📐', '/contractor': '🛠', '/appraiser': '📋', '/lawfirm': '⚖', '/finance': '🏦', '/notary': '◆' }
-const FALLBACK_ROLES = [
-  { id: 'کاربر عادی', name: 'کاربر عادی', dashboard: '/buyer' },
-  { id: 'مشاور املاک', name: 'مشاور املاک', dashboard: '/pros' },
-  { id: 'آژانس املاک', name: 'آژانس املاک', dashboard: '/agency' },
-  { id: 'سازنده / انبوه‌ساز', name: 'سازنده / انبوه‌ساز', dashboard: '/builder' },
-]
 
 export default function AuthModal() {
   const router = useRouter()
@@ -32,8 +25,6 @@ export default function AuthModal() {
   const [nid, setNid] = useState('')
   const [by, setBy] = useState(''); const [bm, setBm] = useState(''); const [bd, setBd] = useState('')
   const yRef = useRef<HTMLInputElement>(null); const mRef = useRef<HTMLInputElement>(null); const dRef = useRef<HTMLInputElement>(null)
-  const [selectedRole, setSelectedRole] = useState('')
-  const [roles, setRoles] = useState(FALLBACK_ROLES)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -44,7 +35,6 @@ export default function AuthModal() {
     window.addEventListener('mj-open-auth', onOpen)
     return () => window.removeEventListener('mj-open-auth', onOpen)
   }, [])
-  useEffect(() => { if (open && roles === FALLBACK_ROLES) fetch('/api/roles').then(r => r.ok ? r.json() : null).then(d => { if (d?.roles?.length) setRoles(d.roles) }).catch(() => {}) }, [open, roles])
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
@@ -106,10 +96,10 @@ export default function AuthModal() {
     } catch { setError('خطا در اتصال به سرور') } finally { setLoading(false) }
   }
   async function submitOnboarding() {
-    setError(''); if (!name.trim()) { setError('نام خود را وارد کنید'); return } if (!selectedRole) { setError('نقش خود را انتخاب کنید'); return }
+    setError(''); if (!name.trim()) { setError('نام خود را وارد کنید'); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), role: selectedRole }) })
+      const res = await fetch('/api/auth/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim() }) })   // فاز ۱۷۱: نقش بعداً داخلِ پنل
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'خطا'); return }
       success() // روی همان صفحه می‌ماند؛ کاربر به جایی که بود برمی‌گردد
@@ -207,16 +197,11 @@ export default function AuthModal() {
           )}
           {tab === 'phone' && otpStep === 'onboard' && (
             <>
-              <div style={{ marginBottom: 16 }}><p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 4px' }}>به ملک‌جت خوش آمدی! 🎉</p><p style={{ fontSize: 12.5, color: 'var(--faint)', margin: 0 }}>نام و نقشت را انتخاب کن.</p></div>
+              <div style={{ marginBottom: 16 }}><p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 4px' }}>به ملک‌جت خوش آمدی! 🎉</p><p style={{ fontSize: 12.5, color: 'var(--faint)', margin: 0 }}>فقط نامت را بگو — تمام.</p></div>
               <div style={{ marginBottom: 16 }}><label style={lab}>نام و نام خانوادگی {nameVerified && <span style={{ color: '#5fd98a', fontSize: 11 }}>✓ تأییدشده با شاهکار</span>}</label><input value={name} onChange={e => setName(e.target.value)} readOnly={nameVerified} placeholder="مثلاً علی رضایی" style={{ ...inp, direction: 'rtl', textAlign: 'right', opacity: nameVerified ? 0.8 : 1 }} autoFocus={!nameVerified} /></div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={lab}>نقش شما</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {roles.map(r => <button key={r.id} onClick={() => setSelectedRole(r.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 12px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, textAlign: 'right', border: `1px solid ${selectedRole === r.id ? 'var(--gold)' : 'var(--line)'}`, background: selectedRole === r.id ? 'var(--goldDim)' : 'var(--bg2)', color: selectedRole === r.id ? 'var(--gold)' : 'var(--text)', fontWeight: selectedRole === r.id ? 700 : 500 }}><span style={{ fontSize: 16 }}>{ROLE_ICONS[r.dashboard] || '◆'}</span>{r.name}</button>)}
-                </div>
-              </div>
+              <p style={{ fontSize: 11.5, color: 'var(--faint)', margin: '0 0 14px', lineHeight: 1.9 }}>🏢 کسب‌وکار داری (مشاور، آژانس، سازنده…)؟ بعد از ورود، از داخلِ پنلت انتخابش می‌کنی — الان لازم نیست.</p>
               {errBox}
-              <button onClick={submitOnboarding} disabled={loading} style={btn}>{loading ? 'در حال ثبت…' : 'تکمیل ثبت‌نام و ورود'}</button>
+              <button onClick={submitOnboarding} disabled={loading} style={btn}>{loading ? 'در حال ثبت…' : 'ورود به ملک‌جت'}</button>
             </>
           )}
           {tab === 'email' && (
