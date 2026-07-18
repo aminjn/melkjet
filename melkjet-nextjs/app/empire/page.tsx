@@ -12,6 +12,8 @@ import { dayPhaseOf, weatherFxOf, streetLifeOf, cityLayoutOf, towerFloorsOf, tow
 import { ptypeClassOf } from '@/app/lib/listing-similarity'
 // فاز ۱۶۴ب: موتورِ اسپرایتِ شهر — گرافیکِ استودیوییِ CC0 (Kenney) از public/empire/sprites؛ نبودِ manifest = صحنهٔ SVG
 import { pickStack, isValidManifest, type SpriteManifest, type SpriteDef, type BuildingKind } from '@/app/lib/empire-sprites'
+// ☀️ فاز ۱۶۷ — زنگِ صبحگاهی: اشتراکِ پوش با اجازهٔ خودِ کاربر (force=true یعنی بپرس)
+import { ensurePushSubscribed } from '@/app/lib/push-client'
 import Link from 'next/link'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
@@ -819,6 +821,15 @@ export default function EmpirePage() {
   const [civicHint, setCivicHint] = useState(false)
   useEffect(() => { try { if (!sessionStorage.getItem('empCivicHint')) setCivicHint(true) } catch {} }, [])
   const openCivic = (t: 'world' | 'market' | 'ranks') => { setGtab(t); setCivicHint(false); try { sessionStorage.setItem('empCivicHint', '1') } catch {} }
+  // ☀️ فاز ۱۶۷ — دعوتِ یک‌بارهٔ زنگِ صبحگاهی: فقط وقتی اجازهٔ نوتیفیکیشن هنوز پرسیده نشده و کاربر قبلاً جواب نداده
+  const [morningAsk, setMorningAsk] = useState<'no' | 'ask' | 'ok'>('no')
+  useEffect(() => {
+    try {
+      if (typeof Notification === 'undefined' || Notification.permission !== 'default') return
+      if (localStorage.getItem('mj-morning-optin')) return
+      setMorningAsk('ask')
+    } catch {}
+  }, [])
   const [mktV, setMktV] = useState<'capital' | 'players' | 'bank' | 'shop'>('capital')
   const [rankV, setRankV] = useState<'compete' | 'hall' | 'clan'>('compete')
   const [misV, setMisV] = useState<'quests' | 'rewards' | 'dreams'>('quests')
@@ -1263,6 +1274,8 @@ export default function EmpirePage() {
         .empTabActive{animation:empTabPop .3s ease both}
         .empPulse{animation:empPulse 1.6s ease-in-out infinite}
         .empXpBar{transition:width .6s ease}
+        @keyframes empGhostPulse{0%,100%{opacity:.35}50%{opacity:.8}}
+        .empGhostXp{animation:empGhostPulse 1.8s ease-in-out infinite}
         .empRoot>*{animation:empUp .45s ease both}
         .empRoot>*:nth-child(2){animation-delay:.05s}.empRoot>*:nth-child(3){animation-delay:.1s}
         .empRoot>*:nth-child(4){animation-delay:.15s}.empRoot>*:nth-child(5){animation-delay:.2s}
@@ -1519,7 +1532,18 @@ export default function EmpirePage() {
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{e.profile?.title} · DNA: {e.dna} · دستیار: {e.mentor}</div>
         <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 11, color: '#f0d47a', fontWeight: 700, whiteSpace: 'nowrap' }}>سطح {fa(lv.level || 1)}</span>
-          <div style={{ flex: 1, height: 10, background: 'rgba(255,255,255,.09)', borderRadius: 99, overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,.4)' }}><div className="empXpBar" style={{ width: `${(lv.progress || 0) * 100}%`, height: '100%', borderRadius: 99, background: 'linear-gradient(90deg,#ffd76a,#ff9d2e)', boxShadow: '0 0 10px rgba(255,183,77,.6)' }} /></div>
+          <div style={{ flex: 1, height: 10, background: 'rgba(255,255,255,.09)', borderRadius: 99, overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,.4)', position: 'relative' }}>
+            <div className="empXpBar" style={{ width: `${(lv.progress || 0) * 100}%`, height: '100%', borderRadius: 99, background: 'linear-gradient(90deg,#ffd76a,#ff9d2e)', boxShadow: '0 0 10px rgba(255,183,77,.6)' }} />
+            {/* ☀️ فاز ۱۶۷ — سگمنتِ شبح: «اگر مأموریت‌های امروز را بزنی تا اینجا می‌رسی» — اندازه از potentialXp واقعی نسبت به بازهٔ سطح؛ pct=0 ⇒ هیچ شبحی */}
+            {(() => {
+              const tp = st.todayPath
+              const prog = Math.max(0, Math.min(1, lv.progress || 0))
+              if (!tp || !(tp.pct > 0) || prog >= 1) return null
+              const ghost = (Math.min(100, tp.pct) / 100) * (1 - prog)
+              if (ghost <= 0.005) return null
+              return <div className="empGhostXp" title="اگر مأموریت‌های امروز را انجام بدهی تا اینجا می‌رسی" style={{ position: 'absolute', top: 0, bottom: 0, insetInlineStart: `${prog * 100}%`, width: `${ghost * 100}%`, borderRadius: 99, background: 'linear-gradient(90deg, rgba(255,215,106,.55), rgba(255,157,46,.3))' }} />
+            })()}
+          </div>
           <span style={{ fontSize: 10.5, color: 'var(--muted)', whiteSpace: 'nowrap' }}>⚡ {fa(e.xp)}{lv.next ? ` / ${fa(lv.next)}` : ''}</span>
         </div>
       </div>
@@ -1586,7 +1610,8 @@ export default function EmpirePage() {
         ['🎪', 'رویدادها', (st.liveEvents || []).length + (bd?.deal ? 1 : 0) + (au?.auction ? 1 : 0), 'events'],
         ['🔥', 'فرصت‌های طلاییِ امروز', (st.dealsEnabled && deals?.deals?.length) || 0, 'deals'],
         ['🏗', 'زمین و ساخت', lands?.lands?.length || 0, 'lands'],
-        ['✉️', 'نامهٔ ملک‌جت و امروز', st.brief && !st.brief.openedAt ? 1 : 0, 'brief'],
+        // ☀️ فاز ۱۶۷: نامهٔ روز به زنگِ صبحگاهی گره خورد — ساعت از knob واقعی (todayPath.morningHour)، هاردکد نیست
+        ['✉️', st.todayPath?.morningHour != null ? `☀️ گزارشِ ساعتِ ${fa(st.todayPath.morningHour)}` : 'نامهٔ ملک‌جت و امروز', st.brief && !st.brief.openedAt ? 1 : 0, 'brief'],
         ['🗺', 'نقشهٔ شهرِ تو', 0, 'map'],
       ]
       return (
@@ -1632,7 +1657,7 @@ export default function EmpirePage() {
     </BottomSheet>
     {/* برگهٔ بخش‌ها — محتوای زیرصفحه‌های قبلی سرِ جای خودش مانده؛ فقط شرطِ نمایش به برگه وصل شده است */}
     <BottomSheet open={citySheet !== ''} onClose={() => setCitySheet('')}
-      title={({ brief: '⚡ امروز و نامهٔ ملک‌جت', events: '🎪 رویدادها', deals: '🔥 فرصت‌های طلاییِ امروز', lands: '🏗 زمین و ساخت', map: '🗺 نقشهٔ شهرِ تو', '': '' } as Record<string, string>)[citySheet]}>
+      title={({ brief: st.todayPath?.morningHour != null ? `☀️ گزارشِ ساعتِ ${fa(st.todayPath.morningHour)}` : '⚡ امروز و نامهٔ ملک‌جت', events: '🎪 رویدادها', deals: '🔥 فرصت‌های طلاییِ امروز', lands: '🏗 زمین و ساخت', map: '🗺 نقشهٔ شهرِ تو', '': '' } as Record<string, string>)[citySheet]}>
     {citySheet === 'brief' && <>
     {/* 🧭 اتاقِ تحلیل (فاز ۳۹ — سند ۲۶ فصل ۱۶): اولویت‌های امروز از وضعیتِ واقعی + سلامتِ مالی + جریانِ نقدی.
         فقط پیشنهاد می‌دهد — هیچ کاری را خودش انجام نمی‌دهد (قانونِ سند: تصمیم همیشه با خودت). */}
@@ -3019,6 +3044,32 @@ export default function EmpirePage() {
       ['rewards', '🎁', 'جوایزِ واقعی'],
       ['dreams', '🌠', 'رؤیاها', (st.endgame?.dreams || []).length],
     ], misV, setMisV)}
+    {/* ☀️ فاز ۱۶۷ — «مأموریت = موتورِ پیشرفت»: اعدادِ واقعی از st.todayPath (منحنیِ سطح + پاداشِ knob) — pct=0 ⇒ هیچ */}
+    {st.todayPath && st.todayPath.pct > 0 && (
+      <div style={{ ...card, borderColor: 'rgba(255,215,106,.45)', background: 'linear-gradient(160deg, rgba(255,215,106,.10), rgba(255,157,46,.03) 70%)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12.5, padding: '12px 14px' }}>
+        <span style={{ fontSize: 20 }} aria-hidden>🚀</span>
+        <span style={{ flex: 1, minWidth: 200, lineHeight: 2 }}>
+          تا سطحِ بعد <b style={{ color: 'var(--gold)' }}>{fa(st.todayPath.xpToNext)}</b> امتیاز مانده — مأموریت‌های امروز <b style={{ color: 'var(--gold)' }}>{fa(st.todayPath.potentialXp)}</b> امتیاز می‌دهند (<b style={{ color: '#ffd76a' }}>{fa(st.todayPath.pct)}٪</b> از راه)
+        </span>
+      </div>
+    )}
+    {/* ☀️ فاز ۱۶۷ — دعوتِ یک‌بارهٔ زنگِ صبحگاهی: فقط وقتی permission هنوز default است و کاربر قبلاً جواب نداده */}
+    {st.todayPath?.morningEnabled && morningAsk !== 'no' && (
+      <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12.5, borderColor: 'var(--goldDim)', padding: '12px 14px' }}>
+        <span style={{ fontSize: 20 }} aria-hidden>☀️</span>
+        {morningAsk === 'ok'
+          ? <span style={{ color: '#7ee0b8', fontWeight: 800 }}>✓ تنظیم شد — هر روز ساعتِ {fa(st.todayPath.morningHour)} صبح مأموریتِ روز به گوشی‌ات می‌رسد</span>
+          : <>
+            <span style={{ flex: 1, minWidth: 190, lineHeight: 2 }}>هر روز ساعتِ <b style={{ color: 'var(--gold)' }}>{fa(st.todayPath.morningHour)}</b> صبح مأموریتِ روز را برایت بفرستیم؟</span>
+            <button className="empChunky" style={{ ...btn, padding: '8px 18px', fontSize: 12.5, borderRadius: 999 }} disabled={busy} onClick={async () => {
+              const r = await ensurePushSubscribed(true)
+              try { localStorage.setItem('mj-morning-optin', '1') } catch {}
+              setMorningAsk(r.ok ? 'ok' : 'no')
+            }}>باشه، خبرم کن</button>
+            <button style={{ ...btnGhost, padding: '8px 14px', fontSize: 12 }} onClick={() => { try { localStorage.setItem('mj-morning-optin', '1') } catch {}; setMorningAsk('no') }}>نه</button>
+          </>}
+      </div>
+    )}
 
     {misV === 'rewards' && <>
     {/* 🎁 مسیرِ جوایزِ واقعی (فاز ۴۸): ارزشِ خالصت را بالا ببر → جایزهٔ تومانیِ «واقعی» به کیف‌پولِ ملک‌جت.
@@ -4354,6 +4405,10 @@ export default function EmpirePage() {
               <div style={{ fontSize: 10, fontWeight: 800, color: '#ffd76a' }}>مأموریتِ امروز{(st.streak?.streak || 0) > 0 ? <span style={{ color: 'var(--muted)', fontWeight: 500 }}> · 🔥 روزِ {fa(st.streak.streak)}</span> : null}</div>
               <div style={{ fontSize: 14, fontWeight: 900, marginTop: 2 }}>{dq.title}</div>
               {qBar(dq.progress, dq.target, !!dq.done)}
+              {/* ☀️ فاز ۱۶۷ — «مسیرِ امروز»: مأموریت = موتورِ پیشرفت؛ عددِ صادق از st.todayPath (منحنیِ واقعیِ سطح) */}
+              {(st.todayPath?.pct || 0) > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: '#ffd76a', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span aria-hidden>🚀</span> این مأموریت‌ها {fa(st.todayPath.pct)}٪ از راهِ سطحِ بعد را می‌دهند
+              </div>}
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
                 <span style={rewardChip}>🪙 {fa(dq.rewardCoins)}</span>
                 <span style={rewardChip}>⚡ {fa(dq.rewardXp)}</span>
