@@ -10,6 +10,8 @@ import { sfx, sfxPrefs, setSfxPrefs } from '@/app/lib/empire-sound'
 import { dayPhaseOf, weatherFxOf, streetLifeOf, cityLayoutOf, towerFloorsOf, towerPaletteOf, type DayPhase } from '@/app/lib/empire-visual'
 // فاز ۱۶۳: کلاس‌بندیِ واقعیِ نوعِ ملک (همان تابعِ کانونیِ سایت) → گونهٔ بصریِ ساختمان در شهر
 import { ptypeClassOf } from '@/app/lib/listing-similarity'
+// فاز ۱۶۴ب: موتورِ اسپرایتِ شهر — گرافیکِ استودیوییِ CC0 (Kenney) از public/empire/sprites؛ نبودِ manifest = صحنهٔ SVG
+import { pickStack, isValidManifest, type SpriteManifest, type SpriteDef, type BuildingKind } from '@/app/lib/empire-sprites'
 import Link from 'next/link'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
@@ -434,6 +436,13 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
   bubbleOf?: (a: any) => { icon: string; bounce?: boolean; title: string; onClick: () => void } | null
 }) {
   const vis = visual || {}
+  // 🖼 فاز ۱۶۴ب — حالتِ اسپرایت: manifest یک‌بار می‌آید و اعتبارسنجی می‌شود؛ نبود/خرابی = صحنهٔ SVG بدونِ هیچ تغییری
+  const [man, setMan] = React.useState<SpriteManifest | null>(null)
+  React.useEffect(() => {
+    let dead = false
+    fetch('/empire/sprites/manifest.json').then(r => (r.ok ? r.json() : null)).then(j => { if (!dead && isValidManifest(j) && j.geo && j.stacks) setMan(j) }).catch(() => {})
+    return () => { dead = true }
+  }, [])
   const phase: DayPhase = vis.dayNight === false ? 'night' : dayPhaseOf(new Date().getHours())
   // فاز ۱۶۳: آسمانِ چندپرده با باندِ گرمِ افق — به سبکِ سیتی‌بیلدرهای بزرگ
   const sky: Record<DayPhase, string> = {
@@ -457,7 +466,12 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
   const tile = Math.max(48, Math.min(88, Math.floor(470 / gridN)))
   const c = Math.floor(gridN / 2)
   const groundW = Math.round(gridN * tile * 0.72)                    // ضلعِ مربعِ زمین — بعد از چرخشِ ایزو ≈ الماسِ gridN×tile
-  const gHalfH = Math.round(gridN * tile * 0.255)                    // نیم‌ارتفاعِ تصویرشدهٔ الماس — برای افق/اسکای‌لاین
+  // فاز ۱۶۴ب — پارامترهای حالتِ اسپرایت: شبکهٔ جهانی (قواره‌ها زوج، خیابان‌ها فرد) + مقیاسِ رندرِ کاشیِ ۱۳۲px
+  const sprite = !!man
+  const M = 2 * gridN - 1
+  const kSp = Math.min(0.9, 640 / (M * 132))
+  const yMidSp = M * 33 * kSp                                        // مرکزِ عمودیِ دنیای اسپرایت برای سنترشدن روی صحنه
+  const gHalfH = sprite ? Math.round(M * 33 * kSp) : Math.round(gridN * tile * 0.255)   // نیم‌ارتفاعِ شهر — برای افق/اسکای‌لاین
   const W = 560, HB = 470, cx = 280, cy = 245                        // جعبهٔ صحنه وسطِ صفحه — با کلاسِ empIsoScene مقیاس می‌شود
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: sky[phase], overflow: 'hidden' }}>
@@ -488,7 +502,8 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
         <div aria-hidden style={{ position: 'absolute', left: cx + 60, top: cy - gHalfH - 28, width: 240, height: 58, borderRadius: '50%', background: 'linear-gradient(180deg,#3a7159,#284f40)', filter: 'blur(5px)', opacity: .5, zIndex: 0 }} />
         <div aria-hidden style={{ position: 'absolute', left: cx - 300, top: cy - gHalfH - 52, width: 600, zIndex: 0, filter: 'blur(1.2px)' }}><SkylineSvg w={600} h={26} fill="#7383ad" o={.34} /></div>
         <div aria-hidden style={{ position: 'absolute', left: cx - 330, top: cy - gHalfH - 34, width: 660, zIndex: 0, filter: 'blur(.4px)' }}><SkylineSvg w={660} h={30} fill="#5a6790" o={.5} /></div>
-        {/* فاز ۱۶۳ — زمینِ محله: قواره‌ها + خیابان‌های آسفالت با خط‌کشیِ منقطع (SVG روی صفحهٔ چرخیدهٔ ایزو) */}
+        {/* فاز ۱۶۳ — زمینِ محله (fallback بدونِ اسپرایت): قواره‌ها + خیابان‌های SVG روی صفحهٔ چرخیدهٔ ایزو */}
+        {!sprite && <>
         <div style={{ position: 'absolute', left: cx, top: cy, width: groundW, height: groundW, transform: 'translate(-50%,-50%) rotateX(60deg) rotateZ(45deg)', borderRadius: 10, overflow: 'hidden', boxShadow: '0 0 0 3px rgba(24,28,40,.6), 0 22px 36px rgba(0,0,0,.5)', zIndex: 2 }}>
           <GroundSvg G={groundW} n={gridN} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(closest-side at 50% 50%, rgba(255,255,255,.14), transparent 70%)', pointerEvents: 'none' }} />
@@ -501,6 +516,33 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
             {k === 0 ? <FountainSvg /> : k === 1 ? <BillboardSvg win="#ffe9a3" /> : <TreeSvg s={sc} big={k % 2 === 0} />}
           </span>
         })}
+        </>}
+        {/* 🖼 فاز ۱۶۴ب — زمینِ اسپرایتی (Kenney): چمنِ قواره‌ها + نوارهای خیابان بینِ قواره‌ها + تقاطع + کاشیِ درخت
+            روی قواره‌های خالیِ مارپیچ. ترتیبِ نقاش با (wc+wr) — همان منطقِ چیدمانِ GroundSvg، این‌بار با کاشیِ واقعی */}
+        {sprite && (() => {
+          const T = 132 * kSp
+          const deco = new Map<string, number>()
+          spots.slice(assets.length, assets.length + 4).forEach((s2, i2) => deco.set(s2.col + ',' + s2.row, i2))
+          const tiles: React.ReactNode[] = []
+          for (let wr = 0; wr < M; wr++) for (let wc = 0; wc < M; wc++) {
+            const x = cx + (wc - wr) * T / 2
+            const y = cy + (wc + wr) * 33 * kSp - yMidSp
+            const odd1 = wc % 2 === 1, odd2 = wr % 2 === 1
+            let sp: SpriteDef | undefined
+            if (odd1 && odd2) sp = man!.ground.cross
+            else if (odd1) sp = man!.ground.roadNS
+            else if (odd2) sp = man!.ground.roadEW
+            else {
+              const dk = deco.get((wc / 2) + ',' + (wr / 2))
+              sp = dk != null && man!.props?.length ? man!.props[dk % man!.props.length] : man!.ground.grass[(wc / 2 + wr / 2) % man!.ground.grass.length]
+            }
+            if (!sp) sp = man!.ground.grass[0]
+            const tall = sp.h > 101
+            tiles.push(<img key={'g' + wc + '_' + wr} src={`/empire/sprites/${sp.file}`} alt="" width={sp.w * kSp} height={sp.h * kSp} draggable={false}
+              style={{ position: 'absolute', left: x - (sp.w * kSp) / 2, top: y - (sp.h - 101) * kSp, zIndex: (tall ? 2 : 1) + wc + wr, pointerEvents: 'none', userSelect: 'none' }} />)
+          }
+          return tiles
+        })()}
         {/* ساختمان‌ها — هر یک داراییِ واقعی؛ گونهٔ بصری از نوعِ واقعیِ ملک، ارتفاع از towerFloorsOf؛ لمس = برگهٔ همان دارایی */}
         {assets.map((a: any, i: number) => {
           const spot = spots[i]
@@ -521,20 +563,39 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
           // فاز ۱۶۳ (شلوغی‌زدایی): حداکثر «یک» نشانگرِ شناور بر فرازِ هر ساختمان — اولویت: حباب > تاج > برچسب
           const showCrown = crown && !bub
           const labelOn = !bub && !showCrown && labelIdx.has(i) && vals[i] > 0
+          // 🖼 فاز ۱۶۴ب — استکِ اسپرایتِ Kenney: بدنه×طبقهٔ واقعی + سقف؛ هندسهٔ اثبات‌شدهٔ کاشیِ ۱۳۲ (× مقیاسِ kSp)
+          const stk = sprite ? pickStack(man!, (crown ? 'landmark' : bkind === 'apt' ? 'apartment' : bkind) as BuildingKind, String(a.id)) : null
+          const geo = man?.geo || { bodyW: 99, step: 34, lift: 10, roofOverlap: 24 }
+          const T2 = 132 * kSp
+          const tx = cx + (spot.col - spot.row) * T2 - T2 / 2
+          const ty = cy + (spot.col + spot.row) * 66 * kSp - yMidSp
+          const roofY = ty - (geo.lift + (floors - 1) * geo.step + geo.roofOverlap) * kSp
+          const wrapLeft = stk ? tx + ((132 - geo.bodyW) / 2) * kSp : cx + Math.round(x - bw / 2)
+          const wrapTop = stk ? roofY : Math.round(cy + y - H - bw / 4)
+          const wrapW = stk ? geo.bodyW * kSp : bw
+          const wrapH = stk ? ty + 75 * kSp - roofY : H + bw / 2
+          const zIdx = stk ? 3 + 2 * (spot.col + spot.row) : 10 + spot.col + spot.row
           return (
             <div key={a.id} className="empTower" onClick={onTower ? () => onTower(a) : undefined}
               title={`${a.nickname ? `«${a.nickname}» — ` : ''}${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${building ? ' · در حال ساخت' : ''}${crown ? ' · 👑 نگینِ امپراتوری' : ''}`}
-              style={{ position: 'absolute', left: cx + Math.round(x - bw / 2), top: Math.round(cy + y - H - bw / 4), width: bw, height: H + bw / 2, zIndex: 10 + spot.col + spot.row, opacity: building ? .6 : 1, animationDelay: `${i * 70}ms`, cursor: onTower ? 'pointer' : 'default' }}>
-              {/* سایهٔ ریختهٔ نرم به‌سمتِ پایین-راست (نورِ ثابت از بالا-چپ) */}
-              <div aria-hidden style={{ position: 'absolute', left: '58%', top: H + bw / 4 + 4, width: bw * 1.7, height: bw * 0.55, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(0,0,0,.3), transparent 72%)', filter: 'blur(2.5px)', pointerEvents: 'none' }} />
+              style={{ position: 'absolute', left: wrapLeft, top: wrapTop, width: wrapW, height: wrapH, zIndex: zIdx, opacity: building ? .6 : 1, animationDelay: `${i * 70}ms`, cursor: onTower ? 'pointer' : 'default' }}>
+              {/* سایهٔ ریختهٔ نرم به‌سمتِ پایین-راست (فقط حالتِ SVG — کاشیِ اسپرایت پایهٔ خودش را دارد) */}
+              {!stk && <div aria-hidden style={{ position: 'absolute', left: '58%', top: H + bw / 4 + 4, width: bw * 1.7, height: bw * 0.55, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(0,0,0,.3), transparent 72%)', filter: 'blur(2.5px)', pointerEvents: 'none' }} />}
               {/* برچسبِ ارزش = چیپِ تیرهٔ خوانا؛ فقط ۲ داراییِ برتر همیشه روشن، بقیه با hover/لمس */}
               {vals[i] > 0 && <span className={'empValTag' + (labelOn ? ' empValOn' : '')} style={{ position: 'absolute', top: crown ? -34 : -21, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 700, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.72)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, padding: '2px 7px', backdropFilter: 'blur(2px)', zIndex: 4 }}>{building ? '🏗 ' : ''}{faB(vals[i])}</span>}
               {showCrown && <span className="empCrownFloat" style={{ position: 'absolute', top: -34, left: '50%', transform: 'translateX(-50%)', fontSize: 16, filter: 'drop-shadow(0 0 6px rgba(255,215,106,.85))', zIndex: 5 }}>👑</span>}
               {/* حبابِ اقدامِ شناور — فقط از وضعیتِ واقعیِ همین دارایی (نبود = هیچ حبابی) */}
               {bub && <button title={bub.title} className={bub.bounce ? 'empBounce' : undefined} onClick={ev => { ev.stopPropagation(); bub.onClick() }}
                 style={{ position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', border: '2px solid rgba(90,60,10,.55)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 13, fontWeight: 900, cursor: 'pointer', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 5 }}>{bub.icon}</button>}
-              {/* بدنهٔ ساختمان — هنرِ SVG (فاز ۱۶۳): گونه از نوعِ واقعیِ ملک، پالت از نمای واقعی، نگین = LANDMARK */}
-              <BuildingSvg w={bw} floors={floors} fh={fh} pal={pal} seed={seed} building={building} kind={bkind} landmark={crown} />
+              {/* بدنهٔ ساختمان — اسپرایتِ واقعیِ Kenney (بدنه×طبقهٔ واقعی + سقف)؛ نبودِ manifest → هنرِ SVG فاز ۱۶۳ */}
+              {stk ? <>
+                {Array.from({ length: floors }, (_, f) => (
+                  <img key={'b' + f} src={`/empire/sprites/${stk.body.file}`} alt="" width={stk.body.w * kSp} height={stk.body.h * kSp} draggable={false}
+                    style={{ position: 'absolute', left: ((geo.bodyW - stk.body.w) / 2) * kSp, top: ((floors - 1 - f) * geo.step + geo.roofOverlap) * kSp, pointerEvents: 'none', userSelect: 'none' }} />
+                ))}
+                <img src={`/empire/sprites/${stk.roof.file}`} alt="" width={stk.roof.w * kSp} height={stk.roof.h * kSp} draggable={false}
+                  style={{ position: 'absolute', left: ((geo.bodyW - stk.roof.w) / 2) * kSp, top: 0, pointerEvents: 'none', userSelect: 'none' }} />
+              </> : <BuildingSvg w={bw} floors={floors} fh={fh} pal={pal} seed={seed} building={building} kind={bkind} landmark={crown} />}
               {building && <span aria-hidden style={{ position: 'absolute', top: -7, left: '60%', fontSize: 13, filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))', pointerEvents: 'none' }}>🏗</span>}
             </div>
           )
@@ -545,8 +606,8 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
             با اولین دارایی، برجِ تو در خطِ آسمان بالا می‌رود و پینش روی نقشهٔ واقعیِ شهر می‌نشیند.
           </div>
         )}
-        {/* زندگیِ خیابان (فاز ۱۶۳): خودروهای SVG «روی خودِ خیابان‌ها» در دو محورِ ایزو — شمارشان از دارایی‌های واقعی */}
-        {cars > 0 && Array.from({ length: cars }, (_, i) => {
+        {/* زندگیِ خیابان (فاز ۱۶۳): خودروهای SVG «روی خودِ خیابان‌ها» — فقط در حالتِ SVG (با اسپرایت ناهم‌سبک بود) */}
+        {!sprite && cars > 0 && Array.from({ length: cars }, (_, i) => {
           const axis = i % 2
           const lane = 1 + ((i >> 1) % Math.max(1, gridN - 1))
           const u0 = lane - 0.5 - c

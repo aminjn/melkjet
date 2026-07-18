@@ -1,0 +1,437 @@
+{
+ "tileW": 132,
+ "geo": {
+  "bodyW": 99,
+  "step": 34,
+  "lift": 10,
+  "roofOverlap": 24
+ },
+ "ground": {
+  "grass": [
+   {
+    "file": "grass-0.png",
+    "w": 132,
+    "h": 101
+   }
+  ],
+  "roadNS": {
+   "file": "road-ns-1.png",
+   "w": 132,
+   "h": 99
+  },
+  "roadEW": {
+   "file": "road-ew-2.png",
+   "w": 132,
+   "h": 99
+  },
+  "cross": {
+   "file": "cross-3.png",
+   "w": 132,
+   "h": 99
+  }
+ },
+ "buildings": {
+  "apartment": [
+   {
+    "file": "apartment-b-7.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "apartment-b-8.png",
+    "w": 100,
+    "h": 85
+   },
+   {
+    "file": "apartment-b-9.png",
+    "w": 100,
+    "h": 85
+   },
+   {
+    "file": "apartment-b-a.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "apartment-b-b.png",
+    "w": 100,
+    "h": 85
+   },
+   {
+    "file": "apartment-b-c.png",
+    "w": 100,
+    "h": 85
+   }
+  ],
+  "shop": [
+   {
+    "file": "shop-b-h.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "shop-b-i.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "shop-b-j.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "shop-b-k.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "shop-b-l.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "shop-b-m.png",
+    "w": 99,
+    "h": 85
+   }
+  ],
+  "villa": [
+   {
+    "file": "villa-b-q.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "villa-b-r.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "villa-b-s.png",
+    "w": 99,
+    "h": 85
+   }
+  ],
+  "office": [
+   {
+    "file": "office-b-x.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "office-b-y.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "office-b-z.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "office-b-10.png",
+    "w": 99,
+    "h": 85
+   }
+  ],
+  "landmark": [
+   {
+    "file": "landmark-b-14.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "landmark-b-15.png",
+    "w": 99,
+    "h": 85
+   }
+  ],
+  "generic": [
+   {
+    "file": "generic-b-19.png",
+    "w": 99,
+    "h": 85
+   },
+   {
+    "file": "generic-b-1a.png",
+    "w": 100,
+    "h": 85
+   },
+   {
+    "file": "generic-b-1b.png",
+    "w": 99,
+    "h": 85
+   }
+  ]
+ },
+ "props": [
+  {
+   "file": "tree-4.png",
+   "w": 132,
+   "h": 113
+  },
+  {
+   "file": "tree-5.png",
+   "w": 132,
+   "h": 113
+  },
+  {
+   "file": "tree-6.png",
+   "w": 132,
+   "h": 113
+  }
+ ],
+ "stacks": {
+  "apartment": {
+   "bodies": [
+    {
+     "file": "apartment-b-7.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "apartment-b-8.png",
+     "w": 100,
+     "h": 85
+    },
+    {
+     "file": "apartment-b-9.png",
+     "w": 100,
+     "h": 85
+    },
+    {
+     "file": "apartment-b-a.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "apartment-b-b.png",
+     "w": 100,
+     "h": 85
+    },
+    {
+     "file": "apartment-b-c.png",
+     "w": 100,
+     "h": 85
+    }
+   ],
+   "roofs": [
+    {
+     "file": "apartment-r-d.png",
+     "w": 99,
+     "h": 60
+    },
+    {
+     "file": "apartment-r-e.png",
+     "w": 100,
+     "h": 60
+    },
+    {
+     "file": "apartment-r-f.png",
+     "w": 99,
+     "h": 60
+    },
+    {
+     "file": "apartment-r-g.png",
+     "w": 99,
+     "h": 61
+    }
+   ]
+  },
+  "shop": {
+   "bodies": [
+    {
+     "file": "shop-b-h.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "shop-b-i.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "shop-b-j.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "shop-b-k.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "shop-b-l.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "shop-b-m.png",
+     "w": 99,
+     "h": 85
+    }
+   ],
+   "roofs": [
+    {
+     "file": "shop-r-n.png",
+     "w": 99,
+     "h": 54
+    },
+    {
+     "file": "shop-r-o.png",
+     "w": 99,
+     "h": 54
+    },
+    {
+     "file": "shop-r-p.png",
+     "w": 99,
+     "h": 54
+    }
+   ]
+  },
+  "villa": {
+   "bodies": [
+    {
+     "file": "villa-b-q.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "villa-b-r.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "villa-b-s.png",
+     "w": 99,
+     "h": 85
+    }
+   ],
+   "roofs": [
+    {
+     "file": "villa-r-t.png",
+     "w": 99,
+     "h": 61
+    },
+    {
+     "file": "villa-r-u.png",
+     "w": 99,
+     "h": 60
+    },
+    {
+     "file": "villa-r-v.png",
+     "w": 99,
+     "h": 61
+    },
+    {
+     "file": "villa-r-w.png",
+     "w": 99,
+     "h": 63
+    }
+   ]
+  },
+  "office": {
+   "bodies": [
+    {
+     "file": "office-b-x.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "office-b-y.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "office-b-z.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "office-b-10.png",
+     "w": 99,
+     "h": 85
+    }
+   ],
+   "roofs": [
+    {
+     "file": "office-r-11.png",
+     "w": 100,
+     "h": 60
+    },
+    {
+     "file": "office-r-12.png",
+     "w": 99,
+     "h": 60
+    },
+    {
+     "file": "office-r-13.png",
+     "w": 100,
+     "h": 55
+    }
+   ]
+  },
+  "landmark": {
+   "bodies": [
+    {
+     "file": "landmark-b-14.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "landmark-b-15.png",
+     "w": 99,
+     "h": 85
+    }
+   ],
+   "roofs": [
+    {
+     "file": "landmark-r-16.png",
+     "w": 99,
+     "h": 63
+    },
+    {
+     "file": "landmark-r-17.png",
+     "w": 99,
+     "h": 61
+    },
+    {
+     "file": "landmark-r-18.png",
+     "w": 99,
+     "h": 63
+    }
+   ]
+  },
+  "generic": {
+   "bodies": [
+    {
+     "file": "generic-b-19.png",
+     "w": 99,
+     "h": 85
+    },
+    {
+     "file": "generic-b-1a.png",
+     "w": 100,
+     "h": 85
+    },
+    {
+     "file": "generic-b-1b.png",
+     "w": 99,
+     "h": 85
+    }
+   ],
+   "roofs": [
+    {
+     "file": "generic-r-1c.png",
+     "w": 99,
+     "h": 60
+    },
+    {
+     "file": "generic-r-1d.png",
+     "w": 100,
+     "h": 60
+    }
+   ]
+  }
+ }
+}

@@ -16,6 +16,16 @@ export interface SpriteManifest {
   buildings: Record<string, SpriteDef[]>   // apartment | shop | villa | office | landmark | generic
   vehicles?: SpriteDef[]
   props?: SpriteDef[]                // درخت/فواره/بیلبورد …
+  // فاز ۱۶۴ب — پک‌های ماژولارِ استکی (مثل Kenney Isometric Buildings): طبقهٔ واقعی = تکرارِ بدنه + سقف
+  stacks?: Record<string, { bodies: SpriteDef[]; roofs: SpriteDef[] }>   // هم‌کلیدِ buildings
+  geo?: { bodyW: number; step: number; lift: number; roofOverlap: number }  // هندسهٔ استک (تیون‌شدهٔ بصری)
+}
+
+// انتخابِ استکِ ساختمان (بدنه+سقف) — قطعی از id؛ نبودِ دسته → generic → null
+export function pickStack(man: SpriteManifest, kind: BuildingKind, id: string): { body: SpriteDef; roof: SpriteDef } | null {
+  const s = man.stacks?.[kind]?.bodies?.length ? man.stacks[kind] : man.stacks?.['generic']
+  if (!s || !s.bodies.length || !s.roofs.length) return null
+  return { body: s.bodies[spriteHash(id) % s.bodies.length], roof: s.roofs[spriteHash(id + ':r') % s.roofs.length] }
 }
 
 // هَشِ قطعیِ سبک (بدونِ وابستگی) — همان الگوی مکانیک‌های قطعیِ بازی
