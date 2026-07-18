@@ -3334,7 +3334,7 @@ export async function listEmpireUsers(): Promise<string[]> {
 
 // ══════════ نامهٔ روزانهٔ ملک‌جت — Daily Brief (سند فصل ۴: AI Overnight + جدولِ daily_brief) ══════════
 // طرحِ سند: id / user_id / summary / priority / created_at / opened_at — یکی به‌ازای هر کاربر در هر روز.
-export interface DailyBrief { id: string; userId: string; day: number; summary: string; items: Array<{ icon: string; text: string }>; priority: number; createdAt: number; openedAt?: number }
+export interface DailyBrief { id: string; userId: string; day: number; summary: string; items: Array<{ icon: string; text: string }>; priority: number; createdAt: number; openedAt?: number; morningAt?: number }
 export const dayNumberOf = (ts: number) => Math.floor(ts / 864e5)
 const BRIEF_FILE = join(process.cwd(), '.empire-briefs.json')
 function briefLoad(): Record<string, DailyBrief> { if (existsSync(BRIEF_FILE)) { try { return JSON.parse(readFileSync(BRIEF_FILE, 'utf-8')) } catch {} } return {} }
@@ -3356,4 +3356,10 @@ export async function getBrief(userId: string, day: number): Promise<DailyBrief 
 export async function markBriefOpened(userId: string, day: number, now = Date.now()): Promise<void> {
   if (pgEnabled()) { await ensureBrief(); await pgTx(c => c.query(`UPDATE reos_daily_brief SET data = data || jsonb_build_object('openedAt', $3::bigint) WHERE user_id=$1 AND day=$2`, [userId, day, now])) }
   else { const db = briefLoad(); const b = db[briefKey(userId, day)]; if (b && !b.openedAt) { b.openedAt = now; briefSave(db) } }
+}
+// فاز ۱۶۷ — نشانِ «زنگِ صبحگاهیِ امروز رفت» روی خودِ رکوردِ نامه: ایدمپوتنسیِ ماندگار
+// (ری‌استارت/چند-instance هم دوباره پوش نمی‌فرستد؛ کرون فقط روی instance صفر است).
+export async function markBriefMorning(userId: string, day: number, now = Date.now()): Promise<void> {
+  if (pgEnabled()) { await ensureBrief(); await pgTx(c => c.query(`UPDATE reos_daily_brief SET data = data || jsonb_build_object('morningAt', $3::bigint) WHERE user_id=$1 AND day=$2`, [userId, day, now])) }
+  else { const db = briefLoad(); const b = db[briefKey(userId, day)]; if (b && !b.morningAt) { b.morningAt = now; briefSave(db) } }
 }

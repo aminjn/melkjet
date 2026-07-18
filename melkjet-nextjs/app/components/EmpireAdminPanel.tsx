@@ -1172,6 +1172,11 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
         {cfg && <div style={card}>
           <div style={sub}>تنظیمِ نامهٔ روزانه</div>
           {row('فعال (۱/۰)', cin('dailyBrief'))}
+          {/* فاز ۱۶۷ — زنگِ صبحگاهی: رأسِ این ساعت (وقتِ تهران) نامهٔ روز + پوشِ مأموریتِ روز برای همه می‌رود */}
+          <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>☀️ زنگِ صبحگاهی (مأموریتِ روز)</div>
+          {row('فعال (۱/۰)', cin('morning', 'enabled'), 'هر روز یک‌بار، خودکار روی cron')}
+          {row('ساعت (وقتِ تهران)', cin('morning', 'hour'), 'پیش‌فرض ۹ صبح')}
+          {row('پوش‌نوتیفیکیشن (۱/۰)', cin('morning', 'push'), 'متنِ پوش = کوئستِ واقعیِ روز + «X٪ از راهِ سطحِ بعد»')}
           {/* فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — عوض‌کردنِ id یعنی شروعِ فصلِ جدید */}
           <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>🌱 فصلِ دنیا (Season)</div>
           {row('فعال (۱/۰)', cin('season', 'enabled'))}

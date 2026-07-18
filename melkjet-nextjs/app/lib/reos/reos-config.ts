@@ -27,6 +27,9 @@ export interface ReosConfig {
     levelCurve: { base: number; exp: number }
     mentorInitiates: boolean
     dailyBrief: boolean
+    // فاز ۱۶۷ — زنگِ صبحگاهی: هر روز رأسِ ساعتِ تنظیم‌شده (وقتِ تهران) نامهٔ روز ساخته و
+    // مأموریتِ روز با پوش‌نوتیفیکیشن به کاربر می‌رسد. همه knob زندهٔ سوپرادمین.
+    morning: { enabled: boolean; hour: number; push: boolean }
     sellProfitXp: number
     land: { buildGainPct: number; partnerGainPct: number; buildMonths: number }
     rentIncome: boolean
@@ -205,6 +208,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
     levelCurve: { base: 100, exp: 1.5 },
     mentorInitiates: true,
     dailyBrief: true,
+    morning: { enabled: true, hour: 9, push: true },
     // چرخهٔ عمرِ ملک (§6.7-6.8 و فصل ۵): فروش با سود → XP؛ برآوردِ زمین (ساخت/مشارکت) با پارامترهای شفافِ ادمین.
     sellProfitXp: 50,
     land: { buildGainPct: 45, partnerGainPct: 20, buildMonths: 18 },

@@ -12,7 +12,7 @@ const fa = (n: number) => n.toLocaleString('fa-IR')
 export default function MissionChip() {
   const path = usePathname() || ''
   const watch = path.startsWith('/listing') || path.startsWith('/search') || path.startsWith('/market') || path.startsWith('/locations') || path.startsWith('/property')
-  const [q, setQ] = useState<{ title: string; progress: number; target: number; done: boolean; claimed: boolean; rewardCoins?: number } | null>(null)
+  const [q, setQ] = useState<{ title: string; progress: number; target: number; done: boolean; claimed: boolean; rewardCoins?: number; pct?: number } | null>(null)
   const [gone, setGone] = useState(false)          // کاربر بست — تا پایانِ سشن ساکت
   const wasDone = useRef(false)
   const [burst, setBurst] = useState(false)        // لحظهٔ کامل‌شدن → جشنِ کوچک
@@ -62,7 +62,9 @@ export default function MissionChip() {
         {q.done
           ? <Link href="/empire" style={{ display: 'block', marginTop: 8, textAlign: 'center', background: 'linear-gradient(90deg,#ffd76a,#ff9d2e)', color: '#1b1440', fontWeight: 800, fontSize: 12.5, borderRadius: 12, padding: '7px 10px', textDecoration: 'none' }}>
             🎁 برگرد و جایزه‌ات را بگیر{q.rewardCoins ? ` (${fa(q.rewardCoins)} سکه)` : ''}</Link>
-          : <div style={{ marginTop: 6, fontSize: 10.5, color: 'rgba(255,255,255,.65)' }}>با دیدنِ آگهی‌های واقعی جلو می‌روی — پیشرفتت همین‌جا شمرده می‌شود.</div>}
+          : <div style={{ marginTop: 6, fontSize: 10.5, color: 'rgba(255,255,255,.65)' }}>
+            {q.pct ? <>همین مأموریت <b style={{ color: '#ffe9a3' }}>{fa(q.pct)}٪ از راهِ سطحِ بعد</b> است — </> : null}
+            با دیدنِ آگهی‌های واقعی جلو می‌روی.</div>}
       </div>
     </div>
   )

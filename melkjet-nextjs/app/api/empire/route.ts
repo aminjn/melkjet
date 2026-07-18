@@ -41,6 +41,7 @@ import { masteryOf, newsOf } from '@/app/lib/empire-engage'
 import { listingHref } from '@/app/lib/listing-url'
 import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
+import { pathPct } from '@/app/lib/empire-morning'
 import { materialsIndexState, materialsFactorOf } from '@/app/lib/materials-index'
 import { grantWarReward, absorbNpcAssets, moveCapital, doPrestige, spendSkillPoint, prestigeEffectsOf, SKILL_BRANCHES } from '@/app/lib/empire-store'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
@@ -615,6 +616,16 @@ async function stateOf(userId: string, e00: EmpireData) {
     othersBuilding: Math.max(0, total - 1),
     suspense: e.suspense && e.suspense.dueAt > Date.now() ? e.suspense : null,
     brief, streak,
+    // ☀️ فاز ۱۶۷ — «مسیرِ امروز»: مأموریت‌های بازِ امروز چند XP می‌دهند و چند درصد از راهِ سطحِ بعدند —
+    // عددِ صادق از منحنیِ واقعیِ سطح؛ UI با همین به کاربر نشان می‌دهد مأموریت = موتورِ پیشرفت.
+    todayPath: (() => {
+      const lv = empireLevel(e.xp)
+      const xpToNext = Math.max(0, (lv.next ?? e.xp) - e.xp)
+      const potentialXp = (quests?.daily && !quests.daily.claimed ? quests.daily.rewardXp : 0)
+        + (quests?.weekly && !quests.weekly.claimed ? quests.weekly.rewardXp : 0)
+        + (missions?.m1 && !missions.m1.claimed ? missions.m1.rewardXp : 0)
+      return { xpToNext, potentialXp, pct: pathPct(xpToNext, potentialXp), morningHour: config().empire.morning.hour, morningEnabled: config().empire.morning.enabled }
+    })(),
     nextDream: nextDreamOf(e),
     mentorLine: mentorLineOf(e, bank, missions, chestAvailable),
     welcomeBack: absentDays >= 7 || e.pendingComeback ? { days: Math.max(absentDays, 7), gift: !!e.pendingComeback } : null,
@@ -691,7 +702,10 @@ export async function GET(req: NextRequest) {
   if (new URL(req.url).searchParams.get('quest') === '1') {
     const qs = await questsOf(userId, e).catch(() => null)
     const d = qs?.daily
-    return NextResponse.json({ enabled: true, daily: d ? { title: d.title, progress: d.progress, target: d.target, metric: d.metric, done: !!d.done, claimed: !!d.claimed, rewardCoins: d.rewardCoins, rewardXp: d.rewardXp } : null })
+    // فاز ۱۶۷: «X٪ از راهِ سطحِ بعد» برای چیپِ سراسری — همان منحنیِ واقعیِ سطح
+    const lvQ = empireLevel(e.xp)
+    const xpToNextQ = Math.max(0, (lvQ.next ?? e.xp) - e.xp)
+    return NextResponse.json({ enabled: true, daily: d ? { title: d.title, progress: d.progress, target: d.target, metric: d.metric, done: !!d.done, claimed: !!d.claimed, rewardCoins: d.rewardCoins, rewardXp: d.rewardXp, pct: pathPct(xpToNextQ, d.claimed ? 0 : d.rewardXp) } : null })
   }
   return NextResponse.json(await stateOf(userId, e))
 }

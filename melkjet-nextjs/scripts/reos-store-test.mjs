@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest, effectiveTransferTaxPct , openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions, followEmpire } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, markBriefMorning, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest, effectiveTransferTaxPct , openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions, followEmpire } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -873,6 +873,10 @@ async function main() {
     await markBriefOpened(uid, day)
     ok('بازکردنِ نامه opened_at را ثبت می‌کند', (await getBrief(uid, day)).openedAt > 0)
     ok('روزِ دیگر → نامه‌ای نیست', (await getBrief(uid, day + 1)) === null)
+    // فاز ۱۶۷ (زنگِ صبحگاهی): نشانِ morningAt روی PG — ایدمپوتنسیِ پوشِ صبح
+    ok('نامهٔ تازه هنوز نشانِ صبح ندارد', !(await getBrief(uid, day)).morningAt)
+    await markBriefMorning(uid, day, 1234567)
+    ok('زنگِ صبح morningAt را روی PG ثبت می‌کند', (await getBrief(uid, day)).morningAt === 1234567)
 
     // ── فاز ۳: چرخهٔ عمرِ ملک + لیگ‌ها + صندوقچه ──
     const bl = await buyAsset(uid, { id: 'LND1', title: 'زمین کلنگی ۲۰۰ متری', hood: 'چیتگر', price: 2_000_000_000, ptype: 'زمین' })
