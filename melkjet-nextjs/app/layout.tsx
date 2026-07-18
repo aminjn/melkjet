@@ -7,6 +7,7 @@ import LocationDetector from './components/LocationDetector'
 import Tracker from './components/Tracker'
 import AuthModal from './components/AuthModal'
 import DeferredShell from './components/DeferredShell'
+import MissionChip from './components/MissionChip'
 import ThemeFab from './components/ThemeFab'
 
 export const metadata: Metadata = {
@@ -71,6 +72,7 @@ export default function RootLayout({
         <ThemeFab />
         {/* فاز ۱۰۸: هفت overlay غیرِحیاتی بعد از idle/اولین تعامل mount می‌شوند (TBT موبایل) */}
         <DeferredShell />
+        <MissionChip />
       </body>
     </html>
   )

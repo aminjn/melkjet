@@ -369,3 +369,7 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 @media(max-width:900px){.empIsoScene{transform:scale(1)!important}}
 @media(max-width:480px){.empIsoScene{transform:scale(.85)!important;transform-origin:50% 48%!important}}
 @media(prefers-reduced-motion:reduce){.empDot{display:none!important}}
+/* فاز ۱۶۲ — چیپِ ماموریتِ داخلِ سایت */
+@keyframes mjmPop{0%{transform:scale(.4);opacity:0}55%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion: reduce){.mjmission *{animation:none!important;transition:none!important}}
+@media (max-width:480px){.mjmission{left:8px!important;bottom:8px!important;max-width:250px!important}}

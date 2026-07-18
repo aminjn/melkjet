@@ -161,8 +161,100 @@ function MJ({ children }: { children: React.ReactNode }) {
   )
 }
 
+// 🧮 فاز ۱۶۲ — هشِ قطعی از شناسهٔ واقعیِ دارایی: الگوی پنجره‌های روشن را بدونِ هیچ تصادفی تعیین می‌کند
+const seedOf = (id: any) => { const s = String(id ?? ''); let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h }
+
+// 🏙 فاز ۱۶۲ — TowerSvg: بدنهٔ برجِ ایزومتریک با SVGِ درون‌خطی (صفر تصویر): بامِ لوزی با جزئیاتِ تأسیسات،
+// دو نما با «شبکهٔ پنجرهٔ» واقعی (هر سطر = یک طبقهٔ واقعی)، نورپردازیِ وجه‌ها، خطِ تفکیکِ طبقات، داربستِ کارگاه.
+// روشن/خاموشیِ هر پنجره قطعی از هشِ شناسهٔ دارایی است — نه Math.random (قانونِ «هیچ عددِ ساختگی»).
+function TowerSvg({ w, floors, pal, seed, building }: { w: number; floors: number; pal: { top: string; left: string; right: string; win: string }; seed: number; building: boolean }) {
+  const uid = React.useId().replace(/[^a-zA-Z0-9]/g, '')
+  const fh = 22, H = floors * fh, half = w / 2, qh = w / 4
+  const hTot = H + w / 2
+  const cols = w >= 46 ? 3 : 2
+  const faceL = `0,${qh} ${half},${w / 2} ${half},${w / 2 + H} 0,${qh + H}`
+  const faceR = `${half},${w / 2} ${w},${qh} ${w},${qh + H} ${half},${w / 2 + H}`
+  const roof = `${half},0 ${w},${qh} ${half},${w / 2} 0,${qh}`
+  const wins: React.ReactNode[] = []
+  for (let face = 0; face < 2; face++) {
+    const step = (half - 6) / cols
+    const ww = step * 0.56, wh = fh * 0.4
+    for (let r = 0; r < floors; r++) for (let ci = 0; ci < cols; ci++) {
+      const k = face * 64 + r * cols + ci
+      const on = ((seed + k * 2654435761) >>> 0) % 5 < 3
+      const wx = 3 + ci * step + (face ? half : 0) + (step - ww) / 2
+      const slope = face ? -0.5 : 0.5
+      const yEdge = face ? w / 2 - (wx - half) * 0.5 : qh + wx * 0.5
+      const y0 = yEdge + r * fh + fh * 0.3
+      wins.push(<polygon key={k} points={`${wx},${y0} ${wx + ww},${y0 + ww * slope} ${wx + ww},${y0 + ww * slope + wh} ${wx},${y0 + wh}`}
+        fill={on ? (((seed >> (k % 13)) & 3) === 0 ? '#fff3c4' : pal.win) : 'rgba(10,14,30,.5)'} stroke="rgba(0,0,0,.28)" strokeWidth=".5" opacity={on ? .95 : .8} />)
+    }
+  }
+  return (
+    <svg width={w} height={hTot} viewBox={`0 0 ${w} ${hTot}`} style={{ position: 'absolute', inset: 0, display: 'block', overflow: 'visible' }} aria-hidden>
+      <defs>
+        <linearGradient id={uid + 'L'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".16" /><stop offset="1" stopColor="#000" stopOpacity=".2" /></linearGradient>
+        <linearGradient id={uid + 'R'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".05" /><stop offset="1" stopColor="#000" stopOpacity=".32" /></linearGradient>
+        <linearGradient id={uid + 'G'} x1="0" y1="0" x2="1" y2=".7"><stop offset="0" stopColor="#fff" stopOpacity=".55" /><stop offset=".45" stopColor="#fff" stopOpacity="0" /></linearGradient>
+        <pattern id={uid + 'S'} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3.5" height="9" fill="rgba(235,190,80,.4)" /></pattern>
+      </defs>
+      {/* وجه‌ها: رنگِ پایه از پالتِ نمای واقعیِ دارایی + روکشِ نور (چپ روشن‌تر، راست تیره‌تر) */}
+      <polygon points={faceL} fill={pal.left} />
+      <polygon points={faceL} fill={`url(#${uid}L)`} />
+      <polygon points={faceR} fill={pal.right} />
+      <polygon points={faceR} fill={`url(#${uid}R)`} />
+      {/* خطوطِ باریکِ تفکیکِ طبقات */}
+      {Array.from({ length: Math.max(0, floors - 1) }, (_, f) => <g key={f} stroke="rgba(0,0,0,.16)" strokeWidth="1">
+        <line x1={0} y1={qh + (f + 1) * fh} x2={half} y2={w / 2 + (f + 1) * fh} />
+        <line x1={half} y1={w / 2 + (f + 1) * fh} x2={w} y2={qh + (f + 1) * fh} />
+      </g>)}
+      {wins}
+      {/* بام: لوزی + براقی + تأسیساتِ بام (کولرِ تیره + منبعِ روشن) */}
+      <polygon points={roof} fill={pal.top} />
+      <polygon points={roof} fill={`url(#${uid}G)`} />
+      <polygon points={roof} fill="none" stroke="rgba(255,255,255,.22)" strokeWidth="1" />
+      <polygon points={`${half * 1.18},${qh * 0.72} ${half * 1.18 + 7},${qh * 0.72 + 3.5} ${half * 1.18},${qh * 0.72 + 7} ${half * 1.18 - 7},${qh * 0.72 + 3.5}`} fill="rgba(25,30,55,.8)" />
+      <polygon points={`${half * 0.72},${qh * 1.05} ${half * 0.72 + 5},${qh * 1.05 + 2.5} ${half * 0.72},${qh * 1.05 + 5} ${half * 0.72 - 5},${qh * 1.05 + 2.5}`} fill="rgba(255,255,255,.3)" />
+      {/* داربستِ کارگاه — فقط وقتی واقعاً در حالِ ساخت است */}
+      {building && <>
+        <polygon points={faceL} fill={`url(#${uid}S)`} />
+        <polygon points={faceR} fill={`url(#${uid}S)`} />
+        <polygon points={roof} fill={`url(#${uid}S)`} />
+      </>}
+    </svg>
+  )
+}
+
+// 🌳 فاز ۱۶۲ — درختِ SVG (تنه + تاجِ دوپرده + سایه) — صرفاً دکورِ قطعیِ زمین، جای همان ایموجی
+function TreeSvg({ s, big }: { s: number; big?: boolean }) {
+  return (
+    <svg width={18 * s} height={22 * s} viewBox="0 0 18 22" aria-hidden style={{ display: 'block' }}>
+      <ellipse cx="9" cy="20.6" rx="6.4" ry="1.5" fill="rgba(0,0,0,.24)" />
+      <rect x="8.1" y="12" width="1.8" height="8" rx=".9" fill="#7a4f2a" />
+      <circle cx="9" cy="8.6" r={big ? 6.4 : 5.4} fill="#2f9e46" />
+      <circle cx="6.6" cy="6.6" r={big ? 3.8 : 3.1} fill="#5ecf6d" />
+    </svg>
+  )
+}
+
+// 🎉 فاز ۱۶۲ — جشنِ یک‌بارهٔ دریافتِ جایزه در نمای شهر: کانفتیِ CSS + سه سکهٔ پرنده به‌سمتِ HUD +
+// توستِ «+N سکه» (N = پاداشِ واقعیِ همان ادعا؛ صفر = بدونِ توست). ~۱.۲ثانیه؛ reduced-motion همه را خاموش می‌کند.
+function CityCelebration({ seed, coins }: { seed: number; coins: number }) {
+  if (!seed) return null
+  return (
+    <div key={seed} aria-hidden style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 70 }}>
+      {Array.from({ length: 12 }, (_, i) => (
+        <span key={i} className="empConf" style={{ position: 'absolute', top: -14, left: `${(8 + i * 83) % 92}%`, width: 7, height: 11, borderRadius: 2, opacity: 0, background: ['#ffd76a', '#ff9d2e', '#7d6ef0', '#5fd98a', '#ff5f4d'][i % 5], animationDelay: `${(i % 6) * 90}ms`, transform: `rotate(${(i * 47) % 360}deg)` }} />
+      ))}
+      {[0, 1, 2].map(i => (
+        <span key={'c' + i} className="empCoinFly" style={{ position: 'absolute', bottom: 170, left: '50%', fontSize: 18, opacity: 0, animationDelay: `${i * 120}ms` }}>🪙</span>
+      ))}
+      {coins > 0 && <div className="empCoinToast" style={{ position: 'fixed', top: 116, left: '50%', transform: 'translateX(-50%)', opacity: 0, background: 'rgba(12,10,34,.88)', border: '1px solid rgba(255,215,106,.6)', color: '#ffd76a', fontWeight: 900, fontSize: 14, borderRadius: 999, padding: '6px 16px', boxShadow: '0 6px 20px rgba(255,215,106,.35)' }}>+{fa(coins)} سکه</div>}
+    </div>
+  )
+}
+
 // 🏙 فاز ۱۵۸→۱۵۹ — IsoCity «تمام‌صفحه»: کلِ صفحه صحنهٔ شهرِ ایزومتریکِ زنده است (سبکِ tycoon) — CSS خالص، صفر تصویر.
-// فقط ظاهر است؛ همهٔ ورودی‌ها دادهٔ واقعی‌اند: ارتفاعِ برج = ارزشِ روزِ همان دارایی، پالت = نمای انتخابیِ خودِ
 // بازیکن، آسمان = ساعتِ واقعی، جلوه = هوای واقعیِ Open-Meteo، شلوغیِ خیابان = شمارِ دارایی‌ها. هیچ عددِ ساختگی.
 // سبزینهٔ حاشیه صرفاً تزئینی و قطعی است (خانه‌های خالیِ همان مارپیچِ چیدمان) — هیچ ادعای داده‌ای ندارد.
 function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
@@ -193,7 +285,6 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
   const c = Math.floor(gridN / 2)
   const groundW = Math.round(gridN * tile * 0.72)                    // ضلعِ مربعِ زمین — بعد از چرخشِ ایزو ≈ الماسِ gridN×tile
   const W = 560, HB = 470, cx = 280, cy = 245                        // جعبهٔ صحنه وسطِ صفحه — با کلاسِ empIsoScene مقیاس می‌شود
-  const skew = 26.57                                                 // atan(1/2) — تصویرِ ایزومتریکِ ۲:۱
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: sky[phase], overflow: 'hidden' }}>
       {phase === 'night' && ['8%', '22%', '38%', '57%', '72%', '88%'].map((left, i) => (
@@ -221,7 +312,8 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
         {/* سبزینهٔ تزئینیِ قطعی روی خانه‌های خالیِ مارپیچ — صرفاً دکورِ زمین */}
         {spots.slice(assets.length, assets.length + 4).map((s2, k) => {
           const dx = (s2.col - s2.row) * tile / 2, dy = ((s2.col + s2.row) - 2 * c) * tile / 4
-          return <span key={'t' + k} aria-hidden style={{ position: 'absolute', left: cx + dx - 8, top: cy + dy - 16, fontSize: k % 3 === 2 ? 13 : 16, zIndex: 9 + s2.col + s2.row, textShadow: '0 3px 4px rgba(0,0,0,.35)' }}>{['🌳', '🌲', '🌳', '🌴'][k % 4]}</span>
+          const sc = k % 3 === 2 ? 0.8 : 1
+          return <span key={'t' + k} aria-hidden style={{ position: 'absolute', left: cx + dx - 9 * sc, top: cy + dy - 19 * sc, zIndex: 9 + s2.col + s2.row, pointerEvents: 'none' }}><TreeSvg s={sc} big={k % 2 === 0} /></span>
         })}
         {/* برج‌ها — هر برج یک داراییِ واقعی؛ جای هر برج قطعی از cityLayoutOf، ارتفاع از towerFloorsOf؛ لمس = برگهٔ همان دارایی */}
         {assets.map((a: any, i: number) => {
@@ -231,12 +323,11 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
           const floors = towerFloorsOf(vals[i], max)
           const building = a.construction && !a.construction.done
           const crown = vals[i] === max && assets.length > 1 && !building
-          const H = floors * 24
-          const bw = Math.round(tile * 0.72)
+          const H = floors * 22
+          const bw = Math.round(tile * 0.78)
           const x = (spot.col - spot.row) * tile / 2
           const y = ((spot.col + spot.row) - 2 * c) * tile / 4
           const bub = bubbleOf?.(a) || null
-          const winDot: React.CSSProperties = { width: 3.5, height: 3.5, borderRadius: '50%', background: pal.win, boxShadow: `0 0 4px ${pal.win}`, opacity: .95, flex: 'none' }
           return (
             <div key={a.id} className="empTower" onClick={onTower ? () => onTower(a) : undefined}
               title={`${a.nickname ? `«${a.nickname}» — ` : ''}${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${building ? ' · در حال ساخت' : ''}${crown ? ' · 👑 نگینِ امپراتوری' : ''}`}
@@ -249,16 +340,9 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
               {/* حبابِ اقدامِ شناور — فقط از وضعیتِ واقعیِ همین دارایی (نبود = هیچ حبابی) */}
               {bub && <button title={bub.title} className={bub.bounce ? 'empBounce' : undefined} onClick={ev => { ev.stopPropagation(); bub.onClick() }}
                 style={{ position: 'absolute', top: crown ? -64 : -46, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', border: '1px solid rgba(255,215,106,.7)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 13, fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 14px rgba(255,215,106,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 5 }}>{bub.icon}</button>}
-              {/* بام (لوزی) + نوارِ براقِ ظریف (فاز ۱۶۱) */}
-              <div style={{ position: 'absolute', left: 0, top: 0, width: bw, height: bw / 2, background: `linear-gradient(115deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,0) 40%), linear-gradient(0deg, ${pal.top}, ${pal.top})`, clipPath: 'polygon(50% 0,100% 50%,50% 100%,0 50%)', filter: 'brightness(1.12)' }} />
-              {/* وجهِ چپ (تیره‌تر) + پنجره‌ها به تعدادِ طبقه‌های واقعی */}
-              <div style={{ position: 'absolute', left: 0, top: bw / 4, width: bw / 2, height: H, background: `linear-gradient(180deg, ${pal.left}, ${pal.left})`, transform: `skewY(${skew}deg)`, transformOrigin: '0 0', display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', alignItems: 'center', boxShadow: 'inset 0 -6px 10px rgba(0,0,0,.25)' }}>
-                {Array.from({ length: floors }, (_, f) => <span key={f} style={winDot} />)}
-              </div>
-              {/* وجهِ راست (تیره‌ترین) */}
-              <div style={{ position: 'absolute', left: bw / 2, top: bw / 2, width: bw / 2, height: H, background: `linear-gradient(180deg, ${pal.right}, ${pal.right})`, transform: `skewY(-${skew}deg)`, transformOrigin: '0 0', display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', alignItems: 'center', boxShadow: 'inset 0 -6px 10px rgba(0,0,0,.35)' }}>
-                {Array.from({ length: floors }, (_, f) => <span key={f} style={winDot} />)}
-              </div>
+              {/* بدنهٔ برج — SVG ایزومتریک (فاز ۱۶۲): شبکهٔ پنجرهٔ واقعی + نورپردازی + جزئیاتِ بام؛ پالت از نمای واقعی */}
+              <TowerSvg w={bw} floors={floors} pal={pal} seed={seedOf(a.id)} building={building} />
+              {building && <span aria-hidden style={{ position: 'absolute', top: -7, left: '60%', fontSize: 13, filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))', pointerEvents: 'none' }}>🏗</span>}
             </div>
           )
         })}
@@ -370,6 +454,9 @@ export default function EmpirePage() {
   // فاز ۱۵۹ (شهرِ تمام‌صفحه): برگهٔ بازِ روی صحنه + برجِ لمس‌شده — فقط حالتِ نمایشی؛ صفر منطقِ تازه
   const [citySheet, setCitySheet] = useState<'' | 'brief' | 'events' | 'deals' | 'lands' | 'map'>('')
   const [towerSel, setTowerSel] = useState<any>(null)
+  // فاز ۱۶۲: جشنِ یک‌بارهٔ دریافتِ جایزه در نمای شهر — کانفتی + پروازِ سکه + توستِ «+N سکه» (N واقعی)
+  const [cityCeleb, setCityCeleb] = useState<{ at: number; coins: number } | null>(null)
+  const fireCityCeleb = (coins: number) => { setCityCeleb({ at: Date.now(), coins }); setTimeout(() => setCityCeleb(null), 1450) }
   const [mktV, setMktV] = useState<'capital' | 'players' | 'bank' | 'shop'>('capital')
   const [rankV, setRankV] = useState<'compete' | 'hall' | 'clan'>('compete')
   const [misV, setMisV] = useState<'quests' | 'rewards' | 'dreams'>('quests')
@@ -712,7 +799,7 @@ export default function EmpirePage() {
   async function doHunter() { setHunterRes(null); const d = await api({ action: 'hunterStart' }); if (d) setHunterPair(d.pair) }
   async function doHunterPick(id: string) { const d = await api({ action: 'hunterAnswer', pick: id }); if (d) { setHunterRes(d); setHunterPair([]); load() } }
   async function doAnalyze(listingId: string) { const d = await api({ action: 'analyze', listingId }); if (d) { setAnalysis(d.analysis); load() } }
-  async function doClaim(key: string) { const d = await api({ action: 'claim', key }); if (d) { setSt(d); celebrate() } }
+  async function doClaim(key: string) { const d = await api({ action: 'claim', key }); if (d) { setSt(d); celebrate() } return d }
   // فروش/اجاره «فقط» از طریقِ مشاور یا آژانسِ املاک — اول برگهٔ قرارداد با نامِ طرف و هزینهٔ تومانی باز می‌شود.
   async function openAgentQuote(a: any, kind: 'sell' | 'rent') {
     const d = await api({ action: 'agentQuote', assetId: a.id, kind })
@@ -729,7 +816,7 @@ export default function EmpirePage() {
       : await api({ action: 'assetAction', assetId: aq.assetId, act: 'rent', via: aq.via })
     if (d) { setSt(d); setAq(null); if (aq.kind === 'sell' ? (d.profit || 0) > 0 : true) celebrate() }
   }
-  async function doChest() { const d = await api({ action: 'chest' }); if (d) { setChestReward(d.reward); celebrate(); load() } }
+  async function doChest() { const d = await api({ action: 'chest' }); if (d) { setChestReward(d.reward); celebrate(); load() } return d }
   async function doBoards() { const d = await api({ action: 'boards' }); if (d) setBoards(d) }
   async function doMarket() { const d = await api({ action: 'market' }); if (d) setMkt(d) }
   async function doNews() { const d = await api({ action: 'news' }); if (d) setPaper(d) }
@@ -796,6 +883,12 @@ export default function EmpirePage() {
         .empDot{animation:empDotFloat 7s linear infinite}
         @keyframes empSheetUp{from{transform:translateY(48px);opacity:0}to{transform:none;opacity:1}}
         .empSheet{animation:empSheetUp .28s ease both}
+        @keyframes empConfFall{0%{transform:translateY(-4vh) rotate(0deg);opacity:1}100%{transform:translateY(104vh) rotate(540deg);opacity:.4}}
+        .empConf{animation:empConfFall 1.15s ease-in both}
+        @keyframes empCoinFly{0%{transform:translate(-50%,0) scale(1);opacity:0}12%{opacity:1}100%{transform:translate(calc(-50% - 28vw),-62vh) scale(.55);opacity:0}}
+        .empCoinFly{animation:empCoinFly 1s ease-in both}
+        @keyframes empToastPop{0%{opacity:0;transform:translateX(-50%) translateY(10px) scale(.85)}18%,82%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}100%{opacity:0;transform:translateX(-50%) translateY(-12px) scale(.95)}}
+        .empCoinToast{animation:empToastPop 1.3s ease both}
         .empTower:hover{transform:translateY(-4px);filter:brightness(1.15)}
         .empCrownFloat{animation:empCrownFloat 2.6s ease-in-out infinite}
         .empTabActive{animation:empTabPop .3s ease both}
@@ -3809,30 +3902,50 @@ export default function EmpirePage() {
     </>}
 
     {/* 🎮 منوی اصلی (فصل ۹ Main Menu — فاز ۱۵۸): نوارِ شناورِ گرد؛ تبِ فعال = نشانِ دایره‌ایِ طلاییِ بالاپریده */}
-    <div style={{ height: gtab === 'city' && st.quests?.daily ? 140 : 74 }} />
-    {/* 🎁 نوارِ پاداشِ روزانه (فاز ۱۵۸ — صرفاً نمایشِ همان داده و اکشن‌های موجود: صندوقچهٔ روزانه + کوئستِ روزانهٔ واقعی؛
-        هیچ endpoint/پاداش/عددِ تازه‌ای ندارد) — بالای منوی پایین، فقط در تبِ شهر */}
+    <div style={{ height: gtab === 'city' && st.quests?.daily ? (st.quests.daily.claimed ? 128 : 216) : 74 }} />
+    {/* 🎉 جشنِ دریافتِ جایزه در نمای شهر (فاز ۱۶۲) — یک‌باره، خالصِ CSS */}
+    {gtab === 'city' && <CityCelebration seed={cityCeleb?.at || 0} coins={cityCeleb?.coins || 0} />}
+    {/* 🎯 فاز ۱۶۲ — «مأموریت، قهرمانِ شهر»: تا وقتی جایزهٔ کوئستِ روزانه گرفته نشده، کارتِ بزرگِ مأموریت
+        وسطِ پایینِ صحنه است (همان دادهٔ st.quests.daily و همان doClaim/doChest — هیچ مکانیکِ تازه‌ای نیست)؛
+        بعد از دریافت به نوارِ باریکِ ✅ + استریک جمع می‌شود. صندوقچه = چیپِ 🎁 کناری. */}
     {gtab === 'city' && st.quests?.daily && (() => {
       const dq = st.quests.daily
       const chestOk = !!st.chest?.available && !chestReward
-      const claimable = chestOk || (dq.done && !dq.claimed)
       const href = dq.metric === 'market' ? '/market' : '/search'
-      return (
+      const chestBtn = chestOk ? (
+        <button title="صندوقچهٔ امروزت منتظر است — باز کن" className="empPulse" disabled={busy}
+          onClick={async () => { const d = await doChest(); if (d?.reward) fireCityCeleb(d.reward.kind === 'coins' ? Number(d.reward.amount) || 0 : 0) }}
+          style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(255,215,106,.6)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', fontSize: 19, cursor: 'pointer', flex: 'none', boxShadow: '0 6px 18px rgba(255,215,106,.4)', padding: 0 }}>🎁</button>
+      ) : null
+      if (!dq.claimed) return (
         <div style={{ position: 'fixed', bottom: 'calc(76px + env(safe-area-inset-bottom))', left: 0, right: 0, zIndex: 49, display: 'flex', justifyContent: 'center', padding: '0 10px', pointerEvents: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: 560, width: '100%', background: 'rgba(23,16,58,.88)', border: '1px solid rgba(212,175,55,.3)', borderRadius: 18, padding: '8px 12px', boxShadow: '0 10px 30px -8px rgba(0,0,0,.65)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: 560, width: '100%', background: 'rgba(12,10,34,.9)', border: '1px solid rgba(255,215,106,.35)', borderRadius: 20, padding: '12px 14px', boxShadow: '0 14px 40px -8px rgba(0,0,0,.7), 0 0 0 1px rgba(255,215,106,.12)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
+            <span style={{ ...iconSq('#ffd76a'), width: 52, height: 52, fontSize: 26 }}>🎯</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#ffe9a3' }}>🎁 پاداشِ روزانه{(st.streak?.streak || 0) > 0 ? <span style={{ fontSize: 10.5, color: 'var(--muted)', fontWeight: 500 }}> · 🔥 روزِ {fa(st.streak.streak)}</span> : null}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                <span style={{ fontSize: 10.5, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dq.title}</span>
-                <div style={{ flex: 1, height: 5, minWidth: 36, background: 'rgba(255,255,255,.1)', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${Math.min(100, dq.progress / dq.target * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#ffd76a,#ff9d2e)', borderRadius: 3 }} /></div>
-                <span style={{ fontSize: 10, color: 'var(--faint)', whiteSpace: 'nowrap' }}>{fa(dq.progress)}/{fa(dq.target)}</span>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#ffd76a' }}>مأموریتِ امروز{(st.streak?.streak || 0) > 0 ? <span style={{ color: 'var(--muted)', fontWeight: 500 }}> · 🔥 روزِ {fa(st.streak.streak)}</span> : null}</div>
+              <div style={{ fontSize: 14, fontWeight: 900, marginTop: 2 }}>{dq.title}</div>
+              {qBar(dq.progress, dq.target, !!dq.done)}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                <span style={rewardChip}>🪙 {fa(dq.rewardCoins)}</span>
+                <span style={rewardChip}>⚡ {fa(dq.rewardXp)}</span>
+                <span style={{ flex: 1 }} />
+                {dq.done
+                  ? <button className="empPulse" disabled={busy} onClick={async () => { const d = await doClaim(dq.claimKey); if (d) fireCityCeleb(Number(dq.rewardCoins) || 0) }} style={{ ...btn, padding: '10px 22px', fontSize: 14, borderRadius: 999 }}>🎁 جایزه‌ات را بگیر</button>
+                  : <Link href={href} style={{ ...btn, textDecoration: 'none', display: 'inline-block', padding: '10px 22px', fontSize: 14, borderRadius: 999 }}>برو انجامش بده ←</Link>}
               </div>
             </div>
-            {claimable
-              ? <button className="empPulse" disabled={busy} onClick={() => { if (chestOk) doChest(); else doClaim(dq.claimKey) }} style={{ ...btn, padding: '8px 18px', fontSize: 13, borderRadius: 14, flex: 'none' }}>بگیر!</button>
-              : dq.claimed
-                ? <span style={{ fontSize: 11, color: '#7ee0b8', fontWeight: 700, flex: 'none' }}>✓ دریافت شد</span>
-                : <Link href={href} style={{ textDecoration: 'none', fontSize: 12, fontWeight: 800, color: '#ffe9a3', border: '1px solid rgba(212,175,55,.55)', borderRadius: 14, padding: '7px 14px', whiteSpace: 'nowrap', flex: 'none' }}>برو انجامش بده</Link>}
+            {chestBtn}
+          </div>
+        </div>
+      )
+      return (
+        <div style={{ position: 'fixed', bottom: 'calc(76px + env(safe-area-inset-bottom))', left: 0, right: 0, zIndex: 49, display: 'flex', justifyContent: 'center', padding: '0 10px', pointerEvents: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: 560, width: '100%', background: 'rgba(12,10,34,.82)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 18, padding: '8px 12px', boxShadow: '0 10px 30px -8px rgba(0,0,0,.65)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#7ee0b8' }}>✅ مأموریتِ امروز انجام شد</span>
+            {(st.streak?.streak || 0) > 0 && <span style={{ fontSize: 11, color: 'var(--muted)' }}>🔥 روزِ {fa(st.streak.streak)}</span>}
+            <span style={{ flex: 1 }} />
+            {chestReward && <span style={{ fontSize: 10.5, color: '#ffd76a' }}>صندوقچه باز شد: {chestReward.kind === 'coins' ? `🪙 ${fa(chestReward.amount)}` : chestReward.kind === 'xp' ? `⚡ ${fa(chestReward.amount)}` : `🤖 ${fa(chestReward.amount)}`}</span>}
+            {chestBtn}
           </div>
         </div>
       )

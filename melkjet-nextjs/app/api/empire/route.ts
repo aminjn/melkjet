@@ -674,7 +674,7 @@ async function stateOf(userId: string, e00: EmpireData) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   await primeConfig()
   const s = await getSession()
   if (!s) return NextResponse.json({ guest: true, enabled: true })
@@ -682,6 +682,13 @@ export async function GET() {
   if (!await flagEnabled('empire', { userId, role: (s as any).role })) return NextResponse.json({ enabled: false })
   const e = await getEmpire(userId)
   if (!e) return NextResponse.json({ enabled: true, empire: null, count: await empireCount() })
+  // فاز ۱۶۲ — نمای سبکِ «فقط کوئستِ روز» برای چیپِ ماموریتِ داخلِ سایت (جستجو/آگهی):
+  // بدونِ ساختِ stateOf سنگین؛ همان questsOf واقعی. هیچ مکانیکِ تازه‌ای ندارد.
+  if (new URL(req.url).searchParams.get('quest') === '1') {
+    const qs = await questsOf(userId, e).catch(() => null)
+    const d = qs?.daily
+    return NextResponse.json({ enabled: true, daily: d ? { title: d.title, progress: d.progress, target: d.target, metric: d.metric, done: !!d.done, claimed: !!d.claimed, rewardCoins: d.rewardCoins, rewardXp: d.rewardXp } : null })
+  }
   return NextResponse.json(await stateOf(userId, e))
 }
 
