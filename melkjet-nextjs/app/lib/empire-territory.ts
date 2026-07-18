@@ -62,8 +62,10 @@ export async function hoodBoardOf(meId: string, opts: { maxHoods: number; sample
     board.unshift({ hood: home, total: 0, mine: 0, owners: 0, king: null, gap: 1 })
   const top = board.slice(0, Math.max(1, opts.maxHoods))
   const pool = await candidateListings(500).catch(() => [])
+  // تطبیقِ محله با «بخشِ» نشانی (جداشده با ویرگول) نه زیررشته — وگرنه «ونک» آگهی‌های «پونک» را هم می‌گرفت (دادهٔ غلط ممنوع)
+  const partsOf = (loc?: string) => String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean)
   return top.map(s => {
-    const here = pool.filter(it => String(it.location || '').includes(s.hood))
+    const here = pool.filter(it => partsOf(it.location).includes(s.hood))
     return { ...s, listings: here.length, samples: here.slice(0, Math.max(0, opts.sampleListings)).map(it => ({ id: it.id, title: it.title, price: it.price || '' })) }
   })
 }
