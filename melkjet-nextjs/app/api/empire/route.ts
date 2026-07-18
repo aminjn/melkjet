@@ -663,6 +663,10 @@ async function stateOf(userId: string, e00: EmpireData) {
         trade: { need: u.tradeLevel, ok: lv >= u.tradeLevel, enabled: config().empire.social?.tradeEnabled !== false },
         clan: { need: u.clanLevel, ok: lv >= u.clanLevel, enabled: config().empire.social?.clanEnabled !== false },
         projects: { max: maxProjectsOf(lv, u), active: e.assets.filter(x => x.construction && !x.construction.done).length, exitPct: u.projectExitPct },
+        // فاز ۱۶۵ — بناهای مدنیِ روی نقشه (بازار/دنیا/رتبه‌ها): فقط دیده‌شدنِ knob؛ هیچ مکانیکی
+        civicMarket: { need: u.marketLevel ?? 2, ok: lv >= (u.marketLevel ?? 2) },
+        civicWorld: { need: u.worldLevel ?? 3, ok: lv >= (u.worldLevel ?? 3) },
+        civicRanks: { need: u.ranksLevel ?? 4, ok: lv >= (u.ranksLevel ?? 4) },
       }
     })(),
     mastery: masteryOf(e),   // استادیِ چندمحوره (جلد ۴۹ فصل ۵) — از شمارنده‌های واقعیِ رفتار

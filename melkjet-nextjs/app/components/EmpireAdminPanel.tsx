@@ -652,6 +652,9 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('بازارِ سرمایه از سطح', cin('unlocks', 'capitalLevel'), '«امکانات باز می‌شوند، نه اعداد»')}
             {row('شرکتِ ساختمانی از سطح', cin('unlocks', 'companyLevel'))}
             {row('سرمایه‌گذاریِ جمعی از سطح', cin('unlocks', 'crowdLevel'))}
+            {row('بنای «بازارِ شهر» از سطح', cin('unlocks', 'marketLevel'), 'فاز ۱۶۵ — فقط دیده‌شدنِ بنای مدنی روی نقشه')}
+            {row('بنای «تالارِ شهر» (دنیا) از سطح', cin('unlocks', 'worldLevel'))}
+            {row('بنای «تالارِ افتخار» (رتبه‌ها) از سطح', cin('unlocks', 'ranksLevel'))}
             {row('ظرفیتِ پایهٔ پروژهٔ همزمان', cin('unlocks', 'projectsBase'), 'ظرفیت = پایه + سطح ÷ گام')}
             {row('گامِ رشدِ ظرفیت (هر چند سطح +۱)', cin('unlocks', 'projectsPerLevels'))}
             {row('خروج از پروژهٔ نیمه‌کاره (٪ بهای تمام‌شده)', cin('unlocks', 'projectExitPct'), 'با پیش‌فروشِ فعال ممنوع؛ مالیات → خزانه')}

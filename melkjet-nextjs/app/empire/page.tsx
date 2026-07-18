@@ -430,10 +430,13 @@ function CityCelebration({ seed, coins }: { seed: number; coins: number }) {
 // 🏙 فاز ۱۵۸→۱۵۹ — IsoCity «تمام‌صفحه»: کلِ صفحه صحنهٔ شهرِ ایزومتریکِ زنده است (سبکِ tycoon) — CSS خالص، صفر تصویر.
 // بازیکن، آسمان = ساعتِ واقعی، جلوه = هوای واقعیِ Open-Meteo، شلوغیِ خیابان = شمارِ دارایی‌ها. هیچ عددِ ساختگی.
 // سبزینهٔ حاشیه صرفاً تزئینی و قطعی است (خانه‌های خالیِ همان مارپیچِ چیدمان) — هیچ ادعای داده‌ای ندارد.
-function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
+function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
   assets: any[]; wx: any; visual: any
   onTower?: (a: any) => void
   bubbleOf?: (a: any) => { icon: string; bounce?: boolean; title: string; onClick: () => void } | null
+  // فاز ۱۶۵ — بناهای مدنیِ ناوبری روی نقشه (تالارِ شهر/بازارِ شهر/تالارِ افتخار): ok=false → قفل با چیپِ سطح
+  civic?: Array<{ key: string; icon: string; label: string; need: number; ok: boolean; onOpen: () => void }>
+  civicHint?: boolean
 }) {
   const vis = visual || {}
   // 🖼 فاز ۱۶۴ب — حالتِ اسپرایت: manifest یک‌بار می‌آید و اعتبارسنجی می‌شود؛ نبود/خرابی = صحنهٔ SVG بدونِ هیچ تغییری
@@ -461,7 +464,8 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
   // فاز ۱۶۳ (شلوغی‌زدایی): برچسبِ ارزش فقط برای ۲ داراییِ باارزش‌تر همیشه روشن است؛ بقیه با hover/لمس
   const labelIdx = new Set(vals.map((v, i) => [v, i] as const).sort((p, q) => q[0] - p[0]).slice(0, 2).map(p => p[1]))
   // چیدمان با ۴ خانهٔ اضافه برای پراپ‌های تزئینی — خانهٔ هر دارایی همچنان قطعی و پایدار است
-  const { gridN, spots } = cityLayoutOf(assets.length + 4)
+  // چیدمان: ۴ خانهٔ دکور + خانه‌های بناهای مدنی (فاز ۱۶۵) — خانهٔ هر دارایی همچنان قطعی و پایدار
+  const { gridN, spots } = cityLayoutOf(assets.length + 4 + (civic?.length || 0))
   // فاز ۱۶۳: قوارهٔ بزرگ‌تر — هر خانه = قواره + خیابانِ میانی؛ محله واقعی می‌شود
   const tile = Math.max(48, Math.min(88, Math.floor(470 / gridN)))
   const c = Math.floor(gridN / 2)
@@ -600,6 +604,44 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
             </div>
           )
         })}
+        {/* 🏛 فاز ۱۶۵ — بناهای مدنی: ناوبریِ دنیا/بازار/رتبه‌ها از روی خودِ نقشه؛ قفل = knob سطح (فقط دیده‌شدن) */}
+        {(civic || []).map((cv, k) => {
+          const spot = spots[assets.length + 4 + k]
+          if (!spot) return null
+          const floors = cv.key === 'market' ? 1 : 2
+          const stk = sprite ? pickStack(man!, (cv.key === 'world' ? 'landmark' : cv.key === 'market' ? 'shop' : 'office') as BuildingKind, 'civic:' + cv.key) : null
+          const geo = man?.geo || { bodyW: 99, step: 34, lift: 10, roofOverlap: 24 }
+          const T2 = 132 * kSp
+          const tx = cx + (spot.col - spot.row) * T2 - T2 / 2
+          const ty = cy + (spot.col + spot.row) * 66 * kSp - yMidSp
+          const roofY = ty - (geo.lift + (floors - 1) * geo.step + geo.roofOverlap) * kSp
+          const fh = 22, bwC = Math.round(tile * 0.72), H = floors * fh
+          const x = (spot.col - spot.row) * tile / 2
+          const y = ((spot.col + spot.row) - 2 * c) * tile / 4
+          const wrapLeft = stk ? tx + ((132 - geo.bodyW) / 2) * kSp : cx + Math.round(x - bwC / 2)
+          const wrapTop = stk ? roofY : Math.round(cy + y - H - bwC / 4)
+          const wrapW = stk ? geo.bodyW * kSp : bwC
+          const wrapH = stk ? ty + 75 * kSp - roofY : H + bwC / 2
+          const zIdx = stk ? 3 + 2 * (spot.col + spot.row) : 10 + spot.col + spot.row
+          return (
+            <div key={'cv' + cv.key} className="empTower" role="button" onClick={cv.ok ? cv.onOpen : undefined}
+              title={cv.ok ? cv.label : `${cv.label} — در سطحِ ${fa(cv.need)} باز می‌شود`}
+              style={{ position: 'absolute', left: wrapLeft, top: wrapTop, width: wrapW, height: wrapH, zIndex: zIdx, cursor: cv.ok ? 'pointer' : 'default', opacity: cv.ok ? 1 : .55, filter: cv.ok ? undefined : 'grayscale(.7)', animationDelay: `${360 + k * 90}ms` }}>
+              {/* نشانِ طلاییِ شناور + چیپِ قفل/راهنمای یک‌باره */}
+              <span aria-hidden style={{ position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: '2px solid rgba(90,60,10,.55)', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, zIndex: 5, pointerEvents: 'none' }}>{cv.icon}</span>
+              {!cv.ok && <span style={{ position: 'absolute', top: -52, left: '50%', transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700, color: '#e8e4f5', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.8)', border: '1px solid rgba(255,255,255,.16)', borderRadius: 9, padding: '2px 8px', zIndex: 5, pointerEvents: 'none' }}>🔒 در سطحِ {fa(cv.need)} باز می‌شود</span>}
+              {cv.ok && civicHint && <span className="empPulse" style={{ position: 'absolute', top: -52 - k * 34, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 800, color: '#1a1503', whiteSpace: 'nowrap', background: 'linear-gradient(180deg,#ffe085,#d4af37)', borderRadius: 999, padding: '3px 10px', zIndex: 6 + k, pointerEvents: 'none' }}>{cv.label} — لمس کن</span>}
+              {stk ? <>
+                {Array.from({ length: floors }, (_, f) => (
+                  <img key={'b' + f} src={`/empire/sprites/${stk.body.file}`} alt="" width={stk.body.w * kSp} height={stk.body.h * kSp} draggable={false}
+                    style={{ position: 'absolute', left: ((geo.bodyW - stk.body.w) / 2) * kSp, top: ((floors - 1 - f) * geo.step + geo.roofOverlap) * kSp, pointerEvents: 'none', userSelect: 'none' }} />
+                ))}
+                <img src={`/empire/sprites/${stk.roof.file}`} alt="" width={stk.roof.w * kSp} height={stk.roof.h * kSp} draggable={false}
+                  style={{ position: 'absolute', left: ((geo.bodyW - stk.roof.w) / 2) * kSp, top: 0, pointerEvents: 'none', userSelect: 'none' }} />
+              </> : <BuildingSvg w={bwC} floors={floors} fh={fh} pal={towerPaletteOf('')} seed={seedOf('civic:' + cv.key)} building={false} kind={(cv.key === 'market' ? 'shop' : cv.key === 'ranks' ? 'office' : 'apt') as BKind} landmark={cv.key === 'world'} />}
+            </div>
+          )
+        })}
         {/* حالتِ خالی: همان پیامِ واقعیِ قبلی، روی الماسِ سبزِ خالی */}
         {assets.length === 0 && (
           <div style={{ position: 'absolute', left: cx, top: cy - 26, transform: 'translate(-50%,-50%)', zIndex: 30, background: 'rgba(15,12,41,.75)', border: '1px solid rgba(255,255,255,.16)', borderRadius: 14, padding: '10px 16px', fontSize: 12, color: '#e8e4f5', width: 270, textAlign: 'center', lineHeight: 2 }}>
@@ -722,6 +764,10 @@ export default function EmpirePage() {
   // فاز ۱۶۲: جشنِ یک‌بارهٔ دریافتِ جایزه در نمای شهر — کانفتی + پروازِ سکه + توستِ «+N سکه» (N واقعی)
   const [cityCeleb, setCityCeleb] = useState<{ at: number; coins: number } | null>(null)
   const fireCityCeleb = (coins: number) => { setCityCeleb({ at: Date.now(), coins }); setTimeout(() => setCityCeleb(null), 1450) }
+  // فاز ۱۶۵: راهنمای یک‌بارهٔ بناهای مدنی (sessionStorage — فقط UI) + بازکنندهٔ بخش‌ها از روی نقشه
+  const [civicHint, setCivicHint] = useState(false)
+  useEffect(() => { try { if (!sessionStorage.getItem('empCivicHint')) setCivicHint(true) } catch {} }, [])
+  const openCivic = (t: 'world' | 'market' | 'ranks') => { setGtab(t); setCivicHint(false); try { sessionStorage.setItem('empCivicHint', '1') } catch {} }
   const [mktV, setMktV] = useState<'capital' | 'players' | 'bank' | 'shop'>('capital')
   const [rankV, setRankV] = useState<'compete' | 'hall' | 'clan'>('compete')
   const [misV, setMisV] = useState<'quests' | 'rewards' | 'dreams'>('quests')
@@ -755,8 +801,9 @@ export default function EmpirePage() {
   const [sndOpen, setSndOpen] = useState(false)
   useEffect(() => { setSnd(sfxPrefs()) }, [])
   // فاز ۱۵۹: نمای شهر تمام‌صفحه است — اسکرولِ بدنه قفل؛ با ترکِ تب/صفحه برمی‌گردد
+  // فاز ۱۶۵: شهر «همیشه» صحنهٔ پایه است — اسکرولِ بدنه در کلِ داشبورد قفل؛ محتوای بخش‌ها داخلِ برگه اسکرول می‌شود
   useEffect(() => {
-    if (step === 'dash' && gtab === 'city') {
+    if (step === 'dash') {
       document.body.style.overflow = 'hidden'
       return () => { document.body.style.overflow = '' }
     }
@@ -1397,7 +1444,8 @@ export default function EmpirePage() {
   const lv = st.level || { titleFa: 'شهروند', title: 'Citizen', progress: 0, next: null }
   const ms = st.missions
   // فاز ۱۵۹: در نمای شهر HUD به‌صورتِ ردیف‌های شناور روی صحنه می‌نشیند — همان محتوا/هندلرها، فقط ظاهر
-  const hudFloat = gtab === 'city'
+  // فاز ۱۶۵: شهر همیشه پس‌زمینه است — HUD همیشه شناور روی صحنه
+  const hudFloat = true
   return wrap(<>
     {/* سربرگ = HUD چسبان (فصل ۹: همیشه در دسترس، کمتر از ۲۰٪ صفحه) */}
     <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', borderRadius: 18, ...(hudFloat
@@ -1448,9 +1496,21 @@ export default function EmpirePage() {
       </div>
     </div>
 
-    {gtab === 'city' && <>
+    {/* 🏙 فاز ۱۶۵ — معماریِ جدید: «شهر خودِ کلِ تجربه است» — صحنه همیشه سوار است؛ بخش‌ها برگه‌هایی روی آن */}
+    <>
     {/* 🏙 فاز ۱۵۹ — نمای شهرِ تمام‌صفحه: کلِ صفحه صحنه است؛ زیرصفحه‌های قبلی بدونِ تغییرِ منطق داخلِ برگه‌های پایینی باز می‌شوند */}
     <IsoCity assets={e.assets || []} wx={wx} visual={st.visual}
+      civicHint={civicHint}
+      civic={(() => {
+        // فاز ۱۶۵ — بناهای مدنیِ ناوبری: قفل/بازشدن از knob واقعیِ سطح (st.unlocks.civic* از config)؛ فقط دیده‌شدن
+        const lvN = lv.level || 1
+        const u = st.unlocks || {}
+        return [
+          { key: 'world', icon: '🏛', label: 'تالارِ شهر', need: u.civicWorld?.need ?? 3, ok: u.civicWorld ? !!u.civicWorld.ok : lvN >= 3, onOpen: () => openCivic('world') },
+          { key: 'market', icon: '🏪', label: 'بازارِ شهر', need: u.civicMarket?.need ?? 2, ok: u.civicMarket ? !!u.civicMarket.ok : lvN >= 2, onOpen: () => openCivic('market') },
+          { key: 'ranks', icon: '🏆', label: 'تالارِ افتخار', need: u.civicRanks?.need ?? 4, ok: u.civicRanks ? !!u.civicRanks.ok : lvN >= 4, onOpen: () => openCivic('ranks') },
+        ]
+      })()}
       onTower={(a: any) => setTowerSel(a)}
       bubbleOf={(a: any) => {
         // حباب فقط از وضعیتِ واقعیِ همین دارایی — نبودِ وضعیت = هیچ حبابی
@@ -1492,14 +1552,31 @@ export default function EmpirePage() {
     })()}
     {/* 🏢 برگهٔ برجِ لمس‌شده: اطلاعاتِ واقعیِ همان دارایی + مدیریت در پرتفوی */}
     <BottomSheet open={!!towerSel} onClose={() => setTowerSel(null)} title={`${towerSel?.construction && !towerSel?.construction?.done ? '🏗' : '🏢'} ${towerSel?.nickname || towerSel?.construction?.name || towerSel?.hood || towerSel?.title?.slice(0, 40) || 'دارایی'}`}>
-      {towerSel && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+      {towerSel && <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
         <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.9 }}>{towerSel.title?.slice(0, 90)}</div>
         <div>ارزشِ روز (زنده از بازارِ واقعی): <b style={{ color: 'var(--gold)' }}>{faB(Number(towerSel.current ?? towerSel.buyPrice) || 0)} تومان</b></div>
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>
           وضعیت: {towerSel.construction && !towerSel.construction.done ? '🏗 در حالِ ساخت' : towerSel.construction?.done ? '🏙 پروژهٔ تکمیل‌شده' : (towerSel.income || 0) > 0 ? '💰 دارای درآمد' : '🏛 در مالکیتِ تو'}
           {towerSel.hood ? ` · ${towerSel.hood}` : ''}
         </div>
-        <button style={{ ...btn, alignSelf: 'flex-start', padding: '8px 20px', fontSize: 13 }} onClick={() => { setTowerSel(null); setGtab('portfolio'); try { window.scrollTo({ top: 0 }) } catch {} }}>💼 مدیریت</button>
+        {/* فاز ۱۶۵ — اقدام‌های اصلیِ همین دارایی روی خودِ نقشه: همان هندلرهای پرتفوی، دکمه‌های بزرگِ بازی */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {!towerSel.construction && !towerSel.action && towerSel.kind !== 'land' && <>
+            <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px' }} disabled={busy}
+              onClick={async () => { const d = await api({ action: 'assetAction', assetId: towerSel.id, act: 'renovate' }); if (d) { setSt(d); const na = (d.empire?.assets || []).find((x2: any) => x2.id === towerSel.id); if (na) setTowerSel(na) } }}>🛠 بازسازی</button>
+            <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px' }} disabled={busy}
+              onClick={() => { openAgentQuote(towerSel, 'rent'); setTowerSel(null); setGtab('portfolio') }}>💰 اجاره با مشاور</button>
+          </>}
+          {!towerSel.construction && <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px', color: '#7ee0b8' }} disabled={busy}
+            onClick={() => { openAgentQuote(towerSel, 'sell'); setTowerSel(null); setGtab('portfolio') }}>🏷 عرضه و فروش</button>}
+          <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px' }} disabled={busy || e.aiTokens <= 0}
+            onClick={() => doAnalyze(towerSel.listingId)}>🧠 تحلیلِ ملک‌جت (۱ ژتون)</button>
+        </div>
+        {analysis && <div style={{ fontSize: 11.5, color: 'var(--muted)', borderTop: '1px dashed var(--line)', paddingTop: 8 }}>
+          <b style={{ color: 'var(--text)' }}>{analysis.verdict}</b>
+          {intelView(analysis)}
+        </div>}
+        <button className="empChunky" style={{ ...btn, alignSelf: 'flex-start', padding: '9px 22px', fontSize: 13.5, borderRadius: 999 }} onClick={() => { setTowerSel(null); setGtab('portfolio'); try { window.scrollTo({ top: 0 }) } catch {} }}>💼 همهٔ جزئیات (مزایده/عرضه به امپراتورها)</button>
       </div>}
     </BottomSheet>
     {/* برگهٔ بخش‌ها — محتوای زیرصفحه‌های قبلی سرِ جای خودش مانده؛ فقط شرطِ نمایش به برگه وصل شده است */}
@@ -2005,8 +2082,12 @@ export default function EmpirePage() {
     })()}
     </>}
     </BottomSheet>
-    </>}
+    </>
 
+    {/* 🗂 فاز ۱۶۵ — همهٔ بخش‌های قدیمی (پرتفوی/دنیا/مأموریت‌ها/بازار/رتبه‌ها) داخلِ «یک» برگهٔ بزرگ روی شهر
+        رندر می‌شوند؛ محتوا و شرط‌های داخلی عیناً همان است — بستنِ برگه = بازگشت به شهر */}
+    <BottomSheet open={gtab !== 'city'} onClose={() => setGtab('city')}
+      title={({ world: '🏛 تالارِ شهر', portfolio: '💼 پرتفوی', missions: '🎯 مأموریت‌ها', market: '🏪 بازارِ شهر', ranks: '🏆 تالارِ افتخار', city: '' } as Record<string, string>)[gtab] || ''}>
     {gtab === 'portfolio' && <>
     {tabHead('💼', 'پرتفوی', 'هر دارایی یک تکه از رؤیای توست — زنده از بازارِ واقعی')}
     {/* فاز ۱۰۳ (جلد ۳): Prestige + درختِ مهارت — بازتولدِ داوطلبانه با مهارتِ ماندگار */}
@@ -4196,15 +4277,16 @@ export default function EmpirePage() {
     </div>
     </>}
     </>}
+    </BottomSheet>
 
-    {/* 🎮 منوی اصلی (فصل ۹ Main Menu — فاز ۱۵۸): نوارِ شناورِ گرد؛ تبِ فعال = نشانِ دایره‌ایِ طلاییِ بالاپریده */}
-    <div style={{ height: gtab === 'city' && st.quests?.daily ? (st.quests.daily.claimed ? 128 : 216) : 74 }} />
+    {/* 🎮 فاز ۱۶۵ — داکِ سه‌تاییِ بازی: شهر (خانه) · مأموریت‌ها · پرتفوی؛ دنیا/بازار/رتبه‌ها فقط از بناهای مدنیِ روی نقشه */}
+    <div style={{ height: st.quests?.daily ? (st.quests.daily.claimed ? 128 : 216) : 74 }} />
     {/* 🎉 جشنِ دریافتِ جایزه در نمای شهر (فاز ۱۶۲) — یک‌باره، خالصِ CSS */}
-    {gtab === 'city' && <CityCelebration seed={cityCeleb?.at || 0} coins={cityCeleb?.coins || 0} />}
+    <CityCelebration seed={cityCeleb?.at || 0} coins={cityCeleb?.coins || 0} />
     {/* 🎯 فاز ۱۶۲ — «مأموریت، قهرمانِ شهر»: تا وقتی جایزهٔ کوئستِ روزانه گرفته نشده، کارتِ بزرگِ مأموریت
         وسطِ پایینِ صحنه است (همان دادهٔ st.quests.daily و همان doClaim/doChest — هیچ مکانیکِ تازه‌ای نیست)؛
         بعد از دریافت به نوارِ باریکِ ✅ + استریک جمع می‌شود. صندوقچه = چیپِ 🎁 کناری. */}
-    {gtab === 'city' && st.quests?.daily && (() => {
+    {st.quests?.daily && (() => {
       const dq = st.quests.daily
       const chestOk = !!st.chest?.available && !chestReward
       const href = dq.metric === 'market' ? '/market' : '/search'
@@ -4249,7 +4331,7 @@ export default function EmpirePage() {
     <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', justifyContent: 'center', padding: '8px 10px calc(10px + env(safe-area-inset-bottom))', pointerEvents: 'none' }}>
       {/* 🎨 نوارِ تبِ شناورِ tycoon: شیشهٔ تیرهٔ بنفش + تبِ فعال با نشانِ دایره‌ایِ طلایی */}
       <div style={{ display: 'flex', gap: 4, margin: '0 10px', background: 'linear-gradient(180deg, rgba(30,23,68,.92), rgba(16,12,42,.92))', border: '2px solid rgba(0,0,0,.45)', borderRadius: 22, padding: '6px 8px', boxShadow: '0 3px 0 rgba(5,3,20,.9), 0 14px 44px -8px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.08)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
-        {([['city', '🏙', 'شهر'], ['world', '🌍', 'دنیا'], ['portfolio', '💼', 'پرتفوی'], ['missions', '🎯', 'مأموریت‌ها'], ['market', '📊', 'بازار'], ['ranks', '🏆', 'رتبه‌ها']] as const).map(([k, ic, l]) => (
+        {([['city', '🏙', 'شهر'], ['missions', '🎯', 'مأموریت‌ها'], ['portfolio', '💼', 'پرتفوی']] as const).map(([k, ic, l]) => (
           <button key={k} onClick={() => { setGtab(k); try { window.scrollTo({ top: 0 }) } catch {} }}
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 48, padding: '4px 7px 6px', borderRadius: 16, border: 'none', cursor: 'pointer', background: gtab === k ? 'linear-gradient(180deg,rgba(255,215,106,.26),rgba(212,175,55,.10))' : 'transparent', color: gtab === k ? '#ffe9a3' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500, boxShadow: gtab === k ? 'inset 0 0 0 1px rgba(212,175,55,.45)' : 'none' }}>
             <span className={gtab === k ? 'empTabActive' : undefined} style={gtab === k

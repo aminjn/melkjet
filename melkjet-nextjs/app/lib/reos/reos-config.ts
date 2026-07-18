@@ -170,7 +170,7 @@ export interface ReosConfig {
     streakBonus: { d7: number; d14: number; d21: number; d30: number }
     // GDD فصل ۴ بخش ۱۹ (Progression): «اعداد نباید بزرگ‌تر شوند؛ امکانات باید بیشتر شوند» — قابلیت‌ها سطح‌گشا هستند
     // + فصل ۵ (منابع): ظرفیتِ پروژهٔ همزمانِ شرکت با سطح رشد می‌کند؛ خروج از پروژهٔ نیمه‌کاره با ٪ شفاف.
-    unlocks: { capitalLevel: number; companyLevel: number; crowdLevel: number; projectsBase: number; projectsPerLevels: number; projectExitPct: number; tradeLevel: number; clanLevel: number }
+    unlocks: { capitalLevel: number; companyLevel: number; crowdLevel: number; projectsBase: number; projectsPerLevels: number; projectExitPct: number; tradeLevel: number; clanLevel: number; marketLevel: number; worldLevel: number; ranksLevel: number }
     // فاز ۳۷ (درخواستِ مستقیم): مالکیتِ انحصاریِ آگهی + بازارِ بازیکنان + مشارکتِ ساخت + اتحاد — همه سطح‌گشا.
     social: { exclusiveEnabled: boolean; tradeEnabled: boolean; jvEnabled: boolean; jvMaxPct: number; clanEnabled: boolean; clanCreateFee: number; clanMaxMembers: number; p2pAuctionEnabled: boolean; p2pAuctionStepPct: number; p2pAuctionMaxDays: number
       // فاز ۱۰۲: گفتگوی دوستان + دوئلِ هفتگی + خزانه/کنسرسیومِ اتحاد
@@ -252,7 +252,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
     },
     // سطح‌گشایی (سند ۱۵ / GDD فصل ۴ بخش ۱۹): بازارِ سرمایه از سطح ۳، شرکتِ ساختمانی از سطح ۴، مشارکتِ جمعی از سطح ۶؛
     // ظرفیتِ پروژهٔ همزمان = ۱ + سطح ÷ ۱۰؛ خروج از پروژهٔ نیمه‌کاره به ۸۵٪ بهای تمام‌شده (منهای مالیات → خزانه).
-    unlocks: { capitalLevel: 3, companyLevel: 4, crowdLevel: 6, projectsBase: 1, projectsPerLevels: 10, projectExitPct: 85, tradeLevel: 6, clanLevel: 8 },
+    unlocks: { capitalLevel: 3, companyLevel: 4, crowdLevel: 6, projectsBase: 1, projectsPerLevels: 10, projectExitPct: 85, tradeLevel: 6, clanLevel: 8, marketLevel: 2, worldLevel: 3, ranksLevel: 4 },   // فاز ۱۶۵: سطحِ بازشدنِ بناهای مدنی (بازار/دنیا/رتبه‌ها) — فقط دیده‌شدن، صفر مکانیک
     // اجتماع (فاز ۳۷): یک آگهیِ واقعی = یک مالک؛ معامله و مشارکتِ ساخت بینِ بازیکنان؛ اتحاد با هزینهٔ ثبتِ → خزانه.
     social: { exclusiveEnabled: true, tradeEnabled: true, jvEnabled: true, jvMaxPct: 49, clanEnabled: true, clanCreateFee: 100_000_000, clanMaxMembers: 20, p2pAuctionEnabled: true, p2pAuctionStepPct: 5, p2pAuctionMaxDays: 7,
       dmEnabled: true, dmMaxLen: 300, dmCooldownSec: 5, duelEnabled: true, duelXpWin: 100, holdingEnabled: true, consortiumEnabled: true },   // فاز ۱۰۲
