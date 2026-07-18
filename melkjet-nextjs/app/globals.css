@@ -373,3 +373,5 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 @keyframes mjmPop{0%{transform:scale(.4);opacity:0}55%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
 @media (prefers-reduced-motion: reduce){.mjmission *{animation:none!important;transition:none!important}}
 @media (max-width:480px){.mjmission{left:8px!important;bottom:8px!important;max-width:250px!important}}
+/* فاز ۱۶۳ — خودروهای SVG روی خیابان‌های شهرِ ایزومتریک: با reduced-motion کامل حذف می‌شوند */
+@media(prefers-reduced-motion:reduce){.empCarIso{display:none!important}}

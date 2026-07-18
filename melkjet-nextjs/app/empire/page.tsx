@@ -8,6 +8,8 @@ import NeshanMap from '@/app/components/NeshanMap'
 import { sfx, sfxPrefs, setSfxPrefs } from '@/app/lib/empire-sound'
 // فاز ۱۵۸ (شهرِ ایزومتریکِ tycoon): توابعِ خالصِ بصری — فاز/هوا/چیدمان/پالت همه از دادهٔ واقعی
 import { dayPhaseOf, weatherFxOf, streetLifeOf, cityLayoutOf, towerFloorsOf, towerPaletteOf, type DayPhase } from '@/app/lib/empire-visual'
+// فاز ۱۶۳: کلاس‌بندیِ واقعیِ نوعِ ملک (همان تابعِ کانونیِ سایت) → گونهٔ بصریِ ساختمان در شهر
+import { ptypeClassOf } from '@/app/lib/listing-similarity'
 import Link from 'next/link'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
@@ -68,7 +70,7 @@ function subNav(items: Array<[string, string, string, number?]>, cur: string, se
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '2px 0 2px' }}>
       {items.map(([k, ic, l, cnt]) => (
         <button key={k} onClick={() => { set(k); try { window.scrollTo({ top: 0 }) } catch {} }}
-          style={{ fontSize: 11.5, padding: '7px 13px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontWeight: cur === k ? 800 : 500, border: `1px solid ${cur === k ? 'rgba(212,175,55,.55)' : 'var(--line2)'}`, background: cur === k ? 'linear-gradient(135deg,rgba(212,175,55,.24),rgba(240,212,122,.12))' : 'var(--bg2)', color: cur === k ? '#f0d47a' : 'var(--muted)' }}>
+          style={{ fontSize: 11.5, padding: '8px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontWeight: cur === k ? 800 : 500, border: `2px solid ${cur === k ? 'rgba(212,175,55,.55)' : 'rgba(255,255,255,.1)'}`, background: cur === k ? 'linear-gradient(180deg,rgba(255,215,106,.28),rgba(212,175,55,.12))' : 'rgba(255,255,255,.04)', color: cur === k ? '#ffe9a3' : 'var(--muted)', boxShadow: cur === k ? '0 2px 0 rgba(90,60,10,.5)' : '0 2px 0 rgba(5,3,20,.35)' }}>
           {ic} {l}{typeof cnt === 'number' && cnt > 0 ? ` (${fa(cnt)})` : ''}
         </button>
       ))}
@@ -82,10 +84,12 @@ type St = any
 // 🎨 پوستهٔ «پروتوتایپِ کامل» (فایلِ طراحیِ کاربر): کارتِ شیشه‌ای، طلاییِ سه‌درجه، قرص‌ها، فونتِ سِریفِ نمایشی.
 // فقط ظاهر — هیچ منطقی اینجا نیست.
 const DISPLAY = "'Markazi Text', Vazirmatn, serif"   // اگر فونت نبود، به Vazirmatn برمی‌گردد
-const card: React.CSSProperties = { background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 18, padding: 16 }
-const btn: React.CSSProperties = { background: 'linear-gradient(135deg,#d4af37,#f0d47a)', color: '#1a1503', border: 'none', borderRadius: 12, padding: '10px 18px', fontWeight: 800, cursor: 'pointer', fontSize: 14, boxShadow: '0 6px 22px rgba(212,175,55,.28)' }
-const btnGhost: React.CSSProperties = { background: 'rgba(255,255,255,.05)', color: 'var(--text)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12, padding: '10px 18px', cursor: 'pointer', fontSize: 14 }
-const chip = (on: boolean): React.CSSProperties => ({ padding: '9px 16px', borderRadius: 99, border: `1px solid ${on ? 'rgba(212,175,55,.55)' : 'rgba(255,255,255,.12)'}`, background: on ? 'rgba(212,175,55,.14)' : 'rgba(255,255,255,.04)', color: on ? '#f0d47a' : 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: on ? 700 : 400 })
+// 🎮 فاز ۱۶۳ — «پنلِ بازیِ» مشترکِ کلِ امپراتوری: پرکنندهٔ بنفشِ تیرهٔ گرادیانی، خطِ دورِ ۲px، لبهٔ پایینیِ برجسته
+const card: React.CSSProperties = { background: 'linear-gradient(180deg, rgba(44,34,92,.5), rgba(20,15,50,.55))', border: '2px solid rgba(255,255,255,.10)', borderRadius: 20, padding: 16, boxShadow: '0 3px 0 rgba(5,3,20,.5), 0 12px 28px -14px rgba(0,0,0,.55)' }
+// دکمهٔ طلاییِ chunky (سبکِ موبایل‌گیم): گرادیانِ پر، دورخطِ تیره، بِوِلِ پایین
+const btn: React.CSSProperties = { background: 'linear-gradient(180deg,#ffe085,#d4af37)', color: '#1a1503', border: '2px solid rgba(90,60,10,.55)', borderRadius: 14, padding: '10px 18px', fontWeight: 900, cursor: 'pointer', fontSize: 14, boxShadow: '0 3px 0 #8a6d1f, 0 8px 20px rgba(212,175,55,.28)' }
+const btnGhost: React.CSSProperties = { background: 'linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03))', color: 'var(--text)', border: '2px solid rgba(255,255,255,.14)', borderRadius: 12, padding: '9px 17px', cursor: 'pointer', fontSize: 13.5, boxShadow: '0 2px 0 rgba(5,3,20,.45)' }
+const chip = (on: boolean): React.CSSProperties => ({ padding: '9px 16px', borderRadius: 99, border: `2px solid ${on ? 'rgba(212,175,55,.55)' : 'rgba(255,255,255,.12)'}`, background: on ? 'linear-gradient(180deg,rgba(255,215,106,.26),rgba(212,175,55,.1))' : 'rgba(255,255,255,.04)', color: on ? '#ffe9a3' : 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: on ? 800 : 400, boxShadow: on ? '0 2px 0 rgba(90,60,10,.5)' : '0 2px 0 rgba(5,3,20,.35)' })
 
 // 🎮 فاز ۱۶۰ — پوستهٔ tycoon برای بقیهٔ تب‌ها (فقط ظاهر — صفر منطق):
 // سربرگِ بخش با چیپِ رنگی، چیپِ پاداش، مربعِ آیکنِ رنگی، چیپِ وضعیت، نوارِ پیشرفتِ کلفت. رنگ‌ها همیشه hex.
@@ -164,19 +168,37 @@ function MJ({ children }: { children: React.ReactNode }) {
 // 🧮 فاز ۱۶۲ — هشِ قطعی از شناسهٔ واقعیِ دارایی: الگوی پنجره‌های روشن را بدونِ هیچ تصادفی تعیین می‌کند
 const seedOf = (id: any) => { const s = String(id ?? ''); let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h }
 
-// 🏙 فاز ۱۶۲ — TowerSvg: بدنهٔ برجِ ایزومتریک با SVGِ درون‌خطی (صفر تصویر): بامِ لوزی با جزئیاتِ تأسیسات،
-// دو نما با «شبکهٔ پنجرهٔ» واقعی (هر سطر = یک طبقهٔ واقعی)، نورپردازیِ وجه‌ها، خطِ تفکیکِ طبقات، داربستِ کارگاه.
-// روشن/خاموشیِ هر پنجره قطعی از هشِ شناسهٔ دارایی است — نه Math.random (قانونِ «هیچ عددِ ساختگی»).
-function TowerSvg({ w, floors, pal, seed, building }: { w: number; floors: number; pal: { top: string; left: string; right: string; win: string }; seed: number; building: boolean }) {
+// 🏘 فاز ۱۶۳ — گونهٔ بصریِ ساختمان از دادهٔ واقعیِ همان دارایی (kind ذخیره‌شده + کلاس‌بندیِ کانونیِ عنوان)
+type BKind = 'apt' | 'shop' | 'villa' | 'office'
+const bkindOf = (a: any): BKind => {
+  const p = ptypeClassOf(a?.ptype || a?.title)
+  if (a?.kind === 'villa' || p === 'villa') return 'villa'
+  if (a?.kind === 'commercial' || p === 'shop') return 'shop'
+  if (p === 'office' || p === 'industrial') return 'office'
+  return 'apt'
+}
+
+// 🏙 فاز ۱۶۳ — BuildingSvg: هنرِ ساختمانِ ایزومتریک به سبکِ سیتی‌بیلدرهای بزرگ (صفر تصویر، SVG درون‌خطی).
+// چهار گونه از دادهٔ واقعی: آپارتمان (بالکن‌دار)، مغازه (سایه‌بانِ راه‌راه + تابلوی نورانی)، ویلا (بامِ شیروانیِ
+// دوپرده + پرچینِ حیاط)، اداری (نمای شیشه‌ای با مولیون و بازتابِ آسمان). نورِ ثابت از بالا-چپ: وجهِ چپ روشن،
+// راست تیره، نوارِ AO پای دیوار، رینگ‌لایتِ لبهٔ بام. نگینِ پرتفوی = LANDMARK (اسپایر + قابِ طلایی).
+// همهٔ الگوها (پنجرهٔ روشن/خاموش و…) قطعی از هشِ شناسهٔ واقعیِ دارایی — هیچ Math.random.
+function BuildingSvg({ w, floors, fh, pal, seed, building, kind, landmark }: {
+  w: number; floors: number; fh: number
+  pal: { top: string; left: string; right: string; win: string }
+  seed: number; building: boolean; kind: BKind; landmark: boolean
+}) {
   const uid = React.useId().replace(/[^a-zA-Z0-9]/g, '')
-  const fh = 22, H = floors * fh, half = w / 2, qh = w / 4
+  const H = floors * fh, half = w / 2, qh = w / 4
   const hTot = H + w / 2
   const cols = w >= 46 ? 3 : 2
   const faceL = `0,${qh} ${half},${w / 2} ${half},${w / 2 + H} 0,${qh + H}`
   const faceR = `${half},${w / 2} ${w},${qh} ${w},${qh + H} ${half},${w / 2 + H}`
   const roof = `${half},0 ${w},${qh} ${half},${w / 2} 0,${qh}`
+  const office = kind === 'office'
+  // شبکهٔ پنجره (برای غیرِ اداری): سطر = طبقهٔ واقعی؛ روشن/خاموش قطعی از هش
   const wins: React.ReactNode[] = []
-  for (let face = 0; face < 2; face++) {
+  if (!office) for (let face = 0; face < 2; face++) {
     const step = (half - 6) / cols
     const ww = step * 0.56, wh = fh * 0.4
     for (let r = 0; r < floors; r++) for (let ci = 0; ci < cols; ci++) {
@@ -190,37 +212,186 @@ function TowerSvg({ w, floors, pal, seed, building }: { w: number; floors: numbe
         fill={on ? (((seed >> (k % 13)) & 3) === 0 ? '#fff3c4' : pal.win) : 'rgba(10,14,30,.5)'} stroke="rgba(0,0,0,.28)" strokeWidth=".5" opacity={on ? .95 : .8} />)
     }
   }
+  // مولیون‌های عمودیِ نمای شیشه‌ای (اداری)
+  const mullions: React.ReactNode[] = []
+  if (office) {
+    for (let mx = 4; mx < half; mx += 5.5) {
+      mullions.push(<line key={'l' + mx} x1={mx} y1={qh + mx * 0.5 + 1} x2={mx} y2={qh + mx * 0.5 + H} stroke="rgba(255,255,255,.28)" strokeWidth=".8" />)
+      const rx2 = half + mx
+      mullions.push(<line key={'r' + mx} x1={rx2} y1={w / 2 - mx * 0.5 + 1} x2={rx2} y2={w / 2 - mx * 0.5 + H} stroke="rgba(255,255,255,.16)" strokeWidth=".8" />)
+    }
+  }
+  // بالکن‌های آپارتمان: هر طبقه یک تیغهٔ بیرون‌زده روی وجهِ چپ (نما)
+  const balconies: React.ReactNode[] = []
+  if (kind === 'apt') for (let f = 0; f < floors; f++) {
+    const yB = f * fh + fh * 0.86
+    balconies.push(<polygon key={'b' + f} points={`-2.5,${qh + yB - 1.2} ${half - 1},${w / 2 + yB - 1.2} ${half - 1},${w / 2 + yB + 1.6} -2.5,${qh + yB + 1.6}`} fill="rgba(255,255,255,.42)" stroke="rgba(0,0,0,.2)" strokeWidth=".4" />)
+  }
+  const groundY = fh * (floors - 1)  // ترازِ طبقهٔ همکف برای سایه‌بان/تابلو
   return (
-    <svg width={w} height={hTot} viewBox={`0 0 ${w} ${hTot}`} style={{ position: 'absolute', inset: 0, display: 'block', overflow: 'visible' }} aria-hidden>
+    <svg width={w} height={hTot} viewBox={`0 0 ${w} ${hTot}`} style={{ position: 'absolute', inset: 0, display: 'block', overflow: 'visible', filter: 'saturate(1.18)' }} aria-hidden>
       <defs>
-        <linearGradient id={uid + 'L'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".16" /><stop offset="1" stopColor="#000" stopOpacity=".2" /></linearGradient>
-        <linearGradient id={uid + 'R'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".05" /><stop offset="1" stopColor="#000" stopOpacity=".32" /></linearGradient>
-        <linearGradient id={uid + 'G'} x1="0" y1="0" x2="1" y2=".7"><stop offset="0" stopColor="#fff" stopOpacity=".55" /><stop offset=".45" stopColor="#fff" stopOpacity="0" /></linearGradient>
+        <linearGradient id={uid + 'L'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".24" /><stop offset="1" stopColor="#000" stopOpacity=".16" /></linearGradient>
+        <linearGradient id={uid + 'R'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#000" stopOpacity=".22" /><stop offset="1" stopColor="#000" stopOpacity=".44" /></linearGradient>
+        <linearGradient id={uid + 'G'} x1="0" y1="0" x2="1" y2=".7"><stop offset="0" stopColor="#fff" stopOpacity=".6" /><stop offset=".45" stopColor="#fff" stopOpacity="0" /></linearGradient>
+        <linearGradient id={uid + 'AO'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#000" stopOpacity=".4" /></linearGradient>
+        <linearGradient id={uid + 'GL'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#b8e2f2" /><stop offset="1" stopColor="#4a7fae" /></linearGradient>
+        <linearGradient id={uid + 'GR'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#6f9cc4" /><stop offset="1" stopColor="#28496b" /></linearGradient>
         <pattern id={uid + 'S'} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3.5" height="9" fill="rgba(235,190,80,.4)" /></pattern>
+        <pattern id={uid + 'AW'} width="8" height="6" patternUnits="userSpaceOnUse"><rect width="8" height="6" fill="#e8e4d8" /><rect width="4" height="6" fill="#e5533d" /></pattern>
+        <clipPath id={uid + 'CL'}><polygon points={faceL} /></clipPath>
+        <clipPath id={uid + 'CR'}><polygon points={faceR} /></clipPath>
       </defs>
-      {/* وجه‌ها: رنگِ پایه از پالتِ نمای واقعیِ دارایی + روکشِ نور (چپ روشن‌تر، راست تیره‌تر) */}
-      <polygon points={faceL} fill={pal.left} />
+      {/* وجه‌ها — نورِ ثابتِ بالا-چپ: چپ روشن، راست در سایه؛ اداری = شیشهٔ بازتابی + تِینتِ پالتِ واقعی */}
+      <polygon points={faceL} fill={office ? `url(#${uid}GL)` : pal.left} />
+      {office && <polygon points={faceL} fill={pal.left} opacity=".22" />}
       <polygon points={faceL} fill={`url(#${uid}L)`} />
-      <polygon points={faceR} fill={pal.right} />
+      <polygon points={faceR} fill={office ? `url(#${uid}GR)` : pal.right} />
+      {office && <polygon points={faceR} fill={pal.right} opacity=".22" />}
       <polygon points={faceR} fill={`url(#${uid}R)`} />
+      {/* بازتابِ موربِ آسمان روی شیشه (اداری) */}
+      {office && <g>
+        <polygon clipPath={`url(#${uid}CL)`} points={`-2,${qh + H * 0.3} ${half + 2},${w / 2 + H * 0.06} ${half + 2},${w / 2 + H * 0.2} -2,${qh + H * 0.46}`} fill="#fff" opacity=".3" />
+        <polygon clipPath={`url(#${uid}CR)`} points={`${half - 2},${w / 2 + H * 0.5} ${w + 2},${qh + H * 0.28} ${w + 2},${qh + H * 0.38} ${half - 2},${w / 2 + H * 0.62}`} fill="#fff" opacity=".16" />
+      </g>}
       {/* خطوطِ باریکِ تفکیکِ طبقات */}
-      {Array.from({ length: Math.max(0, floors - 1) }, (_, f) => <g key={f} stroke="rgba(0,0,0,.16)" strokeWidth="1">
+      {Array.from({ length: Math.max(0, floors - 1) }, (_, f) => <g key={f} stroke={office ? 'rgba(20,40,70,.3)' : 'rgba(0,0,0,.16)'} strokeWidth="1">
         <line x1={0} y1={qh + (f + 1) * fh} x2={half} y2={w / 2 + (f + 1) * fh} />
         <line x1={half} y1={w / 2 + (f + 1) * fh} x2={w} y2={qh + (f + 1) * fh} />
       </g>)}
       {wins}
-      {/* بام: لوزی + براقی + تأسیساتِ بام (کولرِ تیره + منبعِ روشن) */}
-      <polygon points={roof} fill={pal.top} />
-      <polygon points={roof} fill={`url(#${uid}G)`} />
-      <polygon points={roof} fill="none" stroke="rgba(255,255,255,.22)" strokeWidth="1" />
-      <polygon points={`${half * 1.18},${qh * 0.72} ${half * 1.18 + 7},${qh * 0.72 + 3.5} ${half * 1.18},${qh * 0.72 + 7} ${half * 1.18 - 7},${qh * 0.72 + 3.5}`} fill="rgba(25,30,55,.8)" />
-      <polygon points={`${half * 0.72},${qh * 1.05} ${half * 0.72 + 5},${qh * 1.05 + 2.5} ${half * 0.72},${qh * 1.05 + 5} ${half * 0.72 - 5},${qh * 1.05 + 2.5}`} fill="rgba(255,255,255,.3)" />
+      {mullions}
+      {balconies}
+      {/* سایه‌بانِ راه‌راه + تابلوی نورانیِ مغازه — روی طبقهٔ همکفِ واقعی */}
+      {kind === 'shop' && <g>
+        <polygon points={`-3,${qh + groundY + fh * 0.34} ${half + 1},${w / 2 + groundY + fh * 0.34} ${half + 1},${w / 2 + groundY + fh * 0.34 + 5} -3,${qh + groundY + fh * 0.34 + 5}`} fill={`url(#${uid}AW)`} stroke="rgba(0,0,0,.3)" strokeWidth=".5" />
+        <polygon points={`${half + 4},${w / 2 + groundY - (4 - half) * 0 + fh * 0.18 - 2} ${half + 4 + 12},${w / 2 + groundY + fh * 0.18 - 8} ${half + 4 + 12},${w / 2 + groundY + fh * 0.18 - 2} ${half + 4},${w / 2 + groundY + fh * 0.18 + 4}`} fill={pal.win} stroke="#1c2237" strokeWidth="1" opacity=".95" style={{ filter: `drop-shadow(0 0 4px ${pal.win})` }} />
+      </g>}
+      {/* AO — نوارِ تیرهٔ پای دیوار (تماس با زمین) */}
+      <polygon points={`0,${qh + H - 7} ${half},${w / 2 + H - 7} ${half},${w / 2 + H} 0,${qh + H}`} fill={`url(#${uid}AO)`} />
+      <polygon points={`${half},${w / 2 + H - 7} ${w},${qh + H - 7} ${w},${qh + H} ${half},${w / 2 + H}`} fill={`url(#${uid}AO)`} />
+      {/* بام */}
+      {kind === 'villa' ? <g>
+        {/* شیروانیِ دوپرده + خطِ تیزه + دودکش */}
+        <polygon points={`${half},0 ${w},${qh} 0,${qh}`} fill="#d9694f" />
+        <polygon points={`0,${qh} ${w},${qh} ${half},${w / 2}`} fill="#a84a36" />
+        <line x1={0} y1={qh} x2={w} y2={qh} stroke="#f0b9a4" strokeWidth="1.2" />
+        <rect x={half * 1.22} y={qh * 0.34} width={4} height={7} fill="#8a5a40" stroke="rgba(0,0,0,.25)" strokeWidth=".5" />
+        {/* پرچینِ حیاط + درختچه — پای دیوارِ نما */}
+        {Array.from({ length: 5 }, (_, k) => <rect key={k} x={-5 + k * (half / 5.2)} y={qh + H + (-5 + k * (half / 5.2)) * 0.5 - 5.5} width={1.7} height={5.5} fill="#efe9db" stroke="rgba(0,0,0,.2)" strokeWidth=".3" />)}
+        <circle cx={w - 3} cy={qh + H - 4} r={4.4} fill="#2f9e46" />
+        <circle cx={w - 4.6} cy={qh + H - 5.8} r={2.6} fill="#5ecf6d" />
+      </g> : <g>
+        <polygon points={roof} fill={pal.top} />
+        <polygon points={roof} fill={`url(#${uid}G)`} />
+        {/* رینگ‌لایتِ لبهٔ بام (نور از بالا-چپ) */}
+        <polyline points={`0,${qh} ${half},0 ${w},${qh}`} fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.3" />
+        <polyline points={`0,${qh} ${half},${w / 2} ${w},${qh}`} fill="none" stroke="rgba(0,0,0,.22)" strokeWidth="1" />
+        {!office && !landmark && <>
+          <polygon points={`${half * 1.18},${qh * 0.72} ${half * 1.18 + 7},${qh * 0.72 + 3.5} ${half * 1.18},${qh * 0.72 + 7} ${half * 1.18 - 7},${qh * 0.72 + 3.5}`} fill="rgba(25,30,55,.8)" />
+          <polygon points={`${half * 0.72},${qh * 1.05} ${half * 0.72 + 5},${qh * 1.05 + 2.5} ${half * 0.72},${qh * 1.05 + 5} ${half * 0.72 - 5},${qh * 1.05 + 2.5}`} fill="rgba(255,255,255,.3)" />
+        </>}
+      </g>}
+      {/* LANDMARK — نگینِ پرتفوی: اسپایرِ بام + قابِ طلایی */}
+      {landmark && <g>
+        <polygon points={roof} fill="none" stroke="#ffd76a" strokeWidth="1.6" />
+        <line x1={half} y1={qh - 2} x2={half} y2={-13} stroke="#ffd76a" strokeWidth="1.6" />
+        <polygon points={`${half},-16 ${half - 3},${-6} ${half + 3},${-6}`} fill="#ffd76a" style={{ filter: 'drop-shadow(0 0 5px rgba(255,215,106,.8))' }} />
+        <circle cx={half} cy={-16.5} r={1.8} fill="#fff3c4" />
+      </g>}
       {/* داربستِ کارگاه — فقط وقتی واقعاً در حالِ ساخت است */}
       {building && <>
         <polygon points={faceL} fill={`url(#${uid}S)`} />
         <polygon points={faceR} fill={`url(#${uid}S)`} />
-        <polygon points={roof} fill={`url(#${uid}S)`} />
+        {kind !== 'villa' && <polygon points={roof} fill={`url(#${uid}S)`} />}
       </>}
+    </svg>
+  )
+}
+
+// 🛣 فاز ۱۶۳ — GroundSvg: زمینِ محله به سبکِ سیتی‌بیلدر — قواره‌های بالاآمده با حاشیهٔ پیاده‌رو، خیابان‌های
+// آسفالتِ میانِ قواره‌ها با خط‌کشیِ وسطِ منقطع. یک SVG در صفحهٔ زمین (قبل از چرخشِ ایزو).
+function GroundSvg({ G, n }: { G: number; n: number }) {
+  const uid = React.useId().replace(/[^a-zA-Z0-9]/g, '')
+  const cell = G / n, rw = Math.max(10, cell * 0.24), pad = cell - rw
+  const cells: React.ReactNode[] = []
+  for (let ci = 0; ci < n; ci++) for (let ri = 0; ri < n; ri++) {
+    const x0 = ci * cell + rw / 2, y0 = ri * cell + rw / 2
+    cells.push(<g key={ci + '_' + ri}>
+      <rect x={x0} y={y0} width={pad} height={pad} rx={3.5} fill="#c3c8d2" />
+      <rect x={x0 + 1} y={y0 + 1} width={pad - 2} height={pad - 2} rx={3} fill="none" stroke="rgba(0,0,0,.18)" strokeWidth="1" />
+      <rect x={x0 + 3} y={y0 + 3} width={pad - 6} height={pad - 6} rx={2.5} fill={`url(#${uid}g)`} />
+    </g>)
+  }
+  const dashes: React.ReactNode[] = []
+  for (let m = 1; m < n; m++) {
+    dashes.push(<line key={'v' + m} x1={m * cell} y1={2} x2={m * cell} y2={G - 2} stroke="rgba(255,255,255,.65)" strokeWidth={1.6} strokeDasharray="7 8" />)
+    dashes.push(<line key={'h' + m} x1={2} y1={m * cell} x2={G - 2} y2={m * cell} stroke="rgba(255,255,255,.65)" strokeWidth={1.6} strokeDasharray="7 8" />)
+  }
+  return (
+    <svg width={G} height={G} viewBox={`0 0 ${G} ${G}`} aria-hidden style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id={uid + 'g'} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#58c96e" /><stop offset="1" stopColor="#2f9e46" /></linearGradient>
+        <linearGradient id={uid + 'a'} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#4d5361" /><stop offset="1" stopColor="#383e4b" /></linearGradient>
+      </defs>
+      <rect x={0} y={0} width={G} height={G} rx={8} fill={`url(#${uid}a)`} />
+      {cells}
+      {dashes}
+    </svg>
+  )
+}
+
+// 🚗 فاز ۱۶۳ — خودروی SVG ایزو (شیبِ ۲:۱) — روی خودِ خیابان‌ها حرکت می‌کند؛ dir آینه‌اش می‌کند
+function CarSvg({ dir, tone }: { dir: 1 | -1; tone: string }) {
+  return (
+    <svg width="24" height="16" viewBox="0 0 24 16" aria-hidden style={{ display: 'block', transform: dir === -1 ? 'scaleX(-1)' : undefined }}>
+      <ellipse cx="12" cy="13.4" rx="9" ry="2" fill="rgba(0,0,0,.3)" />
+      <polygon points="2,9 12,4 22,9 12,14" fill={tone} />
+      <polygon points="2,9 12,4 12,7 2,12" fill="rgba(255,255,255,.28)" />
+      <polygon points="6.5,7.6 11,5.3 15.5,7.6 11,9.9" fill="#cfe8ff" stroke="rgba(0,0,0,.25)" strokeWidth=".5" />
+      <circle cx="7" cy="12" r="1.5" fill="#1a1d28" />
+      <circle cx="16.5" cy="12.4" r="1.5" fill="#1a1d28" />
+    </svg>
+  )
+}
+
+// ⛲/🪧 فاز ۱۶۳ — پراپ‌های قطعیِ قواره‌های خالی: فواره و بیلبورد (SVG، صفر ادعای داده)
+function FountainSvg() {
+  return (
+    <svg width="26" height="22" viewBox="0 0 26 22" aria-hidden style={{ display: 'block' }}>
+      <ellipse cx="13" cy="19.5" rx="10" ry="2.2" fill="rgba(0,0,0,.22)" />
+      <ellipse cx="13" cy="17" rx="9" ry="3.4" fill="#b9bec9" />
+      <ellipse cx="13" cy="16.2" rx="7" ry="2.5" fill="#57c2ff" />
+      <rect x="12.2" y="9" width="1.8" height="7" fill="#98a0ad" />
+      <ellipse cx="13" cy="9" rx="3.4" ry="1.3" fill="#b9bec9" />
+      <circle cx="13" cy="6" r="1.3" fill="#cfeeff" />
+      <circle cx="10.8" cy="7.4" r=".8" fill="#cfeeff" opacity=".8" />
+      <circle cx="15.2" cy="7.4" r=".8" fill="#cfeeff" opacity=".8" />
+    </svg>
+  )
+}
+function BillboardSvg({ win }: { win: string }) {
+  return (
+    <svg width="30" height="26" viewBox="0 0 30 26" aria-hidden style={{ display: 'block' }}>
+      <ellipse cx="15" cy="24" rx="8" ry="1.8" fill="rgba(0,0,0,.22)" />
+      <rect x="11.5" y="12" width="1.5" height="12" fill="#5b6270" />
+      <rect x="17" y="12" width="1.5" height="12" fill="#5b6270" />
+      <rect x="3" y="2" width="24" height="11" rx="2" fill="#232a3d" stroke="#5b6270" strokeWidth="1" />
+      <rect x="5" y="4" width="20" height="7" rx="1" fill={win} opacity=".92" style={{ filter: `drop-shadow(0 0 4px ${win})` }} />
+    </svg>
+  )
+}
+
+// 🌆 فاز ۱۶۳ — سیلوئتِ خطِ آسمانِ دوردست (دو ردیفِ محو) — عمقِ صحنه؛ ارتفاع‌ها آرایهٔ ثابتِ قطعی
+function SkylineSvg({ w, h, fill, o }: { w: number; h: number; fill: string; o: number }) {
+  const bars = [12, 20, 9, 16, 24, 11, 18, 8, 15, 22, 10, 17, 13, 21]
+  const bw2 = 200 / bars.length
+  return (
+    <svg width={w} height={h} viewBox="0 0 200 28" preserveAspectRatio="none" aria-hidden style={{ display: 'block', opacity: o }}>
+      {bars.map((b, i) => <g key={i}>
+        <rect x={i * bw2 + 0.8} y={28 - b} width={bw2 - 1.6} height={b} fill={fill} rx="1" />
+        {b > 14 && <rect x={i * bw2 + bw2 / 2 - 0.5} y={28 - b - 3} width="1" height="3" fill={fill} />}
+      </g>)}
     </svg>
   )
 }
@@ -264,11 +435,12 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
 }) {
   const vis = visual || {}
   const phase: DayPhase = vis.dayNight === false ? 'night' : dayPhaseOf(new Date().getHours())
+  // فاز ۱۶۳: آسمانِ چندپرده با باندِ گرمِ افق — به سبکِ سیتی‌بیلدرهای بزرگ
   const sky: Record<DayPhase, string> = {
-    dawn: 'linear-gradient(180deg,#ff9a6b 0%,#5b4dc9 100%)',
-    day: 'linear-gradient(180deg,#57c2ff 0%,#7d6ef0 100%)',
-    dusk: 'linear-gradient(180deg,#ff7e5f 0%,#4a3cb0 100%)',
-    night: 'linear-gradient(180deg,#241a4a 0%,#0f0c29 100%)',
+    dawn: 'linear-gradient(180deg,#2e2a63 0%,#b3589e 45%,#ff9a6b 74%,#ffd9a8 100%)',
+    day: 'linear-gradient(180deg,#2f9df0 0%,#66c1f5 48%,#a9e0f9 76%,#ffe9c4 100%)',
+    dusk: 'linear-gradient(180deg,#3a2f77 0%,#8a4ab0 45%,#ff7e5f 78%,#ffc98e 100%)',
+    night: 'linear-gradient(180deg,#151238 0%,#241a4a 52%,#3d2a6d 82%,#4a3560 100%)',
   }
   const skyIcon = phase === 'day' ? '☀️' : phase === 'dawn' ? '🌅' : phase === 'dusk' ? '🌇' : '🌙'
   const fx = vis.weatherFx === false ? null : weatherFxOf(wx?.icon)
@@ -277,13 +449,15 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
   // ارزشِ روزِ واقعی؛ بی‌داده = ۰ → برجِ یک‌طبقه بدونِ برچسب (هیچ عددِ ساختگی/NaN روی صحنه نمی‌آید)
   const vals = assets.map((a: any) => Number(a.current ?? a.buyPrice) || 0)
   const max = Math.max(1, ...vals)
-  // فاز ۱۶۱ (خوانایی): برچسبِ ارزش فقط برای ۳ برجِ باارزش‌ترِ همین پرتفوی همیشه روشن است؛ بقیه با hover/لمس
-  const labelIdx = new Set(vals.map((v, i) => [v, i] as const).sort((p, q) => q[0] - p[0]).slice(0, 3).map(p => p[1]))
-  // چیدمان با ۴ خانهٔ اضافه برای سبزینهٔ تزئینی — خانهٔ هر دارایی همچنان قطعی و پایدار است
+  // فاز ۱۶۳ (شلوغی‌زدایی): برچسبِ ارزش فقط برای ۲ داراییِ باارزش‌تر همیشه روشن است؛ بقیه با hover/لمس
+  const labelIdx = new Set(vals.map((v, i) => [v, i] as const).sort((p, q) => q[0] - p[0]).slice(0, 2).map(p => p[1]))
+  // چیدمان با ۴ خانهٔ اضافه برای پراپ‌های تزئینی — خانهٔ هر دارایی همچنان قطعی و پایدار است
   const { gridN, spots } = cityLayoutOf(assets.length + 4)
-  const tile = Math.max(42, Math.min(76, Math.floor(430 / gridN)))   // قوارهٔ شبکه — با رشدِ شهر خودکار جمع‌تر می‌شود
+  // فاز ۱۶۳: قوارهٔ بزرگ‌تر — هر خانه = قواره + خیابانِ میانی؛ محله واقعی می‌شود
+  const tile = Math.max(48, Math.min(88, Math.floor(470 / gridN)))
   const c = Math.floor(gridN / 2)
   const groundW = Math.round(gridN * tile * 0.72)                    // ضلعِ مربعِ زمین — بعد از چرخشِ ایزو ≈ الماسِ gridN×tile
+  const gHalfH = Math.round(gridN * tile * 0.255)                    // نیم‌ارتفاعِ تصویرشدهٔ الماس — برای افق/اسکای‌لاین
   const W = 560, HB = 470, cx = 280, cy = 245                        // جعبهٔ صحنه وسطِ صفحه — با کلاسِ empIsoScene مقیاس می‌شود
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: sky[phase], overflow: 'hidden' }}>
@@ -302,20 +476,32 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
       {!clouds && [['12%', '10%', 240, 70], ['62%', '20%', 300, 85]].map(([l, t, w2, h2], i) => (
         <div key={'b' + i} aria-hidden className="empCloud" style={{ position: 'absolute', left: l as string, top: t as string, width: w2 as number, height: h2 as number, borderRadius: '50%', background: phase === 'night' ? 'rgba(190,200,255,.05)' : 'rgba(255,255,255,.12)', filter: 'blur(18px)', animationDelay: `${i * 5}s`, pointerEvents: 'none' }} />
       ))}
+      {/* فاز ۱۶۳ — باندِ گرمِ افق: نورِ ملایم پشتِ کلِ شهر */}
+      <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, top: '38%', height: 150, background: 'linear-gradient(180deg, transparent, rgba(255,196,130,.22) 50%, transparent)', pointerEvents: 'none' }} />
       {/* صحنهٔ ایزومتریک — جعبهٔ ثابت وسطِ صفحه؛ در موبایل با کلاسِ empIsoScene کوچک می‌شود */}
       <div style={{ position: 'absolute', left: '50%', top: '55%', width: W, height: HB, marginLeft: -W / 2, marginTop: -HB / 2 }}>
       <div className="empIsoScene" style={{ position: 'absolute', inset: 0, perspective: 900 }}>
-        {/* هالهٔ گرم و پهنِ افق پشتِ شهر (فاز ۱۶۱: پهن‌تر و پررنگ‌تر) */}
-        <div style={{ position: 'absolute', left: cx, top: cy - 16, width: 640, height: 320, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(255,222,140,.34), rgba(255,190,120,.12) 55%, transparent 75%)', pointerEvents: 'none' }} />
-        {/* زمینِ الماسیِ سبز — فاز ۱۶۱: شطرنجیِ دوپردهٔ ملایم + نورِ داخلی از مرکز + همان لبهٔ تیره */}
-        <div style={{ position: 'absolute', left: cx, top: cy, width: groundW, height: groundW, transform: 'translate(-50%,-50%) rotateX(60deg) rotateZ(45deg)', borderRadius: 8, background: `radial-gradient(closest-side at 50% 50%, rgba(255,255,255,.18), transparent 72%), repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 ${Math.round(groundW / gridN)}px, transparent ${Math.round(groundW / gridN)}px ${Math.round(groundW / gridN) * 2}px), repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 ${Math.round(groundW / gridN)}px, transparent ${Math.round(groundW / gridN)}px ${Math.round(groundW / gridN) * 2}px), linear-gradient(135deg,#4fd06a,#2f9e46)`, boxShadow: '0 0 0 3px rgba(18,74,32,.6), 0 20px 34px rgba(0,0,0,.45), inset 0 0 26px rgba(255,255,255,.12)' }} />
-        {/* سبزینهٔ تزئینیِ قطعی روی خانه‌های خالیِ مارپیچ — صرفاً دکورِ زمین */}
+        {/* هالهٔ گرم و پهنِ افق پشتِ شهر */}
+        <div style={{ position: 'absolute', left: cx, top: cy - 16, width: 660, height: 330, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(255,222,140,.34), rgba(255,190,120,.12) 55%, transparent 75%)', pointerEvents: 'none' }} />
+        {/* فاز ۱۶۳ — عمق: تپه‌های نرم + دو ردیف سیلوئتِ شهرِ دوردست پشتِ محله */}
+        <div aria-hidden style={{ position: 'absolute', left: cx - 250, top: cy - gHalfH - 34, width: 220, height: 64, borderRadius: '50%', background: 'linear-gradient(180deg,#3f7d63,#2c5a49)', filter: 'blur(5px)', opacity: .55, zIndex: 0 }} />
+        <div aria-hidden style={{ position: 'absolute', left: cx + 60, top: cy - gHalfH - 28, width: 240, height: 58, borderRadius: '50%', background: 'linear-gradient(180deg,#3a7159,#284f40)', filter: 'blur(5px)', opacity: .5, zIndex: 0 }} />
+        <div aria-hidden style={{ position: 'absolute', left: cx - 300, top: cy - gHalfH - 52, width: 600, zIndex: 0, filter: 'blur(1.2px)' }}><SkylineSvg w={600} h={26} fill="#7383ad" o={.34} /></div>
+        <div aria-hidden style={{ position: 'absolute', left: cx - 330, top: cy - gHalfH - 34, width: 660, zIndex: 0, filter: 'blur(.4px)' }}><SkylineSvg w={660} h={30} fill="#5a6790" o={.5} /></div>
+        {/* فاز ۱۶۳ — زمینِ محله: قواره‌ها + خیابان‌های آسفالت با خط‌کشیِ منقطع (SVG روی صفحهٔ چرخیدهٔ ایزو) */}
+        <div style={{ position: 'absolute', left: cx, top: cy, width: groundW, height: groundW, transform: 'translate(-50%,-50%) rotateX(60deg) rotateZ(45deg)', borderRadius: 10, overflow: 'hidden', boxShadow: '0 0 0 3px rgba(24,28,40,.6), 0 22px 36px rgba(0,0,0,.5)', zIndex: 2 }}>
+          <GroundSvg G={groundW} n={gridN} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(closest-side at 50% 50%, rgba(255,255,255,.14), transparent 70%)', pointerEvents: 'none' }} />
+        </div>
+        {/* پراپ‌های قطعیِ قواره‌های خالی: فواره، بیلبورد، درخت — صرفاً دکور، هیچ ادعای داده‌ای */}
         {spots.slice(assets.length, assets.length + 4).map((s2, k) => {
           const dx = (s2.col - s2.row) * tile / 2, dy = ((s2.col + s2.row) - 2 * c) * tile / 4
-          const sc = k % 3 === 2 ? 0.8 : 1
-          return <span key={'t' + k} aria-hidden style={{ position: 'absolute', left: cx + dx - 9 * sc, top: cy + dy - 19 * sc, zIndex: 9 + s2.col + s2.row, pointerEvents: 'none' }}><TreeSvg s={sc} big={k % 2 === 0} /></span>
+          const sc = k % 3 === 2 ? 0.85 : 1
+          return <span key={'t' + k} aria-hidden style={{ position: 'absolute', left: cx + dx - 13 * sc, top: cy + dy - 20 * sc, zIndex: 9 + s2.col + s2.row, pointerEvents: 'none' }}>
+            {k === 0 ? <FountainSvg /> : k === 1 ? <BillboardSvg win="#ffe9a3" /> : <TreeSvg s={sc} big={k % 2 === 0} />}
+          </span>
         })}
-        {/* برج‌ها — هر برج یک داراییِ واقعی؛ جای هر برج قطعی از cityLayoutOf، ارتفاع از towerFloorsOf؛ لمس = برگهٔ همان دارایی */}
+        {/* ساختمان‌ها — هر یک داراییِ واقعی؛ گونهٔ بصری از نوعِ واقعیِ ملک، ارتفاع از towerFloorsOf؛ لمس = برگهٔ همان دارایی */}
         {assets.map((a: any, i: number) => {
           const spot = spots[i]
           if (!spot) return null
@@ -323,25 +509,32 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
           const floors = towerFloorsOf(vals[i], max)
           const building = a.construction && !a.construction.done
           const crown = vals[i] === max && assets.length > 1 && !building
-          const H = floors * 22
-          const bw = Math.round(tile * 0.78)
+          const seed = seedOf(a.id)
+          const bkind = bkindOf(a)
+          // فاز ۱۶۳: تنوعِ گونه — مغازه پهن و کوتاه‌قد، ویلا جمع‌وجور، آپارتمان با پهنای متغیرِ قطعی، اداری برجِ شیشه‌ای
+          const fh = bkind === 'villa' || bkind === 'shop' ? 18 : 22
+          const bw = bkind === 'shop' ? Math.round(tile * 0.92) : bkind === 'villa' ? Math.round(tile * 0.7) : Math.round(tile * (0.72 + ((seed >> 4) % 3) * 0.05))
+          const H = floors * fh
           const x = (spot.col - spot.row) * tile / 2
           const y = ((spot.col + spot.row) - 2 * c) * tile / 4
           const bub = bubbleOf?.(a) || null
+          // فاز ۱۶۳ (شلوغی‌زدایی): حداکثر «یک» نشانگرِ شناور بر فرازِ هر ساختمان — اولویت: حباب > تاج > برچسب
+          const showCrown = crown && !bub
+          const labelOn = !bub && !showCrown && labelIdx.has(i) && vals[i] > 0
           return (
             <div key={a.id} className="empTower" onClick={onTower ? () => onTower(a) : undefined}
               title={`${a.nickname ? `«${a.nickname}» — ` : ''}${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${building ? ' · در حال ساخت' : ''}${crown ? ' · 👑 نگینِ امپراتوری' : ''}`}
               style={{ position: 'absolute', left: cx + Math.round(x - bw / 2), top: Math.round(cy + y - H - bw / 4), width: bw, height: H + bw / 2, zIndex: 10 + spot.col + spot.row, opacity: building ? .6 : 1, animationDelay: `${i * 70}ms`, cursor: onTower ? 'pointer' : 'default' }}>
-              {/* سایهٔ بیضیِ نرم زیرِ برج — عمق (فاز ۱۶۱) */}
-              <div aria-hidden style={{ position: 'absolute', left: '50%', top: H + bw / 4 + 3, width: bw * 1.5, height: bw * 0.55, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(0,0,0,.28), transparent 72%)', filter: 'blur(2px)', pointerEvents: 'none' }} />
-              {/* برچسبِ ارزش = چیپِ تیرهٔ خوانا روی هر آسمانی؛ فقط ۳ برجِ برتر همیشه روشن، بقیه با hover (فاز ۱۶۱) */}
-              {vals[i] > 0 && <span className={'empValTag' + (labelIdx.has(i) ? ' empValOn' : '')} style={{ position: 'absolute', top: -21, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 700, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.72)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, padding: '2px 7px', backdropFilter: 'blur(2px)', zIndex: 4 }}>{building ? '🏗 ' : ''}{faB(vals[i])}</span>}
-              {crown && <span className="empCrownFloat" style={{ position: 'absolute', top: -37, left: '50%', transform: 'translateX(-50%)', fontSize: 16, filter: 'drop-shadow(0 0 6px rgba(255,215,106,.85))', zIndex: 5 }}>👑</span>}
+              {/* سایهٔ ریختهٔ نرم به‌سمتِ پایین-راست (نورِ ثابت از بالا-چپ) */}
+              <div aria-hidden style={{ position: 'absolute', left: '58%', top: H + bw / 4 + 4, width: bw * 1.7, height: bw * 0.55, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(0,0,0,.3), transparent 72%)', filter: 'blur(2.5px)', pointerEvents: 'none' }} />
+              {/* برچسبِ ارزش = چیپِ تیرهٔ خوانا؛ فقط ۲ داراییِ برتر همیشه روشن، بقیه با hover/لمس */}
+              {vals[i] > 0 && <span className={'empValTag' + (labelOn ? ' empValOn' : '')} style={{ position: 'absolute', top: crown ? -34 : -21, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 700, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.72)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, padding: '2px 7px', backdropFilter: 'blur(2px)', zIndex: 4 }}>{building ? '🏗 ' : ''}{faB(vals[i])}</span>}
+              {showCrown && <span className="empCrownFloat" style={{ position: 'absolute', top: -34, left: '50%', transform: 'translateX(-50%)', fontSize: 16, filter: 'drop-shadow(0 0 6px rgba(255,215,106,.85))', zIndex: 5 }}>👑</span>}
               {/* حبابِ اقدامِ شناور — فقط از وضعیتِ واقعیِ همین دارایی (نبود = هیچ حبابی) */}
               {bub && <button title={bub.title} className={bub.bounce ? 'empBounce' : undefined} onClick={ev => { ev.stopPropagation(); bub.onClick() }}
-                style={{ position: 'absolute', top: crown ? -64 : -46, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', border: '1px solid rgba(255,215,106,.7)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 13, fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 14px rgba(255,215,106,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 5 }}>{bub.icon}</button>}
-              {/* بدنهٔ برج — SVG ایزومتریک (فاز ۱۶۲): شبکهٔ پنجرهٔ واقعی + نورپردازی + جزئیاتِ بام؛ پالت از نمای واقعی */}
-              <TowerSvg w={bw} floors={floors} pal={pal} seed={seedOf(a.id)} building={building} />
+                style={{ position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', border: '2px solid rgba(90,60,10,.55)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 13, fontWeight: 900, cursor: 'pointer', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 5 }}>{bub.icon}</button>}
+              {/* بدنهٔ ساختمان — هنرِ SVG (فاز ۱۶۳): گونه از نوعِ واقعیِ ملک، پالت از نمای واقعی، نگین = LANDMARK */}
+              <BuildingSvg w={bw} floors={floors} fh={fh} pal={pal} seed={seed} building={building} kind={bkind} landmark={crown} />
               {building && <span aria-hidden style={{ position: 'absolute', top: -7, left: '60%', fontSize: 13, filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))', pointerEvents: 'none' }}>🏗</span>}
             </div>
           )
@@ -352,12 +545,23 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf }: {
             با اولین دارایی، برجِ تو در خطِ آسمان بالا می‌رود و پینش روی نقشهٔ واقعیِ شهر می‌نشیند.
           </div>
         )}
-        {/* زندگیِ خیابان: خودروها کنارِ لبهٔ پایینیِ الماس — شمارشان از دارایی‌های واقعی */}
-        {cars > 0 && <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, top: cy + Math.round(gridN * tile * 0.26) - 4, height: 18, overflow: 'hidden', pointerEvents: 'none', zIndex: 25 }}>
-          {Array.from({ length: cars }, (_, i) => (
-            <span key={i} className="empCar" style={{ position: 'absolute', bottom: 0, fontSize: 11, animationDuration: `${9 + i * 2.6}s`, animationDelay: `${i * 1.7}s` }}>{['🚗', '🚕', '🚙', '🚌', '🛵'][i % 5]}</span>
-          ))}
-        </div>}
+        {/* زندگیِ خیابان (فاز ۱۶۳): خودروهای SVG «روی خودِ خیابان‌ها» در دو محورِ ایزو — شمارشان از دارایی‌های واقعی */}
+        {cars > 0 && Array.from({ length: cars }, (_, i) => {
+          const axis = i % 2
+          const lane = 1 + ((i >> 1) % Math.max(1, gridN - 1))
+          const u0 = lane - 0.5 - c
+          const R = gridN / 2 + 0.35
+          const bx = axis === 0 ? cx + u0 * tile / 2 : cx - u0 * tile / 2
+          const by = cy + u0 * tile / 4
+          const cvars = (axis === 0
+            ? { '--cfx': `${Math.round(R * tile / 2)}px`, '--cfy': `${-Math.round(R * tile / 4)}px`, '--ctx': `${-Math.round(R * tile / 2)}px`, '--cty': `${Math.round(R * tile / 4)}px` }
+            : { '--cfx': `${-Math.round(R * tile / 2)}px`, '--cfy': `${-Math.round(R * tile / 4)}px`, '--ctx': `${Math.round(R * tile / 2)}px`, '--cty': `${Math.round(R * tile / 4)}px` }) as React.CSSProperties
+          return (
+            <span key={'car' + i} aria-hidden className="empCarIso" style={{ position: 'absolute', left: bx - 12, top: by - 10, zIndex: 8, pointerEvents: 'none', animationDuration: `${8 + i * 2.2}s`, animationDelay: `${i * 1.3}s`, ...cvars }}>
+              <CarSvg dir={axis === 0 ? -1 : 1} tone={['#e5533d', '#3d7ee5', '#e5b23d', '#58c26a', '#c4c9d4'][i % 5]} />
+            </span>
+          )
+        })}
       </div>
       </div>
       {/* فاز ۱۶۱ — وینیتِ ملایمِ لبه‌ها: روکش‌ها روی هر آسمانی خوانا می‌مانند */}
@@ -828,9 +1032,9 @@ export default function EmpirePage() {
 
   // 🎨 تیترِ سِریفِ هر تب (پروتوتایپِ کامل — دسته‌بندیِ روشنِ پنج بخش)
   const tabHead = (icon: string, t: string, d: string) => (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '2px 2px -4px' }}>
-      <span style={{ fontSize: 20 }}>{icon}</span>
-      <span style={{ fontFamily: DISPLAY, fontSize: 26, color: '#f4e7bd', fontWeight: 700, lineHeight: 1 }}>{t}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 2px -4px' }}>
+      <span style={{ ...iconSq('#ffd76a'), width: 40, height: 40, fontSize: 21, borderRadius: 13 }}>{icon}</span>
+      <span style={{ fontFamily: DISPLAY, fontSize: 26, color: '#f4e7bd', fontWeight: 900, lineHeight: 1 }}>{t}</span>
       <span style={{ fontSize: 11, color: 'var(--muted)' }}>{d}</span>
     </div>
   )
@@ -889,6 +1093,12 @@ export default function EmpirePage() {
         .empCoinFly{animation:empCoinFly 1s ease-in both}
         @keyframes empToastPop{0%{opacity:0;transform:translateX(-50%) translateY(10px) scale(.85)}18%,82%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}100%{opacity:0;transform:translateX(-50%) translateY(-12px) scale(.95)}}
         .empCoinToast{animation:empToastPop 1.3s ease both}
+        @keyframes empCarGo{0%{transform:translate(var(--cfx),var(--cfy))}100%{transform:translate(var(--ctx),var(--cty))}}
+        .empCarIso{animation:empCarGo linear infinite}
+        .empChunky{border:2px solid rgba(90,60,10,.55)!important;box-shadow:0 3px 0 #8a6d1f,0 8px 18px rgba(0,0,0,.35)!important;transition:transform .1s ease,box-shadow .1s ease!important}
+        .empChunky:active{transform:translateY(2px)!important;box-shadow:0 1px 0 #8a6d1f,0 4px 10px rgba(0,0,0,.3)!important}
+        .empChunkyDark{border:2px solid rgba(0,0,0,.5)!important;box-shadow:0 3px 0 rgba(5,3,20,.9),0 8px 18px rgba(0,0,0,.4)!important;transition:transform .1s ease,box-shadow .1s ease!important}
+        .empChunkyDark:active{transform:translateY(2px)!important;box-shadow:0 1px 0 rgba(5,3,20,.9)!important}
         .empTower:hover{transform:translateY(-4px);filter:brightness(1.15)}
         .empCrownFloat{animation:empCrownFloat 2.6s ease-in-out infinite}
         .empTabActive{animation:empTabPop .3s ease both}
@@ -1210,8 +1420,8 @@ export default function EmpirePage() {
       return (
         <div style={{ position: 'fixed', right: 10, top: '36%', zIndex: 45, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {rail.map(([ic, lbl, n, key]) => (
-            <button key={key} title={lbl} aria-label={lbl} onClick={() => setCitySheet(key)}
-              style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1px solid rgba(255,255,255,.16)', background: 'rgba(23,16,58,.78)', backdropFilter: 'blur(6px)', fontSize: 20, cursor: 'pointer', boxShadow: '0 8px 22px rgba(0,0,0,.45)', fontFamily: 'inherit', padding: 0 }}>
+            <button key={key} title={lbl} aria-label={lbl} onClick={() => setCitySheet(key)} className="empChunkyDark"
+              style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(180deg, rgba(48,38,96,.92), rgba(20,14,48,.92))', backdropFilter: 'blur(6px)', fontSize: 20, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
               {ic}
               {n > 0 && <span style={{ position: 'absolute', top: -4, left: -4, minWidth: 17, height: 17, borderRadius: 9, background: 'linear-gradient(135deg,#ff5f4d,#e02f2f)', color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', boxShadow: '0 2px 8px rgba(224,47,47,.6)' }}>{fa(n)}</span>}
             </button>
@@ -1809,40 +2019,46 @@ export default function EmpirePage() {
     {gtab === 'world' && <>
     {tabHead('🌍', 'دنیا', 'کتابِ تاریخ، شایعات، شهرها، شرکت‌ها و روزنامه — همه از رخدادهای واقعی')}
     {/* 🗞 دنیای زنده (فاز ۶۳ — سند ۳۲ فصل ۲۱): سالِ دنیا + کتابِ تاریخ + شایعاتِ منصفانه — همه از رخدادِ واقعی */}
-    {wd?.ok && <div style={card}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <b style={{ fontSize: 14 }}>🗞 دنیای زنده</b>
-        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 10, border: '1px solid var(--goldDim)', color: 'var(--gold)' }}>سالِ {fa(wd.year.year)} — روزِ {fa(wd.year.dayOfYear)}</span>
+    {wd?.ok && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* فاز ۱۶۳ — دنیای زنده: دیگر دیوارِ متن نیست؛ هر بخش یک پنلِ بازی با سربرگِ خودش */}
+      <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '12px 16px' }}>
+        <span style={{ ...iconSq('#7d6ef0'), width: 38, height: 38, fontSize: 19, borderRadius: 12 }}>🗞</span>
+        <b style={{ fontSize: 15, fontWeight: 900 }}>دنیای زنده</b>
+        <span style={{ ...tagChip('#ffd76a'), fontSize: 11 }}>سالِ {fa(wd.year.year)} — روزِ {fa(wd.year.dayOfYear)}</span>
         <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>دنیا حتی وقتی نیستی هم حرکت می‌کند — این‌ها واقعاً رخ داده‌اند</span>
       </div>
       {/* 🎑 مناسبتِ واقعیِ تقویم (فاز ۷۱ — Real World Integration lite): دنیا با زندگیِ واقعی نفس می‌کشد */}
-      {wd.occasion && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--gold)', background: 'rgba(212,175,55,.07)', border: '1px solid var(--goldDim)', borderRadius: 10, padding: '7px 12px' }}>{wd.occasion.icon} {wd.occasion.text}</div>}
+      {wd.occasion && <div style={{ fontSize: 12, color: 'var(--gold)', background: 'rgba(212,175,55,.07)', border: '1px solid var(--goldDim)', borderRadius: 12, padding: '8px 12px' }}>{wd.occasion.icon} {wd.occasion.text}</div>}
 
-      {/* 🏛 مصوبهٔ شهر (فاز ۷۰ — دولتِ زنده): این هفته + اعلامِ پیشاپیشِ هفتهٔ بعد (Future Engine — بدونِ غافلگیریِ ناعادلانه) */}
-      {wd.gov && <div style={{ marginTop: 8, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '8px 12px', fontSize: 11.5, lineHeight: 2 }}>
-        <div>🏛 <b>مصوبهٔ این هفته:</b> {wd.gov.now} <span style={{ color: 'var(--faint)', fontSize: 10 }}>· مالیاتِ مؤثرِ انتقال: {fa(wd.gov.taxNow)}٪</span></div>
-        <div style={{ color: 'var(--muted)' }}>📣 <b>اعلامِ پیشاپیش — هفتهٔ بعد:</b> {wd.gov.next} <span style={{ color: 'var(--faint)', fontSize: 10 }}>· الان برنامه‌ریزی کن</span></div>
-        {/* فاز ۷۸: مصوبه فقط خبر نیست — همان‌جا اقدام کن */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-          <button style={{ ...btn, padding: '4px 12px', fontSize: 11 }} onClick={() => { setGtab('city'); setCityV('deals'); try { window.scrollTo({ top: 0 }) } catch {} }}>🔥 با این نرخ برو سراغِ فرصت‌های امروز</button>
-          <button style={{ ...btnGhost, padding: '4px 12px', fontSize: 11 }} onClick={() => { setGtab('market'); setMktV('players'); try { window.scrollTo({ top: 0 }) } catch {} }}>🏪 بازارِ امپراتورها</button>
+      {/* 🏛 مصوبهٔ شهر (فاز ۷۰) — فاز ۱۶۳: بنرِ فرمانِ کاغذی-طلایی با CTA چانکی؛ همان متن و هندلرها */}
+      {wd.gov && <div style={{ background: 'linear-gradient(180deg, rgba(255,215,106,.15), rgba(212,175,55,.05))', border: '2px solid rgba(212,175,55,.45)', borderRadius: 18, padding: '12px 14px', fontSize: 12, lineHeight: 2.1, boxShadow: '0 3px 0 rgba(90,60,10,.35), inset 0 1px 0 rgba(255,255,255,.12)', display: 'flex', gap: 12 }}>
+        <span style={{ ...iconSq('#ffd76a'), width: 46, height: 46, fontSize: 23 }}>🏛</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div><b style={{ fontWeight: 900 }}>مصوبهٔ این هفته:</b> {wd.gov.now} <span style={tagChip('#ffd76a')}>مالیاتِ مؤثرِ انتقال: {fa(wd.gov.taxNow)}٪</span></div>
+          <div style={{ color: 'var(--muted)' }}>📣 <b>اعلامِ پیشاپیش — هفتهٔ بعد:</b> {wd.gov.next} <span style={{ color: 'var(--faint)', fontSize: 10 }}>· الان برنامه‌ریزی کن</span></div>
+          {/* فاز ۷۸: مصوبه فقط خبر نیست — همان‌جا اقدام کن */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+            <button className="empChunky" style={{ ...btn, padding: '6px 14px', fontSize: 11.5 }} onClick={() => { setGtab('city'); setCityV('deals'); try { window.scrollTo({ top: 0 }) } catch {} }}>🔥 با این نرخ برو سراغِ فرصت‌های امروز</button>
+            <button style={{ ...btnGhost, padding: '6px 14px', fontSize: 11.5 }} onClick={() => { setGtab('market'); setMktV('players'); try { window.scrollTo({ top: 0 }) } catch {} }}>🏪 بازارِ امپراتورها</button>
+          </div>
         </div>
       </div>}
       {(wd.history || []).length > 0 ? <>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 10 }}>
+        {qSection('🗞', 'روزنامهٔ شهر — رخدادهای واقعی', '#57c2ff')}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {wd.history.slice(0, 6).map((h: any, i: number) => {
             {/* فاز ۶۷ (World Feed تعاملی): خبرِ دنبال‌شده هایلایت + تبریک و دنبال‌کردن از همان‌جا */}
             const followed = h.no && (wd.following || []).includes(h.no)
             const isPlayer = h.no && h.no < 9000 && h.no !== wd.myNo
             return (
-              <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, alignItems: 'center', flexWrap: 'wrap', padding: followed ? '4px 8px' : '0', borderRadius: 8, background: followed ? 'rgba(212,175,55,.07)' : 'transparent', border: followed ? '1px solid var(--goldDim)' : 'none' }}>
-                <span>{h.icon}</span>
-                <span style={{ flex: 1, minWidth: 140 }}>{followed && <b style={{ color: 'var(--gold)', fontSize: 9.5 }}>⭐ دنبال‌شده · </b>}{h.title}{h.detail && <span style={{ color: 'var(--faint)', fontSize: 10 }}> — {h.detail}</span>}</span>
+              <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, alignItems: 'center', padding: '6px 10px', borderRadius: 12, background: followed ? 'rgba(212,175,55,.08)' : 'rgba(255,255,255,.04)', border: followed ? '1px solid rgba(212,175,55,.5)' : '1px solid rgba(255,255,255,.07)' }}>
+                <span style={{ width: 26, height: 26, borderRadius: 8, background: 'rgba(87,194,255,.12)', border: '1px solid rgba(87,194,255,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flex: 'none' }}>{h.icon}</span>
+                <span title={h.detail || ''} style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{followed && <b style={{ color: 'var(--gold)', fontSize: 9.5 }}>⭐ </b>}{h.title}</span>
                 {isPlayer && <button title={(wd.kudosGiven || []).includes(h.no) ? 'قبلاً تبریک گفته‌ای' : 'تبریک به این امپراتوری'} disabled={busy || (wd.kudosGiven || []).includes(h.no)} onClick={async () => { const d = await api({ action: 'kudos', no: h.no }); if (d?.ok) { setWd({ ...wd, kudosGiven: [...(wd.kudosGiven || []), h.no] }); celebrate() } }}
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, opacity: (wd.kudosGiven || []).includes(h.no) ? 0.4 : 1 }}>👏</button>}
                 {h.no && h.no !== wd.myNo && <button title={followed ? 'لغوِ دنبال‌کردن' : 'دنبال‌کردن — خبرهایش در فید هایلایت می‌شود'} disabled={busy} onClick={async () => { const d = await api({ action: 'follow', no: h.no, on: !followed }); if (d?.ok) setWd({ ...wd, following: d.following }) }}
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: followed ? 'var(--gold)' : 'var(--faint)' }}>{followed ? '★' : '☆'}</button>}
-                <span style={{ color: 'var(--faint)', fontSize: 9.5, whiteSpace: 'nowrap' }}>{agoFa(h.day, wd.day)}</span>
+                <span style={tagChip('#9aa0b8')}>{agoFa(h.day, wd.day)}</span>
               </div>
             )
           })}
@@ -1859,14 +2075,21 @@ export default function EmpirePage() {
         </details>}
       </> : <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>کتابِ تاریخِ این دنیا هنوز خالی است — اولین شگفتی، اولین برج، اولین چکش… تاریخ را امپراتورهای واقعی می‌نویسند.</div>}
       {(wd.rumors?.current || []).length > 0 && <>
-        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>👂 شایعاتِ این هفته <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— شایعه است، نه خبر؛ بعد از ۷ روز با قیمتِ واقعیِ بازار ارزیابی می‌شود</span></div>
+        {qSection('👂', 'شایعه‌های این هفته — شایعه است، نه خبر', '#e0955f')}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {wd.rumors.current.map((r: any) => (
-            <div key={r.id} style={{ background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 10, padding: '8px 11px', fontSize: 11.5 }}>
-              <div>👂 {r.text}</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>
-                <span>منبع: {r.sourceFa} · اعتبارِ ادعایی {fa(r.credPct)}٪{r.verdict ? (r.verdict === 'true' ? ' · ✓ درست از آب درآمد' : ' · ✗ غلط بود') : ' · هنوز ارزیابی نشده'}</span>
-                {r.hood && <button onClick={() => openCityMkt({ hood: r.hood })} style={{ color: 'var(--gold)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit', fontSize: 10, padding: 0 }}>🔎 خودت قضاوت کن — بازارِ {r.hood} همین‌جا</button>}
+            <div key={r.id} style={{ background: 'rgba(255,255,255,.04)', border: '1px dashed rgba(224,149,95,.45)', borderRadius: 14, padding: '9px 12px', fontSize: 11.5, display: 'flex', gap: 10 }}>
+              <span style={{ ...iconSq('#e0955f'), width: 30, height: 30, fontSize: 15, borderRadius: 9 }}>👂</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ lineHeight: 1.9 }}>{r.text}</div>
+                {/* فاز ۱۶۳ — سنجهٔ اعتبارِ منبع: همان عددِ واقعیِ credPct، حالا به‌صورتِ نوار */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                  <span style={{ fontSize: 9.5, color: 'var(--muted)', whiteSpace: 'nowrap' }}>منبع: {r.sourceFa}</span>
+                  <div style={{ flex: 1, height: 6, minWidth: 40, background: 'rgba(255,255,255,.08)', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${Math.min(100, Number(r.credPct) || 0)}%`, height: '100%', background: 'linear-gradient(90deg,#e0955f,#ffd76a)', borderRadius: 3 }} /></div>
+                  <b style={{ fontSize: 10, color: '#ffd76a', whiteSpace: 'nowrap' }}>{fa(r.credPct)}٪</b>
+                  {r.verdict && <span style={tagChip(r.verdict === 'true' ? '#5fd98a' : '#e08a7e')}>{r.verdict === 'true' ? '✓ درست بود' : '✗ غلط بود'}</span>}
+                </div>
+                {r.hood && <button onClick={() => openCityMkt({ hood: r.hood })} style={{ color: 'var(--gold)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 800, fontFamily: 'inherit', fontSize: 10, padding: 0, marginTop: 4 }}>🔎 خودت قضاوت کن — بازارِ {r.hood} همین‌جا</button>}
               </div>
             </div>
           ))}
@@ -1879,12 +2102,17 @@ export default function EmpirePage() {
       </>}
       {/* 🏙 شهرهای دنیا (فاز ۶۸ — چندشهری v1): آمارِ زندهٔ هر شهر از آگهی‌های واقعی — شهرِ جدید با داده‌اش خودکار ظاهر می‌شود */}
       {(wd.cities || []).length > 0 && <>
-        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏙 شهرهای دنیا <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— کلیک روی هر شهر = بازارش همین‌جا با مذاکره/تحلیل/خرید · داراییِ واقعی در ۲ شهر = مجموعهٔ «فاتحِ شهرها»</span></div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {qSection('🏙', 'شهرهای دنیا — لمس = بازارِ واقعیِ همان شهر', '#7d6ef0')}
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
           {wd.cities.map((c: any) => (
             <button key={c.city} onClick={() => openCityMkt({ city: c.city })} title={`بازارِ ${c.city} همین‌جا باز می‌شود — با مذاکره/تحلیل/خرید`}
-              style={{ fontSize: 10.5, border: `1px solid ${cityMkt?.title === c.city ? 'var(--gold)' : 'var(--line2)'}`, borderRadius: 12, padding: '5px 12px', color: 'var(--muted)', background: cityMkt?.title === c.city ? 'rgba(212,175,55,.08)' : 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
-              <b style={{ color: 'var(--text)' }}>{c.city}</b> · {fa(c.listings)} آگهیِ فعال · میانهٔ قیمت {faB(c.medianPrice)} <span style={{ color: 'var(--gold)' }}>▾</span>
+              style={{ flex: 'none', minWidth: 122, textAlign: 'center', border: `2px solid ${cityMkt?.title === c.city ? 'rgba(212,175,55,.6)' : 'rgba(255,255,255,.1)'}`, borderRadius: 16, padding: '10px 12px', background: cityMkt?.title === c.city ? 'rgba(212,175,55,.1)' : 'rgba(255,255,255,.04)', cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 0 rgba(5,3,20,.4)' }}>
+              <div style={{ fontSize: 20 }}>🏙</div>
+              <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--text)', margin: '3px 0 6px' }}>{c.city}</div>
+              <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <span style={tagChip('#57c2ff')}>{fa(c.listings)} آگهی</span>
+                <span style={tagChip('#ffd76a')}>میانه {faB(c.medianPrice)}</span>
+              </div>
             </button>
           ))}
         </div>
@@ -1942,9 +2170,13 @@ export default function EmpirePage() {
         <span style={{ color: 'var(--gold)', fontWeight: 800 }}>{fa(wd.weather.tempC)}°</span>
         <span style={{ color: 'var(--faint)', fontSize: 9.5 }}>{wd.weather.city} — هوای واقعی</span>
       </div>}
-      {(wd.media || []).length > 0 && <div style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px', marginTop: 12 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>📻 رسانهٔ شهر <span style={{ fontSize: 9.5, color: 'var(--faint)', fontWeight: 400 }}>— از معاملاتِ شرکت‌ها و روندِ واقعیِ محله‌ها</span></div>
-        {wd.media.map((m: any, i: number) => <div key={i} style={{ fontSize: 11, color: 'var(--muted)', padding: '3px 0' }}>{m.icon} {m.text}</div>)}
+      {(wd.media || []).length > 0 && <div style={{ ...card, padding: '12px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ ...iconSq('#e0955f'), width: 30, height: 30, fontSize: 15, borderRadius: 9 }}>📻</span>
+          <b style={{ fontSize: 12.5, fontWeight: 900 }}>رسانهٔ شهر</b>
+          <span style={{ fontSize: 9.5, color: 'var(--faint)' }}>از معاملاتِ شرکت‌ها و روندِ واقعیِ محله‌ها</span>
+        </div>
+        {wd.media.map((m: any, i: number) => <div key={i} style={{ fontSize: 11, color: 'var(--muted)', padding: '4px 0', lineHeight: 1.9 }}>{m.icon} {m.text}</div>)}
       </div>}
 
       {/* فاز ۱۰۱: جنگِ شرکتیِ من — وضعیتِ زنده یا نتیجهٔ آخرین رقابت */}
@@ -1957,7 +2189,7 @@ export default function EmpirePage() {
 
       {/* فاز ۱۰۱: شهروندانِ شهر — برآوردِ آماری از قیمت/عرضهٔ «واقعیِ» محله‌ها (هیچ آدمِ ساختگی‌ای معامله نمی‌کند) */}
       {(wd.citizens || []).length > 0 && <>
-        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>👥 شهروندانِ شهر <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— برآوردِ آماری از قیمت‌های واقعیِ محله‌ها؛ کجا تقاضا هست</span></div>
+        {qSection('👥', 'شهروندانِ شهر — تقاضای واقعیِ محله‌ها', '#5fd98a')}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 8 }}>
           {wd.citizens.map((seg: any) => (
             <div key={seg.id} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '9px 12px' }}>
@@ -1973,7 +2205,7 @@ export default function EmpirePage() {
 
       {/* 🏢 شرکت‌های زندهٔ شهر (فاز ۶۵ — NPC Civilization v1): رقبای واقعی‌نما که هر روز روی آگهی‌های واقعی معامله می‌کنند */}
       {(wd.companies || []).length > 0 && <>
-        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏢 شرکت‌های شهر <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— هر روز خودشان معامله می‌کنند؛ اگر ملکی را زودتر بخرند، برای خریدنش باید سراغِ خودشان بروی</span></div>
+        {qSection('🏢', 'شرکت‌های شهر — رقبای زنده', '#57c2ff')}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 8 }}>
           {wd.companies.map((c: any) => (
             <div key={c.id} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px' }}>
@@ -2867,6 +3099,9 @@ export default function EmpirePage() {
       ['bank', '🏦', 'بانک'],
       ['shop', '🪙', 'فروشگاه'],
     ], mktV, setMktV)}
+    {/* فاز ۱۶۳ — سربرگِ بخشِ فعالِ بازار با چیپِ رنگی؛ صرفاً ظاهر */}
+    {qSection(({ capital: '📈', players: '🏪', bank: '🏦', shop: '🪙' } as Record<string, string>)[mktV] || '📊',
+      ({ capital: 'سرمایه و روندهای واقعی', players: 'بازارِ امپراتورهای واقعی', bank: 'بانک و اعتبار', shop: 'فروشگاه' } as Record<string, string>)[mktV] || 'بازار', '#5fd98a')}
 
     {mktV === 'capital' && <>
     {/* 🧭 روندِ محله‌ها (فاز ۳۹ — سند ۲۶ Part 04): از تاریخچهٔ روزانهٔ واقعیِ رصدخانه — تا دو اسنپ‌شات نباشد، هیچ روندی ادعا نمی‌شود. */}
@@ -3913,13 +4148,13 @@ export default function EmpirePage() {
       const chestOk = !!st.chest?.available && !chestReward
       const href = dq.metric === 'market' ? '/market' : '/search'
       const chestBtn = chestOk ? (
-        <button title="صندوقچهٔ امروزت منتظر است — باز کن" className="empPulse" disabled={busy}
+        <button title="صندوقچهٔ امروزت منتظر است — باز کن" className="empPulse empChunky" disabled={busy}
           onClick={async () => { const d = await doChest(); if (d?.reward) fireCityCeleb(d.reward.kind === 'coins' ? Number(d.reward.amount) || 0 : 0) }}
           style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(255,215,106,.6)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', fontSize: 19, cursor: 'pointer', flex: 'none', boxShadow: '0 6px 18px rgba(255,215,106,.4)', padding: 0 }}>🎁</button>
       ) : null
       if (!dq.claimed) return (
         <div style={{ position: 'fixed', bottom: 'calc(76px + env(safe-area-inset-bottom))', left: 0, right: 0, zIndex: 49, display: 'flex', justifyContent: 'center', padding: '0 10px', pointerEvents: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: 560, width: '100%', background: 'rgba(12,10,34,.9)', border: '1px solid rgba(255,215,106,.35)', borderRadius: 20, padding: '12px 14px', boxShadow: '0 14px 40px -8px rgba(0,0,0,.7), 0 0 0 1px rgba(255,215,106,.12)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: 560, width: '100%', background: 'linear-gradient(180deg, rgba(26,20,58,.94), rgba(12,10,34,.94))', border: '2px solid rgba(255,215,106,.4)', borderRadius: 20, padding: '12px 14px', boxShadow: '0 4px 0 rgba(60,42,8,.7), 0 16px 44px -8px rgba(0,0,0,.7)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
             <span style={{ ...iconSq('#ffd76a'), width: 52, height: 52, fontSize: 26 }}>🎯</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 800, color: '#ffd76a' }}>مأموریتِ امروز{(st.streak?.streak || 0) > 0 ? <span style={{ color: 'var(--muted)', fontWeight: 500 }}> · 🔥 روزِ {fa(st.streak.streak)}</span> : null}</div>
@@ -3930,8 +4165,8 @@ export default function EmpirePage() {
                 <span style={rewardChip}>⚡ {fa(dq.rewardXp)}</span>
                 <span style={{ flex: 1 }} />
                 {dq.done
-                  ? <button className="empPulse" disabled={busy} onClick={async () => { const d = await doClaim(dq.claimKey); if (d) fireCityCeleb(Number(dq.rewardCoins) || 0) }} style={{ ...btn, padding: '10px 22px', fontSize: 14, borderRadius: 999 }}>🎁 جایزه‌ات را بگیر</button>
-                  : <Link href={href} style={{ ...btn, textDecoration: 'none', display: 'inline-block', padding: '10px 22px', fontSize: 14, borderRadius: 999 }}>برو انجامش بده ←</Link>}
+                  ? <button className="empPulse empChunky" disabled={busy} onClick={async () => { const d = await doClaim(dq.claimKey); if (d) fireCityCeleb(Number(dq.rewardCoins) || 0) }} style={{ ...btn, padding: '10px 22px', fontSize: 14, borderRadius: 999 }}>🎁 جایزه‌ات را بگیر</button>
+                  : <Link href={href} className="empChunky" style={{ ...btn, textDecoration: 'none', display: 'inline-block', padding: '10px 22px', fontSize: 14, borderRadius: 999 }}>برو انجامش بده ←</Link>}
               </div>
             </div>
             {chestBtn}
@@ -3952,12 +4187,12 @@ export default function EmpirePage() {
     })()}
     <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', justifyContent: 'center', padding: '8px 10px calc(10px + env(safe-area-inset-bottom))', pointerEvents: 'none' }}>
       {/* 🎨 نوارِ تبِ شناورِ tycoon: شیشهٔ تیرهٔ بنفش + تبِ فعال با نشانِ دایره‌ایِ طلایی */}
-      <div style={{ display: 'flex', gap: 4, margin: '0 10px', background: 'rgba(23,16,58,.85)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 22, padding: '6px 8px', boxShadow: '0 14px 44px -8px rgba(0,0,0,.7), 0 0 0 1px rgba(212,175,55,.1)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
+      <div style={{ display: 'flex', gap: 4, margin: '0 10px', background: 'linear-gradient(180deg, rgba(30,23,68,.92), rgba(16,12,42,.92))', border: '2px solid rgba(0,0,0,.45)', borderRadius: 22, padding: '6px 8px', boxShadow: '0 3px 0 rgba(5,3,20,.9), 0 14px 44px -8px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.08)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
         {([['city', '🏙', 'شهر'], ['world', '🌍', 'دنیا'], ['portfolio', '💼', 'پرتفوی'], ['missions', '🎯', 'مأموریت‌ها'], ['market', '📊', 'بازار'], ['ranks', '🏆', 'رتبه‌ها']] as const).map(([k, ic, l]) => (
           <button key={k} onClick={() => { setGtab(k); try { window.scrollTo({ top: 0 }) } catch {} }}
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 48, padding: '4px 7px 6px', borderRadius: 16, border: 'none', cursor: 'pointer', background: gtab === k ? 'linear-gradient(180deg,rgba(255,215,106,.26),rgba(212,175,55,.10))' : 'transparent', color: gtab === k ? '#ffe9a3' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500, boxShadow: gtab === k ? 'inset 0 0 0 1px rgba(212,175,55,.45)' : 'none' }}>
             <span className={gtab === k ? 'empTabActive' : undefined} style={gtab === k
-              ? { fontSize: 16, width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', boxShadow: '0 4px 14px rgba(255,215,106,.45)', transform: 'translateY(-6px)', marginBottom: -6 }
+              ? { fontSize: 16, width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: '2px solid rgba(90,60,10,.55)', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.45)', transform: 'translateY(-6px)', marginBottom: -6 }
               : { fontSize: 17 }}>{ic}</span>{l}
           </button>
         ))}
