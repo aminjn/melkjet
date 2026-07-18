@@ -463,26 +463,44 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
   const max = Math.max(1, ...vals)
   // فاز ۱۶۳ (شلوغی‌زدایی): برچسبِ ارزش فقط برای ۲ داراییِ باارزش‌تر همیشه روشن است؛ بقیه با hover/لمس
   const labelIdx = new Set(vals.map((v, i) => [v, i] as const).sort((p, q) => q[0] - p[0]).slice(0, 2).map(p => p[1]))
-  // چیدمان با ۴ خانهٔ اضافه برای پراپ‌های تزئینی — خانهٔ هر دارایی همچنان قطعی و پایدار است
-  // چیدمان: ۴ خانهٔ دکور + خانه‌های بناهای مدنی (فاز ۱۶۵) — خانهٔ هر دارایی همچنان قطعی و پایدار
-  const { gridN, spots } = cityLayoutOf(assets.length + 4 + (civic?.length || 0))
+  // فاز ۱۶۶ — قابِ پر و تراکم: شبکهٔ حداقل ۷×۷ قواره؛ خانهٔ هر دارایی همچنان قطعی و پایدار (مارپیچ از مرکز).
+  // قواره‌های خالی «محتوای محیطیِ» قطعی می‌گیرند (پایین‌تر) — شهرِ پر، نه شطرنجیِ خالی.
+  const usedN = assets.length + 4 + (civic?.length || 0)
+  const { gridN, spots } = cityLayoutOf(Math.max(37, usedN))     // ≥۸×۸ قواره — spotهای سرریز استفاده نمی‌شوند
   // فاز ۱۶۳: قوارهٔ بزرگ‌تر — هر خانه = قواره + خیابانِ میانی؛ محله واقعی می‌شود
   const tile = Math.max(48, Math.min(88, Math.floor(470 / gridN)))
   const c = Math.floor(gridN / 2)
   const groundW = Math.round(gridN * tile * 0.72)                    // ضلعِ مربعِ زمین — بعد از چرخشِ ایزو ≈ الماسِ gridN×tile
-  // فاز ۱۶۴ب — پارامترهای حالتِ اسپرایت: شبکهٔ جهانی (قواره‌ها زوج، خیابان‌ها فرد) + مقیاسِ رندرِ کاشیِ ۱۳۲px
+  // فاز ۱۶۴ب→۱۶۶ — دنیای اسپرایت: بلوک‌های ۲×۲ قواره + خیابان هر «سه» خط (دورهٔ ۳) — به‌جای شطرنجیِ ۷۵٪ آسفالت؛
+  // «دوربینِ نزدیک»: ساختمانِ ۴طبقه ≈ ۲۴۰px روی دسکتاپ — زمین از لبه‌های صحنه بیرون می‌زند، جزیرهٔ شناور نداریم.
   const sprite = !!man
-  const M = 2 * gridN - 1
-  const kSp = Math.min(0.9, 640 / (M * 132))
-  const yMidSp = M * 33 * kSp                                        // مرکزِ عمودیِ دنیای اسپرایت برای سنترشدن روی صحنه
+  const wOf = (p: number) => p + (p >> 1)                            // قوارهٔ p → خانهٔ دنیا (خیابان‌ها در w≡2 mod 3)
+  const pOf = (w: number) => w - Math.floor((w + 1) / 3)             // خانهٔ دنیای غیرخیابان → شمارهٔ قواره
+  const M = wOf(gridN - 1) + 1
+  const kSp = Math.min(0.78, 9.4 / M)                               // شهرِ خیلی بزرگ → کمی عقب‌تر؛ سقفِ نیم‌ارتفاع ثابت می‌ماند
+  const yMidSp = M * 33 * kSp                                        // مرکزِ عمودیِ دنیای اسپرایت برای سنترشدن روی لنگر
   const gHalfH = sprite ? Math.round(M * 33 * kSp) : Math.round(gridN * tile * 0.255)   // نیم‌ارتفاعِ شهر — برای افق/اسکای‌لاین
-  const W = 560, HB = 470, cx = 280, cy = 245                        // جعبهٔ صحنه وسطِ صفحه — با کلاسِ empIsoScene مقیاس می‌شود
+  const cx = 0, cy = 0                                               // مختصات حولِ لنگرِ صحنه (empIsoAnchor پایینِ صفحه)
+  // فاز ۱۶۶ — محتوای محیطیِ قطعی برای قواره‌های خالی: ~۵۵٪ ساختمانِ کوچکِ کم‌رنگ (صرفاً صحنه‌آرایی، بدونِ برچسب/لمس)،
+  // بقیه پارک/درخت. چیدمان از هَشِ مختصاتِ قواره — قطعی، هیچ ادعای داده‌ای ندارد.
+  const usedPlots = new Set(spots.slice(0, usedN).map(s2 => s2.col + ',' + s2.row))
+  type Amb = { kind: 'bld'; floors: number; bk: BuildingKind } | { kind: 'park' }
+  const ambient = new Map<string, Amb>()
+  if (sprite) for (let pr = 0; pr < gridN; pr++) for (let pc = 0; pc < gridN; pc++) {
+    const key = pc + ',' + pr
+    if (usedPlots.has(key)) continue
+    const h = seedOf('amb:' + key)
+    if (h % 100 < 55) ambient.set(key, { kind: 'bld', floors: 1 + ((h >>> 3) % 2), bk: (['apartment', 'shop', 'villa', 'office'] as BuildingKind[])[h % 4] })
+    else ambient.set(key, { kind: 'park' })
+  }
+  // فاز ۱۶۶ — گرمای زمین: کاشیِ بژِ پک سبز می‌شود (در پک کاشیِ تمام‌سبز وجود ندارد — فیلترِ CSS تیون‌شده)؛ خیابان‌ها دست‌نخورده
+  const GREEN_F = 'sepia(.9) saturate(1.9) hue-rotate(58deg) brightness(.94)'
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: sky[phase], overflow: 'hidden' }}>
       {phase === 'night' && ['8%', '22%', '38%', '57%', '72%', '88%'].map((left, i) => (
         <span key={i} style={{ position: 'absolute', top: `${6 + (i % 3) * 4}%`, left, fontSize: 9, color: '#cfd6ff', animation: `empTwinkle ${2 + i * 0.6}s ease-in-out infinite` }}>✦</span>
       ))}
-      <span style={{ position: 'absolute', top: '15%', left: 26, fontSize: 30, filter: 'drop-shadow(0 0 14px rgba(255,240,180,.6))' }}>{skyIcon}</span>
+      <span style={{ position: 'absolute', top: '5%', left: 26, fontSize: 30, filter: 'drop-shadow(0 0 14px rgba(255,240,180,.6))' }}>{skyIcon}</span>
       {clouds && ['14%', '56%', '78%'].map((l, i) => (
         <span key={'c' + i} className="empCloud" style={{ position: 'absolute', top: `${9 + i * 5}%`, left: l, fontSize: 17, opacity: .8, animationDelay: `${i * 4}s` }}>☁️</span>
       ))}
@@ -494,18 +512,18 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
       {!clouds && [['12%', '10%', 240, 70], ['62%', '20%', 300, 85]].map(([l, t, w2, h2], i) => (
         <div key={'b' + i} aria-hidden className="empCloud" style={{ position: 'absolute', left: l as string, top: t as string, width: w2 as number, height: h2 as number, borderRadius: '50%', background: phase === 'night' ? 'rgba(190,200,255,.05)' : 'rgba(255,255,255,.12)', filter: 'blur(18px)', animationDelay: `${i * 5}s`, pointerEvents: 'none' }} />
       ))}
-      {/* فاز ۱۶۳ — باندِ گرمِ افق: نورِ ملایم پشتِ کلِ شهر */}
-      <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, top: '38%', height: 150, background: 'linear-gradient(180deg, transparent, rgba(255,196,130,.22) 50%, transparent)', pointerEvents: 'none' }} />
-      {/* صحنهٔ ایزومتریک — جعبهٔ ثابت وسطِ صفحه؛ در موبایل با کلاسِ empIsoScene کوچک می‌شود */}
-      <div style={{ position: 'absolute', left: '50%', top: '55%', width: W, height: HB, marginLeft: -W / 2, marginTop: -HB / 2 }}>
-      <div className="empIsoScene" style={{ position: 'absolute', inset: 0, perspective: 900 }}>
+      {/* فاز ۱۶۳→۱۶۶ — باندِ گرمِ افق: بالا رفت چون آسمان حالا فقط نوارِ باریکِ بالای قاب است */}
+      <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, top: '13%', height: 130, background: 'linear-gradient(180deg, transparent, rgba(255,196,130,.22) 50%, transparent)', pointerEvents: 'none' }} />
+      {/* صحنهٔ ایزومتریک — فاز ۱۶۶: لنگرِ ۰×۰ پایینِ قاب؛ دنیای شهر بزرگ‌تر از صحنه است و از لبه‌ها بیرون می‌زند */}
+      <div className="empIsoAnchor" style={{ position: 'absolute', left: '50%', top: '66%', width: 0, height: 0 }}>
+      <div className="empIsoScene" style={{ position: 'absolute', left: 0, top: 0, perspective: 900 }}>
         {/* هالهٔ گرم و پهنِ افق پشتِ شهر */}
-        <div style={{ position: 'absolute', left: cx, top: cy - 16, width: 660, height: 330, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(255,222,140,.34), rgba(255,190,120,.12) 55%, transparent 75%)', pointerEvents: 'none' }} />
-        {/* فاز ۱۶۳ — عمق: تپه‌های نرم + دو ردیف سیلوئتِ شهرِ دوردست پشتِ محله */}
-        <div aria-hidden style={{ position: 'absolute', left: cx - 250, top: cy - gHalfH - 34, width: 220, height: 64, borderRadius: '50%', background: 'linear-gradient(180deg,#3f7d63,#2c5a49)', filter: 'blur(5px)', opacity: .55, zIndex: 0 }} />
-        <div aria-hidden style={{ position: 'absolute', left: cx + 60, top: cy - gHalfH - 28, width: 240, height: 58, borderRadius: '50%', background: 'linear-gradient(180deg,#3a7159,#284f40)', filter: 'blur(5px)', opacity: .5, zIndex: 0 }} />
-        <div aria-hidden style={{ position: 'absolute', left: cx - 300, top: cy - gHalfH - 52, width: 600, zIndex: 0, filter: 'blur(1.2px)' }}><SkylineSvg w={600} h={26} fill="#7383ad" o={.34} /></div>
-        <div aria-hidden style={{ position: 'absolute', left: cx - 330, top: cy - gHalfH - 34, width: 660, zIndex: 0, filter: 'blur(.4px)' }}><SkylineSvg w={660} h={30} fill="#5a6790" o={.5} /></div>
+        <div style={{ position: 'absolute', left: cx, top: cy - 30, width: 980, height: 520, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(255,222,140,.30), rgba(255,190,120,.10) 55%, transparent 75%)', pointerEvents: 'none' }} />
+        {/* فاز ۱۶۳→۱۶۶ — عمق: تپه‌ها و سیلوئتِ شهرِ دوردست پهن‌تر شدند و درست پشتِ بام‌ها نشستند */}
+        <div aria-hidden style={{ position: 'absolute', left: cx - 560, top: cy - gHalfH - 44, width: 500, height: 92, borderRadius: '50%', background: 'linear-gradient(180deg,#3f7d63,#2c5a49)', filter: 'blur(6px)', opacity: .55, zIndex: 0 }} />
+        <div aria-hidden style={{ position: 'absolute', left: cx + 120, top: cy - gHalfH - 36, width: 540, height: 84, borderRadius: '50%', background: 'linear-gradient(180deg,#3a7159,#284f40)', filter: 'blur(6px)', opacity: .5, zIndex: 0 }} />
+        <div aria-hidden style={{ position: 'absolute', left: cx - 720, top: cy - gHalfH - 72, width: 1440, zIndex: 0, filter: 'blur(1.2px)' }}><SkylineSvg w={1440} h={34} fill="#7383ad" o={.34} /></div>
+        <div aria-hidden style={{ position: 'absolute', left: cx - 780, top: cy - gHalfH - 48, width: 1560, zIndex: 0, filter: 'blur(.4px)' }}><SkylineSvg w={1560} h={40} fill="#5a6790" o={.5} /></div>
         {/* فاز ۱۶۳ — زمینِ محله (fallback بدونِ اسپرایت): قواره‌ها + خیابان‌های SVG روی صفحهٔ چرخیدهٔ ایزو */}
         {!sprite && <>
         <div style={{ position: 'absolute', left: cx, top: cy, width: groundW, height: groundW, transform: 'translate(-50%,-50%) rotateX(60deg) rotateZ(45deg)', borderRadius: 10, overflow: 'hidden', boxShadow: '0 0 0 3px rgba(24,28,40,.6), 0 22px 36px rgba(0,0,0,.5)', zIndex: 2 }}>
@@ -531,22 +549,53 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
           for (let wr = 0; wr < M; wr++) for (let wc = 0; wc < M; wc++) {
             const x = cx + (wc - wr) * T / 2
             const y = cy + (wc + wr) * 33 * kSp - yMidSp
-            const odd1 = wc % 2 === 1, odd2 = wr % 2 === 1
+            const odd1 = wc % 3 === 2, odd2 = wr % 3 === 2      // فاز ۱۶۶: خیابان هر سه خط — بلوک‌های ۲×۲ قواره
             let sp: SpriteDef | undefined
+            let green = false                                   // فاز ۱۶۶: قواره‌ها سبز می‌شوند؛ خیابان‌ها نه
             if (odd1 && odd2) sp = man!.ground.cross
             else if (odd1) sp = man!.ground.roadNS
             else if (odd2) sp = man!.ground.roadEW
             else {
-              const dk = deco.get((wc / 2) + ',' + (wr / 2))
-              sp = dk != null && man!.props?.length ? man!.props[dk % man!.props.length] : man!.ground.grass[(wc / 2 + wr / 2) % man!.ground.grass.length]
+              const pk = pOf(wc) + ',' + pOf(wr)
+              const dk = deco.get(pk)
+              const amb = ambient.get(pk)
+              // فاز ۱۶۶: قوارهٔ خالیِ «پارک» کاشیِ درخت می‌گیرد — قطعی از هَشِ مختصات؛ صرفاً دکور
+              sp = dk != null && man!.props?.length ? man!.props[dk % man!.props.length]
+                : amb?.kind === 'park' && man!.props?.length ? man!.props[seedOf('ambp:' + pk) % man!.props.length]
+                : man!.ground.grass[(pOf(wc) + pOf(wr)) % man!.ground.grass.length]
+              green = true
             }
             if (!sp) sp = man!.ground.grass[0]
             const tall = sp.h > 101
+            // maxWidth:none — لنگرِ صحنه ۰×۰ است و max-width سراسریِ img تصویر را به صفر جمع می‌کرد (فاز ۱۶۶)
             tiles.push(<img key={'g' + wc + '_' + wr} src={`/empire/sprites/${sp.file}`} alt="" width={sp.w * kSp} height={sp.h * kSp} draggable={false}
-              style={{ position: 'absolute', left: x - (sp.w * kSp) / 2, top: y - (sp.h - 101) * kSp, zIndex: (tall ? 2 : 1) + wc + wr, pointerEvents: 'none', userSelect: 'none' }} />)
+              style={{ position: 'absolute', left: x - (sp.w * kSp) / 2, top: y - (sp.h - 101) * kSp, zIndex: (tall ? 2 : 1) + wc + wr, pointerEvents: 'none', userSelect: 'none', maxWidth: 'none', filter: green ? GREEN_F : undefined }} />)
           }
           return tiles
         })()}
+        {/* 🏘 فاز ۱۶۶ — ساختمان‌های محیطیِ قواره‌های خالی: کوچک (۱–۲ طبقه)، کمی کم‌رنگ، بدونِ برچسب و لمس — پر شدنِ قاب،
+            صفر ادعای داده. داراییِ خودِ بازیکن با اشباعِ کامل + هالهٔ گرمِ پای برج از این‌ها متمایز می‌ماند. */}
+        {sprite && Array.from(ambient.entries()).filter(([, v]) => v.kind === 'bld').map(([key, v]) => {
+          const amb = v as { kind: 'bld'; floors: number; bk: BuildingKind }
+          const [pc, pr] = key.split(',').map(Number)
+          const stk = pickStack(man!, amb.bk, 'amb:' + key)
+          if (!stk) return null
+          const geo = man!.geo || { bodyW: 99, step: 34, lift: 10, roofOverlap: 24 }
+          const T2 = 132 * kSp
+          const tx = cx + (wOf(pc) - wOf(pr)) * T2 / 2 - T2 / 2
+          const ty = cy + (wOf(pc) + wOf(pr)) * 33 * kSp - yMidSp
+          const roofY = ty - (geo.lift + (amb.floors - 1) * geo.step + geo.roofOverlap) * kSp
+          return (
+            <div key={'amb' + key} aria-hidden style={{ position: 'absolute', left: tx + ((132 - geo.bodyW) / 2) * kSp, top: roofY, width: geo.bodyW * kSp, height: ty + 75 * kSp - roofY, zIndex: 3 + wOf(pc) + wOf(pr), pointerEvents: 'none', filter: 'saturate(.75) brightness(.97)' }}>
+              {Array.from({ length: amb.floors }, (_, f) => (
+                <img key={'b' + f} src={`/empire/sprites/${stk.body.file}`} alt="" width={stk.body.w * kSp} height={stk.body.h * kSp} draggable={false}
+                  style={{ position: 'absolute', left: ((geo.bodyW - stk.body.w) / 2) * kSp, top: ((amb.floors - 1 - f) * geo.step + geo.roofOverlap) * kSp, userSelect: 'none' }} />
+              ))}
+              <img src={`/empire/sprites/${stk.roof.file}`} alt="" width={stk.roof.w * kSp} height={stk.roof.h * kSp} draggable={false}
+                style={{ position: 'absolute', left: ((geo.bodyW - stk.roof.w) / 2) * kSp, top: 0, userSelect: 'none' }} />
+            </div>
+          )
+        })}
         {/* ساختمان‌ها — هر یک داراییِ واقعی؛ گونهٔ بصری از نوعِ واقعیِ ملک، ارتفاع از towerFloorsOf؛ لمس = برگهٔ همان دارایی */}
         {assets.map((a: any, i: number) => {
           const spot = spots[i]
@@ -571,20 +620,22 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
           const stk = sprite ? pickStack(man!, (crown ? 'landmark' : bkind === 'apt' ? 'apartment' : bkind) as BuildingKind, String(a.id)) : null
           const geo = man?.geo || { bodyW: 99, step: 34, lift: 10, roofOverlap: 24 }
           const T2 = 132 * kSp
-          const tx = cx + (spot.col - spot.row) * T2 - T2 / 2
-          const ty = cy + (spot.col + spot.row) * 66 * kSp - yMidSp
+          const tx = cx + (wOf(spot.col) - wOf(spot.row)) * T2 / 2 - T2 / 2
+          const ty = cy + (wOf(spot.col) + wOf(spot.row)) * 33 * kSp - yMidSp
           const roofY = ty - (geo.lift + (floors - 1) * geo.step + geo.roofOverlap) * kSp
           const wrapLeft = stk ? tx + ((132 - geo.bodyW) / 2) * kSp : cx + Math.round(x - bw / 2)
           const wrapTop = stk ? roofY : Math.round(cy + y - H - bw / 4)
           const wrapW = stk ? geo.bodyW * kSp : bw
           const wrapH = stk ? ty + 75 * kSp - roofY : H + bw / 2
-          const zIdx = stk ? 3 + 2 * (spot.col + spot.row) : 10 + spot.col + spot.row
+          const zIdx = stk ? 3 + wOf(spot.col) + wOf(spot.row) : 10 + spot.col + spot.row
           return (
             <div key={a.id} className="empTower" onClick={onTower ? () => onTower(a) : undefined}
               title={`${a.nickname ? `«${a.nickname}» — ` : ''}${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${building ? ' · در حال ساخت' : ''}${crown ? ' · 👑 نگینِ امپراتوری' : ''}`}
               style={{ position: 'absolute', left: wrapLeft, top: wrapTop, width: wrapW, height: wrapH, zIndex: zIdx, opacity: building ? .6 : 1, animationDelay: `${i * 70}ms`, cursor: onTower ? 'pointer' : 'default' }}>
               {/* سایهٔ ریختهٔ نرم به‌سمتِ پایین-راست (فقط حالتِ SVG — کاشیِ اسپرایت پایهٔ خودش را دارد) */}
               {!stk && <div aria-hidden style={{ position: 'absolute', left: '58%', top: H + bw / 4 + 4, width: bw * 1.7, height: bw * 0.55, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(0,0,0,.3), transparent 72%)', filter: 'blur(2.5px)', pointerEvents: 'none' }} />}
+              {/* فاز ۱۶۶ — هالهٔ گرمِ پای برجِ بازیکن: تمایزِ فوری از ساختمان‌های محیطیِ کم‌رنگ */}
+              {stk && <div aria-hidden style={{ position: 'absolute', left: '50%', bottom: -6 * kSp, width: 190 * kSp, height: 70 * kSp, transform: 'translateX(-50%)', background: 'radial-gradient(closest-side, rgba(255,214,120,.5), transparent 72%)', filter: 'blur(5px)', pointerEvents: 'none', zIndex: -1 }} />}
               {/* برچسبِ ارزش = چیپِ تیرهٔ خوانا؛ فقط ۲ داراییِ برتر همیشه روشن، بقیه با hover/لمس */}
               {vals[i] > 0 && <span className={'empValTag' + (labelOn ? ' empValOn' : '')} style={{ position: 'absolute', top: crown ? -34 : -21, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 700, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.72)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, padding: '2px 7px', backdropFilter: 'blur(2px)', zIndex: 4 }}>{building ? '🏗 ' : ''}{faB(vals[i])}</span>}
               {showCrown && <span className="empCrownFloat" style={{ position: 'absolute', top: -34, left: '50%', transform: 'translateX(-50%)', fontSize: 16, filter: 'drop-shadow(0 0 6px rgba(255,215,106,.85))', zIndex: 5 }}>👑</span>}
@@ -612,8 +663,8 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
           const stk = sprite ? pickStack(man!, (cv.key === 'world' ? 'landmark' : cv.key === 'market' ? 'shop' : 'office') as BuildingKind, 'civic:' + cv.key) : null
           const geo = man?.geo || { bodyW: 99, step: 34, lift: 10, roofOverlap: 24 }
           const T2 = 132 * kSp
-          const tx = cx + (spot.col - spot.row) * T2 - T2 / 2
-          const ty = cy + (spot.col + spot.row) * 66 * kSp - yMidSp
+          const tx = cx + (wOf(spot.col) - wOf(spot.row)) * T2 / 2 - T2 / 2
+          const ty = cy + (wOf(spot.col) + wOf(spot.row)) * 33 * kSp - yMidSp
           const roofY = ty - (geo.lift + (floors - 1) * geo.step + geo.roofOverlap) * kSp
           const fh = 22, bwC = Math.round(tile * 0.72), H = floors * fh
           const x = (spot.col - spot.row) * tile / 2
@@ -622,7 +673,7 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
           const wrapTop = stk ? roofY : Math.round(cy + y - H - bwC / 4)
           const wrapW = stk ? geo.bodyW * kSp : bwC
           const wrapH = stk ? ty + 75 * kSp - roofY : H + bwC / 2
-          const zIdx = stk ? 3 + 2 * (spot.col + spot.row) : 10 + spot.col + spot.row
+          const zIdx = stk ? 3 + wOf(spot.col) + wOf(spot.row) : 10 + spot.col + spot.row
           return (
             <div key={'cv' + cv.key} className="empTower" role="button" onClick={cv.ok ? cv.onOpen : undefined}
               title={cv.ok ? cv.label : `${cv.label} — در سطحِ ${fa(cv.need)} باز می‌شود`}

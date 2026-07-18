@@ -364,10 +364,11 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   .mjbi-featimg{width:100%!important;min-height:190px!important}
 }
 
-/* فاز ۱۵۸→۱۵۹ — شهرِ ایزومتریکِ «تمام‌صفحه»: بزرگ در دسکتاپ، متناسب در موبایل (فقط ظاهر) */
-.empIsoScene{transform:scale(1.45);transform-origin:50% 54%}
-@media(max-width:900px){.empIsoScene{transform:scale(1)!important}}
-@media(max-width:480px){.empIsoScene{transform:scale(.85)!important;transform-origin:50% 48%!important}}
+/* فاز ۱۵۸→۱۶۶ — شهرِ ایزومتریکِ «قابِ پر»: لنگرِ ۰×۰ (empIsoAnchor) + مقیاسِ صحنه؛ شهر از لبه‌ها بیرون می‌زند */
+.empIsoScene{transform:scale(1.45);transform-origin:0 0}
+.empIsoAnchor{top:66%!important}
+@media(max-width:900px){.empIsoScene{transform:scale(1.1)!important}.empIsoAnchor{top:61%!important}}
+@media(max-width:480px){.empIsoScene{transform:scale(1)!important}.empIsoAnchor{top:62%!important}}
 @media(prefers-reduced-motion:reduce){.empDot{display:none!important}}
 /* فاز ۱۶۲ — چیپِ ماموریتِ داخلِ سایت */
 @keyframes mjmPop{0%{transform:scale(.4);opacity:0}55%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
