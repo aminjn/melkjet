@@ -83,7 +83,14 @@ export default function AuthModal() {
   }
   async function resend() {
     setError('')
-    try { const r = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) }); const d = await r.json(); if (d.dev) setDevCode(d.code || ''); if (d.error) setError(d.error); startCountdown(d.retryIn || 120) } catch {}
+    // فاز ۱۷۰: تایمر فقط با ارسالِ واقعی (ok) یا کولداونِ واقعیِ سرور (retryIn) — نه روی خطا
+    try {
+      const r = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
+      const d = await r.json()
+      if (d.dev) setDevCode(d.code || '')
+      if (d.error) setError(d.error)
+      if (d.ok || d.retryIn) startCountdown(d.retryIn || 120)
+    } catch { setError('اتصال برقرار نشد — همین حالا دوباره بزن') }
   }
   async function verifyOTP() {
     setError(''); if (code.length !== 6) { setError('کد ۶ رقمی را وارد کنید'); return }

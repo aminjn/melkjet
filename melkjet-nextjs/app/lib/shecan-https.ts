@@ -8,11 +8,20 @@ import { Resolver } from 'node:dns'
 // و بعد به همان IP با SNI صحیح وصل می‌شویم — مستقل از resolv.conf سرور.
 
 const SHECAN = ['178.22.122.100', '185.51.200.2']
-const resolver = new Resolver()
+// فاز ۱۷۰ — تشخیصِ قیفِ ورود: resolverِ پیش‌فرضِ Node تا ~۲۰ ثانیه روی شکنِ کند/مسدود گیر می‌کرد و
+// «اولین» درخواستِ هر اینستنس (کشِ سرد) کلِ مهلتِ پیامک را می‌سوزاند → «بار اول ارور». حالا شکن سریع
+// شکست می‌خورد (۲ ثانیه × ۲ تلاش) و fallback فوری است. ترتیبِ شکن‌اول عمداً حفظ شده: برای دامنه‌های
+// فیلترشده (gapgpt) جوابِ resolverِ سیستم ممکن است IPِ فیلتر باشد — نباید مسابقه‌ای شود.
+const resolver = new Resolver({ timeout: 2000, tries: 2 })
 try { resolver.setServers(SHECAN) } catch { /* ignore */ }
 
 const cache = new Map<string, { ip: string; exp: number }>()
-const TTL = 5 * 60 * 1000
+const TTL = 30 * 60 * 1000   // فاز ۱۷۰: ۵→۳۰ دقیقه — IPهای این سرویس‌ها پایدارند؛ کشِ سرد یعنی تأخیرِ کاربر
+
+// فاز ۱۷۰ — ابطالِ کشِ یک هاست (بینِ تلاش‌های retry: شاید IPِ کش‌شده مرده باشد)
+export function bustDns(hostname: string): void { cache.delete(hostname) }
+// گرم‌کردنِ DNS در بوتِ اینستنس (instrumentation) — اولین کاربرِ واقعی دیگر هزینهٔ resolve را نمی‌دهد
+export function warmDns(hostname: string): void { resolveIp(hostname).catch(() => { /* بی‌صدا؛ در اولین استفاده دوباره تلاش می‌شود */ }) }
 
 // resolve یک هاست به IPv4 از طریق شکن (با fallback به resolver سیستم)
 function resolveIp(hostname: string): Promise<string> {
@@ -33,6 +42,9 @@ function resolveIp(hostname: string): Promise<string> {
   })
 }
 
+// اتصالِ keep-alive مشترک — درخواستِ دوم به همان سرویس دیگر هزینهٔ TLS نمی‌دهد (تأخیرِ OTP)
+const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 20, timeout: 60000 })
+
 export interface ShecanResp { status: number; body: string }
 
 // درخواست HTTPS با IP حل‌شده توسط شکن (مستقل از resolv.conf، بدون پروکسی)
@@ -45,6 +57,7 @@ export async function shecanRequest(url: string, init: { method: string; headers
       host: ip, port: 443, path: u.pathname + u.search, method: init.method,
       headers: { ...init.headers, Host: u.hostname },
       servername: u.hostname,   // SNI صحیح برای اعتبارسنجی گواهی
+      agent: keepAliveAgent,    // فاز ۱۷۰: اتصالِ گرم — درخواستِ بعدی TLS handshake نمی‌خواهد
       timeout,
     }, (res) => {
       let data = ''
@@ -71,6 +84,7 @@ export async function shecanRequestBuffer(url: string, init: { method?: string; 
       host: ip, port: 443, path: u.pathname + u.search, method: init.method || 'GET',
       headers: { ...(init.headers || {}), Host: u.hostname },
       servername: u.hostname,
+      agent: keepAliveAgent,
       timeout,
     }, (res) => {
       const chunks: Buffer[] = []

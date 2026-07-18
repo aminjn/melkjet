@@ -1,5 +1,5 @@
 import { getAdminData } from './admin-store'
-import { shecanRequest } from './shecan-https'
+import { shecanRequest, bustDns } from './shecan-https'
 
 // Pod.ir / پادیوم → استعلامِ ثبت‌احوال + تطبیقِ شاهکار (موبایل ↔ کد ملی).
 // کلیدها از env یا از admin-data.podium خوانده می‌شوند (هیچ کلیدی در کد نیست).
@@ -27,15 +27,24 @@ export function podMissing(): string[] {
   return m
 }
 
+// فاز ۱۷۰: مثلِ OTP — دو تلاشِ ۱۲ثانیه‌ای فقط برای خطای «شبکه» (درخواست اصلاً نرسیده — تکرارش امن و بی‌هزینه است)؛
+// بینِ تلاش‌ها DNS باطل می‌شود. جوابِ رسیده (حتی خطادار) هرگز retry نمی‌شود — استعلامِ دولتی هزینه دارد.
 async function callPodium(payload: unknown): Promise<{ hasError?: boolean; message?: string; result?: string }> {
   const c = cfg()
-  const res = await shecanRequest(c.url, {
-    method: 'POST',
-    headers: { Authorization: `bearer ${c.token}`, 'Content-Type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify(payload),
-    timeout: 25000,
-  })
-  try { return JSON.parse(res.body) } catch { return { hasError: true, message: `پاسخِ نامعتبر از پاد (HTTP ${res.status})` } }
+  for (let t = 0; ; t++) {
+    try {
+      const res = await shecanRequest(c.url, {
+        method: 'POST',
+        headers: { Authorization: `bearer ${c.token}`, 'Content-Type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(payload),
+        timeout: 12000,
+      })
+      try { return JSON.parse(res.body) } catch { return { hasError: true, message: `پاسخِ نامعتبر از پاد (HTTP ${res.status})` } }
+    } catch (e: any) {
+      if (t >= 1) return { hasError: true, message: `اتصال به سرویسِ احراز ناموفق: ${e?.message || 'خطا'}` }
+      try { bustDns(new URL(c.url).hostname) } catch { /* ادامه با همان کش */ }
+    }
+  }
 }
 
 export interface Identity {
