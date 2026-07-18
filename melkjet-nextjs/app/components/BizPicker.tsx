@@ -33,19 +33,21 @@ export default function BizPicker() {
   const onDefaultPanel = path === '/buyer' || path.startsWith('/buyer/')
   useEffect(() => {
     if (!onDefaultPanel) return
-    try { const t = Number(localStorage.getItem(HIDE_KEY) || 0); if (t && Date.now() - t < HIDE_DAYS * 864e5) { setGone(true); return } } catch {}
+    try { const t = Number(localStorage.getItem(HIDE_KEY) || 0); if (t && Date.now() - t < HIDE_DAYS * 864e5) setGone(true) } catch {}
     fetch('/api/auth/profile', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.account?.onboarded) setMe({ name: d.account.name || '', role: d.account.role || '' }) })
+      // فاز ۱۷۲: تشخیصِ «هنوز کسب‌وکاری انتخاب نکرده» با داشبوردِ نقش (dash === '/buyer') نه نامِ نقش —
+      // حساب‌های قدیمی نقش را با شناسه ذخیره کرده‌اند و مقایسهٔ نام هرگز نمی‌گرفت (کارت دیده نمی‌شد).
+      .then(d => { if (d?.account?.onboarded && d?.dash === '/buyer') setMe({ name: d.account.name || '', role: d.account.role || '' }) })
       .catch(() => {})
   }, [onDefaultPanel])
 
-  // فقط وقتی هنوز روی نقشِ پیش‌فرض است — کسب‌وکاری‌ها دیگر هرگز نمی‌بینند
-  const show = onDefaultPanel && !gone && me !== null && me.role === 'کاربر عادی'
+  const show = onDefaultPanel && !gone && me !== null
   useEffect(() => {
     if (open && !roles.length) fetch('/api/roles').then(r => r.ok ? r.json() : null).then(d => { if (d?.roles?.length) setRoles(d.roles.filter((x: any) => x.name !== 'کاربر عادی')) }).catch(() => {})
   }, [open, roles.length])
-  if (!show) return null
+  const showPill = onDefaultPanel && gone && me !== null   // فاز ۱۷۲: بعدِ بستن، پیلِ کوچکِ دائمی می‌ماند
+  if (!show && !showPill) return null
 
   const later = () => { setGone(true); try { localStorage.setItem(HIDE_KEY, String(Date.now())) } catch {} }
   const pick = async (r: { id: string; name: string }) => {
@@ -63,8 +65,14 @@ export default function BizPicker() {
   const extra = roles.filter(r => !MAIN_DASH.includes(r.dashboard))
   return (
     <>
+      {/* فاز ۱۷۲ — پیلِ دائمیِ کوچک بعد از بستنِ کارت: مسیرِ انتخابِ کسب‌وکار هیچ‌وقت گم نمی‌شود */}
+      {showPill && !open && (
+        <button onClick={() => setOpen(true)} style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 58, display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 999, padding: '8px 13px', fontSize: 12, fontWeight: 800, color: 'var(--gold)', cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 8px 22px rgba(0,0,0,.35)', direction: 'rtl' }}>
+          🏢 پنلِ کسب‌وکار
+        </button>
+      )}
       {/* کارتِ دعوت — بالای پنلِ پیش‌فرض، غیرمسدودکننده */}
-      {!open && (
+      {show && !open && (
         <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 58, width: 'min(560px, calc(100vw - 20px))', direction: 'rtl' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 14, padding: '10px 14px', boxShadow: '0 12px 34px rgba(0,0,0,.35)' }}>
             <span style={{ fontSize: 20 }}>🏢</span>

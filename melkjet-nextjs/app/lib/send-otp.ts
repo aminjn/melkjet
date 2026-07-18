@@ -71,7 +71,9 @@ export async function sendOtpSms(phone: string): Promise<{ ok: boolean; dev?: bo
     console.log(`[DEV OTP] ${phone} → ${code}`)
     return { ok: true, dev: true, code, retryIn: RESEND_COOLDOWN_S }
   }
+  const t0 = Date.now()
   const r = await sendPatternWithRetry({ apiKey, sender, pattern, patternVar }, phone, code)
+  console.log(`[otp] send ${r.ok ? 'ok' : 'FAIL'} in ${Date.now() - t0}ms${r.ok ? '' : ` (${(r as any).error})`}`)   // تشخیصِ کندی در pm2 logs
   if (!r.ok) return { ok: false, error: r.error }
   await setOTP(phone, code)   // فقط بعدِ ارسالِ موفق — تا شکستِ پیامک مهلتِ resend را نسوزاند
   return { ok: true, retryIn: RESEND_COOLDOWN_S }

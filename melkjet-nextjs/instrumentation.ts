@@ -6,10 +6,13 @@ export async function register() {
     // فاز ۱۷۰ — گرم‌کردنِ DNS در بوتِ «هر» اینستنس (پیامکِ OTP و AI): اولین کاربرِ واقعی
     // دیگر هزینهٔ resolveِ سرد را نمی‌دهد («بار اول ارور می‌داد»). شکستش بی‌صداست.
     try {
-      const { warmDns } = await import('./app/lib/shecan-https')
+      const { warmDns, shecanRequest } = await import('./app/lib/shecan-https')
       warmDns('api2.ippanel.com')
       warmDns('api.gapgpt.app')
       warmDns('api.pod.ir')
+      // فاز ۱۷۲ — علاوه بر DNS، «اتصالِ TLS» به سرویسِ پیامک هم گرم می‌شود (agent keep-alive نگهش می‌دارد):
+      // اولین OTPِ واقعیِ هر اینستنس دیگر هزینهٔ TCP+TLS handshake را هم نمی‌دهد. شکست بی‌صداست.
+      setTimeout(() => { shecanRequest('https://api2.ippanel.com/', { method: 'GET', headers: {}, timeout: 5000 }).catch(() => {}) }, 1500)
     } catch { /* گرم‌کردن اختیاری است */ }
   }
 }
