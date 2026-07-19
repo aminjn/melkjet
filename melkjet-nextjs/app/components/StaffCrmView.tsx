@@ -45,6 +45,22 @@ export default function StaffCrmView() {
   const [tasks, setTasks] = useState<any[]>([])          // فاز ۱۲۳: وظایفِ تیمی
   const [meName, setMeName] = useState('')
   const [staffList, setStaffList] = useState<Array<{ phone: string; name: string }>>([])   // فاز ۱۷۴ — پرسنلِ واقعی برای ارجاع
+  // فاز ۱۷۵ — ویرایشِ کاملِ پیگیری (متن + تاریخِ شمسی) به‌صورتِ inline در هر دو تبِ پیگیری‌ها و تایم‌لاین
+  const [editAct, setEditAct] = useState<{ phone: string; at: number; text: string; due: string; dueTs: number } | null>(null)
+  const saveEdit = async () => {
+    if (!editAct) return
+    const d = await post({ action: 'actEdit', phone: editAct.phone, actAt: editAct.at, text: editAct.text, ...(editAct.dueTs ? { dueAt: editAct.dueTs } : {}) })
+    if (d) { setEditAct(null); setMsg('✓ پیگیری ویرایش شد — یادآورِ خودکار با سررسیدِ جدید تنظیم شد'); setTimeout(() => setMsg(''), 4000); if (sel) openCustomer(sel); load() }
+  }
+  // به‌صورتِ تابعِ ساده (نه کامپوننتِ تو در تو) — وگرنه هر رندر remount می‌شود و فوکوسِ اینپوت می‌پرد
+  const editForm = (ea: NonNullable<typeof editAct>) => (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px 10px', margin: '4px 0', background: 'var(--bg2)', border: '1px solid var(--goldDim)', borderRadius: 10 }}>
+      <input value={ea.text} onChange={e => setEditAct({ ...ea, text: e.target.value })} maxLength={500} style={{ ...inp, flex: 1, minWidth: 200 }} />
+      <span style={{ minWidth: 180, display: 'inline-block' }}><JalaliDatePicker value={ea.due} onChange={v => setEditAct({ ...ea, due: v })} onPickTs={ts => setEditAct({ ...ea, dueTs: ts })} withTime placeholder="سررسیدِ جدید (اختیاری)" style={{ padding: '5px 8px', fontSize: 12 }} /></span>
+      <button style={{ ...btn, padding: '5px 14px', fontSize: 11.5 }} disabled={busy || !ea.text.trim()} onClick={saveEdit}>ذخیره</button>
+      <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} onClick={() => setEditAct(null)}>انصراف</button>
+    </div>
+  )
   const [tTitle, setTTitle] = useState('')
   const [tAssign, setTAssign] = useState('')
   const [tPhone, setTPhone] = useState('')
@@ -113,10 +129,15 @@ export default function StaffCrmView() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 10 }}>
             <label style={{ fontSize: 11, color: 'var(--muted)', flex: 2, minWidth: 220 }}>عنوانِ وظیفه *<br />
               <input value={tTitle} onChange={e => setTTitle(e.target.value)} maxLength={160} placeholder="مثلاً: تماس با آقای سمیعی برای تمدیدِ پلن" style={{ ...inp, width: '100%', marginTop: 4 }} /></label>
-            <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 130 }}>مسئول (نامِ همکار)<br />
-              <input value={tAssign} onChange={e => setTAssign(e.target.value)} placeholder={meName || 'خالی = همه'} style={{ ...inp, width: '100%', marginTop: 4 }} /></label>
-            <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 150 }}>مشتریِ مرتبط (شماره — اختیاری)<br />
-              <input value={tPhone} onChange={e => setTPhone(e.target.value.replace(/[^\d]/g, ''))} placeholder="09…" style={{ ...inp, width: '100%', marginTop: 4, direction: 'ltr' }} /></label>
+            {/* فاز ۱۷۵ («دستی نوشتنِ اسم مسخره است»): مسئول از دراپ‌داونِ پرسنلِ واقعی، مشتری از جستجوی مشتریانِ واقعی */}
+            <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 130 }}>مسئول (همکار)<br />
+              <select value={tAssign} onChange={e => setTAssign(e.target.value)} style={{ ...inp, width: '100%', marginTop: 4 }}>
+                <option value="">— همه —</option>
+                {staffList.map(p => <option key={p.phone} value={p.name}>{p.name}</option>)}
+              </select></label>
+            <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 200 }}>مشتریِ مرتبط (جستجو کن — اختیاری)<br />
+              <input list="mjCustList" value={tPhone} onChange={e => { const v = e.target.value; const m = v.match(/(\d{10,11})/); setTPhone(m ? m[1] : v.replace(/[^\d]/g, '')) }} placeholder="نام یا شماره…" style={{ ...inp, width: '100%', marginTop: 4 }} />
+              <datalist id="mjCustList">{rows.slice(0, 300).map(r => <option key={r.phone} value={`${r.name || 'بی‌نام'} (${r.phone})`} />)}</datalist></label>
             <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 190 }}>سررسید (شمسی)<br />
               <div style={{ marginTop: 4 }}><JalaliDatePicker value={tDue} onChange={setTDue} onPickTs={setTDueTs} withTime placeholder="انتخابِ تاریخ و ساعت" /></div></label>
             <button style={btn} disabled={busy || !tTitle.trim()} onClick={async () => {
@@ -158,16 +179,21 @@ export default function StaffCrmView() {
           <b style={{ fontSize: 13.5 }}>⏰ سررسیدِ امروز و گذشته ({fa(dueToday.length)})</b>
           {!dueToday.length && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>هیچ پیگیریِ عقب‌افتاده‌ای نیست — آفرین به تیم 👏</div>}
           {dueToday.map((d: any, i: number) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
-              <b style={{ cursor: 'pointer', color: 'var(--gold)' }} onClick={() => { setTab('customers'); openCustomer(rows.find(r => r.phone === d.phone) || { phone: d.phone, name: d.name }) }}>{d.name || d.phone}</b>
-              <span style={{ flex: 1 }}>{d.text.slice(0, 80)}</span>
-              <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>سررسید {faDT(d.dueAt)} · {d.by.split(' (')[0]}</span>
-              {/* فاز ۱۷۳ — تعویقِ یک‌لمسی: سررسیدِ نو = یادآورِ خودکارِ نو */}
-              {[[1, '+۱ روز'], [3, '+۳ روز'], [7, '+۱ هفته']].map(([dd, l]) => (
-                <button key={dd} style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} title="تعویق — یادآورِ خودکار دوباره تنظیم می‌شود"
-                  onClick={async () => { if (await post({ action: 'actSnooze', phone: d.phone, actAt: d.at, days: dd })) load() }}>{l}</button>
-              ))}
-              <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 11 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: d.phone, actAt: d.at })) load() }}>✓ انجام شد</button>
+            <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <b style={{ cursor: 'pointer', color: 'var(--gold)' }} onClick={() => { setTab('customers'); openCustomer(rows.find(r => r.phone === d.phone) || { phone: d.phone, name: d.name }) }}>{d.name || d.phone}</b>
+                <span style={{ flex: 1 }}>{d.text.slice(0, 80)}</span>
+                <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>سررسید {faDT(d.dueAt)} · {d.by.split(' (')[0]}</span>
+                {/* فاز ۱۷۳ — تعویقِ یک‌لمسی: سررسیدِ نو = یادآورِ خودکارِ نو */}
+                {[[1, '+۱ روز'], [3, '+۳ روز'], [7, '+۱ هفته']].map(([dd, l]) => (
+                  <button key={dd} style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} title="تعویق — یادآورِ خودکار دوباره تنظیم می‌شود"
+                    onClick={async () => { if (await post({ action: 'actSnooze', phone: d.phone, actAt: d.at, days: dd })) load() }}>{l}</button>
+                ))}
+                <button title="ویرایشِ متن و تاریخ" style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy}
+                  onClick={() => setEditAct({ phone: d.phone, at: d.at, text: d.text, due: '', dueTs: 0 })}>✎ ویرایش</button>
+                <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 11 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: d.phone, actAt: d.at })) load() }}>✓ انجام شد</button>
+              </div>
+              {editAct && editAct.phone === d.phone && editAct.at === d.at && editForm(editAct)}
             </div>
           ))}
         </div>
@@ -175,12 +201,17 @@ export default function StaffCrmView() {
           <b style={{ fontSize: 13.5 }}>📅 پیگیری‌های آینده ({fa(upcoming.length)})</b>
           {!upcoming.length && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>یادآوریِ آینده‌ای ثبت نشده — در پروندهٔ هر مشتری با «یادآوریِ پیگیری» بساز.</div>}
           {upcoming.map((d: any, i: number) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
-              <b style={{ cursor: 'pointer', color: 'var(--gold)' }} onClick={() => { setTab('customers'); openCustomer(rows.find(r => r.phone === d.phone) || { phone: d.phone, name: d.name }) }}>{d.name || d.phone}</b>
-              <span style={{ flex: 1 }}>{d.text.slice(0, 80)}</span>
-              <span style={{ color: 'var(--muted)', fontSize: 10.5 }}>⏰ {faDT(d.dueAt)} · {d.by.split(' (')[0]}</span>
-              <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} onClick={async () => { if (await post({ action: 'actSnooze', phone: d.phone, actAt: d.at, days: 1 })) load() }}>+۱ روز</button>
-              <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: d.phone, actAt: d.at })) load() }}>✓</button>
+            <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <b style={{ cursor: 'pointer', color: 'var(--gold)' }} onClick={() => { setTab('customers'); openCustomer(rows.find(r => r.phone === d.phone) || { phone: d.phone, name: d.name }) }}>{d.name || d.phone}</b>
+                <span style={{ flex: 1 }}>{d.text.slice(0, 80)}</span>
+                <span style={{ color: 'var(--muted)', fontSize: 10.5 }}>⏰ {faDT(d.dueAt)} · {d.by.split(' (')[0]}</span>
+                <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} onClick={async () => { if (await post({ action: 'actSnooze', phone: d.phone, actAt: d.at, days: 1 })) load() }}>+۱ روز</button>
+                <button title="ویرایشِ متن و تاریخ" style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy}
+                  onClick={() => setEditAct({ phone: d.phone, at: d.at, text: d.text, due: '', dueTs: 0 })}>✎</button>
+                <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: d.phone, actAt: d.at })) load() }}>✓</button>
+              </div>
+              {editAct && editAct.phone === d.phone && editAct.at === d.at && editForm(editAct)}
             </div>
           ))}
         </div>
@@ -397,17 +428,15 @@ export default function StaffCrmView() {
                   {a.dueAt && <span style={{ fontSize: 10.5, color: a.done ? '#5fd98a' : '#e7a14a' }}>{a.done ? '✓ پیگیری انجام شد' : `⏰ سررسید ${faDT(a.dueAt)}`}{!a.done && a.remindedAt ? ' · یادآور رفت' : ''}</span>}
                   {a.dueAt && !a.done && <button style={{ ...btnGhost, padding: '1px 8px', fontSize: 10 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: sel.phone, actAt: a.at })) { openCustomer(sel); load() } }}>✓</button>}
                   {a.dueAt && !a.done && <button title="تعویقِ ۱ روز" style={{ ...btnGhost, padding: '1px 8px', fontSize: 10 }} disabled={busy} onClick={async () => { if (await post({ action: 'actSnooze', phone: sel.phone, actAt: a.at, days: 1 })) { openCustomer(sel); load() } }}>+۱ر</button>}
-                  {/* فاز ۱۷۳ — ویرایش/حذف: CRM واقعی */}
-                  <button title="ویرایشِ متن" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11, padding: 0 }} disabled={busy} onClick={async () => {
-                    const t = prompt('متنِ جدید:', a.text); if (t === null) return
-                    if (await post({ action: 'actEdit', phone: sel.phone, actAt: a.at, text: t })) { openCustomer(sel); load() }
-                  }}>✎</button>
+                  {/* فاز ۱۷۳/۱۷۵ — ویرایشِ کامل (متن + تاریخ) و حذف: CRM واقعی */}
+                  <button title="ویرایشِ متن و تاریخ" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11, padding: 0 }} disabled={busy}
+                    onClick={() => setEditAct({ phone: sel.phone, at: a.at, text: a.text, due: '', dueTs: 0 })}>✎</button>
                   <button title="حذف" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e88', fontSize: 11, padding: 0 }} disabled={busy} onClick={async () => {
                     if (!confirm('این فعالیت حذف شود؟')) return
                     if (await post({ action: 'actDelete', phone: sel.phone, actAt: a.at })) { openCustomer(sel); load() }
                   }}>🗑</button>
                 </div>
-                <div style={{ marginTop: 3, lineHeight: 1.9 }}>{a.text}</div>
+                {editAct && editAct.phone === sel.phone && editAct.at === a.at ? editForm(editAct) : <div style={{ marginTop: 3, lineHeight: 1.9 }}>{a.text}</div>}
               </div>
             ))}
           </div>

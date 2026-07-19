@@ -38,6 +38,7 @@ export interface StaffTask {
   doneAt?: number
   byPhone?: string           // فاز ۱۷۳ — مقصدِ یادآورِ خودکارِ وظیفه
   remindedAt?: number
+  actAt?: number             // فاز ۱۷۵ — پیوند به پیگیریِ سازنده (با forPhone): انجام/تعویق/حذف دوطرفه سینک می‌شود
 }
 interface Db { customers: Record<string, StaffCrmEntry>; tasks: StaffTask[] }
 const EMPTY: Db = { customers: {}, tasks: [] }
@@ -80,7 +81,8 @@ export async function addStaffAct(phone: string, act: Omit<StaffCrmAct, 'at'>, n
     const e = db.customers[phone] || (db.customers[phone] = { status: 'new', acts: [] })
     e.acts.push({ ...act, text: String(act.text || '').slice(0, 500), at: now })
     if (e.acts.length > 200) e.acts = e.acts.slice(-200)
-    if (e.status === 'new') e.status = 'follow'   // اولین تعامل = واردِ پیگیری
+    // اولین تعاملِ «واقعی» = واردِ پیگیری؛ رویدادهای سیستمیِ ⚙️ (فاز ۱۷۵: وضعیت/ارجاع) وضعیت را دست نمی‌زنند
+    if (e.status === 'new' && !String(act.text || '').startsWith('⚙️')) e.status = 'follow'
     return e
   })
 }
@@ -101,10 +103,13 @@ export async function assignStaff(phone: string, to: string): Promise<StaffCrmEn
   })
 }
 
-export async function markActDone(phone: string, actAt: number): Promise<void> {
+export async function markActDone(phone: string, actAt: number, now = Date.now()): Promise<void> {
   await mutate(db => {
     const a = db.customers[phone]?.acts.find(x => x.at === actAt && x.dueAt)
     if (a) a.done = true
+    // فاز ۱۷۵ — وظیفهٔ پیوندی هم انجام‌شده می‌شود (سینکِ دوطرفه)
+    const t = db.tasks.find(x => x.actAt === actAt && x.forPhone === phone)
+    if (t && !t.done) { t.done = true; t.doneBy = a?.by || 'سینکِ پیگیری'; t.doneAt = now }
   })
 }
 
@@ -113,10 +118,17 @@ export async function updateStaffAct(phone: string, actAt: number, patch: { text
   return mutate(db => {
     const a = db.customers[phone]?.acts.find(x => x.at === actAt)
     if (!a) return null
-    if (patch.text !== undefined) a.text = String(patch.text).slice(0, 500)
+    const t = db.tasks.find(x => x.actAt === actAt && x.forPhone === phone)   // فاز ۱۷۵ — سینکِ وظیفهٔ پیوندی
+    if (patch.text !== undefined) {
+      a.text = String(patch.text).slice(0, 500)
+      if (t) t.title = `پیگیری: ${a.text}`.slice(0, 160)
+    }
     if (patch.dueAt !== undefined) {
-      if (patch.dueAt === null) { delete a.dueAt; delete a.done; delete a.remindedAt }
-      else { a.dueAt = patch.dueAt; a.done = false; delete a.remindedAt }   // سررسیدِ نو = یادآورِ نو
+      if (patch.dueAt === null) { delete a.dueAt; delete a.done; delete a.remindedAt; if (t) { delete t.dueAt; delete t.remindedAt } }
+      else {
+        a.dueAt = patch.dueAt; a.done = false; delete a.remindedAt   // سررسیدِ نو = یادآورِ نو
+        if (t) { t.dueAt = patch.dueAt; t.done = false; delete t.doneBy; delete t.doneAt; delete t.remindedAt }
+      }
     }
     return a
   })
@@ -128,6 +140,7 @@ export async function deleteStaffAct(phone: string, actAt: number): Promise<bool
     if (!e) return false
     const n = e.acts.length
     e.acts = e.acts.filter(x => x.at !== actAt)
+    db.tasks = db.tasks.filter(x => !(x.actAt === actAt && x.forPhone === phone))   // فاز ۱۷۵ — وظیفهٔ پیوندی هم می‌رود
     return e.acts.length < n
   })
 }
@@ -147,6 +160,7 @@ export async function claimDueReminders(now = Date.now()): Promise<DueReminder[]
       }
     }
     for (const t of db.tasks) {
+      if (t.actAt) continue   // فاز ۱۷۵ — وظیفهٔ پیوندی به پیگیری: یادآورش را خودِ پیگیری می‌فرستد (بدونِ یادآورِ دوباره)
       if (t.dueAt && !t.done && !t.remindedAt && t.dueAt <= now && t.byPhone) {
         t.remindedAt = now
         out.push({ source: 'task', customerPhone: t.forPhone, staffPhone: t.byPhone, text: t.title, dueAt: t.dueAt })
@@ -176,6 +190,11 @@ export async function toggleStaffTask(id: string, doneBy: string, now = Date.now
     if (!t) return null
     t.done = !t.done
     if (t.done) { t.doneBy = doneBy; t.doneAt = now } else { delete t.doneBy; delete t.doneAt }
+    // فاز ۱۷۵ — پیگیریِ پیوندی هم هم‌وضعیت می‌شود (سینکِ دوطرفه)
+    if (t.actAt && t.forPhone) {
+      const a = db.customers[t.forPhone]?.acts.find(x => x.at === t.actAt)
+      if (a && a.dueAt) a.done = t.done
+    }
     return t
   })
 }

@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
   // گزارشِ عملکردِ پرسنل: هر همکار چند تماس/پیامک/یادداشت/پیگیری ثبت کرده (پاسخ‌گویی)
   const perf: Record<string, { calls: number; sms: number; notes: number; follows: number; total: number; lastAt: number }> = {}
   for (const e of Object.values(crm)) for (const a of e.acts) {
+    if (a.text.startsWith('⚙️')) continue   // فاز ۱۷۵: رویدادهای سیستمی (وضعیت/ارجاع) عملکردِ پرسنل را باد نکند
     const k = a.by.split(' (')[0]
     const g = perf[k] || (perf[k] = { calls: 0, sms: 0, notes: 0, follows: 0, total: 0, lastAt: 0 })
     if (a.kind === 'call') g.calls++; else if (a.kind === 'sms') g.sms++; else if (a.kind === 'follow') g.follows++; else g.notes++
@@ -148,8 +149,19 @@ export async function POST(req: NextRequest) {
     let dueAt = Number(b.dueAt) > Date.now() - 864e5 ? Number(b.dueAt) : undefined
     // فاز ۱۷۳ («همه‌چیز اتومات»): «پیگیری» بدونِ سررسید معنا ندارد — خودکار ۳ روزِ بعد، ساعتِ همین لحظه
     if (kind === 'follow' && !dueAt) dueAt = Date.now() + 3 * 864e5
-    const e = await addStaffAct(phone, { by: await byName(s.phone), byPhone: s.phone, kind, text, dueAt })
-    return NextResponse.json({ ok: true, entry: e, autoDue: kind === 'follow' && !Number(b.dueAt) ? dueAt : undefined })
+    const at = Date.now()
+    const e = await addStaffAct(phone, { by: await byName(s.phone), byPhone: s.phone, kind, text, dueAt }, at)
+    // فاز ۱۷۵ («پیگیری ثبت شد = وظیفه ساخته شد»): هر پیگیری خودکار یک وظیفهٔ پیوندی در تبِ وظایف می‌سازد —
+    // انجام/تعویق/ویرایش/حذف دوطرفه سینک است؛ یادآورِ سررسید از خودِ پیگیری می‌رود (بدونِ دوباره).
+    if (kind === 'follow' && dueAt) {
+      const cust = getAccount(phone)
+      await addStaffTask({
+        title: `پیگیری: ${text}`.slice(0, 160), by: await byName(s.phone), byPhone: s.phone,
+        assignedTo: (e.assignedTo || '').split(' (')[0] || (getAccount(s.phone)?.name || undefined),
+        forPhone: phone, forName: cust?.name || undefined, dueAt, actAt: at,
+      })
+    }
+    return NextResponse.json({ ok: true, entry: e, autoDue: kind === 'follow' && !Number(b.dueAt) ? dueAt : undefined, autoTask: kind === 'follow' })
   }
   // فاز ۱۷۳ — ویرایش/حذف/تعویقِ پیگیری: CRM واقعی، نه فقط ثبتِ یک‌طرفه
   if (action === 'actEdit') {
@@ -177,7 +189,10 @@ export async function POST(req: NextRequest) {
   if (action === 'status') {
     const st = String(b.status || '')
     if (!['new', 'follow', 'customer', 'lost'].includes(st)) return NextResponse.json({ error: 'وضعیتِ نامعتبر' }, { status: 400 })
-    const e = await setStaffStatus(phone, st as StaffCrmStatus)
+    await setStaffStatus(phone, st as StaffCrmStatus)
+    // فاز ۱۷۵ («هر اتفاقی برای مشتری باید در پرونده‌اش ردگیری شود»): تغییرِ وضعیت در تایم‌لاینِ خودش ثبت می‌شود
+    const stFa: Record<string, string> = { new: 'جدید', follow: 'در حالِ پیگیری', customer: 'مشتری شد', lost: 'از دست رفت' }
+    const e = await addStaffAct(phone, { by: await byName(s.phone), byPhone: s.phone, kind: 'note', text: `⚙️ وضعیت → «${stFa[st]}»` })
     if (st === 'customer') logAudit(s.phone, 'CRM مرکزی: مشتری شد', phone)
     return NextResponse.json({ ok: true, entry: e })
   }
@@ -190,7 +205,9 @@ export async function POST(req: NextRequest) {
     if (!toAcc || !((toAcc.adminSections || []).length > 0 || toAcc.role === 'staff' || toPhone === SUPER_ADMIN_PHONE))
       return NextResponse.json({ error: 'این شماره جزوِ پرسنلِ ملک‌جت نیست' }, { status: 400 })
     const label = `${toAcc.name || toPhone} (${toPhone})`
-    const e = await assignStaff(phone, label)
+    await assignStaff(phone, label)
+    // فاز ۱۷۵ — ردگیری در پروندهٔ خودِ مشتری
+    const e = await addStaffAct(phone, { by: await byName(s.phone), byPhone: s.phone, kind: 'note', text: `⚙️ ارجاع به ${toAcc.name || toPhone}` })
     logAudit(s.phone, `CRM مرکزی: ارجاع به ${toAcc.name || toPhone}`, phone)
     // اطلاعِ خودکار به پرسنلِ مقصد (پوش + پیامک) — خودارجاعی پیام نمی‌خواهد
     if (toPhone !== s.phone) {

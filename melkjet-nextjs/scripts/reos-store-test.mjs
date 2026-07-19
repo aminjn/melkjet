@@ -1820,6 +1820,26 @@ async function main() {
     const ed = await updateStaffAct(CU, act.at, { text: 'متنِ ویرایش‌شده' })
     ok('ویرایشِ متنِ فعالیت', ed.text === 'متنِ ویرایش‌شده')
     ok('حذفِ فعالیت', (await deleteStaffAct(CU, act.at)) === true && ((await staffCrmAll())[CU].acts.length === 0))
+
+    // ── فاز ۱۷۵: پیوندِ دوطرفهٔ پیگیری↔وظیفه ──
+    const { markActDone, toggleStaffTask, listStaffTasks } = await import('../app/lib/staff-crm-store.ts')
+    const at2 = Date.now() + 7
+    await addStaffAct(CU, { by: 'همکار (09120009999)', byPhone: STF, kind: 'follow', text: 'پیگیریِ پیوندی', dueAt: at2 + 3600e3 }, at2)
+    const task = await addStaffTask({ title: 'پیگیری: پیوندی', by: 'همکار', byPhone: STF, forPhone: CU, dueAt: at2 + 3600e3, actAt: at2 })
+    ok('وظیفهٔ پیوندی یادآورِ خودش را نمی‌گیرد (پیگیری می‌فرستد — بدونِ دوباره)', !(await claimDueReminders(at2 + 2 * 3600e3)).some(d => d.source === 'task' && d.text === 'پیگیری: پیوندی'))
+    await markActDone(CU, at2)
+    ok('انجامِ پیگیری، وظیفهٔ پیوندی را هم انجام می‌کند', (await listStaffTasks()).find(t => t.id === task.id).done === true)
+    await toggleStaffTask(task.id, 'همکار')   // برگرداندن به باز
+    ok('بازکردنِ وظیفه، پیگیری را هم باز می‌کند', (await staffCrmAll())[CU].acts.find(a => a.at === at2).done === false)
+    const newDue = Date.now() + 5 * 864e5
+    await updateStaffAct(CU, at2, { dueAt: newDue })
+    ok('تعویقِ پیگیری، سررسیدِ وظیفهٔ پیوندی را هم می‌برد', (await listStaffTasks()).find(t => t.id === task.id).dueAt === newDue)
+    await deleteStaffAct(CU, at2)
+    ok('حذفِ پیگیری، وظیفهٔ پیوندی را هم حذف می‌کند', !(await listStaffTasks()).some(t => t.id === task.id))
+    // رویدادِ سیستمیِ ⚙️ وضعیتِ «جدید» را دست نمی‌زند
+    const CU2 = '09120001752'
+    await addStaffAct(CU2, { by: 'ادمین', byPhone: STF, kind: 'note', text: '⚙️ ارجاع به سارا' })
+    ok('رویدادِ سیستمی وضعیت را به «پیگیری» نمی‌بَرد', (await staffCrmAll())[CU2].status === 'new')
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
