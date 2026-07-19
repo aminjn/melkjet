@@ -40,7 +40,8 @@ export interface ReosConfig {
     // فاز ۱۸۲ — راهنمای روزهای اول (سبکِ تراوین): زنجیرهٔ قدم‌های هدایت‌شده تا N روز یا تکمیل؛ جایزهٔ هر قدم knob
     tutorial: { enabled: boolean; days: number; stepCoins: number; stepXp: number }
     // فاز ۱۸۷ — مأموریتِ ساعتی با جایزهٔ نقدی: هر N ساعت یک کارِ یک‌دقیقه‌ایِ واقعی؛ جایزه تومانِ سرمایه (ضدِ قفل‌شدن)
-    hourlyQuest: { enabled: boolean; hours: number; capital: number; xp: number }
+    // جایزه به بازارِ واقعی لنگر است: capitalPct٪ از میانهٔ قیمتِ آگهی‌های فروشیِ واقعی، با کفِ capitalMin
+    hourlyQuest: { enabled: boolean; hours: number; capitalPct: number; capitalMin: number; xp: number }
     sellProfitXp: number
     land: { buildGainPct: number; partnerGainPct: number; buildMonths: number }
     rentIncome: boolean
@@ -225,7 +226,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
     refreshSec: 20,
     sellNego: { enabled: true, offerHours: 1, bandLowPct: 88, bandHighPct: 103, noOfferOverPct: 15, counterBoostPct: 4, counterFailPct: 35 },
     tutorial: { enabled: true, days: 3, stepCoins: 10, stepXp: 20 },
-    hourlyQuest: { enabled: true, hours: 1, capital: 200_000_000, xp: 10 },
+    hourlyQuest: { enabled: true, hours: 1, capitalPct: 10, capitalMin: 2_000_000_000, xp: 10 },
     // چرخهٔ عمرِ ملک (§6.7-6.8 و فصل ۵): فروش با سود → XP؛ برآوردِ زمین (ساخت/مشارکت) با پارامترهای شفافِ ادمین.
     sellProfitXp: 50,
     land: { buildGainPct: 45, partnerGainPct: 20, buildMonths: 18 },

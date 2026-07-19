@@ -1204,7 +1204,8 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>⏱ مأموریتِ ساعتی (جایزهٔ نقدی)</div>
           {row('فعال (۱/۰)', cin('hourlyQuest', 'enabled'))}
           {row('بازه (ساعت)', cin('hourlyQuest', 'hours'), 'پیش‌فرض ۱ — هر ساعت مأموریتِ تازه')}
-          {row('جایزهٔ نقدی (تومان)', cin('hourlyQuest', 'capital'), 'پیش‌فرض ۲۰۰٬۰۰۰٬۰۰۰ — مستقیم به سرمایه؛ ضدِ قفل‌شدن')}
+          {row('جایزهٔ نقدی (٪ میانهٔ بازار)', cin('hourlyQuest', 'capitalPct'), 'پیش‌فرض ۱۰ — درصدی از میانهٔ قیمتِ فروشی‌های واقعی؛ با بازار بالا/پایین می‌رود')}
+          {row('کفِ جایزهٔ نقدی (تومان)', cin('hourlyQuest', 'capitalMin'), 'پیش‌فرض ۲٬۰۰۰٬۰۰۰٬۰۰۰ — وقتی دادهٔ بازار کم است')}
           {row('XP', cin('hourlyQuest', 'xp'), 'پیش‌فرض ۱۰')}
           {/* فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — عوض‌کردنِ id یعنی شروعِ فصلِ جدید */}
           <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>🌱 فصلِ دنیا (Season)</div>

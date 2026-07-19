@@ -10,7 +10,7 @@ import {
   sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf, BUSINESS_TYPES, assetMonthlyIncomeOf,
   landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
   creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
-  negotiationOutcome, questOf, hourlyQuestOf, claimHourlyQuest, nextDreamOf,
+  negotiationOutcome, questOf, hourlyQuestOf, claimHourlyQuest, hourlyRewardOf, nextDreamOf,
   applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, snapshotPulse, listAssetForSale, cancelAssetSale, setSaleOffer, counterSaleOffer, markComeback, claimComeback,
   buyFundUnits, sellFundUnits, accrueFundDividends, joinCrowd, exitCrowd,
   companyReputationOf, hireCandidatesOf, teamSkillOf, ownerPersonaOf, permitTermsOf, permitDueAt,
@@ -200,9 +200,12 @@ async function questsOf(userId: string, e: EmpireData, now = Date.now()) {
     const hq = hourlyQuestOf(userId, slot)
     const hm = await metric(slot * hours * 3600e3)
     const hp = Math.min(hq.target, (hm as any)[hq.metric] || 0)
+    // جایزه لنگر به بازارِ واقعی (درخواستِ کاربر: «با میانگینِ قیمت‌ها»): pct٪ از میانهٔ قیمتِ فروشی‌های واقعی، با کفِ knob
+    const medPrice = median((await candidateListings(400).catch(() => [] as Item[])).filter(isPricedSale).map(priceOf))
     hourly = {
       ...hq, progress: hp, done: hp >= hq.target, claimed: !!e.claims[`hq_${slot}`], claimKey: `hq_${slot}`,
-      rewardCapital: Math.max(0, Math.round(Number(hqCfg.capital) || 0)), rewardXp: Math.max(0, Math.round(Number(hqCfg.xp) || 0)),
+      rewardCapital: hourlyRewardOf(medPrice, Number(hqCfg.capitalPct) || 0, Number(hqCfg.capitalMin) || 0),
+      rewardXp: Math.max(0, Math.round(Number(hqCfg.xp) || 0)),
       hours, nextAt: (slot + 1) * hours * 3600e3,
     }
   }

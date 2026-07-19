@@ -499,6 +499,10 @@ export function hourlyQuestOf(userId: string, slot: number) {
   const h = createHash('sha1').update(userId + '|hq|' + slot).digest()
   return HOURLY_QUESTS[h.readUInt32BE(0) % HOURLY_QUESTS.length]
 }
+// جایزهٔ نقدیِ لنگر به بازارِ واقعی: pct٪ از میانهٔ قیمتِ آگهی‌های فروشی، هرگز کمتر از کفِ knob
+export function hourlyRewardOf(medianPrice: number, pct: number, minToman: number): number {
+  return Math.max(Math.max(0, Math.round(minToman)), Math.round(Math.max(0, medianPrice) * Math.max(0, pct) / 100))
+}
 // ادعای مأموریتِ ساعتی: جایزهٔ نقدی مستقیم به سرمایه + XP کوچک؛ ایدمپوتنت با کلیدِ hq_<slot>
 export async function claimHourlyQuest(userId: string, claimKey: string, rewardCapital: number, rewardXp: number, now = Date.now()) {
   return mutateEmpire(userId, e => {
