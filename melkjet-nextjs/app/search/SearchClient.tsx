@@ -755,7 +755,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
         {/* نقشهٔ واقعیِ نشان — فقط دسکتاپ (کنارِ نتایج، چسبان) */}
         <div className="map-panel mjs-map" style={{ position: 'sticky', top: 88, height: 'calc(100vh - 108px)', paddingTop: 20, paddingRight: 12 }}>
           <style>{`@media (max-width: 768px) { .map-panel { display: none !important; } }`}</style>
-          <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} />
+          <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} cityKey={selectedCity} />
         </div>
       </main>
 
@@ -770,7 +770,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       {mapOpenMobile && (
         <div className="mjs-mapfull" style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'var(--bg)', display: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, padding: 8 }}>
-            <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} />
+            <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} cityKey={selectedCity} />
           </div>
           <button onClick={() => setMapOpenMobile(false)}
             style={{ position: 'fixed', bottom: 84, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'flex', alignItems: 'center', gap: 7, padding: '11px 22px', borderRadius: 999, border: 'none', background: '#e7674a', color: '#fff', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.6)', cursor: 'pointer' }}>
@@ -846,7 +846,7 @@ const clampZoom = (z: number) => Math.max(11, Math.min(18, z))
 
 // نقشهٔ تعاملیِ نشان (زوم + جابه‌جایی) با پین‌های قیمتِ آگهی‌ها — مثلِ دیوار
 type MapView = { center: { lat: number; lng: number }; zoom: number } | null
-function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; lat: number; lng: number; label: string }[]; city: string }) {
+function SearchMap({ view, pins, city, cityKey }: { view: MapView; pins: { id: string; lat: number; lng: number; label: string }[]; city: string; cityKey: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [iv, setIv] = useState<MapView>(view)
@@ -858,24 +858,34 @@ function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; la
 
   useEffect(() => {
     const el = ref.current; if (!el) return
-    const measure = () => { const r = el.getBoundingClientRect(); setSize({ w: Math.min(1000, Math.round(r.width / 10) * 10), h: Math.min(1000, Math.round(r.height / 10) * 10) }) }
+    // فاز ۱۷۹: مقیاسِ متناسب — تصویرِ ≤۱۰۰۰px با «همان نسبتِ» قاب گرفته می‌شود؛ کششِ یکنواخت = پینِ دقیق.
+    // قبلاً هر بُعد جدا سقف/گرد می‌شد → نسبت به‌هم می‌خورد و پین‌ها از جای واقعی می‌لغزیدند («توی کوه و بیابان»).
+    const measure = () => { const r = el.getBoundingClientRect(); if (!r.width || !r.height) return; const sc = Math.min(1, 1000 / r.width, 1000 / r.height); setSize({ w: Math.max(100, Math.round(r.width * sc)), h: Math.max(100, Math.round(r.height * sc)) }) }
     measure()
     const ro = new ResizeObserver(measure); ro.observe(el)
     return () => ro.disconnect()
   }, [])
   // با تغییرِ جستجو/شهر، نمای داخلی را به نمای جدید برگردان
-  useEffect(() => { if (view) setIv(view) }, [view?.center.lat, view?.center.lng, view?.zoom])
+  // فاز ۱۷۹: بعد از اولین تعاملِ کاربر، بازنشانیِ خودکارِ نما (از تغییرِ فیلترها) دیگر نقشه را نمی‌پراند
+  const touched = useRef(false)
+  useEffect(() => { if (view && !touched.current) setIv(view) }, [view?.center.lat, view?.center.lng, view?.zoom])
+  useEffect(() => { touched.current = false }, [cityKey])   // فقط «شهرِ واقعاً انتخابی» نما را آزاد می‌کند — نه مشتقِ فیلترها
   useEffect(() => { setErr(false) }, [iv?.center.lat, iv?.center.lng, iv?.zoom, size.w, size.h])
 
   const ready = iv && size.w > 0 && size.h > 0
   const src = ready ? `/api/geo/static-map?lat=${iv!.center.lat.toFixed(5)}&lng=${iv!.center.lng.toFixed(5)}&w=${size.w}&h=${size.h}&zoom=${iv!.zoom}` : ''
+  // فاز ۱۷۹ («زوم می‌کنم آگهی‌ها می‌رن توی کوه و دشت»): تا تصویرِ نمای جدید «لود نشده»، پین‌ها با نمای
+  // تصویرِ فعلی می‌مانند — تصویر و پین همیشه اتمیک با هم عوض می‌شوند؛ هیچ لحظه‌ای ناهم‌خوان نیستند.
+  const [shown, setShown] = useState<{ view: MapView; src: string } | null>(null)
+  const loading179 = !!src && shown?.src !== src
 
   // خوشه‌بندیِ پین‌ها → «حباب‌های شمارش» مثلِ دیوار: در زوم پایین، پین‌های نزدیک به هم در
   // یک حبابِ عدد جمع می‌شوند؛ با زوم/کلیک باز می‌شوند به پین‌های تکیِ قیمت.
   const clusters = useMemo(() => {
-    if (!ready || err) return [] as { x: number; y: number; count: number; id: string; label: string; lat: number; lng: number }[]
-    const pc = project(iv!.center.lat, iv!.center.lng, iv!.zoom)
-    const pts = pins.map(p => { const pp = project(p.lat, p.lng, iv!.zoom); return { id: p.id, label: p.label, x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y), lat: p.lat, lng: p.lng } })
+    const pv = shown?.view || iv    // پین‌ها همیشه با نمای تصویرِ روی صفحه
+    if (!pv || !ready || err) return [] as { x: number; y: number; count: number; id: string; label: string; lat: number; lng: number }[]
+    const pc = project(pv.center.lat, pv.center.lng, pv.zoom)
+    const pts = pins.map(p => { const pp = project(p.lat, p.lng, pv.zoom); return { id: p.id, label: p.label, x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y), lat: p.lat, lng: p.lng } })
       .filter(p => p.x >= 0 && p.x <= size.w && p.y >= 6 && p.y <= size.h - 6)
     const R = 46   // شعاعِ خوشه (پیکسل)
     const out: { x: number; y: number; count: number; id: string; label: string; lat: number; lng: number }[] = []
@@ -893,8 +903,8 @@ function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; la
       p.y = Math.min(y, size.h - 6)
     }
     return out
-  }, [pins, iv, size, err, ready])
-  const zoomToCluster = (lat: number, lng: number) => setIv(v => v ? { center: { lat, lng }, zoom: clampZoom(v.zoom + 2) } : v)
+  }, [pins, iv, shown, size, err, ready])
+  const zoomToCluster = (lat: number, lng: number) => { touched.current = true; setIv(v => v ? { center: { lat, lng }, zoom: clampZoom(v.zoom + 2) } : v) }
 
   const pt = (e: React.MouseEvent | React.TouchEvent) => {
     const t = 'touches' in e ? e.touches[0] : (e as React.MouseEvent)
@@ -914,16 +924,25 @@ function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; la
     if (!moved) { setOff({ x: 0, y: 0 }); return }
     const pc = project(iv.center.lat, iv.center.lng, iv.zoom)
     const nc = unproject(pc.x - o.x, pc.y - o.y, iv.zoom)
+    touched.current = true
     setIv({ center: nc, zoom: iv.zoom }); setOff({ x: 0, y: 0 })
   }
-  const zoomBy = (d: number) => setIv(v => v ? { center: v.center, zoom: clampZoom(v.zoom + d) } : v)
+  const zoomBy = (d: number) => { touched.current = true; setIv(v => v ? { center: v.center, zoom: clampZoom(v.zoom + d) } : v) }
 
   return (
     <div ref={ref} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
       style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)', cursor: drag.current ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none' }}>
       <div style={{ position: 'absolute', inset: 0, transform: `translate(${off.x}px,${off.y}px)` }}>
         {src && !err ? (
-          <img src={src} alt="نقشهٔ منطقه" draggable={false} loading="lazy" decoding="async" onError={() => setErr(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
+          <>
+            {shown && <img src={shown.src} alt="نقشهٔ منطقه" draggable={false} decoding="async" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />}
+            {shown?.src !== src && iv && (
+              <img key={src} src={src} alt="" draggable={false} decoding="async" onError={() => setErr(true)}
+                onLoad={() => setShown({ view: { center: { ...iv.center }, zoom: iv.zoom }, src })}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none', opacity: shown ? 0 : 1 }} />
+            )}
+            {loading179 && shown && <div style={{ position: 'absolute', top: 10, insetInlineEnd: 10, zIndex: 40, background: 'rgba(10,9,8,.8)', color: '#f0ede6', borderRadius: 999, padding: '4px 12px', fontSize: 11 }}>در حالِ به‌روزرسانیِ نقشه…</div>}
+          </>
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 24, lineHeight: 1.9 }}>
             {err ? 'نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}

@@ -44,11 +44,20 @@ export async function GET(req: NextRequest) {
   const markerStr = markers.length ? '&marker=red' : ''
   const url = `https://api.neshan.org/v4/static?key=${encodeURIComponent(key)}&type=standard-night&zoom=${zoom}&center=${center}&width=${w}&height=${h}${markerStr}`
 
+  // فاز ۱۷۹ — کشِ حافظه‌ایِ سرور: چند کاربرِ هم‌شهر (یا زوم/پنِ تکراری) دیگر به نشان نمی‌روند.
+  const ck = url
+  const hit = MAP_CACHE.get(ck)
+  if (hit && Date.now() - hit.at < MAP_TTL) return new Response(new Uint8Array(hit.buf), { headers: { 'content-type': hit.ct, 'cache-control': 'public, max-age=86400, immutable' } })
   try {
     const r = await shecanRequestBuffer(url, { timeout: 12000 })
     if (r.status < 200 || r.status >= 400) return new Response('neshan-error', { status: 502 })
-    return new Response(new Uint8Array(r.buffer), { headers: { 'content-type': r.contentType, 'cache-control': 'public, max-age=86400' } })
+    MAP_CACHE.set(ck, { buf: r.buffer, ct: r.contentType, at: Date.now() })
+    if (MAP_CACHE.size > 400) { const oldest = [...MAP_CACHE.entries()].sort((a, b) => a[1].at - b[1].at)[0]; if (oldest) MAP_CACHE.delete(oldest[0]) }
+    return new Response(new Uint8Array(r.buffer), { headers: { 'content-type': r.contentType, 'cache-control': 'public, max-age=86400, immutable' } })
   } catch {
     return new Response('fetch-failed', { status: 502 })
   }
 }
+
+const MAP_CACHE = new Map<string, { buf: Buffer; ct: string; at: number }>()
+const MAP_TTL = 6 * 3600e3

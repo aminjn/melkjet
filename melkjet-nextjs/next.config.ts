@@ -47,6 +47,12 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "no-store, private" }],
       },
       {
+        // فاز ۱۷۹ — استثنای تصویرِ نقشهٔ استاتیک: بدونِ کوکی/سشن است و باید در مرورگر/CDN کش شود
+        // وگرنه هر زوم/پنِ نقشه یک رفتِ کامل به نشان است (کندیِ گزارش‌شدهٔ کاربر). قانونِ بعدی، قبلی را override می‌کند.
+        source: "/api/geo/static-map",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, immutable" }],
+      },
+      {
         // everything else (HTML pages, etc.) — always revalidate so a new
         // deploy is picked up immediately instead of serving stale markup.
         // /_next/image excluded: the optimizer sets its own long-lived
