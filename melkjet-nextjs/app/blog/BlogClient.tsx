@@ -34,6 +34,12 @@ export default function BlogClient({ initial }: { initial: BlogIndexData }) {
   const [q, setQ] = useState('')
   const [booting, setBooting] = useState(initial.articles.length === 0)
   const [moreOpen, setMoreOpen] = useState(false)
+  // فاز ۱۷۸ — جستجو/دسته در URL می‌ماند: رفتن به مقاله و برگشتن چیزی را نمی‌پراند
+  useEffect(() => { try { const sp = new URLSearchParams(window.location.search); const qq = sp.get('q'); if (qq) setQ(qq); const c = sp.get('cat'); if (c) setCat(c) } catch {} }, [])
+  useEffect(() => {
+    const t = setTimeout(() => { try { const sp = new URLSearchParams(); if (q) sp.set('q', q); if (cat) sp.set('cat', cat); window.history.replaceState(null, '', window.location.pathname + (sp.toString() ? '?' + sp.toString() : '')) } catch {} }, 250)
+    return () => clearTimeout(t)
+  }, [q, cat])
   const moreRef = useRef<HTMLDivElement>(null)
 
   // فالبک: فقط اگر SSR چیزی نداشت (مثلاً دیتابیس لحظه‌ای قطع بود) کلاینت خودش واکشی می‌کند.

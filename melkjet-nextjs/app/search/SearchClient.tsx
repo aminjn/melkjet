@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import Nav from '@/app/components/Nav'
@@ -167,31 +167,29 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     window.addEventListener('mj-deal', onDeal)
     return () => window.removeEventListener('mj-deal', onDeal)
   }, [])
-  const goDeal = (label: string) => {
-    setDealType(label)
-    const slug = label === 'اجاره' ? 'rent' : label === 'پیش‌فروش' ? 'presale' : label === 'رهن' ? 'mortgage' : ''
-    try { window.history.replaceState(null, '', '/search' + (slug ? `?type=${slug}` : '')) } catch {}
-  }
+  const goDeal = (label: string) => setDealType(label)   // فاز ۱۷۸: URL را سینکِ واحدِ پایین می‌نویسد
 
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [mapOpenMobile, setMapOpenMobile] = useState(false)   // موبایل: نقشه پیش‌فرض بسته، با دکمهٔ شناور باز می‌شود
   const [search, setSearch] = useState(initialQuery)
   const [searchTerm, setSearchTerm] = useState(initialQuery)
-  const [beds, setBeds] = useState<string>('همه')
+  // فاز ۱۷۸ (فیدبک: «می‌ره تو آگهی برمی‌گرده، کلِ فیلترها و سرچ می‌پره») — همهٔ فیلترها از URL
+  // مقداردهی می‌شوند و پایین‌تر با replaceState به URL برمی‌گردند؛ برگشت از آگهی = همان وضعیت.
+  const [beds, setBeds] = useState<string>(searchParams.get('beds') || 'همه')
   const [kind, setKind] = useState(kindParam)
   useEffect(() => { if (kindParam) setKind(kindParam) }, [kindParam])
-  const [priceMin, setPriceMin] = useState(0)
-  const [priceMax, setPriceMax] = useState(PRICE_MAX)
-  const [areaMin, setAreaMin] = useState(0)
-  const [areaMax, setAreaMax] = useState(0)
-  const [floorMin, setFloorMin] = useState(0)
-  const [yearMin, setYearMin] = useState(0)
-  const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])
-  const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
-  const [hood, setHood] = useState('')   // فیلترِ محله (انتخابِ کاربر)
+  const [priceMin, setPriceMin] = useState(Number(searchParams.get('pmin')) || 0)
+  const [priceMax, setPriceMax] = useState(Number(searchParams.get('pmax')) || PRICE_MAX)
+  const [areaMin, setAreaMin] = useState(Number(searchParams.get('amin')) || 0)
+  const [areaMax, setAreaMax] = useState(Number(searchParams.get('amax')) || 0)
+  const [floorMin, setFloorMin] = useState(Number(searchParams.get('fmin')) || 0)
+  const [yearMin, setYearMin] = useState(Number(searchParams.get('ymin')) || 0)
+  const [checkedAmenities, setCheckedAmenities] = useState<string[]>((searchParams.get('amen') || '').split('،').filter(Boolean))
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'پیشنهاد ملک‌جت')
+  const [hood, setHood] = useState(searchParams.get('hood') || '')   // فیلترِ محله (انتخابِ کاربر)
   // فاز ۱۵۱ (فیدبک: «رفرش می‌کنم می‌رود توی یک محله، ۴ تا آگهی»): «نزدیکِ من» دیگر پیش‌فرض روشن نیست —
   // موقعیت/سوابق فقط با انتخابِ صریحِ کاربر فیلتر می‌کند؛ وگرنه صرفاً مرتب‌سازی.
-  const [nearMe, setNearMe] = useState(false)
+  const [nearMe, setNearMe] = useState(searchParams.get('near') === '1')
 
   // سوابقِ کاربر/موقعیتِ لحظه‌ای: محلهٔ کاربر + شهرِ انتخابی (یا تشخیص‌داده‌شده)
   const [userArea, setUserArea] = useState('')
@@ -222,7 +220,6 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const gotOnce151 = useRef(false)                        // بعد از بارِ اول، تعویضِ شهر/تب بدونِ تأخیرِ ۲.۵ث
   // فاز ۹۲ (پرفورمنس: رندرِ ۱۰۰۰ کارت + ۱۰۰۰ تصویرِ background = ۴۴MB و LCP ~۱۰ث): رندرِ تدریجیِ ۲۴تایی
   const [visN, setVisN] = useState(24)
-  const moreRef = useRef<HTMLDivElement>(null)
   const [promoted, setPromoted] = useState<PropertyT[]>([])
   const [loading, setLoading] = useState(initial.length === 0)
 
@@ -251,16 +248,45 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
 
   // با هر تغییرِ نتیجه‌ها از اول ۲۴ تا؛ نگهبانِ انتهای لیست خودکار ۲۴ تای بعدی را می‌آورد
   useEffect(() => { setVisN(24) }, [dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, searchTerm, selectedCity])
-  useEffect(() => {
-    const el = moreRef.current
+  // فاز ۱۷۸ (فیدبک: «۲۵ تا نشان می‌دهد و بقیه گیر می‌کند») — observer با effectِ یک‌باره وصل می‌شد
+  // ولی نگهبانِ انتهای لیست آن لحظه هنوز رندر نشده بود (داده نیامده بود) → هرگز وصل نمی‌شد.
+  // callback-ref هر بار که نگهبان واقعاً در DOM بیاید/برود، observer را وصل/قطع می‌کند.
+  const moreObs = useRef<IntersectionObserver | null>(null)
+  const moreRefCb = useCallback((el: HTMLDivElement | null) => {
+    moreObs.current?.disconnect(); moreObs.current = null
     if (!el) return
-    const io = new IntersectionObserver(es => { if (es[0]?.isIntersecting) setVisN(n => n + 24) }, { rootMargin: '600px' })
+    const io = new IntersectionObserver(es => { if (es[0]?.isIntersecting) setVisN(n => n + 24) }, { rootMargin: '900px' })
     io.observe(el)
-    return () => io.disconnect()
+    moreObs.current = io
   }, [])
+  useEffect(() => () => moreObs.current?.disconnect(), [])
 
   const toggleAmenity = (a: string) => setCheckedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
   const parsed = useMemo(() => parseQuery(searchTerm), [searchTerm])
+  // فاز ۱۷۸ — سینکِ کاملِ وضعیتِ جستجو → URL (replaceState، بدونِ رفرش): برگشت از آگهی هیچ‌چیز را نمی‌پراند
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const p = new URLSearchParams()
+      if (searchTerm) p.set('q', searchTerm)
+      const slug = dealType === 'اجاره' ? 'rent' : dealType === 'پیش‌فروش' ? 'presale' : dealType === 'رهن' ? 'mortgage' : ''
+      if (slug) p.set('type', slug)
+      if (kind) p.set('kind', kind)
+      if (beds !== 'همه') p.set('beds', beds)
+      if (priceMin > 0) p.set('pmin', String(priceMin))
+      if (priceMax < PRICE_MAX) p.set('pmax', String(priceMax))
+      if (areaMin > 0) p.set('amin', String(areaMin))
+      if (areaMax > 0) p.set('amax', String(areaMax))
+      if (floorMin > 0) p.set('fmin', String(floorMin))
+      if (yearMin > 0) p.set('ymin', String(yearMin))
+      if (checkedAmenities.length) p.set('amen', checkedAmenities.join('،'))
+      if (hood) p.set('hood', hood)
+      if (sortBy !== 'پیشنهاد ملک‌جت') p.set('sort', sortBy)
+      if (nearMe) p.set('near', '1')
+      const qs = p.toString()
+      try { window.history.replaceState(null, '', '/search' + (qs ? `?${qs}` : '')) } catch { /* URL sync اختیاری */ }
+    }, 250)
+    return () => clearTimeout(t)
+  }, [searchTerm, dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, hood, sortBy, nearMe])
   // فاز ۱۷۷ (فیدبک: «از صفحهٔ اصلی سرچ می‌کنم چرت‌وپرت می‌ده») — صفحهٔ اصلی فقط q می‌فرستد؛
   // نیتِ معامله از خودِ متن («اجارهٔ آپارتمان…») تبِ درست را انتخاب می‌کند تا آگهیِ فروش برای کوئریِ اجاره نیاید.
   useEffect(() => {
@@ -718,8 +744,10 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
           </div>
           {/* فاز ۹۲: نگهبانِ اسکرول — ۲۴ کارتِ بعدی خودکار می‌آید؛ تصویر/JS فقط به‌اندازهٔ دیده‌شده مصرف می‌شود */}
           {visN < shownProperties.length && (
-            <div ref={moreRef} style={{ textAlign: 'center', padding: '18px 0', fontSize: 12.5, color: 'var(--muted)' }}>
-              در حالِ آوردنِ نتایجِ بعدی… ({(shownProperties.length - visN).toLocaleString('fa-IR')} آگهیِ دیگر)
+            <div ref={moreRefCb} style={{ textAlign: 'center', padding: '18px 0', fontSize: 12.5, color: 'var(--muted)' }}>
+              <button onClick={() => setVisN(n => n + 48)} style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 10, padding: '9px 22px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                نمایشِ آگهی‌های بیشتر ({(shownProperties.length - visN).toLocaleString('fa-IR')})
+              </button>
             </div>
           )}
         </div>

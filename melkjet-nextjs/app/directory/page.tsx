@@ -62,6 +62,12 @@ export default function DirectoryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [serviceTag, setServiceTag] = useState('')
   const [items, setItems] = useState<ContentItem[]>([])
+  // فاز ۱۷۸ — جستجو/دسته/تگ در URL می‌ماند: برگشت از پروفایل چیزی را نمی‌پراند
+  useEffect(() => { try { const sp = new URLSearchParams(window.location.search); const qq = sp.get('q'); if (qq) setSearchQuery(qq); const c = sp.get('cat'); if (c) setActiveCategory(c); const tg = sp.get('tag'); if (tg) setServiceTag(tg) } catch {} }, [])
+  useEffect(() => {
+    const t = setTimeout(() => { try { const sp = new URLSearchParams(); if (searchQuery) sp.set('q', searchQuery); if (activeCategory !== 'مشاور') sp.set('cat', activeCategory); if (serviceTag) sp.set('tag', serviceTag); window.history.replaceState(null, '', window.location.pathname + (sp.toString() ? '?' + sp.toString() : '')) } catch {} }, 250)
+    return () => clearTimeout(t)
+  }, [searchQuery, activeCategory, serviceTag])
   const [promoted, setPromoted] = useState<ContentItem[]>([])
   const [loading, setLoading] = useState(true)
   const [counts, setCounts] = useState<Record<string, number>>({})
