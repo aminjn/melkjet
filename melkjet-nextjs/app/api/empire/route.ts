@@ -772,6 +772,30 @@ export async function POST(req: NextRequest) {
       const em = await getEmpire(userId)
       return NextResponse.json({ ok: true, board: await hoodBoardOf(userId, config().empire.hoodBoard), homeHood: em?.homeHood || '' })
     }
+    // 🔎 فاز ۱۸۵ — همهٔ آگهی‌های واقعیِ یک محله «داخلِ دنیا» (فیدبک: «همه آگهی‌ها رو می‌خوام ببینم، نمی‌شه دوباره بره تو سایت»):
+    // همان استخرِ واقعی + مالکیتِ انحصاری (soldTo) + پرچمِ قابلِ‌خرید — تحلیل/مذاکره/خرید با اکشن‌های موجود.
+    case 'hoodListings': {
+      const hood = String(b.hood || '').trim()
+      if (!hood) return NextResponse.json({ error: 'محله مشخص نیست' }, { status: 400 })
+      const { hoodMatches } = await import('@/app/lib/empire-territory')
+      const pool = await candidateListings(500).catch(() => [] as Item[])
+      const here = pool.filter(it => hoodMatches(hood, it.location))
+      const owners = await allListingOwners().catch(() => ({} as Record<string, { userId: string; no: number; name: string }>))
+      const rows = here.slice(0, 60).map(it => {
+        const p = priceOf(it)
+        const ow = owners[it.id]
+        const soldTo = ow && ow.userId !== userId && !String(ow.userId).startsWith(NPC_USER_PREFIX) ? { name: ow.name, no: ow.no } : null
+        return {
+          id: it.id, title: it.title, price: it.price || '', priceNum: p,
+          area: String((it.meta || {})['متراژ'] || ''),
+          saleable: isSale(it) && p > 0,
+          soldTo, mine: !!ow && ow.userId === userId,
+        }
+      })
+      // فروشیِ قیمت‌دارِ آزاد اول — بعد خریده‌شده‌ها/بی‌قیمت‌ها (صادقانه دیده شوند، ولی تهِ فهرست)
+      rows.sort((a, b2) => Number(b2.saleable && !b2.soldTo && !b2.mine) - Number(a.saleable && !a.soldTo && !a.mine))
+      return NextResponse.json({ ok: true, hood, total: here.length, capped: here.length > rows.length, listings: rows })
+    }
     // محلهٔ خانهٔ کاربر (پاسخِ واقعیِ خودش؛ خالی = پاک‌کردن)
     case 'setHomeHood': {
       const { setHomeHood } = await import('@/app/lib/empire-store')

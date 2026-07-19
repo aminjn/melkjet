@@ -49,6 +49,26 @@ export function hoodBoardFrom(empires: EmpireLite[], meId: string): HoodStat[] {
   return out
 }
 
+// فاز ۱۸۵ — تطبیقِ محله با «مرزِ واژه» به‌جای تساویِ کاملِ بخشِ ویرگولی: «سهروردی» بخشِ «سهروردی جنوبی» را
+// می‌گیرد (فیدبک: «محله آگهی دارد ولی تابلو هیچی نشان نمی‌دهد») ولی «ونک» هرگز «پونک» را نمی‌گیرد (زیررشته ممنوع).
+// نرمال‌سازی: نیم‌فاصله→حذف، ي/ك عربی→فارسی — «سعادت‌آباد» و «سعادت آباد» یکی‌اند.
+const normTok = (s: string) => s.replace(/[‌‏‎]/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک')
+export function hoodMatches(hood: string, location?: string): boolean {
+  const hTok = String(hood || '').trim().split(/\s+/).filter(Boolean).map(normTok)
+  if (!hTok.length) return false
+  const joinedHood = hTok.join('')
+  for (const part of String(location || '').split(/[،,]/)) {
+    const tok = part.trim().split(/\s+/).filter(Boolean).map(normTok)
+    for (let i = 0; i + hTok.length <= tok.length; i++)
+      if (hTok.every((t, j) => tok[i + j] === t)) return true
+    // «سعادت آباد» در نشانی، «سعادت‌آباد» در محله (و برعکس): مقایسهٔ چسبیده — مرزِ واژه حفظ می‌شود
+    for (let i = 0; i + 2 <= tok.length; i++)
+      if (tok[i] + tok[i + 1] === joinedHood) return true
+    if (hTok.length >= 2) for (const t of tok) if (t === joinedHood) return true
+  }
+  return false
+}
+
 // نسخهٔ کامل برای API: تابلو از دادهٔ زندهٔ استور + آگهی‌های واقعیِ در دسترسِ هر محله (پلِ بازی→خریدِ واقعی).
 export async function hoodBoardOf(meId: string, opts: { maxHoods: number; sampleListings: number }): Promise<Array<HoodStat & { listings: number; samples: Array<{ id: string; title: string; price: string }> }>> {
   const { listEmpiresPublic, getEmpire } = await import('./empire-store')
@@ -62,10 +82,8 @@ export async function hoodBoardOf(meId: string, opts: { maxHoods: number; sample
     board.unshift({ hood: home, total: 0, mine: 0, owners: 0, king: null, gap: 1 })
   const top = board.slice(0, Math.max(1, opts.maxHoods))
   const pool = await candidateListings(500).catch(() => [])
-  // تطبیقِ محله با «بخشِ» نشانی (جداشده با ویرگول) نه زیررشته — وگرنه «ونک» آگهی‌های «پونک» را هم می‌گرفت (دادهٔ غلط ممنوع)
-  const partsOf = (loc?: string) => String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean)
   return top.map(s => {
-    const here = pool.filter(it => partsOf(it.location).includes(s.hood))
+    const here = pool.filter(it => hoodMatches(s.hood, it.location))
     return { ...s, listings: here.length, samples: here.slice(0, Math.max(0, opts.sampleListings)).map(it => ({ id: it.id, title: it.title, price: it.price || '' })) }
   })
 }
