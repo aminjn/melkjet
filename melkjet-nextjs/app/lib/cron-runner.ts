@@ -48,6 +48,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
     // ☀️ زنگِ صبحگاهیِ امپراتوری (فاز ۱۶۷): رأسِ ساعتِ knob (وقتِ تهران) نامهٔ روز + پوشِ مأموریتِ روز.
     // ایدمپوتنت (نشانِ morningAt روی رکوردِ نامه) — هر ۵ دقیقه چک، فقط یک‌بار در روز اثر می‌کند.
     try { const { maybeRunMorning } = await import('./empire-morning'); const nm = await maybeRunMorning(Date.now()); if (nm) console.log(`[empire] morning bell: ${nm} users`) } catch { /* زنگِ صبحگاهی */ }
+    // ⏰ فاز ۱۷۳ — یادآورِ خودکارِ CRM پرسنل: پیگیری/وظیفهٔ سررسیدشده → پوش + پیامک به خودِ پرسنل (اتمیک، یک‌بار)
+    try { const { runStaffReminders } = await import('./staff-crm-reminders'); const nr = await runStaffReminders(Date.now()); if (nr) console.log(`[staff-crm] reminders sent: ${nr}`) } catch { /* یادآورِ CRM */ }
     if (reosCfg.training.enabled && Date.now() - lastReosTrainAt > Math.max(1, reosCfg.training.autoHours) * 60 * 60 * 1000) {
       lastReosTrainAt = Date.now()
       try { const w = await trainEngageModel(); console.log(`[reos] engage model: n=${w.n} auc=${w.auc} default=${w.usedDefault}`) } catch { /* آموزشِ REOS */ }

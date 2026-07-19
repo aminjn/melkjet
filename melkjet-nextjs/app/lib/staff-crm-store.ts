@@ -15,10 +15,12 @@ export const STAFF_CRM_STATUS_FA: Record<StaffCrmStatus, string> = {
 export interface StaffCrmAct {
   at: number
   by: string                 // نام/شمارهٔ پرسنلِ ثبت‌کننده — پاسخ‌گویی
+  byPhone?: string           // فاز ۱۷۳ — شمارهٔ پرسنل: مقصدِ یادآورِ خودکار (پیامک/نوتیف)
   kind: 'call' | 'follow' | 'note' | 'sms'
   text: string
   dueAt?: number             // یادآوریِ پیگیریِ بعدی
   done?: boolean
+  remindedAt?: number        // فاز ۱۷۳ — یادآورِ خودکار یک‌بار رفته (ایدمپوتنت)
 }
 export interface StaffCrmEntry { status: StaffCrmStatus; assignedTo?: string; acts: StaffCrmAct[] }
 // فاز ۱۲۳ — وظیفهٔ تیمی: مستقل یا متصل به یک مشتری؛ با مسئول و سررسید
@@ -34,6 +36,8 @@ export interface StaffTask {
   doneBy?: string
   at: number
   doneAt?: number
+  byPhone?: string           // فاز ۱۷۳ — مقصدِ یادآورِ خودکارِ وظیفه
+  remindedAt?: number
 }
 interface Db { customers: Record<string, StaffCrmEntry>; tasks: StaffTask[] }
 const EMPTY: Db = { customers: {}, tasks: [] }
@@ -101,6 +105,54 @@ export async function markActDone(phone: string, actAt: number): Promise<void> {
   await mutate(db => {
     const a = db.customers[phone]?.acts.find(x => x.at === actAt && x.dueAt)
     if (a) a.done = true
+  })
+}
+
+// ── فاز ۱۷۳ — CRM واقعی برای پرسنل: ویرایش/حذف/تعویقِ پیگیری + یادآورِ خودکار ──
+export async function updateStaffAct(phone: string, actAt: number, patch: { text?: string; dueAt?: number | null }): Promise<StaffCrmAct | null> {
+  return mutate(db => {
+    const a = db.customers[phone]?.acts.find(x => x.at === actAt)
+    if (!a) return null
+    if (patch.text !== undefined) a.text = String(patch.text).slice(0, 500)
+    if (patch.dueAt !== undefined) {
+      if (patch.dueAt === null) { delete a.dueAt; delete a.done; delete a.remindedAt }
+      else { a.dueAt = patch.dueAt; a.done = false; delete a.remindedAt }   // سررسیدِ نو = یادآورِ نو
+    }
+    return a
+  })
+}
+
+export async function deleteStaffAct(phone: string, actAt: number): Promise<boolean> {
+  return mutate(db => {
+    const e = db.customers[phone]
+    if (!e) return false
+    const n = e.acts.length
+    e.acts = e.acts.filter(x => x.at !== actAt)
+    return e.acts.length < n
+  })
+}
+
+// یادآورهای سررسیدشده را «اتمیک» برمی‌دارد و همان‌جا نشانِ remindedAt می‌زند —
+// حتی با چند اینستنس، هر یادآور فقط یک‌بار ارسال می‌شود (کرون فقط روی اینستنسِ صفر است).
+export interface DueReminder { source: 'act' | 'task'; customerPhone?: string; staffPhone: string; text: string; dueAt: number }
+export async function claimDueReminders(now = Date.now()): Promise<DueReminder[]> {
+  return mutate(db => {
+    const out: DueReminder[] = []
+    for (const [phone, e] of Object.entries(db.customers)) {
+      for (const a of e.acts) {
+        if (a.dueAt && !a.done && !a.remindedAt && a.dueAt <= now && a.byPhone) {
+          a.remindedAt = now
+          out.push({ source: 'act', customerPhone: phone, staffPhone: a.byPhone, text: a.text, dueAt: a.dueAt })
+        }
+      }
+    }
+    for (const t of db.tasks) {
+      if (t.dueAt && !t.done && !t.remindedAt && t.dueAt <= now && t.byPhone) {
+        t.remindedAt = now
+        out.push({ source: 'task', customerPhone: t.forPhone, staffPhone: t.byPhone, text: t.title, dueAt: t.dueAt })
+      }
+    }
+    return out
   })
 }
 

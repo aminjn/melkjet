@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listAccounts, getAccount } from '@/app/lib/account-store'
 import { listRoles } from '@/app/lib/role-store'
-import { staffCrmAll, addStaffAct, setStaffStatus, assignStaff, markActDone, listStaffTasks, addStaffTask, toggleStaffTask, deleteStaffTask, type StaffCrmStatus } from '@/app/lib/staff-crm-store'
+import { staffCrmAll, addStaffAct, setStaffStatus, assignStaff, markActDone, updateStaffAct, deleteStaffAct, listStaffTasks, addStaffTask, toggleStaffTask, deleteStaffTask, type StaffCrmStatus } from '@/app/lib/staff-crm-store'
 import { logAudit } from '@/app/lib/audit-store'
 import { listByOwner } from '@/app/lib/ticket-store'
 import { getPrefs } from '@/app/lib/user-store'
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     const forAcc = forPhone ? getAccount(forPhone) : null
     if (forPhone && !forAcc) return NextResponse.json({ error: 'مشتریِ مرتبط یافت نشد' }, { status: 404 })
     const t = await addStaffTask({
-      title, by: await byName(s.phone),
+      title, by: await byName(s.phone), byPhone: s.phone,
       assignedTo: String(b.assignedTo || '').trim().slice(0, 40) || undefined,
       forPhone: forPhone || undefined, forName: forAcc?.name || undefined,
       dueAt: Number(b.dueAt) > Date.now() - 864e5 ? Number(b.dueAt) : undefined,
@@ -140,9 +140,34 @@ export async function POST(req: NextRequest) {
     const kind = ['call', 'follow', 'note', 'sms'].includes(String(b.kind)) ? String(b.kind) as 'call' | 'follow' | 'note' | 'sms' : 'note'
     const text = String(b.text || '').trim()
     if (!text) return NextResponse.json({ error: 'متنِ فعالیت را بنویس' }, { status: 400 })
-    const dueAt = Number(b.dueAt) > Date.now() - 864e5 ? Number(b.dueAt) : undefined
-    const e = await addStaffAct(phone, { by: await byName(s.phone), kind, text, dueAt })
-    return NextResponse.json({ ok: true, entry: e })
+    let dueAt = Number(b.dueAt) > Date.now() - 864e5 ? Number(b.dueAt) : undefined
+    // فاز ۱۷۳ («همه‌چیز اتومات»): «پیگیری» بدونِ سررسید معنا ندارد — خودکار ۳ روزِ بعد، ساعتِ همین لحظه
+    if (kind === 'follow' && !dueAt) dueAt = Date.now() + 3 * 864e5
+    const e = await addStaffAct(phone, { by: await byName(s.phone), byPhone: s.phone, kind, text, dueAt })
+    return NextResponse.json({ ok: true, entry: e, autoDue: kind === 'follow' && !Number(b.dueAt) ? dueAt : undefined })
+  }
+  // فاز ۱۷۳ — ویرایش/حذف/تعویقِ پیگیری: CRM واقعی، نه فقط ثبتِ یک‌طرفه
+  if (action === 'actEdit') {
+    const patch: { text?: string; dueAt?: number | null } = {}
+    if (b.text !== undefined) { const t = String(b.text || '').trim(); if (!t) return NextResponse.json({ error: 'متن خالی است' }, { status: 400 }); patch.text = t }
+    if (b.dueAt !== undefined) patch.dueAt = b.dueAt === null || b.dueAt === 0 ? null : Number(b.dueAt)
+    const a = await updateStaffAct(phone, Number(b.actAt) || 0, patch)
+    if (!a) return NextResponse.json({ error: 'فعالیت یافت نشد' }, { status: 404 })
+    return NextResponse.json({ ok: true, act: a })
+  }
+  if (action === 'actDelete') {
+    const okDel = await deleteStaffAct(phone, Number(b.actAt) || 0)
+    if (!okDel) return NextResponse.json({ error: 'فعالیت یافت نشد' }, { status: 404 })
+    logAudit(s.phone, 'CRM مرکزی: حذفِ فعالیت', phone)
+    return NextResponse.json({ ok: true })
+  }
+  if (action === 'actSnooze') {
+    const days = Math.max(1, Math.min(30, Number(b.days) || 1))
+    const crmAll = await staffCrmAll()
+    const cur = crmAll[phone]?.acts.find(x => x.at === (Number(b.actAt) || 0))
+    if (!cur || !cur.dueAt) return NextResponse.json({ error: 'پیگیری یافت نشد' }, { status: 404 })
+    const a = await updateStaffAct(phone, cur.at, { dueAt: Math.max(Date.now(), cur.dueAt) + days * 864e5 })
+    return NextResponse.json({ ok: true, act: a })
   }
   if (action === 'status') {
     const st = String(b.status || '')
@@ -165,7 +190,7 @@ export async function POST(req: NextRequest) {
     if (!text) return NextResponse.json({ error: 'متنِ پیامک را بنویس' }, { status: 400 })
     const r = await sendServiceSms(phone, text, 'CRM مرکزی ملک‌جت')
     if (!r.ok) return NextResponse.json({ error: r.error || 'ارسالِ پیامک ناموفق بود — تنظیماتِ IPPanel را چک کن' }, { status: 502 })
-    const e = await addStaffAct(phone, { by: await byName(s.phone), kind: 'sms', text: `پیامک ارسال شد: ${text}` })
+    const e = await addStaffAct(phone, { by: await byName(s.phone), byPhone: s.phone, kind: 'sms', text: `پیامک ارسال شد: ${text}` })
     logAudit(s.phone, 'CRM مرکزی: ارسالِ پیامک', phone)
     return NextResponse.json({ ok: true, entry: e })
   }

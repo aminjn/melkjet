@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 // فاز ۱۳۹ (فیدبک: «خیلی جاها مثل CRM تاریخ میلادی است»): اینپوتِ خامِ datetime-local مرورگر
 // همیشه میلادی نشان می‌دهد — به‌جایش تقویمِ شمسیِ خودمان.
 import JalaliDatePicker from './JalaliDatePicker'
+import { ensurePushSubscribed } from '@/app/lib/push-client'
 
 // برچسب‌های وضعیت (کپیِ کلاینتیِ staff-crm-store — آن استور سروری است و fs دارد)
 const STAFF_CRM_STATUS_FA: Record<string, string> = { new: 'جدید', follow: 'در حالِ پیگیری', customer: 'مشتری شد', lost: 'از دست رفت' }
@@ -73,9 +74,18 @@ export default function StaffCrmView() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: FONT, direction: 'rtl' }}>
       <div>
-        <div style={{ fontSize: 16, fontWeight: 900 }}>📞 CRM مرکزی — مشتریانِ سایت</div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>هر کاربرِ واقعیِ سایت یک پرونده است؛ پرسنل تماس/پیگیری/یادداشت ثبت می‌کنند و یادآوری‌ها این‌جا سررسید می‌شوند. هر ثبت با نامِ ثبت‌کننده است.</div>
-        {msg && <div style={{ marginTop: 6, fontSize: 12.5, color: '#e88' }}>{msg}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 16, fontWeight: 900 }}>📞 CRM مرکزی — مشتریانِ سایت</div>
+          <span style={{ flex: 1 }} />
+          {/* فاز ۱۷۳ — یادآورِ خودکار به خودِ پرسنل: پوشِ مرورگر (پیامک همیشه می‌رود) */}
+          <button style={{ ...btnGhost, fontSize: 11 }} onClick={async () => {
+            const r = await ensurePushSubscribed(true)
+            setMsg(r.ok ? '✓ نوتیفیکیشنِ مرورگر فعال شد — یادآورها همین‌جا هم می‌آیند' : 'نوتیفیکیشن فعال نشد (اجازه داده نشد)؛ یادآورِ پیامکی همچنان می‌آید')
+            setTimeout(() => setMsg(''), 5000)
+          }}>🔔 نوتیفِ یادآورها</button>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>هر کاربرِ واقعیِ سایت یک پرونده است؛ پرسنل تماس/پیگیری/یادداشت ثبت می‌کنند. <b style={{ color: 'var(--gold)' }}>یادآورِ خودکار فعال است:</b> رأسِ سررسیدِ هر پیگیری/وظیفه، به ثبت‌کننده پیامک و نوتیفیکیشن می‌رود — هیچ پیگیری‌ای فراموش نمی‌شود.</div>
+        {msg && <div style={{ marginTop: 6, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e88' }}>{msg}</div>}
       </div>
 
       {/* KPIهای واقعی */}
@@ -151,6 +161,11 @@ export default function StaffCrmView() {
               <b style={{ cursor: 'pointer', color: 'var(--gold)' }} onClick={() => { setTab('customers'); openCustomer(rows.find(r => r.phone === d.phone) || { phone: d.phone, name: d.name }) }}>{d.name || d.phone}</b>
               <span style={{ flex: 1 }}>{d.text.slice(0, 80)}</span>
               <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>سررسید {faDT(d.dueAt)} · {d.by.split(' (')[0]}</span>
+              {/* فاز ۱۷۳ — تعویقِ یک‌لمسی: سررسیدِ نو = یادآورِ خودکارِ نو */}
+              {[[1, '+۱ روز'], [3, '+۳ روز'], [7, '+۱ هفته']].map(([dd, l]) => (
+                <button key={dd} style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} title="تعویق — یادآورِ خودکار دوباره تنظیم می‌شود"
+                  onClick={async () => { if (await post({ action: 'actSnooze', phone: d.phone, actAt: d.at, days: dd })) load() }}>{l}</button>
+              ))}
               <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 11 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: d.phone, actAt: d.at })) load() }}>✓ انجام شد</button>
             </div>
           ))}
@@ -163,6 +178,8 @@ export default function StaffCrmView() {
               <b style={{ cursor: 'pointer', color: 'var(--gold)' }} onClick={() => { setTab('customers'); openCustomer(rows.find(r => r.phone === d.phone) || { phone: d.phone, name: d.name }) }}>{d.name || d.phone}</b>
               <span style={{ flex: 1 }}>{d.text.slice(0, 80)}</span>
               <span style={{ color: 'var(--muted)', fontSize: 10.5 }}>⏰ {faDT(d.dueAt)} · {d.by.split(' (')[0]}</span>
+              <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} onClick={async () => { if (await post({ action: 'actSnooze', phone: d.phone, actAt: d.at, days: 1 })) load() }}>+۱ روز</button>
+              <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: d.phone, actAt: d.at })) load() }}>✓</button>
             </div>
           ))}
         </div>
@@ -208,6 +225,7 @@ export default function StaffCrmView() {
             <b style={{ cursor: 'pointer', color: 'var(--gold)' }} onClick={() => openCustomer(rows.find(r => r.phone === d.phone) || { phone: d.phone, name: d.name })}>{d.name || d.phone}</b>
             <span style={{ flex: 1 }}>{d.text.slice(0, 70)}</span>
             <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>سررسید {faDT(d.dueAt)} · ثبتِ {d.by.split(' (')[0]}</span>
+            <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} title="تعویقِ ۱ روز" onClick={async () => { if (await post({ action: 'actSnooze', phone: d.phone, actAt: d.at, days: 1 })) load() }}>+۱ روز</button>
             <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 11 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: d.phone, actAt: d.at })) load() }}>✓ انجام شد</button>
           </div>
         ))}
@@ -351,7 +369,8 @@ export default function StaffCrmView() {
             <textarea value={actText} onChange={e => setActText(e.target.value)} rows={3} placeholder="چه گذشت؟ (نتیجهٔ تماس، قرارِ بعدی، …)" style={{ ...inp, width: '100%', marginTop: 8, resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
               <label style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>یادآوریِ پیگیری (شمسی):
-                <span style={{ minWidth: 185, display: 'inline-block' }}><JalaliDatePicker value={actDue} onChange={setActDue} onPickTs={setActDueTs} withTime placeholder="انتخابِ تاریخ و ساعت" style={{ padding: '5px 8px', fontSize: 12 }} /></span></label>
+                <span style={{ minWidth: 185, display: 'inline-block' }}><JalaliDatePicker value={actDue} onChange={setActDue} onPickTs={setActDueTs} withTime placeholder={actKind === 'follow' ? 'خالی = خودکار ۳ روزِ بعد' : 'انتخابِ تاریخ و ساعت'} style={{ padding: '5px 8px', fontSize: 12 }} /></span></label>
+              {actKind === 'follow' && !actDueTs && <span style={{ fontSize: 10, color: 'var(--gold)' }}>⏰ بدونِ تاریخ = یادآورِ خودکار ۳ روزِ بعد</span>}
               <span style={{ flex: 1 }} />
               <button style={btn} disabled={busy || !actText.trim()} onClick={async () => {
                 const d = await post({ action: 'act', phone: sel.phone, kind: actKind, text: actText, dueAt: actDueTs || undefined })
@@ -370,8 +389,18 @@ export default function StaffCrmView() {
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <b>{KIND_FA[a.kind] || a.kind}</b>
                   <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>{faDT(a.at)} · {String(a.by).split(' (')[0]}</span>
-                  {a.dueAt && <span style={{ fontSize: 10.5, color: a.done ? '#5fd98a' : '#e7a14a' }}>{a.done ? '✓ پیگیری انجام شد' : `⏰ سررسید ${faDT(a.dueAt)}`}</span>}
+                  {a.dueAt && <span style={{ fontSize: 10.5, color: a.done ? '#5fd98a' : '#e7a14a' }}>{a.done ? '✓ پیگیری انجام شد' : `⏰ سررسید ${faDT(a.dueAt)}`}{!a.done && a.remindedAt ? ' · یادآور رفت' : ''}</span>}
                   {a.dueAt && !a.done && <button style={{ ...btnGhost, padding: '1px 8px', fontSize: 10 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: sel.phone, actAt: a.at })) { openCustomer(sel); load() } }}>✓</button>}
+                  {a.dueAt && !a.done && <button title="تعویقِ ۱ روز" style={{ ...btnGhost, padding: '1px 8px', fontSize: 10 }} disabled={busy} onClick={async () => { if (await post({ action: 'actSnooze', phone: sel.phone, actAt: a.at, days: 1 })) { openCustomer(sel); load() } }}>+۱ر</button>}
+                  {/* فاز ۱۷۳ — ویرایش/حذف: CRM واقعی */}
+                  <button title="ویرایشِ متن" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11, padding: 0 }} disabled={busy} onClick={async () => {
+                    const t = prompt('متنِ جدید:', a.text); if (t === null) return
+                    if (await post({ action: 'actEdit', phone: sel.phone, actAt: a.at, text: t })) { openCustomer(sel); load() }
+                  }}>✎</button>
+                  <button title="حذف" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e88', fontSize: 11, padding: 0 }} disabled={busy} onClick={async () => {
+                    if (!confirm('این فعالیت حذف شود؟')) return
+                    if (await post({ action: 'actDelete', phone: sel.phone, actAt: a.at })) { openCustomer(sel); load() }
+                  }}>🗑</button>
                 </div>
                 <div style={{ marginTop: 3, lineHeight: 1.9 }}>{a.text}</div>
               </div>

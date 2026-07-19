@@ -1802,6 +1802,26 @@ async function main() {
     ok('تأییدِ دوباره، دوبار شارژ نمی‌کند', (await getE45(uc12)).coins === coinsBefore53 + 70 && (await rdb53()).revenueTotal === revBefore53 + 250_000)
   }
 
+  // ── فاز ۱۷۳ (CRM پرسنل): پیگیریِ ویرایش/حذف/تعویق + برداشتِ اتمیکِ یادآورهای سررسیدشده ──
+  {
+    const { addStaffAct, updateStaffAct, deleteStaffAct, claimDueReminders, addStaffTask, staffCrmAll } = await import('../app/lib/staff-crm-store.ts')
+    const CU = '09120001730', STF = '09120009999'
+    const past = Date.now() - 3600e3
+    await addStaffAct(CU, { by: 'همکار (09120009999)', byPhone: STF, kind: 'follow', text: 'پیگیریِ تمدیدِ پلن', dueAt: past })
+    await addStaffTask({ title: 'وظیفهٔ سررسیدشده', by: 'همکار', byPhone: STF, dueAt: past })
+    const due1 = await claimDueReminders()
+    ok('یادآورهای سررسیدشده (پیگیری + وظیفه) برداشته می‌شوند', due1.filter(d => d.staffPhone === STF).length === 2 && due1.some(d => d.source === 'act' && d.customerPhone === CU))
+    ok('برداشتِ دوباره خالی است (هر یادآور فقط یک‌بار — اتمیک)', (await claimDueReminders()).filter(d => d.staffPhone === STF).length === 0)
+    const act = (await staffCrmAll())[CU].acts[0]
+    ok('نشانِ remindedAt روی PG نشسته', act.remindedAt > 0)
+    const snoozed = await updateStaffAct(CU, act.at, { dueAt: Date.now() - 1000 })
+    ok('تعویق/سررسیدِ نو، یادآور را ریست می‌کند (remindedAt پاک)', snoozed.remindedAt === undefined && snoozed.done === false)
+    ok('سررسیدِ نو دوباره یادآور می‌گیرد', (await claimDueReminders()).some(d => d.customerPhone === CU))
+    const ed = await updateStaffAct(CU, act.at, { text: 'متنِ ویرایش‌شده' })
+    ok('ویرایشِ متنِ فعالیت', ed.text === 'متنِ ویرایش‌شده')
+    ok('حذفِ فعالیت', (await deleteStaffAct(CU, act.at)) === true && ((await staffCrmAll())[CU].acts.length === 0))
+  }
+
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
   await pool.end()
   process.exit(fail === 0 ? 0 : 1)
