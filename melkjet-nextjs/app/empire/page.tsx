@@ -523,6 +523,31 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
   const anchorFrac = vw > 0 && vw <= 480 ? 0.62 : vw > 0 && vw <= 900 ? 0.61 : 0.66   // آینهٔ empIsoAnchor در globals.css
   const yBotCity = yBots.length ? Math.max(...yBots) : 0
   const shiftY = vh > 0 ? Math.min(0, ((vh - 150) - (vh * anchorFrac + yBotCity * kFit)) / kFit) : 0
+  // 🎯 فاز ۱۸۳ — هندسهٔ بنای مدنی «یک‌جا»: هم لایهٔ نقاشی هم لایهٔ تعاملِ بالایی از همین می‌خوانند
+  // (ریشهٔ باگِ «لمس کن کار نمی‌کند»: CTAها pointerEvents:none بودند و پدِ پایه داخلِ wrapperای با zIndex
+  // پایین‌تر از برج‌های ردیفِ جلو — پدِ برجِ جلویی کلیک را می‌دزدید. حالا تعامل در لایهٔ بالای همهٔ برج‌هاست.)
+  const civicGeoOf = (cv: any, k: number) => {
+    const spot = spots[assets.length + 4 + k]
+    if (!spot) return null
+    const floors = cv.key === 'market' ? 1 : 2
+    const stk = sprite ? pickStack(man!, (cv.key === 'world' || cv.key === 'hoods' ? 'landmark' : cv.key === 'market' ? 'shop' : 'office') as BuildingKind, 'civic:' + cv.key) : null
+    const geo = man?.geo || { bodyW: 99, step: 34, lift: 10, roofOverlap: 24 }
+    const T2 = 132 * kSp
+    const tx = cx + (wOf(spot.col) - wOf(spot.row)) * T2 / 2 - T2 / 2
+    const ty = cy + (wOf(spot.col) + wOf(spot.row)) * 33 * kSp - yMidSp
+    const roofY = ty - (geo.lift + (floors - 1) * geo.step + geo.roofOverlap) * kSp
+    const fh = 22, bwC = Math.round(tile * 0.72), H = floors * fh
+    const x = (spot.col - spot.row) * tile / 2
+    const y = ((spot.col + spot.row) - 2 * c) * tile / 4
+    const wrapLeft = stk ? tx + ((132 - geo.bodyW) / 2) * kSp : cx + Math.round(x - bwC / 2)
+    const wrapTop = stk ? roofY : Math.round(cy + y - H - bwC / 4)
+    const wrapW = stk ? geo.bodyW * kSp : bwC
+    const wrapH = stk ? ty + 75 * kSp - roofY : H + bwC / 2
+    const zIdx = stk ? 3 + wOf(spot.col) + wOf(spot.row) : 10 + spot.col + spot.row
+    const tipC = cv.ok ? cv.label : `${cv.label} — در سطحِ ${fa(cv.need)} باز می‌شود`
+    const padHC = Math.max(padMin, Math.round(wrapH * 0.35))
+    return { spot, floors, stk, geo, fh, bwC, wrapLeft, wrapTop, wrapW, wrapH, zIdx, tipC, padHC }
+  }
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: sky[phase], overflow: 'hidden' }}>
       {phase === 'night' && ['8%', '22%', '38%', '57%', '72%', '88%'].map((left, i) => (
@@ -697,48 +722,48 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
             </div>
           )
         })}
-        {/* 🏛 فاز ۱۶۵ — بناهای مدنی: ناوبریِ دنیا/بازار/رتبه‌ها از روی خودِ نقشه؛ قفل = knob سطح (فقط دیده‌شدن) */}
+        {/* 🏛 فاز ۱۶۵ — بناهای مدنی: ناوبریِ دنیا/بازار/رتبه‌ها از روی خودِ نقشه؛ قفل = knob سطح (فقط دیده‌شدن)
+            فاز ۱۸۳: این بلاک فقط «نقاشیِ» بناست — چیپ/نشان/پد به لایهٔ تعاملِ بالایی رفتند تا هیچ برجی لمس را ندزدد */}
         {(civic || []).map((cv, k) => {
-          const spot = spots[assets.length + 4 + k]
-          if (!spot) return null
-          const floors = cv.key === 'market' ? 1 : 2
-          const stk = sprite ? pickStack(man!, (cv.key === 'world' || cv.key === 'hoods' ? 'landmark' : cv.key === 'market' ? 'shop' : 'office') as BuildingKind, 'civic:' + cv.key) : null
-          const geo = man?.geo || { bodyW: 99, step: 34, lift: 10, roofOverlap: 24 }
-          const T2 = 132 * kSp
-          const tx = cx + (wOf(spot.col) - wOf(spot.row)) * T2 / 2 - T2 / 2
-          const ty = cy + (wOf(spot.col) + wOf(spot.row)) * 33 * kSp - yMidSp
-          const roofY = ty - (geo.lift + (floors - 1) * geo.step + geo.roofOverlap) * kSp
-          const fh = 22, bwC = Math.round(tile * 0.72), H = floors * fh
-          const x = (spot.col - spot.row) * tile / 2
-          const y = ((spot.col + spot.row) - 2 * c) * tile / 4
-          const wrapLeft = stk ? tx + ((132 - geo.bodyW) / 2) * kSp : cx + Math.round(x - bwC / 2)
-          const wrapTop = stk ? roofY : Math.round(cy + y - H - bwC / 4)
-          const wrapW = stk ? geo.bodyW * kSp : bwC
-          const wrapH = stk ? ty + 75 * kSp - roofY : H + bwC / 2
-          const zIdx = stk ? 3 + wOf(spot.col) + wOf(spot.row) : 10 + spot.col + spot.row
-          const tipC = cv.ok ? cv.label : `${cv.label} — در سطحِ ${fa(cv.need)} باز می‌شود`
-          const padHC = Math.max(padMin, Math.round(wrapH * 0.35))
+          const g = civicGeoOf(cv, k)
+          if (!g) return null
           return (
             <div key={'cv' + cv.key} className="empTower"
-              title={tipC}
-              style={{ position: 'absolute', left: wrapLeft, top: wrapTop, width: wrapW, height: wrapH, zIndex: zIdx, opacity: cv.ok ? 1 : .55, filter: cv.ok ? undefined : 'grayscale(.7)', animationDelay: `${360 + k * 90}ms`, pointerEvents: 'none' }}>
-              {/* نشانِ طلاییِ شناور + چیپِ قفل/راهنمای یک‌باره — فاز ۱۶۸: نشانِ «محله‌ها» ضربان‌دار + چیپِ همیشگی */}
-              <span aria-hidden className={cv.key === 'hoods' ? 'empPulse' : undefined} style={{ position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: '2px solid rgba(90,60,10,.55)', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, zIndex: 5, pointerEvents: 'none' }}>{cv.icon}</span>
-              {cv.ok && cv.key === 'hoods' && !civicHint && <span style={{ position: 'absolute', top: -52, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 800, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.82)', border: '1px solid rgba(255,215,106,.45)', borderRadius: 999, padding: '2px 9px', zIndex: 5, pointerEvents: 'none' }}>⚔️ محله‌ها</span>}
-              {!cv.ok && <span style={{ position: 'absolute', top: -52, left: '50%', transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700, color: '#e8e4f5', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.8)', border: '1px solid rgba(255,255,255,.16)', borderRadius: 9, padding: '2px 8px', zIndex: 5, pointerEvents: 'none' }}>🔒 در سطحِ {fa(cv.need)} باز می‌شود</span>}
-              {cv.ok && civicHint && <span className="empPulse" style={{ position: 'absolute', top: -52 - k * 34, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 800, color: '#1a1503', whiteSpace: 'nowrap', background: 'linear-gradient(180deg,#ffe085,#d4af37)', borderRadius: 999, padding: '3px 10px', zIndex: 6 + k, pointerEvents: 'none' }}>{cv.label} — لمس کن</span>}
-              {stk ? <>
-                {Array.from({ length: floors }, (_, f) => (
-                  <img key={'b' + f} src={`/empire/sprites/${stk.body.file}`} alt="" width={stk.body.w * kSp} height={stk.body.h * kSp} draggable={false}
-                    style={{ position: 'absolute', left: ((geo.bodyW - stk.body.w) / 2) * kSp, top: ((floors - 1 - f) * geo.step + geo.roofOverlap) * kSp, pointerEvents: 'none', userSelect: 'none' }} />
+              title={g.tipC}
+              style={{ position: 'absolute', left: g.wrapLeft, top: g.wrapTop, width: g.wrapW, height: g.wrapH, zIndex: g.zIdx, opacity: cv.ok ? 1 : .55, filter: cv.ok ? undefined : 'grayscale(.7)', animationDelay: `${360 + k * 90}ms`, pointerEvents: 'none' }}>
+              {g.stk ? <>
+                {Array.from({ length: g.floors }, (_, f) => (
+                  <img key={'b' + f} src={`/empire/sprites/${g.stk!.body.file}`} alt="" width={g.stk!.body.w * kSp} height={g.stk!.body.h * kSp} draggable={false}
+                    style={{ position: 'absolute', left: ((g.geo.bodyW - g.stk!.body.w) / 2) * kSp, top: ((g.floors - 1 - f) * g.geo.step + g.geo.roofOverlap) * kSp, pointerEvents: 'none', userSelect: 'none' }} />
                 ))}
-                <img src={`/empire/sprites/${stk.roof.file}`} alt="" width={stk.roof.w * kSp} height={stk.roof.h * kSp} draggable={false}
-                  style={{ position: 'absolute', left: ((geo.bodyW - stk.roof.w) / 2) * kSp, top: 0, pointerEvents: 'none', userSelect: 'none' }} />
-              </> : <BuildingSvg w={bwC} floors={floors} fh={fh} pal={towerPaletteOf('')} seed={seedOf('civic:' + cv.key)} building={false} kind={(cv.key === 'market' ? 'shop' : cv.key === 'ranks' ? 'office' : 'apt') as BKind} landmark={cv.key === 'world' || cv.key === 'hoods'} />}
+                <img src={`/empire/sprites/${g.stk!.roof.file}`} alt="" width={g.stk!.roof.w * kSp} height={g.stk!.roof.h * kSp} draggable={false}
+                  style={{ position: 'absolute', left: ((g.geo.bodyW - g.stk!.roof.w) / 2) * kSp, top: 0, pointerEvents: 'none', userSelect: 'none' }} />
+              </> : <BuildingSvg w={g.bwC} floors={g.floors} fh={g.fh} pal={towerPaletteOf('')} seed={seedOf('civic:' + cv.key)} building={false} kind={(cv.key === 'market' ? 'shop' : cv.key === 'ranks' ? 'office' : 'apt') as BKind} landmark={cv.key === 'world' || cv.key === 'hoods'} />}
+            </div>
+          )
+        })}
+        {/* 🎯 فاز ۱۸۳ — لایهٔ تعاملِ بناهای مدنی، «بالای همهٔ برج‌ها» (zIndex 35، زیرِ HUD/برگه‌ها):
+            بنای مدنی ناوبریِ اصلی است — چیپِ «لمس کن»، چیپِ «⚔️ محله‌ها» و نشانِ طلایی حالا دکمهٔ واقعی‌اند
+            و پدِ پایه هم این‌جاست تا پدِ برج‌های ردیفِ جلو (painter's order) نتواند کلیک را بدزدد. قفل = بدونِ کلیک. */}
+        {(civic || []).map((cv, k) => {
+          const g = civicGeoOf(cv, k)
+          if (!g) return null
+          return (
+            <div key={'cvh' + cv.key} style={{ position: 'absolute', left: g.wrapLeft, top: g.wrapTop, width: g.wrapW, height: g.wrapH, zIndex: 35, pointerEvents: 'none', opacity: cv.ok ? 1 : .55, filter: cv.ok ? undefined : 'grayscale(.7)' }}>
+              {/* نشانِ طلاییِ شناور — فاز ۱۶۸: نشانِ «محله‌ها» ضربان‌دار؛ فاز ۱۸۳: وقتی باز است، خودش دکمه است */}
+              {cv.ok
+                ? <button type="button" title={g.tipC} aria-label={`بازکردنِ ${cv.label}`} onClick={cv.onOpen} className={cv.key === 'hoods' ? 'empPulse' : undefined}
+                    style={{ position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: '2px solid rgba(90,60,10,.55)', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: 0, pointerEvents: 'auto' }}>{cv.icon}</button>
+                : <span aria-hidden style={{ position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: '2px solid rgba(90,60,10,.55)', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, pointerEvents: 'none' }}>{cv.icon}</span>}
+              {cv.ok && cv.key === 'hoods' && !civicHint && <button type="button" onClick={cv.onOpen} aria-label="بازکردنِ محله‌ها"
+                style={{ position: 'absolute', top: -52, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 800, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.82)', border: '1px solid rgba(255,215,106,.45)', borderRadius: 999, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', pointerEvents: 'auto' }}>⚔️ محله‌ها</button>}
+              {!cv.ok && <span style={{ position: 'absolute', top: -52, left: '50%', transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700, color: '#e8e4f5', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.8)', border: '1px solid rgba(255,255,255,.16)', borderRadius: 9, padding: '2px 8px', pointerEvents: 'none' }}>🔒 در سطحِ {fa(cv.need)} باز می‌شود</span>}
+              {cv.ok && civicHint && <button type="button" onClick={cv.onOpen} aria-label={`بازکردنِ ${cv.label}`} className="empPulse"
+                style={{ position: 'absolute', top: -52 - k * 34, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 800, color: '#1a1503', whiteSpace: 'nowrap', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: 'none', borderRadius: 999, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit', zIndex: 6 + k, pointerEvents: 'auto' }}>{cv.label} — لمس کن</button>}
               {/* پدِ لمسِ پایهٔ بنای مدنی — قفل‌بودن = پدِ خاموش */}
-              <button type="button" className="empTowerPad" title={tipC} aria-label={tipC}
+              <button type="button" className="empTowerPad" title={g.tipC} aria-label={g.tipC}
                 onClick={cv.ok ? cv.onOpen : undefined} disabled={!cv.ok}
-                style={{ position: 'absolute', left: '50%', bottom: 0, transform: 'translateX(-50%)', width: Math.max(padMin, Math.round(wrapW)), height: padHC, background: 'transparent', border: 'none', padding: 0, margin: 0, cursor: cv.ok ? 'pointer' : 'default', pointerEvents: cv.ok ? 'auto' : 'none', zIndex: 6 }} />
+                style={{ position: 'absolute', left: '50%', bottom: 0, transform: 'translateX(-50%)', width: Math.max(padMin, Math.round(g.wrapW)), height: g.padHC, background: 'transparent', border: 'none', padding: 0, margin: 0, cursor: cv.ok ? 'pointer' : 'default', pointerEvents: cv.ok ? 'auto' : 'none', zIndex: 6 }} />
             </div>
           )
         })}
@@ -883,6 +908,32 @@ export default function EmpirePage() {
   const [civicHint, setCivicHint] = useState(false)
   useEffect(() => { try { if (!sessionStorage.getItem('empCivicHint')) setCivicHint(true) } catch {} }, [])
   const openCivic = (t: 'world' | 'market' | 'ranks' | 'hoods') => { setGtab(t); setCivicHint(false); try { sessionStorage.setItem('empCivicHint', '1') } catch {} }
+  // 🧭 فاز ۱۸۲ب — راهنمای روزهای اول (quest-log سبکِ تراوین): فقط UI؛ داده و شرط‌ها همه از st.tutorial (سرور).
+  // بارِ اول برای کاربرِ فعال خودش باز می‌شود (localStorage — فقط UI)؛ active:false ⇒ دکمه و پنل کلاً حذف.
+  const [tutOpen, setTutOpen] = useState(false)
+  useEffect(() => {
+    if (step !== 'dash' || !st?.tutorial?.active) return
+    try { if (!localStorage.getItem('mj_tut_seen')) { localStorage.setItem('mj_tut_seen', '1'); setTutOpen(true) } } catch {}
+  }, [step, st?.tutorial?.active])
+  // مقصدِ CTA «برو»ی هر قدم — فقط بازکردنِ همان برگه‌ها/پنل‌های موجود؛ بدونِ دارایی، towerRenovate/towerSell → فرصت‌ها
+  const tutGo = (go: string) => {
+    setTutOpen(false)
+    const a0 = (st?.empire?.assets || [])[0]
+    const g = (go === 'towerRenovate' || go === 'towerSell') && !a0 ? 'deals' : go
+    setTowerSel(null); setCitySheet('')
+    if (g === 'deals') { setGtab('city'); setCitySheet('deals') }
+    else if (g === 'missions') setGtab('missions')
+    else if (g === 'hoods') openCivic('hoods')
+    else if (g === 'towerRenovate' || g === 'towerSell') {
+      setGtab('city'); setTowerSel(a0)
+      // بازکردنِ بخشِ بازسازی/فروش بعد از اثرِ ریستِ برگهٔ برج (deps: towerSel.id) — همان پنل‌های موجود
+      setTimeout(() => {
+        if (g === 'towerRenovate') setTowerRenov(true)
+        else { setTowerSale(true); setTowerAsk(String(Math.round(Number(a0.current ?? a0.buyPrice) || 0))) }
+      }, 80)
+    } else setGtab('city')
+    try { window.scrollTo({ top: 0 }) } catch {}
+  }
   // ☀️ فاز ۱۶۷ — دعوتِ یک‌بارهٔ زنگِ صبحگاهی: فقط وقتی اجازهٔ نوتیفیکیشن هنوز پرسیده نشده و کاربر قبلاً جواب نداده
   const [morningAsk, setMorningAsk] = useState<'no' | 'ask' | 'ok'>('no')
   useEffect(() => {
@@ -1803,6 +1854,21 @@ export default function EmpirePage() {
         </div>
       )
     })()}
+    {/* 🧭 فاز ۱۸۲ب — دکمهٔ شناورِ راهنمای شروع: لبهٔ چپ، قرینهٔ ریل — فقط تا وقتی سرور active بگوید.
+        badge قرمز = شمارِ جایزه‌های آماده (done && !claimed)؛ بدونِ جایزهٔ آماده = چیپِ پیشرفتِ «X از Y». */}
+    {st.tutorial?.active && (() => {
+      const tut = st.tutorial
+      const ready = tut.steps.filter((s2: any) => s2.done && !s2.claimed).length
+      return (
+        <button onClick={() => setTutOpen(true)} title="راهنمای شروع" aria-label="راهنمای شروع" className={ready > 0 ? 'empPulse empChunkyDark' : 'empChunkyDark'}
+          style={{ position: 'fixed', left: 10, top: '36%', zIndex: 45, width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: '2px solid rgba(90,60,10,.55)', boxShadow: '0 3px 0 #8a6d1f, 0 8px 20px rgba(255,215,106,.35)', fontSize: 21, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+          🧭
+          {ready > 0
+            ? <span style={{ position: 'absolute', top: -5, right: -5, minWidth: 18, height: 18, borderRadius: 9, background: 'linear-gradient(135deg,#ff5f4d,#e02f2f)', color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', boxShadow: '0 2px 8px rgba(224,47,47,.6)' }}>{fa(ready)}</span>
+            : <span style={{ position: 'absolute', bottom: -9, left: '50%', transform: 'translateX(-50%)', fontSize: 8.5, fontWeight: 800, color: '#ffe9a3', background: 'rgba(12,10,34,.85)', border: '1px solid rgba(255,215,106,.4)', borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap' }}>{fa(tut.doneCount)} از {fa(tut.steps.length)}</span>}
+        </button>
+      )
+    })()}
     {/* 🏢 برگهٔ برجِ لمس‌شده: اطلاعاتِ واقعیِ همان دارایی + مدیریت در پرتفوی */}
     <BottomSheet open={!!towerSel} onClose={() => setTowerSel(null)} title={`${towerSel?.construction && !towerSel?.construction?.done ? '🏗' : '🏢'} ${towerSel?.nickname || towerSel?.construction?.name || towerSel?.hood || towerSel?.title?.slice(0, 40) || 'دارایی'}`}>
       {/* 🎉 فاز ۱۸۱ب — نتیجهٔ قبولِ پیشنهاد: فروش انجام شد؛ سود/زیانِ واقعی از پاسخِ سرور */}
@@ -2423,6 +2489,51 @@ export default function EmpirePage() {
     </BottomSheet>
     </>
 
+    {/* 🧭 فاز ۱۸۲ب — پنلِ quest-logِ راهنمای شروع (سبکِ تراوین): ۷ قدم به‌ترتیب؛ claimed = کم‌رنگ با ✓،
+        اولین قدمِ ناتمام = فعال (هایلایتِ طلایی + desc + «برو»)، done && !claimed = دکمهٔ 🎁 (اعداد از state)،
+        قدم‌های بعدی = قفلِ کم‌رنگ ولی پیدا (نقشهٔ راه). صفر مکانیکِ تازه — claim همان doClaim با کلیدِ tut_. */}
+    {st.tutorial?.active && <BottomSheet open={tutOpen} onClose={() => setTutOpen(false)} title={`🧭 راهنمای شروع — ${fa(st.tutorial.daysLeft)} روزِ باقی‌مانده`}>
+      {(() => {
+        const tut = st.tutorial
+        const total = tut.steps.length
+        const activeIdx = tut.steps.findIndex((s2: any) => !s2.claimed)
+        return (<>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,.09)', borderRadius: 99, overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,.4)' }}>
+              <div style={{ width: `${(tut.doneCount / Math.max(1, total)) * 100}%`, height: '100%', borderRadius: 99, background: 'linear-gradient(90deg,#ffd76a,#ff9d2e)', boxShadow: '0 0 10px rgba(255,183,77,.5)' }} />
+            </div>
+            <span style={{ fontSize: 11.5, color: 'var(--muted)', whiteSpace: 'nowrap' }}><b style={{ color: '#ffd76a' }}>{fa(tut.doneCount)}</b> از {fa(total)}</span>
+          </div>
+          {tut.steps.map((s2: any, i: number) => {
+            const claimable = s2.done && !s2.claimed
+            const isActive = i === activeIdx
+            const locked = !s2.claimed && !claimable && !isActive
+            return (
+              <div key={s2.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', borderRadius: 14, padding: '10px 12px', border: `1px solid ${claimable ? 'rgba(255,215,106,.55)' : isActive ? 'rgba(255,215,106,.45)' : 'rgba(255,255,255,.08)'}`, background: claimable ? 'rgba(255,215,106,.10)' : isActive ? 'rgba(255,215,106,.06)' : 'rgba(255,255,255,.03)', opacity: s2.claimed ? .5 : locked ? .55 : 1 }}>
+                <span aria-hidden style={{ fontSize: 20, flex: 'none', filter: locked ? 'grayscale(.6)' : 'none' }}>{s2.claimed ? '✅' : s2.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ color: s2.claimed ? 'var(--muted)' : isActive || claimable ? '#ffe9a3' : 'var(--text)' }}>{fa(i + 1)}. {s2.title}</span>
+                    {s2.claimed && <span style={{ fontSize: 10.5, color: '#7ee0b8', fontWeight: 700 }}>✓ دریافت شد</span>}
+                    {locked && <span aria-hidden style={{ fontSize: 11, color: 'var(--faint)' }}>🔒</span>}
+                  </div>
+                  {(isActive || claimable) && <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 2, marginTop: 3 }}>{s2.desc}</div>}
+                  {claimable
+                    ? <button className="empPulse empChunky" disabled={busy} style={{ ...btn, marginTop: 8, padding: '8px 18px', fontSize: 12.5, borderRadius: 999 }}
+                        onClick={async () => { const d = await doClaim('tut_' + s2.id); if (d) fireCityCeleb(Number(d.rewardCoins ?? tut.stepCoins) || 0) }}>
+                        🎁 دریافتِ {fa(tut.stepCoins)} سکه + {fa(tut.stepXp)} XP</button>
+                    : isActive
+                      ? <button className="empChunky" style={{ ...btn, marginTop: 8, padding: '8px 20px', fontSize: 12.5, borderRadius: 999 }} onClick={() => tutGo(s2.go)}>برو ←</button>
+                      : null}
+                </div>
+              </div>
+            )
+          })}
+          <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>هر قدم را که کامل کنی، جایزه‌اش همین‌جا آماده می‌شود — همهٔ شرط‌ها از رفتارِ واقعی‌ات سنجیده می‌شوند.</div>
+        </>)
+      })()}
+    </BottomSheet>}
+
     {/* 🗂 فاز ۱۶۵ — همهٔ بخش‌های قدیمی (پرتفوی/دنیا/مأموریت‌ها/بازار/رتبه‌ها) داخلِ «یک» برگهٔ بزرگ روی شهر
         رندر می‌شوند؛ محتوا و شرط‌های داخلی عیناً همان است — بستنِ برگه = بازگشت به شهر */}
     <BottomSheet open={gtab !== 'city'} onClose={() => setGtab('city')}
@@ -2465,7 +2576,9 @@ export default function EmpirePage() {
                   {sm.price && <b style={{ color: 'var(--gold)', whiteSpace: 'nowrap' }}>{sm.price}</b>}
                 </Link>
               ))}
-            </> : <span style={{ color: 'var(--faint)' }}>فعلاً آگهیِ در دسترسی این‌جا ثبت نشده — <Link href="/search" style={{ color: 'var(--gold)' }}>از جستجو شکارش کن</Link></span>}
+              {/* فاز ۱۸۳ب: نه فقط ۲ نمونه — همهٔ آگهی‌های واقعیِ همین محله با فیلترِ سختِ hood (فاز ۱۷۸) در جستجو */}
+              <Link href={`/search?hood=${encodeURIComponent(s.hood)}`} style={{ color: 'var(--gold)', fontSize: 11, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>همه در جستجو ←</Link>
+            </> : <span style={{ color: 'var(--faint)' }}>فعلاً آگهیِ در دسترسی این‌جا ثبت نشده — <Link href={`/search?hood=${encodeURIComponent(s.hood)}`} style={{ color: 'var(--gold)' }}>از جستجو شکارش کن</Link></span>}
           </div>
         </div>
       )
