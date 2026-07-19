@@ -1194,6 +1194,12 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           {row('بالای بازار = بی‌خریدار از ٪', cin('sellNego', 'noOfferOverPct'), 'گران‌فروشی → بعضی بازه‌ها خریدار نمی‌آید')}
           {row('حداکثر بوستِ چانه (٪)', cin('sellNego', 'counterBoostPct'), 'پیش‌فرض ۴')}
           {row('ریسکِ رفتنِ خریدار با چانه (٪)', cin('sellNego', 'counterFailPct'), 'پیش‌فرض ۳۵')}
+          {/* فاز ۱۸۲ — راهنمای روزهای اول (سبکِ تراوین) */}
+          <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>🧭 راهنمای روزهای اول</div>
+          {row('فعال (۱/۰)', cin('tutorial', 'enabled'))}
+          {row('طولِ راهنما (روز)', cin('tutorial', 'days'), 'پیش‌فرض ۳ — بعدش راهنما خودکار جمع می‌شود')}
+          {row('کوینِ هر قدم', cin('tutorial', 'stepCoins'), 'پیش‌فرض ۱۰')}
+          {row('XPِ هر قدم', cin('tutorial', 'stepXp'), 'پیش‌فرض ۲۰')}
           {/* فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — عوض‌کردنِ id یعنی شروعِ فصلِ جدید */}
           <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>🌱 فصلِ دنیا (Season)</div>
           {row('فعال (۱/۰)', cin('season', 'enabled'))}

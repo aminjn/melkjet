@@ -43,6 +43,7 @@ import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
 import { pathPct } from '@/app/lib/empire-morning'
 import { sellSlotOf, sellOfferOf, counterRollOf } from '@/app/lib/empire-sellnego'
+import { tutorialOf, tutorialDoneOf, TUTORIAL_STEPS } from '@/app/lib/empire-tutorial'
 import { materialsIndexState, materialsFactorOf } from '@/app/lib/materials-index'
 import { grantWarReward, absorbNpcAssets, moveCapital, doPrestige, spendSkillPoint, prestigeEffectsOf, SKILL_BRANCHES } from '@/app/lib/empire-store'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
@@ -658,6 +659,11 @@ async function stateOf(userId: string, e00: EmpireData) {
     minutesToday: openActions * 3,
     dayDelta,
     pulse: { delta: pulseDelta, hours: pulseH, nextAt: (slot180 + 1) * pulseH * 3600e3, refreshSec: Math.max(5, Math.floor(Number(config().empire.refreshSec) || 20)) },
+    // 🧭 فاز ۱۸۲ — راهنمای روزهای اول (سبکِ تراوین): قدم‌های واقعی، جایزهٔ هر قدم knob
+    tutorial: (() => {
+      const t = tutorialOf(e, config().empire.tutorial)
+      return t ? { ...t, stepCoins: config().empire.tutorial.stepCoins, stepXp: config().empire.tutorial.stepXp } : null
+    })(),
     hiddenLeft: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).length,
     hiddenHints: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).map(b => b.hint),   // فاز ۷۴: فقط سرنخ — نه نام، نه شرط
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
@@ -1033,6 +1039,12 @@ export async function POST(req: NextRequest) {
         const stk = await getStreak(userId).catch(() => ({ streak: 0 }))
         const sb = streakMilestonesOf(stk.streak || 0, dayNumberOf(Date.now()), e.claims, config().empire.streakBonus).find(x => x.claimKey === key)
         if (sb && sb.done) evDef = { xp: 0, coins: sb.coins }
+      } else if (key.startsWith('tut_')) {
+        // 🧭 فاز ۱۸۲ — قدمِ راهنما: شرطِ انجام دوباره از وضعیتِ واقعی سنجیده می‌شود
+        const tCfg = config().empire.tutorial
+        const stepId = key.slice(4)
+        if (tCfg.enabled && TUTORIAL_STEPS.some(s => s.id === stepId) && tutorialDoneOf(e, stepId))
+          evDef = { xp: Math.max(0, Math.floor(tCfg.stepXp)), coins: Math.max(0, Math.floor(tCfg.stepCoins)) }
       }
       const def = evDef ? evDef
         : key === 'm1_explore' ? (ms.m1.done ? { xp: ms.m1.rewardXp, coins: ms.m1.rewardCoins } : null)
