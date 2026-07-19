@@ -861,6 +861,9 @@ export default function EmpirePage() {
   // فاز ۱۵۹ (شهرِ تمام‌صفحه): برگهٔ بازِ روی صحنه + برجِ لمس‌شده — فقط حالتِ نمایشی؛ صفر منطقِ تازه
   const [citySheet, setCitySheet] = useState<'' | 'brief' | 'events' | 'deals' | 'lands' | 'map'>('')
   const [towerSel, setTowerSel] = useState<any>(null)
+  // فاز ۱۸۰ (۲) — بازسازیِ «واقعی» از برگهٔ برج: بازکردنِ همان گزینه‌های renovOptions پرتفوی (ارزش‌افزودهٔ شفاف)
+  const [towerRenov, setTowerRenov] = useState(false)
+  useEffect(() => { setTowerRenov(false) }, [towerSel?.id])
   // فاز ۱۶۹ (ج): کارتِ مأموریتِ شهر پیش‌فرض «جمع» است (نوارِ باریکِ یک‌خطی) تا شهر را نبلعد؛ لمس = بازشدنِ فرمِ کامل
   const [heroFull, setHeroFull] = useState(false)
   // فاز ۱۶۲: جشنِ یک‌بارهٔ دریافتِ جایزه در نمای شهر — کانفتی + پروازِ سکه + توستِ «+N سکه» (N واقعی)
@@ -1023,6 +1026,26 @@ export default function EmpirePage() {
       .then(r => r.json()).then(d => { if (alive && d?.ok) setDeals(d) }).catch(() => {})
     return () => { alive = false }
   }, [step, st?.dealsEnabled, deals])
+  // فاز ۱۸۰ — بازارِ زنده بدونِ رفرش: تا وقتی برگهٔ فرصت‌ها باز است، هر refreshSec ثانیه (knob از سرور)
+  // فهرست بی‌صدا refetch می‌شود تا «این را همین الان یکی دیگر خرید» بدونِ هیچ اسپینری دیده شود.
+  useEffect(() => {
+    if (step !== 'dash' || citySheet !== 'deals' || !st?.dealsEnabled) return
+    const sec = Math.max(5, Math.floor(Number(st?.pulse?.refreshSec) || 20))
+    let alive = true
+    const t = setInterval(() => {
+      fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deals' }) })
+        .then(r => r.json()).then(d => { if (alive && d?.ok) setDeals(d) }).catch(() => {})
+    }, sec * 1000)
+    return () => { alive = false; clearInterval(t) }
+  }, [step, citySheet, st?.dealsEnabled, st?.pulse?.refreshSec])
+  // فاز ۱۸۰ — برگشت به تب/پنجره → یک‌بار تازه‌سازیِ بی‌صدای کلِ وضعیت (الگوی MissionChip):
+  // خرید/فروش/نبضی که در نبودت رخ داده بدونِ رفرشِ دستی روی صفحه می‌نشیند.
+  useEffect(() => {
+    if (step !== 'dash') return
+    const onVis = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [step, load])
   // خطاها هر جای صفحه که باشی دیده شوند (فاز ۳۱): توستِ شناور + پاک‌شدنِ خودکار — «دکمهٔ گیرکرده» تمام.
   useEffect(() => {
     if (!err) return
@@ -1584,6 +1607,21 @@ export default function EmpirePage() {
   if (!e) return wrap(<div style={card}>در حال بارگذاری...</div>)
   const lv = st.level || { titleFa: 'شهروند', title: 'Citizen', progress: 0, next: null }
   const ms = st.missions
+  // فاز ۱۸۰ (۳) — چیپِ نبضِ امپراتوری: دلتای «واقعیِ» ثروت در بازهٔ pulseHours جاری (عددِ سرور — اجاره/کسب‌وکار +
+  // تغییرِ قیمتِ زندهٔ آگهی‌ها + بازسازی)؛ بی‌دلتا = شمارشِ معکوسِ زنده تا نبضِ بعدی. لمس = برگهٔ پرتفوی.
+  const pulseChip = (() => {
+    const p180 = st.pulse
+    if (!p180) return null
+    const dv = Number(p180.delta)
+    const has180 = p180.delta != null && dv !== 0
+    return (
+      <button title="نبضِ امپراتوری — تغییرِ واقعیِ ثروتت در بازهٔ جاری" onClick={() => { setGtab('portfolio'); try { window.scrollTo({ top: 0 }) } catch {} }}
+        style={{ ...pill(), cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, color: has180 ? (dv > 0 ? '#7ee0b8' : '#e08a7e') : 'var(--muted)' }}>
+        {has180 ? <>⚡ {fa(p180.hours)} ساعتِ اخیر: {dv > 0 ? '+' : '−'}{faB(Math.abs(dv))}</>
+          : <>⚡ نبضِ بعدی <Countdown until={p180.nextAt || 0} onDone={() => load()} /></>}
+      </button>
+    )
+  })()
   // فاز ۱۵۹: در نمای شهر HUD به‌صورتِ ردیف‌های شناور روی صحنه می‌نشیند — همان محتوا/هندلرها، فقط ظاهر
   // فاز ۱۶۵: شهر همیشه پس‌زمینه است — HUD همیشه شناور روی صحنه
   const hudFloat = true
@@ -1627,6 +1665,7 @@ export default function EmpirePage() {
         </div>
       </div>
       <div className="empHudPills" style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 12, justifyContent: 'flex-end' }}>
+        {pulseChip}
         <span style={pill()} title="Empire Score">🏆 {fa(st.empireScore || 0)}</span>
         <span style={pill(true)}>🪙 {fa(e.coins)}<span aria-hidden style={{ width: 14, height: 14, borderRadius: '50%', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 11, fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, boxShadow: '0 0 6px rgba(255,215,106,.5)' }}>＋</span></span>
         <span style={pill()}>🤖 {fa(e.aiTokens)}</span>
@@ -1741,8 +1780,14 @@ export default function EmpirePage() {
         {/* فاز ۱۶۵ — اقدام‌های اصلیِ همین دارایی روی خودِ نقشه: همان هندلرهای پرتفوی، دکمه‌های بزرگِ بازی */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {!towerSel.construction && !towerSel.action && towerSel.kind !== 'land' && <>
-            <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px' }} disabled={busy}
-              onClick={async () => { const d = await api({ action: 'assetAction', assetId: towerSel.id, act: 'renovate' }); if (d) { setSt(d); const na = (d.empire?.assets || []).find((x2: any) => x2.id === towerSel.id); if (na) setTowerSel(na) } }}>🛠 بازسازی</button>
+            {/* فاز ۱۸۰ (۲) — فیکسِ «بازسازی ارزش را بالا نمی‌برد»: این دکمه قبلاً فقط تصمیمِ نمادین (assetAction/renovate،
+                صفر ارزش) می‌زد؛ حالا اگر گزینه‌های واقعیِ بازسازی (renovOptions با هزینه/ارزش‌افزوده) موجود باشد،
+                همان‌ها را همین‌جا باز می‌کند — دقیقاً همان action `renovate` پرتفوی. بی‌گزینه = رفتارِ قبلی. */}
+            <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px', ...(towerRenov ? { borderColor: 'var(--gold)', color: 'var(--gold)' } : {}) }} disabled={busy}
+              onClick={async () => {
+                if ((towerSel.renovOptions || []).length > 0) { setTowerRenov(o => !o); return }
+                const d = await api({ action: 'assetAction', assetId: towerSel.id, act: 'renovate' }); if (d) { setSt(d); const na = (d.empire?.assets || []).find((x2: any) => x2.id === towerSel.id); if (na) setTowerSel(na) }
+              }}>🛠 بازسازی{(towerSel.renovBoostPct || 0) > 0 ? ` (+${fa(towerSel.renovBoostPct)}٪ ارزش ✓)` : ''}</button>
             <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px' }} disabled={busy}
               onClick={() => { openAgentQuote(towerSel, 'rent'); setTowerSel(null); setGtab('portfolio') }}>💰 اجاره با مشاور</button>
           </>}
@@ -1751,6 +1796,18 @@ export default function EmpirePage() {
           <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px' }} disabled={busy || e.aiTokens <= 0}
             onClick={() => doAnalyze(towerSel.listingId)}>🧠 تحلیلِ ملک‌جت (۱ ژتون)</button>
         </div>
+        {/* فاز ۱۸۰ (۲) — گزینه‌های واقعیِ بازسازی (همان renovOptions پرتفوی): هزینهٔ الان → ارزش‌افزودهٔ شفاف؛
+            بعدِ موفقیت state تازه + جشن و عددِ «ارزشِ روز» بالای همین برگه visibly بالا می‌رود. هیچ عددِ ساختگی. */}
+        {towerRenov && (towerSel.renovOptions || []).length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--bg2)', border: '1px dashed var(--goldDim)', borderRadius: 12, padding: '9px 11px' }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>🛠 هر گزینه یک‌بار — هزینه از سرمایهٔ نقد، ارزش‌افزوده روی همین برج:</span>
+          {towerSel.renovOptions.map((o: any) => o.done
+            ? <span key={o.key} style={{ fontSize: 11.5, color: '#7c6' }}>{o.icon} {o.label} ✓ انجام شد</span>
+            : <button key={o.key} className="empChunky" style={{ ...btnGhost, fontSize: 12, fontWeight: 700, padding: '9px 10px', textAlign: 'right' }} disabled={busy}
+                onClick={async () => {
+                  const d = await api({ action: 'renovate', assetId: towerSel.id, option: o.key })
+                  if (d) { setSt(d); celebrate(); const na = (d.empire?.assets || []).find((x2: any) => x2.id === towerSel.id); if (na) setTowerSel(na) }
+                }}>{o.icon} {o.label} — هزینه {faB(o.cost)} → <b style={{ color: '#7ee0b8' }}>+{fa(o.valuePct)}٪ ارزش</b></button>)}
+        </div>}
         {analysis && <div style={{ fontSize: 11.5, color: 'var(--muted)', borderTop: '1px dashed var(--line)', paddingTop: 8 }}>
           <b style={{ color: 'var(--text)' }}>{analysis.verdict}</b>
           {intelView(analysis)}
@@ -2034,8 +2091,12 @@ export default function EmpirePage() {
             <span style={{ fontSize: 13, color: '#e7a14a', fontWeight: 800 }}>⏳ <Countdown until={deals.expiresAt || 0} onDone={() => setDeals(null)} /></span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 8, marginTop: 10 }}>
-            {deals.deals.map((dl: any) => (
-              <div key={dl.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {deals.deals.map((dl: any) => {
+              // فاز ۱۸۰ — فرصتِ خریده‌شده توسطِ بازیکنِ واقعیِ دیگر (soldTo از دفترِ مالکیتِ سرور):
+              // کم‌رنگ ولی دیده‌شود (FOMO واقعی)، بدجِ نامِ خریدار، دکمهٔ خرید/مذاکره حذف — هیچ عددِ ساختگی.
+              const sold180 = !!dl.soldTo
+              return (
+              <div key={dl.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 5, opacity: sold180 ? .62 : 1 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.7 }}>{dl.title.slice(0, 55)}</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>{dl.hood}{dl.area ? ` · ${fa(dl.area)} متر` : ''}{dl.perM ? ` · متری ${faB(dl.perM)}` : ''}</div>
                 {/* فاز ۴۱ (سند ۲۸ Part 10): درجهٔ کمیابیِ صادقانه — فقط از فاصلهٔ واقعی با میانهٔ محله؛ بی‌داده = بی‌برچسب */}
@@ -2043,17 +2104,20 @@ export default function EmpirePage() {
                   {'✦'.repeat(dl.rarity.stars)} {dl.rarity.label} — متری {fa(Math.abs(dl.rarity.diffPct))}٪ زیرِ میانهٔ محله
                 </div>}
                 <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>{faB(dl.price)} تومان</div>
-                {nego[dl.id] && <div style={{ fontSize: 10.5, color: nego[dl.id].success ? '#7c6' : 'var(--muted)' }}>
+                {sold180 && <div style={{ fontSize: 11, fontWeight: 800, color: '#e8c37a', background: 'rgba(232,195,122,.1)', border: '1px dashed rgba(232,195,122,.45)', borderRadius: 9, padding: '4px 9px' }}>
+                  ✔ خریده‌شده توسطِ «{dl.soldTo.name}» #{fa(dl.soldTo.no)}
+                </div>}
+                {!sold180 && nego[dl.id] && <div style={{ fontSize: 10.5, color: nego[dl.id].success ? '#7c6' : 'var(--muted)' }}>
                   🤝 {nego[dl.id].owner?.name || 'مالک'}: {nego[dl.id].success ? `${fa(nego[dl.id].discountPct)}٪ تخفیف → ${faB(nego[dl.id].finalPrice)}` : 'کوتاه نیامد'}
                   {nego[dl.id].memoryNote && <div style={{ color: '#e7a14a' }}>🧠 {nego[dl.id].memoryNote}</div>}
                 </div>}
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 'auto' }}>
-                  {!nego[dl.id] && <button style={{ ...btnGhost, padding: '4px 9px', fontSize: 11 }} disabled={busy}
+                  {!sold180 && !nego[dl.id] && <button style={{ ...btnGhost, padding: '4px 9px', fontSize: 11 }} disabled={busy}
                     onClick={async () => { const d = await api({ action: 'negotiate', listingId: dl.id }); if (d) setNego(p => ({ ...p, [dl.id]: d })) }}>🤝 مذاکره</button>}
                   <button style={{ ...btnGhost, padding: '4px 9px', fontSize: 11 }} disabled={busy || e.aiTokens <= 0} title="میانهٔ متریِ واقعیِ هم‌محله‌ها را نشان می‌دهد"
                     onClick={async () => { setDealAn(dl.id); await doAnalyze(dl.id) }}>🤖 تحلیل (۱ ژتون)</button>
-                  <button style={{ ...btn, padding: '4px 10px', fontSize: 11 }} disabled={busy}
-                    onClick={() => doBuy({ id: dl.id, title: dl.title, hood: dl.hood, price: nego[dl.id]?.success ? nego[dl.id].finalPrice : dl.price, area: dl.area } as any, !!nego[dl.id]?.success)}>می‌خرم</button>
+                  {!sold180 && <button style={{ ...btn, padding: '4px 10px', fontSize: 11 }} disabled={busy}
+                    onClick={() => doBuy({ id: dl.id, title: dl.title, hood: dl.hood, price: nego[dl.id]?.success ? nego[dl.id].finalPrice : dl.price, area: dl.area } as any, !!nego[dl.id]?.success)}>می‌خرم</button>}
                   {dl.url && <a href={dl.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '4px 9px', fontSize: 11, textDecoration: 'none' }}>🔗</a>}
                 </div>
                 {dealAn === dl.id && analysis && <div style={{ fontSize: 10.5, color: 'var(--muted)', borderTop: '1px solid var(--line)', paddingTop: 5 }}>
@@ -2062,7 +2126,7 @@ export default function EmpirePage() {
                   {intelView(analysis)}
                 </div>}
               </div>
-            ))}
+            )})}
           </div>
         </div>
       )
@@ -2345,6 +2409,11 @@ export default function EmpirePage() {
       <div style={statTile}><div style={{ fontSize: 11, color: 'var(--muted)' }}>🏙 ارزشِ دارایی‌ها (زنده)</div><div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}><CountUp value={st.assetsValue || 0} format={faB} /> تومان {st.growth ? <span style={{ fontSize: 12, color: st.growth > 0 ? '#7c6' : '#e88' }}>({st.growth > 0 ? '+' : ''}{st.growth.toLocaleString('fa-IR')}٪)</span> : null}</div></div>
       {(e.realized || 0) !== 0 && <div style={statTile}><div style={{ fontSize: 11, color: 'var(--muted)' }}>📈 سودِ تحقق‌یافته (فروش‌ها)</div><div style={{ fontSize: 18, fontWeight: 900, marginTop: 4, color: e.realized > 0 ? '#7c6' : '#e88' }}>{e.realized > 0 ? '+' : '−'}<CountUp value={Math.abs(e.realized)} format={faB} /> تومان</div></div>}
     </div>
+    {/* فاز ۱۸۰ (۳) — نبضِ امپراتوری کنارِ آمارِ پرتفوی: همان چیپِ HUD + دلتای دیروز (هر دو عددِ واقعیِ سرور) */}
+    {(pulseChip || (st.dayDelta != null && st.dayDelta !== 0)) && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 12 }}>
+      {pulseChip}
+      {st.dayDelta != null && st.dayDelta !== 0 && <span style={{ ...pill(), color: st.dayDelta > 0 ? '#7ee0b8' : '#e08a7e', fontWeight: 700 }}>{st.dayDelta > 0 ? '📈' : '📉'} نسبت به دیروز: {st.dayDelta > 0 ? '+' : '−'}{faB(Math.abs(st.dayDelta))} تومان</span>}
+    </div>}
 
     {/* شرکتِ ساختمانی (جلد ۶۱): «از یک اتاقِ کوچک تا امپراتوری» — سطح‌گشا (سند ۱۵: امکانات باز می‌شوند، نه اعداد) */}
     {st.companyEnabled && !st.company && st.unlocks && !st.unlocks.company.ok && (
