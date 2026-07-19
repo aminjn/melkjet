@@ -883,6 +883,9 @@ export default function EmpirePage() {
   const [hb, setHb] = useState<any>(null)
   const [hbTick, setHbTick] = useState(0)
   const [homeHoodIn, setHomeHoodIn] = useState('')
+  // فاز ۱۸۴ — مینی‌کارتِ خریدِ آگهیِ نمونهٔ محله داخلِ خودِ دنیا (قاعدهٔ فاز ۸۰: کلیک هرگز از دنیا بیرون نمی‌بَرد)
+  const [hoodBuy, setHoodBuy] = useState('')                                            // id نمونهٔ باز
+  const [hoodBuyOk, setHoodBuyOk] = useState<{ id: string; hood: string } | null>(null) // خریدِ موفقِ همین جلسه
   // فاز ۱۶۸ (سادگیِ بناهای مدنی): برگهٔ مدنی اول ۳ کارتِ بزرگ نشان می‌دهد؛ «همهٔ امکانات» با این باز می‌شود
   const [allFx, setAllFx] = useState(false)
   const [peek, setPeek] = useState<any>(null)                    // پروفایلِ عمومیِ یک امپراتوریِ دیگر (سند ۱۷)
@@ -2570,16 +2573,62 @@ export default function EmpirePage() {
           <div style={{ marginTop: 9, paddingTop: 8, borderTop: '1px dashed var(--line)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 11.5 }}>
             {s.listings > 0 ? <>
               <span style={{ color: '#7ee0b8', fontWeight: 700 }}>🔎 {fa(s.listings)} آگهیِ واقعی در این محله</span>
+              {/* فاز ۱۸۴ — چیپ دیگر Link نیست: مینی‌کارتِ خریدِ داخلِ دنیا باز می‌کند (قاعدهٔ فاز ۸۰) */}
               {(s.samples || []).map((sm: any) => (
-                <Link key={sm.id} href={`/property/${sm.id}`} className="empChunky" style={{ ...btnGhost, textDecoration: 'none', padding: '5px 11px', fontSize: 11, display: 'inline-flex', gap: 5, alignItems: 'center', maxWidth: 260 }}>
+                <button key={sm.id} onClick={() => setHoodBuy(hoodBuy === sm.id ? '' : sm.id)} className="empChunky"
+                  style={{ ...btnGhost, padding: '5px 11px', fontSize: 11, display: 'inline-flex', gap: 5, alignItems: 'center', maxWidth: 260, fontFamily: 'inherit', borderColor: hoodBuy === sm.id ? 'rgba(255,215,106,.55)' : undefined }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🏠 {sm.title?.slice(0, 28)}</span>
                   {sm.price && <b style={{ color: 'var(--gold)', whiteSpace: 'nowrap' }}>{sm.price}</b>}
-                </Link>
+                  <span aria-hidden style={{ fontSize: 9, color: 'var(--faint)' }}>▾</span>
+                </button>
               ))}
-              {/* فاز ۱۸۳ب: نه فقط ۲ نمونه — همهٔ آگهی‌های واقعیِ همین محله با فیلترِ سختِ hood (فاز ۱۷۸) در جستجو */}
-              <Link href={`/search?hood=${encodeURIComponent(s.hood)}`} style={{ color: 'var(--gold)', fontSize: 11, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>همه در جستجو ←</Link>
-            </> : <span style={{ color: 'var(--faint)' }}>فعلاً آگهیِ در دسترسی این‌جا ثبت نشده — <Link href={`/search?hood=${encodeURIComponent(s.hood)}`} style={{ color: 'var(--gold)' }}>از جستجو شکارش کن</Link></span>}
+              {/* فاز ۱۸۳ب→۱۸۴: جستجو در تبِ جدید — دنیا در تبِ خودش زنده می‌ماند */}
+              <a href={`/search?hood=${encodeURIComponent(s.hood)}`} target="_blank" rel="noopener" style={{ color: 'var(--gold)', fontSize: 11, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>همه در جستجو ←</a>
+            </> : <span style={{ color: 'var(--faint)' }}>فعلاً آگهیِ در دسترسی این‌جا ثبت نشده — <a href={`/search?hood=${encodeURIComponent(s.hood)}`} target="_blank" rel="noopener" style={{ color: 'var(--gold)' }}>از جستجو شکارش کن</a></span>}
           </div>
+          {/* 🎉 فاز ۱۸۴ — خریدِ موفقِ همین جلسه در این محله: پیام مستقل از سرنوشتِ نمونه در تابلوی تازه */}
+          {hoodBuyOk?.hood === s.hood && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#7ee0b8', fontWeight: 700, background: 'rgba(126,224,184,.08)', border: '1px solid rgba(126,224,184,.35)', borderRadius: 12, padding: '7px 11px' }}>
+              ✓ به نامت شد — یک قدم به فرمانرواییِ {s.hood} نزدیک‌تر شدی؛ تابلو همین حالا تازه شد.
+            </div>
+          )}
+          {/* 🛒 فاز ۱۸۴ — مینی‌کارتِ خریدِ داخلِ دنیا: عنوان/قیمت/محله + خرید با همان action:'buy' واقعی */}
+          {(() => {
+            const sm = (s.samples || []).find((x: any) => x.id === hoodBuy)
+            if (!sm) return null
+            // پارسِ امنِ قیمت: فقط رشته‌های تمام‌رقمی (بدونِ میلیارد/میلیون/توافقی) — وگرنه دکمه فعال می‌ماند و سرور حرف می‌زند
+            const priceNum = /میلیارد|میلیون|هزار|توافق/.test(sm.price || '') ? 0 : Number(digitsOf(sm.price || ''))
+            const lowCap = priceNum > 1e6 && (e.capital || 0) < priceNum
+            return (
+              <div style={{ marginTop: 8, background: 'rgba(15,12,41,.55)', border: '1px solid rgba(255,215,106,.4)', borderRadius: 14, padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <b style={{ fontSize: 12.5 }}>🏠 {sm.title}</b>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>{sm.price ? <>قیمت: <b style={{ color: 'var(--gold)' }}>{sm.price}</b> · </> : null}محله: {s.hood}</div>
+                  </div>
+                  <button onClick={() => setHoodBuy('')} aria-label="بستن" style={{ background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.14)', color: 'var(--text)', width: 26, height: 26, borderRadius: '50%', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, flex: 'none' }}>✕</button>
+                </div>
+                {/* فاز ۱۸۱ب — همان الگوی نوارِ «سرمایه کم است»: به‌جای دکمهٔ خریدِ فعال، دو راهِ واقعی */}
+                {lowCap && (
+                  <div style={{ marginTop: 8, borderRadius: 12, border: '1px solid rgba(232,195,122,.5)', background: 'rgba(232,195,122,.07)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px' }}>
+                    <span style={{ fontSize: 14 }}>💸</span>
+                    <span style={{ fontSize: 11.5, flex: 1, minWidth: 160, lineHeight: 1.9 }}>سرمایهٔ نقدت ({faB(e.capital || 0)} تومان) از قیمتِ این آگهی کمتر است — یکی از ملک‌هایت را به مشاور بسپار یا وام بگیر.</span>
+                    <button className="empChunky" style={{ ...btnGhost, padding: '6px 11px', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }} onClick={() => setGtab('portfolio')}>💼 پرتفوی</button>
+                    <button className="empChunky" style={{ ...btnGhost, padding: '6px 11px', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }} onClick={() => { setGtab('market'); setMktV('bank') }}>🏦 بانک</button>
+                  </div>
+                )}
+                <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {!lowCap && <button className="empChunky" disabled={busy} style={{ ...btn, padding: '7px 16px', fontSize: 12, fontFamily: 'inherit' }} onClick={async () => {
+                    // همان مسیرِ واقعیِ خرید (ادعای اتمیک + دفترخانه) — موفق: state کامل + جشن + تازه‌شدنِ تابلو
+                    const d = await api({ action: 'buy', listingId: sm.id })
+                    if (d) { setSt(d); celebrate(); setHoodBuy(''); setHoodBuyOk({ id: sm.id, hood: s.hood }); setHb(null) }
+                  }}>🛒 خریدِ همین ملک</button>}
+                  <a href={`/property/${sm.id}`} target="_blank" rel="noopener" style={{ ...btnGhost, textDecoration: 'none', padding: '7px 14px', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}>↗ دیدنِ آگهی</a>
+                  <button style={{ ...btnGhost, padding: '7px 14px', fontSize: 11.5, fontFamily: 'inherit' }} onClick={() => setHoodBuy('')}>بستن</button>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )
       return (<>
