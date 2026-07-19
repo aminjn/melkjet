@@ -108,10 +108,17 @@ export async function hoodBoardOf(meId: string, opts: { maxHoods: number; sample
   const top = board.slice(0, Math.max(1, opts.maxHoods))
   const pool = await candidateListings(500).catch(() => [])
   // 🏰 فاز ۱۸۶ — اتحادِ حاکمِ هر محله از دارایی‌های واقعیِ اعضا (لایهٔ رقابتِ گروهی روی همان داده)
-  const { clanUserMap } = await import('./empire-social')
+  const { clanUserMap, allListingOwners } = await import('./empire-social')
   const kings186 = hoodClanKings(empires, await clanUserMap().catch(() => ({})))
+  // فاز ۱۸۶ (فیدبک: «ملک رو خریدم هنوز نشون میده») — چیپِ نمونه دعوتِ خرید است؛ آگهیِ در مالکیتِ بازیکن
+  // (خودم یا دیگری — انحصارِ فاز ۳۷) دیگر نمونه نمی‌شود. مالکیتِ NPC مثلِ فرصت‌ها قابلِ‌خرید می‌ماند.
+  const [owners186, { NPC_USER_PREFIX }] = await Promise.all([
+    allListingOwners().catch(() => ({} as Record<string, { userId: string }>)),
+    import('./empire-npc'),
+  ])
+  const playerOwned = (id: string) => { const o = owners186[id]; return !!o && !String(o.userId).startsWith(NPC_USER_PREFIX) }
   return top.map(s => {
     const here = pool.filter(it => hoodMatches(s.hood, it.location))
-    return { ...s, clanKing: kings186[s.hood] || null, listings: here.length, samples: here.slice(0, Math.max(0, opts.sampleListings)).map(it => ({ id: it.id, title: it.title, price: it.price || '' })) }
+    return { ...s, clanKing: kings186[s.hood] || null, listings: here.length, samples: here.filter(it => !playerOwned(it.id)).slice(0, Math.max(0, opts.sampleListings)).map(it => ({ id: it.id, title: it.title, price: it.price || '' })) }
   })
 }
