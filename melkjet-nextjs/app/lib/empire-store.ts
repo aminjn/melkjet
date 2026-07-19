@@ -486,6 +486,31 @@ export function questOf(userId: string, period: number, cadence: 'daily' | 'week
   return list[h.readUInt32BE(0) % list.length]
 }
 
+// ⏱ فاز ۱۸۷ — مأموریتِ ساعتی با جایزهٔ نقدی (فیدبک: «هر یک ساعت باشه و پول هم بده که قفل نشه»):
+// کارهای یک‌دقیقه‌ایِ واقعی (بازدید/ذخیره/جستجو در خودِ ملک‌جت)؛ هر بازه یکی، قطعی از هش؛
+// جایزه «تومانِ» سرمایه است (knob) — راهِ همیشه‌بازِ درآمد وقتی سرمایه ته کشیده. هیچ شمارندهٔ ساختگی.
+export const HOURLY_QUESTS = [
+  { key: 'hview1', title: '۱ آگهیِ واقعی ببین', metric: 'views' as const, target: 1 },
+  { key: 'hview2', title: '۲ آگهیِ واقعی ببین', metric: 'views' as const, target: 2 },
+  { key: 'hsave1', title: '۱ آگهی ذخیره کن', metric: 'saves' as const, target: 1 },
+  { key: 'hsearch1', title: '۱ جستجوی هدفمند بزن', metric: 'searches' as const, target: 1 },
+]
+export function hourlyQuestOf(userId: string, slot: number) {
+  const h = createHash('sha1').update(userId + '|hq|' + slot).digest()
+  return HOURLY_QUESTS[h.readUInt32BE(0) % HOURLY_QUESTS.length]
+}
+// ادعای مأموریتِ ساعتی: جایزهٔ نقدی مستقیم به سرمایه + XP کوچک؛ ایدمپوتنت با کلیدِ hq_<slot>
+export async function claimHourlyQuest(userId: string, claimKey: string, rewardCapital: number, rewardXp: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (e.claims[claimKey]) return 'قبلاً دریافت شده'
+    e.claims[claimKey] = now
+    e.capital += Math.max(0, Math.round(rewardCapital))
+    e.xp += Math.max(0, Math.round(rewardXp))
+    e.journal.push({ at: now, text: `⏱ جایزهٔ نقدیِ مأموریتِ ساعتی: +${Math.round(Math.max(0, rewardCapital) / 1e6).toLocaleString('fa-IR')}م تومان` })
+    if (e.journal.length > 120) e.journal = e.journal.slice(-120)
+  })
+}
+
 // نردبانِ رؤیا (GDD جلد۳ «Dream Ladder»): همیشه یک رؤیای بزرگ‌ترِ بعدی جلوی چشم — قطعی از وضعیتِ واقعی.
 export function nextDreamOf(e: Pick<EmpireData, 'assets' | 'realized' | 'creditHist' | 'badges'>): string {
   if (!e.assets.length && !(e.realized || 0)) return '🏠 رؤیای بعدی: اولین ملکِ مسیرت را انتخاب کن.'

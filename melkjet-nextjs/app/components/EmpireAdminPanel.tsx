@@ -1200,6 +1200,12 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           {row('طولِ راهنما (روز)', cin('tutorial', 'days'), 'پیش‌فرض ۳ — بعدش راهنما خودکار جمع می‌شود')}
           {row('کوینِ هر قدم', cin('tutorial', 'stepCoins'), 'پیش‌فرض ۱۰')}
           {row('XPِ هر قدم', cin('tutorial', 'stepXp'), 'پیش‌فرض ۲۰')}
+          {/* فاز ۱۸۷ — مأموریتِ ساعتی با جایزهٔ نقدی (ضدِ قفل‌شدنِ سرمایه) */}
+          <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>⏱ مأموریتِ ساعتی (جایزهٔ نقدی)</div>
+          {row('فعال (۱/۰)', cin('hourlyQuest', 'enabled'))}
+          {row('بازه (ساعت)', cin('hourlyQuest', 'hours'), 'پیش‌فرض ۱ — هر ساعت مأموریتِ تازه')}
+          {row('جایزهٔ نقدی (تومان)', cin('hourlyQuest', 'capital'), 'پیش‌فرض ۲۰۰٬۰۰۰٬۰۰۰ — مستقیم به سرمایه؛ ضدِ قفل‌شدن')}
+          {row('XP', cin('hourlyQuest', 'xp'), 'پیش‌فرض ۱۰')}
           {/* فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — عوض‌کردنِ id یعنی شروعِ فصلِ جدید */}
           <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>🌱 فصلِ دنیا (Season)</div>
           {row('فعال (۱/۰)', cin('season', 'enabled'))}

@@ -1868,6 +1868,18 @@ async function main() {
       ep = await getEP(UP)
       ok('بازهٔ نو: prev = ثروتِ بازهٔ قبل (دلتای واقعی = ۲۰۰م)', ep.pulse.slot === 101 && ep.pulse.prev === 5_000_000_000 && ep.pulse.netWorth - ep.pulse.prev === 200_000_000)
     }
+    // فاز ۱۸۷: مأموریتِ ساعتی — جایزهٔ نقدی مستقیم به سرمایه، ایدمپوتنت با کلیدِ بازه
+    {
+      const { createEmpire: mkH, claimHourlyQuest, getEmpire: getEH } = await import('../app/lib/empire-store.ts')
+      const UH = '09120001870'
+      await mkH(UH, { name: 'ساعتی', answers: { city: 'تهران' } })
+      const cap0 = (await getEH(UH)).capital, xp0 = (await getEH(UH)).xp
+      const r1 = await claimHourlyQuest(UH, 'hq_444', 200_000_000, 10)
+      const eh = await getEH(UH)
+      ok('جایزهٔ نقدی دقیقاً به سرمایه اضافه شد (+XP) و در ژورنال ثبت شد', r1.ok === true && eh.capital === cap0 + 200_000_000 && eh.xp === xp0 + 10 && eh.journal.some(j => j.text.includes('مأموریتِ ساعتی')))
+      ok('ادعای دوبارهٔ همان بازه رد می‌شود (سرمایه دست نمی‌خورد)', (await claimHourlyQuest(UH, 'hq_444', 200_000_000, 10)).ok === false && (await getEH(UH)).capital === cap0 + 200_000_000)
+      ok('بازهٔ بعد ادعای تازهٔ خودش را دارد', (await claimHourlyQuest(UH, 'hq_445', 200_000_000, 10)).ok === true && (await getEH(UH)).capital === cap0 + 400_000_000)
+    }
     // رویدادِ سیستمیِ ⚙️ وضعیتِ «جدید» را دست نمی‌زند
     const CU2 = '09120001752'
     await addStaffAct(CU2, { by: 'ادمین', byPhone: STF, kind: 'note', text: '⚙️ ارجاع به سارا' })

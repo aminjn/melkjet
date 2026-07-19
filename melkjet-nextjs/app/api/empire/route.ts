@@ -10,7 +10,7 @@ import {
   sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf, BUSINESS_TYPES, assetMonthlyIncomeOf,
   landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
   creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
-  negotiationOutcome, questOf, nextDreamOf,
+  negotiationOutcome, questOf, hourlyQuestOf, claimHourlyQuest, nextDreamOf,
   applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, snapshotPulse, listAssetForSale, cancelAssetSale, setSaleOffer, counterSaleOffer, markComeback, claimComeback,
   buyFundUnits, sellFundUnits, accrueFundDividends, joinCrowd, exitCrowd,
   companyReputationOf, hireCandidatesOf, teamSkillOf, ownerPersonaOf, permitTermsOf, permitDueAt,
@@ -191,7 +191,23 @@ async function questsOf(userId: string, e: EmpireData, now = Date.now()) {
   const [dm, wm] = [await metric(dayStart), await metric(weekStart)]
   const dq = questOf(userId, day, 'daily'), wq = questOf(userId, week, 'weekly')
   const dp = Math.min(dq.target, (dm as any)[dq.metric] || 0), wp = Math.min(wq.target, (wm as any)[wq.metric] || 0)
+  // ⏱ فاز ۱۸۷ — مأموریتِ ساعتی با جایزهٔ نقدی (تومانِ سرمایه): همیشه راهی برای درآمد وقتی سرمایه ته کشیده
+  const hqCfg = config().empire.hourlyQuest
+  let hourly = null
+  if (hqCfg?.enabled) {
+    const hours = Math.max(1, Math.floor(Number(hqCfg.hours) || 1))
+    const slot = Math.floor(now / (hours * 3600e3))
+    const hq = hourlyQuestOf(userId, slot)
+    const hm = await metric(slot * hours * 3600e3)
+    const hp = Math.min(hq.target, (hm as any)[hq.metric] || 0)
+    hourly = {
+      ...hq, progress: hp, done: hp >= hq.target, claimed: !!e.claims[`hq_${slot}`], claimKey: `hq_${slot}`,
+      rewardCapital: Math.max(0, Math.round(Number(hqCfg.capital) || 0)), rewardXp: Math.max(0, Math.round(Number(hqCfg.xp) || 0)),
+      hours, nextAt: (slot + 1) * hours * 3600e3,
+    }
+  }
   return {
+    hourly,
     daily: { ...dq, progress: dp, done: dp >= dq.target, claimed: !!e.claims[`dq_${day}`], claimKey: `dq_${day}`, rewardXp: cfg.dailyXp, rewardCoins: cfg.dailyCoins },
     weekly: { ...wq, progress: wp, done: wp >= wq.target, claimed: !!e.claims[`wq_${week}`], claimKey: `wq_${week}`, rewardXp: cfg.weeklyXp, rewardCoins: cfg.weeklyCoins },
   }
@@ -1069,6 +1085,13 @@ export async function POST(req: NextRequest) {
         const stepId = key.slice(4)
         if (tCfg.enabled && TUTORIAL_STEPS.some(s => s.id === stepId) && tutorialDoneOf(e, stepId))
           evDef = { xp: Math.max(0, Math.floor(tCfg.stepXp)), coins: Math.max(0, Math.floor(tCfg.stepCoins)) }
+      } else if (key.startsWith('hq_')) {
+        // ⏱ فاز ۱۸۷ — مأموریتِ ساعتی: جایزه «تومانِ سرمایه» است نه سکه؛ سرور پیشرفتِ واقعیِ همین بازه را دوباره می‌سنجد
+        const hq = qs?.hourly
+        if (!hq || key !== hq.claimKey || !hq.done) return NextResponse.json({ error: 'مأموریتِ این ساعت هنوز کامل نشده یا بازه‌اش گذشته' }, { status: 400 })
+        const rq = await claimHourlyQuest(userId, key, hq.rewardCapital, hq.rewardXp)
+        if (!rq.ok) return NextResponse.json({ error: rq.reason }, { status: 400 })
+        return NextResponse.json({ ok: true, rewardXp: hq.rewardXp, rewardCoins: 0, rewardCapital: hq.rewardCapital, ...(await stateOf(userId, rq.empire!)) })
       }
       const def = evDef ? evDef
         : key === 'm1_explore' ? (ms.m1.done ? { xp: ms.m1.rewardXp, coins: ms.m1.rewardCoins } : null)
