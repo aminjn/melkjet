@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/app/lib/session'
+import { getSession, SUPER_ADMIN_PHONE } from '@/app/lib/session'
 import { listAccounts, getAccount } from '@/app/lib/account-store'
 import { listRoles } from '@/app/lib/role-store'
 import { staffCrmAll, addStaffAct, setStaffStatus, assignStaff, markActDone, updateStaffAct, deleteStaffAct, listStaffTasks, addStaffTask, toggleStaffTask, deleteStaffTask, type StaffCrmStatus } from '@/app/lib/staff-crm-store'
@@ -100,7 +100,12 @@ export async function GET(req: NextRequest) {
   const report = Object.entries(perf).map(([name, g]) => ({ name, ...g })).sort((a, b) => b.total - a.total)
   // فاز ۱۲۳ — وظایفِ تیمی
   const tasks = await listStaffTasks()
-  return NextResponse.json({ ok: true, rows: rows.slice(0, 400), total: rows.length, dueToday, upcoming, doneRecent, report, stats, tasks: tasks.slice(0, 120), meName })
+  // فاز ۱۷۴ — فهرستِ پرسنلِ واقعیِ ملک‌جت برای دراپ‌داونِ ارجاع: دارندگانِ دسترسیِ پنل + سوپرادمین
+  const staffList = listAccounts()
+    .filter(a => (a.adminSections || []).length > 0 || a.role === 'staff' || a.phone === SUPER_ADMIN_PHONE)
+    .map(a => ({ phone: a.phone, name: a.name || a.phone }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'fa'))
+  return NextResponse.json({ ok: true, rows: rows.slice(0, 400), total: rows.length, dueToday, upcoming, doneRecent, report, stats, tasks: tasks.slice(0, 120), meName, staffList })
 }
 
 export async function POST(req: NextRequest) {
@@ -177,7 +182,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, entry: e })
   }
   if (action === 'assign') {
-    const e = await assignStaff(phone, String(b.to || ''))
+    // فاز ۱۷۴ — ارجاع از دراپ‌داونِ پرسنل: `to` شمارهٔ پرسنل است (خالی = برداشتنِ مسئول).
+    // ذخیره به شکلِ «نام (شماره)» تا فیلترِ «فقط کارهای من» دقیق بماند + اطلاعِ خودکار به پرسنل.
+    const toPhone = String(b.to || '').replace(/\D/g, '')
+    if (!toPhone) { const e0 = await assignStaff(phone, ''); return NextResponse.json({ ok: true, entry: e0 }) }
+    const toAcc = getAccount(toPhone)
+    if (!toAcc || !((toAcc.adminSections || []).length > 0 || toAcc.role === 'staff' || toPhone === SUPER_ADMIN_PHONE))
+      return NextResponse.json({ error: 'این شماره جزوِ پرسنلِ ملک‌جت نیست' }, { status: 400 })
+    const label = `${toAcc.name || toPhone} (${toPhone})`
+    const e = await assignStaff(phone, label)
+    logAudit(s.phone, `CRM مرکزی: ارجاع به ${toAcc.name || toPhone}`, phone)
+    // اطلاعِ خودکار به پرسنلِ مقصد (پوش + پیامک) — خودارجاعی پیام نمی‌خواهد
+    if (toPhone !== s.phone) {
+      const cust = getAccount(phone)
+      const body = `👤 مشتریِ جدید به تو ارجاع شد: ${cust?.name || phone} (${phone})`
+      try {
+        const { listForPhone, removeByEndpoint } = await import('@/app/lib/push-store')
+        const { sendPush } = await import('@/app/lib/web-push')
+        for (const sub of listForPhone(toPhone)) {
+          try { const st = await sendPush(sub, { title: '📞 ارجاعِ CRM ملک‌جت', body, url: '/admin', tag: 'mj-staff-crm' }); if (st === 404 || st === 410) removeByEndpoint(sub.endpoint) } catch {}
+        }
+      } catch { /* پوش اختیاری */ }
+      try { await sendServiceSms(toPhone, `${body}\nپنلِ CRM را باز کن.`, 'ارجاعِ CRM پرسنل') } catch { /* بی‌صدا */ }
+    }
     return NextResponse.json({ ok: true, entry: e })
   }
   if (action === 'done') {

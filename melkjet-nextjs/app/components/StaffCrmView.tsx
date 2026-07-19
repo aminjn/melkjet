@@ -44,6 +44,7 @@ export default function StaffCrmView() {
   const [report, setReport] = useState<any[]>([])
   const [tasks, setTasks] = useState<any[]>([])          // فاز ۱۲۳: وظایفِ تیمی
   const [meName, setMeName] = useState('')
+  const [staffList, setStaffList] = useState<Array<{ phone: string; name: string }>>([])   // فاز ۱۷۴ — پرسنلِ واقعی برای ارجاع
   const [tTitle, setTTitle] = useState('')
   const [tAssign, setTAssign] = useState('')
   const [tPhone, setTPhone] = useState('')
@@ -53,7 +54,7 @@ export default function StaffCrmView() {
   const load = useCallback(() => {
     fetch(`/api/admin/staff-crm?q=${encodeURIComponent(q)}&status=${status}&mine=${mine ? 1 : 0}`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.ok) { setRows(d.rows); setTotal(d.total); setDueToday(d.dueToday || []); setStats(d.stats || null); setUpcoming(d.upcoming || []); setDoneRecent(d.doneRecent || []); setReport(d.report || []); setTasks(d.tasks || []); setMeName(d.meName || '') } })
+      .then(d => { if (d?.ok) { setRows(d.rows); setTotal(d.total); setDueToday(d.dueToday || []); setStats(d.stats || null); setUpcoming(d.upcoming || []); setDoneRecent(d.doneRecent || []); setReport(d.report || []); setTasks(d.tasks || []); setMeName(d.meName || ''); setStaffList(d.staffList || []) } })
       .catch(() => {})
   }, [q, status, mine])
   useEffect(() => { load() }, [load])
@@ -351,11 +352,15 @@ export default function StaffCrmView() {
               <button key={st} disabled={busy} onClick={async () => { const d = await post({ action: 'status', phone: sel.phone, status: st }); if (d) { setEntry(d.entry); load() } }}
                 style={{ ...btnGhost, padding: '4px 12px', fontSize: 11.5, borderColor: entry?.status === st ? ST_COLOR[st] : 'var(--line2)', color: entry?.status === st ? ST_COLOR[st] : 'var(--text)' }}>{STAFF_CRM_STATUS_FA[st]}</button>
             ))}
-            <button style={{ ...btnGhost, padding: '4px 12px', fontSize: 11.5 }} disabled={busy} onClick={async () => {
-              const to = prompt('مسئولِ پیگیری (نامِ همکار؛ خالی = برداشتن):', entry?.assignedTo || '')
-              if (to === null) return
-              const d = await post({ action: 'assign', phone: sel.phone, to }); if (d) { setEntry(d.entry); load() }
-            }}>👤 {entry?.assignedTo || 'تعیینِ مسئول'}</button>
+            {/* فاز ۱۷۴ — ارجاع به پرسنلِ واقعی از دراپ‌داون (خالی = برداشتنِ مسئول)؛ به مقصد پیامک/نوتیف می‌رود */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--muted)' }}>👤 مسئول:
+              <select disabled={busy} value={(entry?.assignedTo?.match(/\((\d+)\)/) || [])[1] || ''}
+                onChange={async ev => { const d = await post({ action: 'assign', phone: sel.phone, to: ev.target.value }); if (d) { setEntry(d.entry); setMsg(ev.target.value ? '✓ ارجاع شد — به همکار پیامک/نوتیف رفت' : '✓ مسئول برداشته شد'); setTimeout(() => setMsg(''), 4000); load() } }}
+                style={{ ...inp, padding: '5px 8px', fontSize: 12, minWidth: 150 }}>
+                <option value="">— بدونِ مسئول —</option>
+                {staffList.map(p => <option key={p.phone} value={p.phone}>{p.name}</option>)}
+              </select>
+            </label>
           </div>
 
           {/* ثبتِ فعالیت */}
