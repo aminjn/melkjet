@@ -37,7 +37,8 @@ export interface EmpireAsset {
   lastAccrualAt?: number
   // تجمیع و تخریب (فاز ۲۵): ساختمانِ آپارتمان/تجاری واحدبه‌واحد خریده می‌شود؛ تخریب فقط با مالکیتِ کامل.
   // فاز ۱۸۱ — سپردنِ فروش به مشاور با چانه‌زنی: قیمتِ پیشنهادیِ فروشنده + پیشنهادِ فعالِ خریدار (قطعی از هش، لنگر = ارزشِ واقعیِ روز)
-  sale?: { asking: number; at: number; offer?: { amount: number; slot: number; countered?: boolean } }
+  // walkedSlot (فاز ۱۸۱ب): بازه‌ای که خریدارش با چانه رفت — تا پایانِ همان بازه پیشنهادِ تازه ساخته نمی‌شود («تا بازهٔ بعد» واقعی باشد)
+  sale?: { asking: number; at: number; walkedSlot?: number; offer?: { amount: number; slot: number; countered?: boolean } }
   unitsTotal?: number         // کلِ واحدهای ساختمان — از متای واقعیِ آگهی («طبقه: X از Y») یا قطعی از هش
   unitsOwned?: number         // چند واحدش مالِ توست (خریدِ اولیه = ۱)؛ ارزش/فروش × همین ضریب
   demolishedAt?: number       // تخریب‌شده → kind به 'land' برمی‌گردد؛ ارزش تا ساخت = بهای تمام‌شده
@@ -896,6 +897,7 @@ export async function counterSaleOffer(userId: string, assetId: string, roll: { 
     if (a.sale.offer.countered) return 'روی این پیشنهاد یک‌بار چانه زده‌ای — قبول کن یا منتظرِ خریدارِ بعدی بمان'
     if (roll.walk) {
       e.timeline.push({ at: now, icon: '🚶', title: 'خریدار از معامله رفت', detail: a.title.slice(0, 50) })
+      a.sale.walkedSlot = a.sale.offer.slot   // فاز ۱۸۱ب: همین بازه دیگر خریدار ندارد — وگرنه stateOf فوراً همان پیشنهاد را می‌ساخت و ریسکِ چانه بی‌معنا می‌شد
       a.sale.offer = undefined
       return
     }

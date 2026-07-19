@@ -547,6 +547,10 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
       <div className="empIsoScene" style={{ position: 'absolute', left: 0, top: 0, perspective: 900, transform: `scale(${kFit}) translate(${-Math.round(midX)}px, ${Math.round(shiftY)}px)` }}>
         {/* هالهٔ گرم و پهنِ افق پشتِ شهر */}
         <div style={{ position: 'absolute', left: cx, top: cy - 30, width: 980, height: 520, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(255,222,140,.30), rgba(255,190,120,.10) 55%, transparent 75%)', pointerEvents: 'none' }} />
+        {/* ✨ ذراتِ نورِ محیطیِ شناور — صرفاً حسِ صحنه؛ prefers-reduced-motion آن‌ها را کامل حذف می‌کند */}
+        {[0, 1, 2].map(k => (
+          <span key={'du' + k} aria-hidden className="empDustDot" style={{ position: 'absolute', left: cx + (k - 1) * 175 + 40, top: cy - 36 - k * 34, width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,230,160,.8)', boxShadow: '0 0 8px rgba(255,220,140,.85)', animationDuration: `${6 + k * 2}s`, animationDelay: `${k * 1.5}s`, pointerEvents: 'none', zIndex: 1 }} />
+        ))}
         {/* فاز ۱۶۳→۱۶۶ — عمق: تپه‌ها و سیلوئتِ شهرِ دوردست پهن‌تر شدند و درست پشتِ بام‌ها نشستند */}
         <div aria-hidden style={{ position: 'absolute', left: cx - 560, top: cy - gHalfH - 44, width: 500, height: 92, borderRadius: '50%', background: 'linear-gradient(180deg,#3f7d63,#2c5a49)', filter: 'blur(6px)', opacity: .55, zIndex: 0 }} />
         <div aria-hidden style={{ position: 'absolute', left: cx + 120, top: cy - gHalfH - 36, width: 540, height: 84, borderRadius: '50%', background: 'linear-gradient(180deg,#3a7159,#284f40)', filter: 'blur(6px)', opacity: .5, zIndex: 0 }} />
@@ -684,6 +688,8 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
                   style={{ position: 'absolute', left: ((geo.bodyW - stk.roof.w) / 2) * kSp, top: 0, pointerEvents: 'none', userSelect: 'none' }} />
               </> : <BuildingSvg w={bw} floors={floors} fh={fh} pal={pal} seed={seed} building={building} kind={bkind} landmark={crown} />}
               {building && <span aria-hidden style={{ position: 'absolute', top: -7, left: '60%', fontSize: 13, filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))', pointerEvents: 'none' }}>🏗</span>}
+              {/* فاز ۱۸۱ب — تابلوی «سپرده به مشاور» روی خودِ برج: فقط از دادهٔ واقعیِ sale (نبود = هیچ) */}
+              {a.sale && <span aria-hidden title="سپرده به مشاور برای فروش" style={{ position: 'absolute', top: -6, left: '16%', fontSize: 12, filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.55))', pointerEvents: 'none', zIndex: 5 }}>🤝</span>}
               {/* پدِ لمسِ پایه — تنها ناحیهٔ کلیک‌خورِ این ساختمان */}
               {onTower && <button type="button" className="empTowerPad" title={tip} aria-label={`جزئیاتِ ${a.nickname || a.hood || a.title?.slice(0, 30) || 'دارایی'}`}
                 onClick={() => onTower(a)}
@@ -863,7 +869,11 @@ export default function EmpirePage() {
   const [towerSel, setTowerSel] = useState<any>(null)
   // فاز ۱۸۰ (۲) — بازسازیِ «واقعی» از برگهٔ برج: بازکردنِ همان گزینه‌های renovOptions پرتفوی (ارزش‌افزودهٔ شفاف)
   const [towerRenov, setTowerRenov] = useState(false)
-  useEffect(() => { setTowerRenov(false) }, [towerSel?.id])
+  // فاز ۱۸۱ب — فروش با چانه‌زنی از برگهٔ برج: پنلِ «سپردن به مشاور» + نتیجهٔ چانه/قبول (فقط UI؛ همهٔ اعداد از state/knob)
+  const [towerSale, setTowerSale] = useState(false)
+  const [towerAsk, setTowerAsk] = useState('')
+  const [saleNote, setSaleNote] = useState<{ kind: 'walk' | 'boost' | 'accepted'; boostPct?: number; price?: number; profit?: number } | null>(null)
+  useEffect(() => { setTowerRenov(false); setTowerSale(false); setTowerAsk(''); setSaleNote(null) }, [towerSel?.id])
   // فاز ۱۶۹ (ج): کارتِ مأموریتِ شهر پیش‌فرض «جمع» است (نوارِ باریکِ یک‌خطی) تا شهر را نبلعد؛ لمس = بازشدنِ فرمِ کامل
   const [heroFull, setHeroFull] = useState(false)
   // فاز ۱۶۲: جشنِ یک‌بارهٔ دریافتِ جایزه در نمای شهر — کانفتی + پروازِ سکه + توستِ «+N سکه» (N واقعی)
@@ -1271,6 +1281,29 @@ export default function EmpirePage() {
   async function doHunterPick(id: string) { const d = await api({ action: 'hunterAnswer', pick: id }); if (d) { setHunterRes(d); setHunterPair([]); load() } }
   async function doAnalyze(listingId: string) { const d = await api({ action: 'analyze', listingId }); if (d) { setAnalysis(d.analysis); load() } }
   async function doClaim(key: string) { const d = await api({ action: 'claim', key }); if (d) { setSt(d); celebrate() } return d }
+  // ── فاز ۱۸۱ب — فروش با چانه‌زنی از طریقِ مشاور (برگهٔ برج): همان اکشن‌های سرور؛ state کامل برمی‌گردد ──
+  const towerFresh = (d: any) => { const na = (d?.empire?.assets || []).find((x: any) => x.id === towerSel?.id); if (na) setTowerSel(na); return na }
+  async function doSellList() {
+    if (!towerSel) return
+    const asking = Number(digitsOf(towerAsk)) || Math.round(Number(towerSel.current ?? towerSel.buyPrice) || 0)
+    const d = await api({ action: 'sellList', assetId: towerSel.id, asking })
+    if (d) { setSt(d); towerFresh(d); setTowerSale(false); setSaleNote(null) }
+  }
+  async function doSellCancel() {
+    if (!towerSel) return
+    const d = await api({ action: 'sellCancel', assetId: towerSel.id })
+    if (d) { setSt(d); towerFresh(d); setSaleNote(null) }
+  }
+  async function doSellCounter() {
+    if (!towerSel) return
+    const d = await api({ action: 'sellCounter', assetId: towerSel.id })
+    if (d) { setSt(d); towerFresh(d); setSaleNote(d.walked ? { kind: 'walk' } : { kind: 'boost', boostPct: d.boostPct }) }
+  }
+  async function doSellAccept() {
+    if (!towerSel) return
+    const d = await api({ action: 'sellAccept', assetId: towerSel.id })
+    if (d) { setSt(d); celebrate(); setSaleNote({ kind: 'accepted', price: d.salePrice, profit: d.profit }) }
+  }
   // فروش/اجاره «فقط» از طریقِ مشاور یا آژانسِ املاک — اول برگهٔ قرارداد با نامِ طرف و هزینهٔ تومانی باز می‌شود.
   async function openAgentQuote(a: any, kind: 'sell' | 'rent') {
     const d = await api({ action: 'agentQuote', assetId: a.id, kind })
@@ -1385,7 +1418,9 @@ export default function EmpirePage() {
         .empRoot button:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.07)}
         .empRoot button:active:not(:disabled){transform:scale(.97)}
         .empRoot details>div,.empRoot details>*:not(summary){animation:empUp .35s ease both}
-        @media (prefers-reduced-motion: reduce){.empRoot *{animation:none!important;transition:none!important}}
+        @keyframes empDust{0%{transform:translateY(0)}12%{opacity:.75}85%{opacity:.35}100%{transform:translateY(-72px);opacity:0}}
+        .empDustDot{opacity:0;animation:empDust linear infinite}
+        @media (prefers-reduced-motion: reduce){.empRoot *{animation:none!important;transition:none!important}.empDustDot{display:none!important}}
       `}</style>
       <Burst seed={burst} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1770,7 +1805,17 @@ export default function EmpirePage() {
     })()}
     {/* 🏢 برگهٔ برجِ لمس‌شده: اطلاعاتِ واقعیِ همان دارایی + مدیریت در پرتفوی */}
     <BottomSheet open={!!towerSel} onClose={() => setTowerSel(null)} title={`${towerSel?.construction && !towerSel?.construction?.done ? '🏗' : '🏢'} ${towerSel?.nickname || towerSel?.construction?.name || towerSel?.hood || towerSel?.title?.slice(0, 40) || 'دارایی'}`}>
-      {towerSel && <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+      {/* 🎉 فاز ۱۸۱ب — نتیجهٔ قبولِ پیشنهاد: فروش انجام شد؛ سود/زیانِ واقعی از پاسخِ سرور */}
+      {towerSel && saleNote?.kind === 'accepted' && <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+        <div style={{ background: 'rgba(126,224,184,.08)', border: '1px solid rgba(126,224,184,.4)', borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <b style={{ color: '#7ee0b8', fontSize: 14.5 }}>🎉 فروخته شد — {faB(saleNote.price || 0)} تومان</b>
+          <span style={{ fontSize: 12.5, color: (saleNote.profit || 0) >= 0 ? '#7ee0b8' : '#e08a7e' }}>
+            {(saleNote.profit || 0) >= 0 ? `سودِ واقعی: +${faB(Math.abs(saleNote.profit || 0))}` : `زیانِ واقعی: −${faB(Math.abs(saleNote.profit || 0))}`} تومان · پول به سرمایهٔ نقدت اضافه شد
+          </span>
+        </div>
+        <button className="empChunky" style={{ ...btn, alignSelf: 'flex-start', padding: '9px 22px', fontSize: 13.5, borderRadius: 999 }} onClick={() => setTowerSel(null)}>باشه 👌</button>
+      </div>}
+      {towerSel && saleNote?.kind !== 'accepted' && <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
         <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.9 }}>{towerSel.title?.slice(0, 90)}</div>
         <div>ارزشِ روز (زنده از بازارِ واقعی): <b style={{ color: 'var(--gold)' }}>{faB(Number(towerSel.current ?? towerSel.buyPrice) || 0)} تومان</b></div>
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>
@@ -1791,8 +1836,9 @@ export default function EmpirePage() {
             <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px' }} disabled={busy}
               onClick={() => { openAgentQuote(towerSel, 'rent'); setTowerSel(null); setGtab('portfolio') }}>💰 اجاره با مشاور</button>
           </>}
-          {!towerSel.construction && <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px', color: '#7ee0b8' }} disabled={busy}
-            onClick={() => { openAgentQuote(towerSel, 'sell'); setTowerSel(null); setGtab('portfolio') }}>🏷 عرضه و فروش</button>}
+          {/* فاز ۱۸۱ب — فروش دیگر یک‌کلیکه نیست: با مشاور و چانه‌زنی؛ این دکمه پنلِ «سپردن» را باز می‌کند */}
+          {!towerSel.construction && !towerSel.sale && <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px', color: '#7ee0b8', ...(towerSale ? { borderColor: 'var(--gold)', color: 'var(--gold)' } : {}) }} disabled={busy}
+            onClick={() => { setTowerSale(o => !o); if (!towerAsk) setTowerAsk(String(Math.round(Number(towerSel.current ?? towerSel.buyPrice) || 0))) }}>⇄ عرضه و فروش</button>}
           <button className="empChunky" style={{ ...btnGhost, fontSize: 13, fontWeight: 800, padding: '11px 10px' }} disabled={busy || e.aiTokens <= 0}
             onClick={() => doAnalyze(towerSel.listingId)}>🧠 تحلیلِ ملک‌جت (۱ ژتون)</button>
         </div>
@@ -1807,6 +1853,41 @@ export default function EmpirePage() {
                   const d = await api({ action: 'renovate', assetId: towerSel.id, option: o.key })
                   if (d) { setSt(d); celebrate(); const na = (d.empire?.assets || []).find((x2: any) => x2.id === towerSel.id); if (na) setTowerSel(na) }
                 }}>{o.icon} {o.label} — هزینه {faB(o.cost)} → <b style={{ color: '#7ee0b8' }}>+{fa(o.valuePct)}٪ ارزش</b></button>)}
+        </div>}
+        {/* 🤝 فاز ۱۸۱ب — پنلِ «سپردن به مشاور»: قیمتِ پیشنهادیِ خودت؛ راهنمای صادقانه — گران‌تر از بازار = خریدارِ کمتر */}
+        {towerSale && !towerSel.sale && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: 'var(--bg2)', border: '1px dashed var(--goldDim)', borderRadius: 12, padding: '10px 12px' }}>
+          <b style={{ fontSize: 12.5 }}>🤝 سپردن به مشاور</b>
+          <span style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.9 }}>قیمتِ پیشنهادی‌ات را بگذار؛ مشاور خریدار می‌آورد و هر خریدار پیشنهادِ خودش را می‌دهد — قیمتِ خیلی بالاتر از بازار یعنی خریدارِ کمتر.</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input value={towerAsk ? Number(towerAsk).toLocaleString('fa-IR') : ''} onChange={ev => setTowerAsk(digitsOf(ev.target.value))} inputMode="numeric" aria-label="قیمتِ پیشنهادی (تومان)"
+              style={{ flex: 1, minWidth: 150, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', textAlign: 'center' }} />
+            <button className="empChunky" style={{ ...btn, padding: '10px 20px', fontSize: 13 }} disabled={busy || !(Number(towerAsk) > 0)} onClick={doSellList}>🤝 بسپار</button>
+          </div>
+          <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>≈ {faB(Number(towerAsk) || 0)} تومان · ارزشِ روزِ بازار: {faB(Number(towerSel.current ?? towerSel.buyPrice) || 0)} تومان</span>
+        </div>}
+        {/* 🤝 فاز ۱۸۱ب — وضعیتِ سپرده‌شده: پیشنهادِ فعالِ خریدار (قبول/چانه/لغو) یا شمارشِ زنده تا خریدارِ بعدی */}
+        {towerSel.sale && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: 'var(--bg2)', border: '1px solid var(--goldDim)', borderRadius: 12, padding: '10px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 12.5 }}>🤝 سپرده به مشاور</b>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>قیمتِ پیشنهادیِ تو: <b style={{ color: 'var(--gold)' }}>{faB(towerSel.sale.asking)}</b> تومان</span>
+            <span style={{ flex: 1 }} />
+            <button style={{ ...btnGhost, padding: '5px 11px', fontSize: 11 }} disabled={busy} onClick={doSellCancel}>✖ لغوِ سپردن</button>
+          </div>
+          {saleNote?.kind === 'walk' && <div style={{ fontSize: 11.5, color: '#e08a7e', background: 'rgba(224,138,126,.08)', border: '1px dashed rgba(224,138,126,.4)', borderRadius: 9, padding: '6px 10px' }}>🚶 خریدار از معامله رفت — خریدارِ بعدی: ⏳ <Countdown until={towerSel.sale.nextOfferAt || 0} onDone={load} /></div>}
+          {saleNote?.kind === 'boost' && <div style={{ fontSize: 11.5, color: '#7ee0b8', background: 'rgba(126,224,184,.07)', border: '1px dashed rgba(126,224,184,.35)', borderRadius: 9, padding: '6px 10px' }}>📈 جواب داد — پیشنهاد +{fa(saleNote.boostPct || 0)}٪ بالا آمد!</div>}
+          {towerSel.sale.offer ? (
+            <div style={{ background: 'rgba(212,175,55,.07)', border: '1px dashed var(--goldDim)', borderRadius: 10, padding: '9px 11px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <b style={{ fontSize: 13.5 }}>💰 پیشنهادِ خریدار: <span style={{ color: 'var(--gold)' }}>{faB(towerSel.sale.offer.amount)}</span> تومان</b>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className="empChunky" style={{ ...btn, padding: '9px 18px', fontSize: 12.5 }} disabled={busy} onClick={doSellAccept}>✅ قبول</button>
+                <button className="empChunky" style={{ ...btnGhost, padding: '9px 14px', fontSize: 12.5, fontWeight: 800, opacity: towerSel.sale.offer.countered ? .55 : 1 }} disabled={busy || !!towerSel.sale.offer.countered}
+                  title={towerSel.sale.offer.countered ? 'روی این پیشنهاد یک‌بار چانه زده‌ای — قبول کن یا منتظرِ خریدارِ بعدی بمان' : 'ریسک دارد — شاید خریدار برود'}
+                  onClick={doSellCounter}>🤝 چانه بزن{towerSel.sale.offer.countered ? ' (یک‌بار زدی)' : ''}</button>
+              </div>
+            </div>
+          ) : saleNote?.kind !== 'walk' ? (
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>⏳ خریدارِ بعدی: <b style={{ color: 'var(--gold)' }}><Countdown until={towerSel.sale.nextOfferAt || 0} onDone={load} /></b></div>
+          ) : null}
         </div>}
         {analysis && <div style={{ fontSize: 11.5, color: 'var(--muted)', borderTop: '1px dashed var(--line)', paddingTop: 8 }}>
           <b style={{ color: 'var(--text)' }}>{analysis.verdict}</b>
@@ -2074,6 +2155,21 @@ export default function EmpirePage() {
     </>}
 
     {citySheet === 'deals' && <>
+    {/* 💸 فاز ۱۸۱ب — راهنمای قفلِ سرمایه: نقدِ واقعی از ارزان‌ترین فرصتِ قابلِ‌خرید کمتر است → دو راهِ واقعی */}
+    {st.dealsEnabled && (deals?.deals || []).length > 0 && (() => {
+      const buyable = (deals.deals || []).filter((dl: any) => !dl.soldTo && dl.price > 0)
+      if (!buyable.length) return null
+      const cheapest = Math.min(...buyable.map((dl: any) => nego[dl.id]?.success ? nego[dl.id].finalPrice : dl.price))
+      if ((e.capital || 0) >= cheapest) return null
+      return (
+        <div style={{ ...card, borderColor: 'rgba(232,195,122,.5)', background: 'rgba(232,195,122,.07)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 14px' }}>
+          <span style={{ fontSize: 16 }}>💸</span>
+          <span style={{ fontSize: 12, flex: 1, minWidth: 180, lineHeight: 1.9 }}>سرمایهٔ نقدت ({faB(e.capital || 0)} تومان) از ارزان‌ترین فرصتِ امروز ({faB(cheapest)} تومان) کمتر است — یکی از ملک‌هایت را به مشاور بسپار یا وام بگیر.</span>
+          <button className="empChunky" style={{ ...btnGhost, padding: '7px 13px', fontSize: 11.5, fontWeight: 800 }} onClick={() => { setCitySheet(''); setGtab('portfolio'); try { window.scrollTo({ top: 0 }) } catch {} }}>💼 پرتفوی</button>
+          <button className="empChunky" style={{ ...btnGhost, padding: '7px 13px', fontSize: 11.5, fontWeight: 800 }} onClick={() => { setCitySheet(''); setGtab('market'); setMktV('bank') }}>🏦 بانک</button>
+        </div>
+      )
+    })()}
     {(!st.dealsEnabled || !deals || !(deals.deals || []).length) && <div style={card}>
       <b style={{ fontSize: 13.5 }}>🔥 فرصت‌های طلاییِ امروز</b>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>فرصت‌های امروز از آگهی‌های واقعیِ همین روزِ بازار انتخاب می‌شوند — الان فهرستِ تازه‌ای نیست؛ فردا فهرستِ دیگری می‌آید.</div>

@@ -505,6 +505,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     for (const a of e.assets) {
       if (!a.sale) continue
       if (a.sale.offer && a.sale.offer.slot >= slotN) { freshOffers[a.id] = a.sale.offer; continue }
+      if ((a.sale.walkedSlot || 0) >= slotN) continue   // فاز ۱۸۱ب: خریدارِ این بازه با چانه رفته — پیشنهادِ تازه فقط از بازهٔ بعد
       const market = Math.round((prices[a.listingId] || a.buyPrice / (a.unitsOwned || 1)) * (a.unitsOwned || 1) * (1 + (a.renovBoostPct || 0) / 100))
       const amount = sellOfferOf(a.id, slotN, market, a.sale.asking, snCfg)
       await setSaleOffer(userId, a.id, { amount, slot: slotN }).catch(() => {})
