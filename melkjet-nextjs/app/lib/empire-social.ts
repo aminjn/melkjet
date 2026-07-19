@@ -36,6 +36,11 @@ export async function ownerOfListing(listingId: string): Promise<ListingOwner | 
   return (await load<OwnersDb>('empire_owners', {}))[listingId] || null
 }
 
+// فاز ۱۸۰ — کلِ دفترِ مالکیت در یک خواندن (برای علامت‌گذاریِ فهرست‌ها؛ per-item صدازدن گران است)
+export async function allListingOwners(): Promise<Record<string, ListingOwner>> {
+  return load<OwnersDb>('empire_owners', {})
+}
+
 // ادعای اتمیک: اگر بازیکنِ دیگری زودتر ثبت کرده باشد، شکست با نامِ او (پیامِ صادقانه در UI).
 export async function claimListing(listingId: string, owner: { userId: string; no: number; name: string }): Promise<{ ok: boolean; by?: ListingOwner }> {
   return mutate<OwnersDb, { ok: boolean; by?: ListingOwner }>('empire_owners', {}, db => {

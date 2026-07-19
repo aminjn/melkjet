@@ -223,6 +223,13 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const [promoted, setPromoted] = useState<PropertyT[]>([])
   const [loading, setLoading] = useState(initial.length === 0)
 
+  // فاز ۱۸۰ (فیدبک: «همه جای سایت باید رفرش کنی تا تازه شود») — برگشت به تب = تازه‌سازیِ بی‌صدا
+  const [fresh180, setFresh180] = useState(0)
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === 'visible') setFresh180(n => n + 1) }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
   useEffect(() => {
     let alive = true
     // فاز ۹۴ (LCP ۸ث): واکشیِ دومرحله‌ای — اول ۶۰ تای اول (پاسخِ کوچک → کارت‌ها و تصویرِ LCP فوری)،
@@ -244,7 +251,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     gotOnce151.current = true
     fetch('/api/promotions?slot=search_top', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { items: [] })).then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) }).catch(() => {})
     return () => { alive = false; clearTimeout(t96) }
-  }, [selectedCity, dealType])
+  }, [selectedCity, dealType, fresh180])
 
   // با هر تغییرِ نتیجه‌ها از اول ۲۴ تا؛ نگهبانِ انتهای لیست خودکار ۲۴ تای بعدی را می‌آورد
   useEffect(() => { setVisN(24) }, [dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, searchTerm, selectedCity])

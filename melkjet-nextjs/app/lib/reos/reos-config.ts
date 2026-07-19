@@ -32,6 +32,9 @@ export interface ReosConfig {
     morning: { enabled: boolean; hour: number; push: boolean }
     // فاز ۱۶۸ — تابلوی محله‌ها (رقابتِ قابلِ‌لمس): چند محله در تابلو و چند آگهیِ نمونهٔ واقعی برای هر محله
     hoodBoard: { maxHoods: number; sampleListings: number }
+    // فاز ۱۸۰ — نبضِ سود/ضرر (ساعت) و تازه‌سازیِ خودکارِ فهرست‌ها (ثانیه) — هر دو knob زنده
+    pulseHours: number
+    refreshSec: number
     sellProfitXp: number
     land: { buildGainPct: number; partnerGainPct: number; buildMonths: number }
     rentIncome: boolean
@@ -212,6 +215,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     dailyBrief: true,
     morning: { enabled: true, hour: 9, push: true },
     hoodBoard: { maxHoods: 12, sampleListings: 2 },
+    pulseHours: 6,
+    refreshSec: 20,
     // چرخهٔ عمرِ ملک (§6.7-6.8 و فصل ۵): فروش با سود → XP؛ برآوردِ زمین (ساخت/مشارکت) با پارامترهای شفافِ ادمین.
     sellProfitXp: 50,
     land: { buildGainPct: 45, partnerGainPct: 20, buildMonths: 18 },

@@ -1836,6 +1836,20 @@ async function main() {
     ok('تعویقِ پیگیری، سررسیدِ وظیفهٔ پیوندی را هم می‌برد', (await listStaffTasks()).find(t => t.id === task.id).dueAt === newDue)
     await deleteStaffAct(CU, at2)
     ok('حذفِ پیگیری، وظیفهٔ پیوندی را هم حذف می‌کند', !(await listStaffTasks()).some(t => t.id === task.id))
+    // فاز ۱۸۰: نبضِ چندساعته — ایدمپوتنت در هر بازه، دلتای بازهٔ قبل بسته می‌شود
+    {
+      const { snapshotPulse, getEmpire: getEP } = await import('../app/lib/empire-store.ts')
+      const UP = '09120001800'
+      const { createEmpire: mkE } = await import('../app/lib/empire-store.ts')
+      await mkE(UP, { name: 'نبض', answers: { city: 'تهران' } })
+      await snapshotPulse(UP, 100, 5_000_000_000)
+      await snapshotPulse(UP, 100, 9_999_999_999)   // همان بازه → بی‌اثر
+      let ep = await getEP(UP)
+      ok('نبض در هر بازه فقط یک‌بار ثبت می‌شود', ep.pulse.slot === 100 && ep.pulse.netWorth === 5_000_000_000)
+      await snapshotPulse(UP, 101, 5_200_000_000)
+      ep = await getEP(UP)
+      ok('بازهٔ نو: prev = ثروتِ بازهٔ قبل (دلتای واقعی = ۲۰۰م)', ep.pulse.slot === 101 && ep.pulse.prev === 5_000_000_000 && ep.pulse.netWorth - ep.pulse.prev === 200_000_000)
+    }
     // رویدادِ سیستمیِ ⚙️ وضعیتِ «جدید» را دست نمی‌زند
     const CU2 = '09120001752'
     await addStaffAct(CU2, { by: 'ادمین', byPhone: STF, kind: 'note', text: '⚙️ ارجاع به سارا' })

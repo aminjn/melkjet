@@ -74,6 +74,12 @@ export default function StaffCrmView() {
       .catch(() => {})
   }, [q, status, mine])
   useEffect(() => { load() }, [load])
+  // فاز ۱۸۰ — برگشت به تب = تازه‌سازیِ خودکار (پیگیری/ارجاعِ همکارها بدونِ رفرش دیده شود)
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [load])
 
   const openCustomer = async (r: any) => {
     setSel(r); setEntry(null); setProf(null); setActText(''); setActDue(''); setActDueTs(0); setSmsTxt('')

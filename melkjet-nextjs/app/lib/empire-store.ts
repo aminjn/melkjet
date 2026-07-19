@@ -144,6 +144,7 @@ export interface EmpireData {
   rivalScore?: Record<string, number>   // حافظهٔ رقبا (سند ۲۹ Part 5): چند بار از جلوی هر رقیب ملک را برده‌ای → انتقام
   projectHist?: ProjectReport[]   // کارنامهٔ پروژه‌های تحویل‌شده (GDD فصل ۴) — درسِ هر پروژه از اعدادِ واقعیِ خودش
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
+  pulse?: { slot: number; netWorth: number; prev: number }  // فاز ۱۸۰ — نبضِ چندساعته: سود/ضررِ «واقعیِ» هر بازه (اجاره/قیمتِ زنده/بازسازی)
   weekSnap?: { week: number; netWorth: number }   // اسنپ‌شاتِ هفتگی — لیدربوردِ «رشدِ این هفته» (سند ۱۶: شانسِ بازیکنِ جدید)
   lastLevel?: number          // آخرین سطحِ پاداش‌گرفته — پاداشِ Level Up (سند ۱۶ فصل ۶ بخش ۱)
   title?: string              // عنوانِ (Title) فعال — فقط از نشان‌های واقعاً کسب‌شده (سند ۱۶ بخش ۹)
@@ -858,6 +859,15 @@ export async function snapshotNetWorth(userId: string, day: number, netWorth: nu
   return mutateEmpire(userId, e => {
     if (e.snap && e.snap.day >= day) return 'امروز ثبت شده'
     e.snap = { day, netWorth, prev: e.snap?.netWorth ?? netWorth }
+  })
+}
+
+// فاز ۱۸۰ — نبضِ بازه‌ای (پیش‌فرض ۶ساعته، knob): اولین بازدید در هر بازه، ثروتِ لحظه ثبت و دلتای
+// بازهٔ قبل بسته می‌شود. دلتا ۱۰۰٪ واقعی است: درآمدِ جمع‌شده + تغییرِ قیمتِ زندهٔ آگهی‌ها + بازسازی.
+export async function snapshotPulse(userId: string, slot: number, netWorth: number) {
+  return mutateEmpire(userId, e => {
+    if (e.pulse && e.pulse.slot >= slot) return 'این بازه ثبت شده'
+    e.pulse = { slot, netWorth, prev: e.pulse?.netWorth ?? netWorth }
   })
 }
 

@@ -1181,6 +1181,10 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>⚔️ تابلوی محله‌ها</div>
           {row('تعدادِ محله‌های تابلو', cin('hoodBoard', 'maxHoods'), 'پیش‌فرض ۱۲')}
           {row('آگهیِ نمونهٔ هر محله', cin('hoodBoard', 'sampleListings'), 'پلِ مستقیم به خریدِ واقعی — پیش‌فرض ۲')}
+          {/* فاز ۱۸۰ — نبضِ سود/ضرر و تازه‌سازیِ زنده */}
+          <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>⚡ نبضِ سود/ضرر و تازه‌سازی</div>
+          {row('بازهٔ نبض (ساعت)', cin('pulseHours'), 'پیش‌فرض ۶ — دلتای واقعیِ ثروت در هر بازه')}
+          {row('تازه‌سازیِ خودکارِ فهرست‌ها (ثانیه)', cin('refreshSec'), 'پیش‌فرض ۲۰ — فرصت‌ها/وضعیت بدونِ رفرش تازه می‌شوند')}
           {/* فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — عوض‌کردنِ id یعنی شروعِ فصلِ جدید */}
           <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>🌱 فصلِ دنیا (Season)</div>
           {row('فعال (۱/۰)', cin('season', 'enabled'))}

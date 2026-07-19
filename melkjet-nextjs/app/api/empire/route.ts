@@ -11,7 +11,7 @@ import {
   landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
   creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
   negotiationOutcome, questOf, nextDreamOf,
-  applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, markComeback, claimComeback,
+  applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, snapshotPulse, markComeback, claimComeback,
   buyFundUnits, sellFundUnits, accrueFundDividends, joinCrowd, exitCrowd,
   companyReputationOf, hireCandidatesOf, teamSkillOf, ownerPersonaOf, permitTermsOf, permitDueAt,
   foundCompany, hireEngineer, applyWages, requestPermit, settleObjection, defendObjection, progressPermits,
@@ -51,7 +51,7 @@ import { recentEvents } from '@/app/lib/reos/store'
 import { forIds } from '@/app/lib/listing-stats-store'
 import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
-import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
+import { ownerOfListing, allListingOwners, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
 import { sendDm, dmThread, createDuel, acceptDuel, resolveDuels, myDuels, markDuelRewarded, clanDeposit, clanWithdraw, clanProjectStart, clanProjectJoin, clanProjectSell } from '@/app/lib/empire-social'   // فاز ۱۰۲
 import { submitCreatorItem, myCreatorItems, approvedCreatorItems, recordCreatorSale, creatorIconOf, creatorShareOf, type CreatorCfg } from '@/app/lib/empire-creator'   // فاز ۱۰۷
 import { grantCoins } from '@/app/lib/empire-store'
@@ -582,6 +582,12 @@ async function stateOf(userId: string, e00: EmpireData) {
   let dayDelta: number | null = null
   if (!e.snap || e.snap.day < today) { await snapshotNetWorth(userId, today, nw.netWorth).catch(() => {}); dayDelta = e.snap ? nw.netWorth - e.snap.netWorth : null }
   else dayDelta = nw.netWorth - e.snap.prev
+  // فاز ۱۸۰ — نبضِ چندساعته («هر ۶ ساعت با کاربر بازی کند»): دلتای واقعیِ ثروت در بازهٔ جاری
+  const pulseH = Math.max(1, Math.floor(Number(config().empire.pulseHours) || 6))
+  const slot180 = Math.floor(Date.now() / (pulseH * 3600e3))
+  let pulseDelta: number | null = null
+  if (!e.pulse || e.pulse.slot < slot180) { await snapshotPulse(userId, slot180, nw.netWorth).catch(() => {}); pulseDelta = e.pulse ? nw.netWorth - e.pulse.netWorth : null }
+  else pulseDelta = nw.netWorth - e.pulse.prev
   // اسنپ‌شاتِ هفتگی (سند ۱۶): مبنای لیدربوردِ «رشدِ این هفته» — از نقطهٔ ورودِ خودِ بازیکن در این هفته
   const thisWeek = Math.floor(today / 7)
   if (!e.weekSnap || e.weekSnap.week < thisWeek) await setWeekSnap(userId, thisWeek, nw.netWorth).catch(() => {})
@@ -633,6 +639,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     away,   // فاز ۶۳: «در نبودِ شما» — همه از دادهٔ واقعی (رصدخانه + کتابِ تاریخ)
     minutesToday: openActions * 3,
     dayDelta,
+    pulse: { delta: pulseDelta, hours: pulseH, nextAt: (slot180 + 1) * pulseH * 3600e3, refreshSec: Math.max(5, Math.floor(Number(config().empire.refreshSec) || 20)) },
     hiddenLeft: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).length,
     hiddenHints: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).map(b => b.hint),   // فاز ۷۴: فقط سرنخ — نه نام، نه شرط
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
@@ -1771,6 +1778,9 @@ export async function POST(req: NextRequest) {
       }
       const medOf = (rs: number[]) => { const s = [...rs].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
       const byId = new Map(pool.map(it => [it.id, it] as const))
+      // فاز ۱۸۰ («یکی خرید، بقیه نتونن بخرن و ببینن کی خریده») — دفترِ مالکیت در یک خواندن؛
+      // فرصتِ خریده‌شده حذف نمی‌شود بلکه با نامِ خریدار علامت می‌خورد (اثباتِ اجتماعی + غیرقابلِ‌خرید).
+      const owners180 = await allListingOwners().catch(() => ({} as Record<string, { userId: string; no: number; name: string }>))
       const deals = dailyDealPickOf(userId, day, pool.map(it => it.id), cfg.count).map(id => {
         const it = byId.get(id)!
         const area = parseFaNum((it.meta || {})['متراژ']) || 0
@@ -1778,7 +1788,9 @@ export async function POST(req: NextRequest) {
         const perM = area > 0 ? Math.round(price / area) : 0
         const rates = hoodRates.get(hoodOf(it.location)) || []
         const rarity = rarityOf(perM, rates.length ? medOf(rates) : 0, rates.length, config().empire.intel.minComps)
-        return { id, title: it.title, hood: hoodOf(it.location), price, area, perM, rarity, lat: Number(it.meta?.['__lat']) || undefined, lng: Number(it.meta?.['__lng']) || undefined, url: listingHref(id, it.title, hoodOf(it.location)) }
+        const ow = owners180[id]
+        const soldTo = ow && ow.userId !== userId && !String(ow.userId).startsWith(NPC_USER_PREFIX) ? { name: ow.name, no: ow.no } : null
+        return { id, title: it.title, hood: hoodOf(it.location), price, area, perM, rarity, soldTo, lat: Number(it.meta?.['__lat']) || undefined, lng: Number(it.meta?.['__lng']) || undefined, url: listingHref(id, it.title, hoodOf(it.location)) }
       })
       return NextResponse.json({ ok: true, deals, expiresAt })
     }
