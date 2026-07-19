@@ -124,6 +124,34 @@ export async function listClans(limit = 100): Promise<Array<{ id: string; name: 
     .slice(0, limit)
 }
 
+// 🏰 فاز ۱۸۶ — نقشهٔ عضو→اتحاد (برای «اتحادِ حاکمِ محله» و برچسبِ اتحاد کنارِ نام‌ها)
+export async function clanUserMap(): Promise<Record<string, string>> {
+  const db = await load<ClansDb>('empire_clans', CLANS_FALLBACK)
+  const out: Record<string, string> = {}
+  for (const c of Object.values(db.clans)) for (const m of c.members) out[m.userId] = c.name
+  return out
+}
+
+// 🏰 فاز ۱۸۶ — تابلوی اتحادها (خالص و تست‌پذیر): قدرت = دارایی‌های واقعیِ اعضا؛ هیچ امتیازِ ساختگی —
+// همهٔ متریک‌ها جدا و شفاف: املاک، خزانه، کنسرسیوم‌های تملک‌شده، اعضا. ترتیب: املاک ↓، خزانه ↓، قدیمی‌تر اول.
+export interface ClanBoardRow { id: string; name: string; members: number; assets: number; treasury: number; projectsOwned: number; isMine: boolean }
+export function clanBoardFrom(clans: Clan[], empires: Array<{ userId: string; assets: Array<{ demolishedAt?: number }> }>, meId: string): ClanBoardRow[] {
+  const assetsOf = new Map(empires.map(e => [e.userId, (e.assets || []).filter(a => !a.demolishedAt).length]))
+  return clans.map(c => ({
+    id: c.id, name: c.name, members: c.members.length,
+    assets: c.members.reduce((s, m) => s + (assetsOf.get(m.userId) || 0), 0),
+    treasury: Math.max(0, Math.round(c.treasury || 0)),
+    projectsOwned: (c.projects || []).filter(p => p.status === 'owned').length,
+    isMine: c.members.some(m => m.userId === meId),
+    _at: c.createdAt,
+  })).sort((a: any, b: any) => b.assets - a.assets || b.treasury - a.treasury || a._at - b._at)
+    .map(({ _at, ...r }: any) => r)
+}
+export async function clanBoardOf(meId: string, empires: Array<{ userId: string; assets: Array<{ demolishedAt?: number }> }>): Promise<ClanBoardRow[]> {
+  const db = await load<ClansDb>('empire_clans', CLANS_FALLBACK)
+  return clanBoardFrom(Object.values(db.clans), empires, meId)
+}
+
 export async function createClan(user: { userId: string; no: number; name: string }, name: string): Promise<{ ok: boolean; reason?: string; clan?: Clan }> {
   const bad = validClanName(name)
   if (bad) return { ok: false, reason: bad }

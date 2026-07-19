@@ -2745,6 +2745,19 @@ export async function POST(req: NextRequest) {
         clans: await listClans(50).catch(() => []),
       })
     }
+    // 🏰 فاز ۱۸۶ — تابلوی اتحادها: قدرتِ واقعی (املاکِ اعضا/خزانه/کنسرسیوم) + قلمروها (محله‌هایی که اتحاد حاکم است)
+    case 'clanBoard': {
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const { clanBoardOf, clanUserMap } = await import('@/app/lib/empire-social')
+      const { hoodClanKings } = await import('@/app/lib/empire-territory')
+      const empires186 = await listEmpiresPublic(2000)
+      const rows = await clanBoardOf(userId, empires186)
+      const kings = hoodClanKings(empires186 as any, await clanUserMap().catch(() => ({})))
+      const ruled: Record<string, number> = {}
+      for (const k of Object.values(kings)) ruled[k.name] = (ruled[k.name] || 0) + 1
+      return NextResponse.json({ ok: true, board: rows.map(r => ({ ...r, hoodsRuled: ruled[r.name] || 0 })) })
+    }
     case 'clanCreate': {
       const soc = config().empire.social, u = config().empire.unlocks
       if (soc?.clanEnabled === false) return NextResponse.json({ error: 'اتحادها فعلاً فعال نیستند' }, { status: 403 })

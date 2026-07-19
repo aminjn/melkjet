@@ -49,6 +49,31 @@ export function hoodBoardFrom(empires: EmpireLite[], meId: string): HoodStat[] {
   return out
 }
 
+// 🏰 فاز ۱۸۶ — اتحادِ حاکمِ هر محله (خالص و تست‌پذیر): جمعِ دارایی‌های واقعیِ اعضای هر اتحاد در محله؛
+// بیشترین = اتحادِ حاکم (تساوی → نامِ مقدم به فارسی — قطعی). بی‌اتحاد = هیچ (نه دادهٔ ساختگی).
+export function hoodClanKings(empires: EmpireLite[], clanOfUser: Record<string, string>): Record<string, { name: string; count: number }> {
+  const byHood = new Map<string, Map<string, number>>()
+  for (const e of empires) {
+    const cn = clanOfUser[e.userId]
+    if (!cn) continue
+    for (const a of e.assets || []) {
+      const h = String(a.hood || '').trim()
+      if (!h || a.demolishedAt) continue
+      let m = byHood.get(h)
+      if (!m) { m = new Map(); byHood.set(h, m) }
+      m.set(cn, (m.get(cn) || 0) + 1)
+    }
+  }
+  const out: Record<string, { name: string; count: number }> = {}
+  for (const [hood, m] of byHood) {
+    let best: { name: string; count: number } | null = null
+    for (const [name, count] of m)
+      if (!best || count > best.count || (count === best.count && name.localeCompare(best.name, 'fa') < 0)) best = { name, count }
+    if (best) out[hood] = best
+  }
+  return out
+}
+
 // فاز ۱۸۵ — تطبیقِ محله با «مرزِ واژه» به‌جای تساویِ کاملِ بخشِ ویرگولی: «سهروردی» بخشِ «سهروردی جنوبی» را
 // می‌گیرد (فیدبک: «محله آگهی دارد ولی تابلو هیچی نشان نمی‌دهد») ولی «ونک» هرگز «پونک» را نمی‌گیرد (زیررشته ممنوع).
 // نرمال‌سازی: نیم‌فاصله→حذف، ي/ك عربی→فارسی — «سعادت‌آباد» و «سعادت آباد» یکی‌اند.
@@ -70,7 +95,7 @@ export function hoodMatches(hood: string, location?: string): boolean {
 }
 
 // نسخهٔ کامل برای API: تابلو از دادهٔ زندهٔ استور + آگهی‌های واقعیِ در دسترسِ هر محله (پلِ بازی→خریدِ واقعی).
-export async function hoodBoardOf(meId: string, opts: { maxHoods: number; sampleListings: number }): Promise<Array<HoodStat & { listings: number; samples: Array<{ id: string; title: string; price: string }> }>> {
+export async function hoodBoardOf(meId: string, opts: { maxHoods: number; sampleListings: number }): Promise<Array<HoodStat & { clanKing: { name: string; count: number } | null; listings: number; samples: Array<{ id: string; title: string; price: string }> }>> {
   const { listEmpiresPublic, getEmpire } = await import('./empire-store')
   const { candidateListings } = await import('./scraper-store')
   const empires = await listEmpiresPublic(2000)
@@ -82,8 +107,11 @@ export async function hoodBoardOf(meId: string, opts: { maxHoods: number; sample
     board.unshift({ hood: home, total: 0, mine: 0, owners: 0, king: null, gap: 1 })
   const top = board.slice(0, Math.max(1, opts.maxHoods))
   const pool = await candidateListings(500).catch(() => [])
+  // 🏰 فاز ۱۸۶ — اتحادِ حاکمِ هر محله از دارایی‌های واقعیِ اعضا (لایهٔ رقابتِ گروهی روی همان داده)
+  const { clanUserMap } = await import('./empire-social')
+  const kings186 = hoodClanKings(empires, await clanUserMap().catch(() => ({})))
   return top.map(s => {
     const here = pool.filter(it => hoodMatches(s.hood, it.location))
-    return { ...s, listings: here.length, samples: here.slice(0, Math.max(0, opts.sampleListings)).map(it => ({ id: it.id, title: it.title, price: it.price || '' })) }
+    return { ...s, clanKing: kings186[s.hood] || null, listings: here.length, samples: here.slice(0, Math.max(0, opts.sampleListings)).map(it => ({ id: it.id, title: it.title, price: it.price || '' })) }
   })
 }
