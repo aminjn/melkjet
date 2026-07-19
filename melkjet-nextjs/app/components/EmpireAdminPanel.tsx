@@ -1185,6 +1185,15 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>⚡ نبضِ سود/ضرر و تازه‌سازی</div>
           {row('بازهٔ نبض (ساعت)', cin('pulseHours'), 'پیش‌فرض ۶ — دلتای واقعیِ ثروت در هر بازه')}
           {row('تازه‌سازیِ خودکارِ فهرست‌ها (ثانیه)', cin('refreshSec'), 'پیش‌فرض ۲۰ — فرصت‌ها/وضعیت بدونِ رفرش تازه می‌شوند')}
+          {/* فاز ۱۸۱ — فروش با چانه‌زنی */}
+          <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>🤝 فروش با چانه‌زنی (مشاور)</div>
+          {row('فعال (۱/۰)', cin('sellNego', 'enabled'))}
+          {row('بازهٔ پیشنهادِ خریدار (ساعت)', cin('sellNego', 'offerHours'), 'پیش‌فرض ۱ — دلیلِ برگشتنِ هر ساعت')}
+          {row('کفِ پیشنهاد (٪ ارزشِ روز)', cin('sellNego', 'bandLowPct'), 'پیش‌فرض ۸۸')}
+          {row('سقفِ پیشنهاد (٪ ارزشِ روز)', cin('sellNego', 'bandHighPct'), 'پیش‌فرض ۱۰۳')}
+          {row('بالای بازار = بی‌خریدار از ٪', cin('sellNego', 'noOfferOverPct'), 'گران‌فروشی → بعضی بازه‌ها خریدار نمی‌آید')}
+          {row('حداکثر بوستِ چانه (٪)', cin('sellNego', 'counterBoostPct'), 'پیش‌فرض ۴')}
+          {row('ریسکِ رفتنِ خریدار با چانه (٪)', cin('sellNego', 'counterFailPct'), 'پیش‌فرض ۳۵')}
           {/* فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — عوض‌کردنِ id یعنی شروعِ فصلِ جدید */}
           <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>🌱 فصلِ دنیا (Season)</div>
           {row('فعال (۱/۰)', cin('season', 'enabled'))}

@@ -36,6 +36,8 @@ export interface EmpireAsset {
   income?: number             // درآمدِ جمع‌شدهٔ اجاره/کسب‌وکار (برآورد از بازارِ واقعی)
   lastAccrualAt?: number
   // تجمیع و تخریب (فاز ۲۵): ساختمانِ آپارتمان/تجاری واحدبه‌واحد خریده می‌شود؛ تخریب فقط با مالکیتِ کامل.
+  // فاز ۱۸۱ — سپردنِ فروش به مشاور با چانه‌زنی: قیمتِ پیشنهادیِ فروشنده + پیشنهادِ فعالِ خریدار (قطعی از هش، لنگر = ارزشِ واقعیِ روز)
+  sale?: { asking: number; at: number; offer?: { amount: number; slot: number; countered?: boolean } }
   unitsTotal?: number         // کلِ واحدهای ساختمان — از متای واقعیِ آگهی («طبقه: X از Y») یا قطعی از هش
   unitsOwned?: number         // چند واحدش مالِ توست (خریدِ اولیه = ۱)؛ ارزش/فروش × همین ضریب
   demolishedAt?: number       // تخریب‌شده → kind به 'land' برمی‌گردد؛ ارزش تا ساخت = بهای تمام‌شده
@@ -859,6 +861,45 @@ export async function snapshotNetWorth(userId: string, day: number, netWorth: nu
   return mutateEmpire(userId, e => {
     if (e.snap && e.snap.day >= day) return 'امروز ثبت شده'
     e.snap = { day, netWorth, prev: e.snap?.netWorth ?? netWorth }
+  })
+}
+
+// ── فاز ۱۸۱ — فروش با چانه‌زنی از طریقِ مشاور ──
+export async function listAssetForSale(userId: string, assetId: string, asking: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.construction && !a.construction.done) return 'پروژهٔ در ساخت را نمی‌شود سپرد'
+    if (!(asking > 0)) return 'قیمتِ پیشنهادی نامعتبر است'
+    a.sale = { asking: Math.round(asking), at: now }
+    e.timeline.push({ at: now, icon: '🤝', title: 'به مشاور سپرده شد', detail: `${a.title.slice(0, 50)} · پیشنهادی ${Math.round(asking / 1e6).toLocaleString('fa-IR')}م` })
+  })
+}
+export async function cancelAssetSale(userId: string, assetId: string) {
+  return mutateEmpire(userId, e => { const a = e.assets.find(x => x.id === assetId); if (!a) return 'دارایی یافت نشد'; delete a.sale })
+}
+// ثبتِ پیشنهادِ بازهٔ جاری (idempotent — فقط اسلاتِ جلوتر جایگزین می‌شود)
+export async function setSaleOffer(userId: string, assetId: string, offer: { amount: number; slot: number }) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a || !a.sale) return 'در فهرستِ فروش نیست'
+    if (a.sale.offer && a.sale.offer.slot >= offer.slot) return 'پیشنهادِ این بازه ثبت شده'
+    a.sale.offer = offer.amount > 0 ? { amount: Math.round(offer.amount), slot: offer.slot } : undefined
+    if (!(offer.amount > 0)) a.sale.offer = undefined
+  })
+}
+// چانه: walk = خریدار می‌رود (تا بازهٔ بعد)؛ وگرنه مبلغ تا سقفِ asking بالا می‌آید — هر پیشنهاد یک چانه
+export async function counterSaleOffer(userId: string, assetId: string, roll: { walk: boolean; boostPct: number }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a?.sale?.offer) return 'پیشنهادی برای چانه نیست'
+    if (a.sale.offer.countered) return 'روی این پیشنهاد یک‌بار چانه زده‌ای — قبول کن یا منتظرِ خریدارِ بعدی بمان'
+    if (roll.walk) {
+      e.timeline.push({ at: now, icon: '🚶', title: 'خریدار از معامله رفت', detail: a.title.slice(0, 50) })
+      a.sale.offer = undefined
+      return
+    }
+    a.sale.offer = { amount: Math.min(a.sale.asking, Math.round(a.sale.offer.amount * (1 + roll.boostPct / 100))), slot: a.sale.offer.slot, countered: true }
   })
 }
 

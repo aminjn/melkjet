@@ -35,6 +35,8 @@ export interface ReosConfig {
     // فاز ۱۸۰ — نبضِ سود/ضرر (ساعت) و تازه‌سازیِ خودکارِ فهرست‌ها (ثانیه) — هر دو knob زنده
     pulseHours: number
     refreshSec: number
+    // فاز ۱۸۱ — فروش با چانه‌زنی از طریقِ مشاور: بازهٔ پیشنهادها و باند/ریسک/بوستِ چانه (همه زنده)
+    sellNego: { enabled: boolean; offerHours: number; bandLowPct: number; bandHighPct: number; noOfferOverPct: number; counterBoostPct: number; counterFailPct: number }
     sellProfitXp: number
     land: { buildGainPct: number; partnerGainPct: number; buildMonths: number }
     rentIncome: boolean
@@ -217,6 +219,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
     hoodBoard: { maxHoods: 12, sampleListings: 2 },
     pulseHours: 6,
     refreshSec: 20,
+    sellNego: { enabled: true, offerHours: 1, bandLowPct: 88, bandHighPct: 103, noOfferOverPct: 15, counterBoostPct: 4, counterFailPct: 35 },
     // چرخهٔ عمرِ ملک (§6.7-6.8 و فصل ۵): فروش با سود → XP؛ برآوردِ زمین (ساخت/مشارکت) با پارامترهای شفافِ ادمین.
     sellProfitXp: 50,
     land: { buildGainPct: 45, partnerGainPct: 20, buildMonths: 18 },

@@ -1836,6 +1836,24 @@ async function main() {
     ok('تعویقِ پیگیری، سررسیدِ وظیفهٔ پیوندی را هم می‌برد', (await listStaffTasks()).find(t => t.id === task.id).dueAt === newDue)
     await deleteStaffAct(CU, at2)
     ok('حذفِ پیگیری، وظیفهٔ پیوندی را هم حذف می‌کند', !(await listStaffTasks()).some(t => t.id === task.id))
+    // فاز ۱۸۱: چرخهٔ فروش با چانه — سپردن/پیشنهاد/چانه(بوست و رفتن)/لغو روی PG
+    {
+      const { listAssetForSale, cancelAssetSale, setSaleOffer, counterSaleOffer, buyAsset: buyA, getEmpire: getE181, createEmpire: mkE181 } = await import('../app/lib/empire-store.ts')
+      const U = '09120001810'
+      await mkE181(U, { name: 'چانه', answers: { city: 'تهران' } })
+      await buyA(U, { id: 'SL1', title: 'آپارتمان تستِ فروش', hood: 'ونک', price: 3_000_000_000 })
+      const aId = (await getE181(U)).assets[0].id
+      ok('سپردن به مشاور با قیمتِ پیشنهادی', (await listAssetForSale(U, aId, 3_500_000_000)).ok === true && (await getE181(U)).assets[0].sale.asking === 3_500_000_000)
+      await setSaleOffer(U, aId, { amount: 3_100_000_000, slot: 10 })
+      ok('پیشنهادِ بازه ثبت شد و اسلاتِ قدیمی جایگزین نمی‌شود', (await getE181(U)).assets[0].sale.offer.amount === 3_100_000_000 && (await setSaleOffer(U, aId, { amount: 1, slot: 9 })).ok === false)
+      await counterSaleOffer(U, aId, { walk: false, boostPct: 3 })
+      const of1 = (await getE181(U)).assets[0].sale.offer
+      ok('چانهٔ موفق مبلغ را بالا می‌برد (سقف: asking) و یک‌بار است', of1.amount === 3_193_000_000 && of1.countered === true && (await counterSaleOffer(U, aId, { walk: false, boostPct: 3 })).ok === false)
+      await setSaleOffer(U, aId, { amount: 3_200_000_000, slot: 11 })
+      await counterSaleOffer(U, aId, { walk: true, boostPct: 0 })
+      ok('چانهٔ ناموفق: خریدار می‌رود (پیشنهاد پاک، تا بازهٔ بعد)', !(await getE181(U)).assets[0].sale.offer)
+      ok('لغوِ سپردن', (await cancelAssetSale(U, aId)).ok === true && !(await getE181(U)).assets[0].sale)
+    }
     // فاز ۱۸۰: نبضِ چندساعته — ایدمپوتنت در هر بازه، دلتای بازهٔ قبل بسته می‌شود
     {
       const { snapshotPulse, getEmpire: getEP } = await import('../app/lib/empire-store.ts')

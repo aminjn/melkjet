@@ -11,7 +11,7 @@ import {
   landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
   creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
   negotiationOutcome, questOf, nextDreamOf,
-  applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, snapshotPulse, markComeback, claimComeback,
+  applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, snapshotPulse, listAssetForSale, cancelAssetSale, setSaleOffer, counterSaleOffer, markComeback, claimComeback,
   buyFundUnits, sellFundUnits, accrueFundDividends, joinCrowd, exitCrowd,
   companyReputationOf, hireCandidatesOf, teamSkillOf, ownerPersonaOf, permitTermsOf, permitDueAt,
   foundCompany, hireEngineer, applyWages, requestPermit, settleObjection, defendObjection, progressPermits,
@@ -42,6 +42,7 @@ import { listingHref } from '@/app/lib/listing-url'
 import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
 import { pathPct } from '@/app/lib/empire-morning'
+import { sellSlotOf, sellOfferOf, counterRollOf } from '@/app/lib/empire-sellnego'
 import { materialsIndexState, materialsFactorOf } from '@/app/lib/materials-index'
 import { grantWarReward, absorbNpcAssets, moveCapital, doPrestige, spendSkillPoint, prestigeEffectsOf, SKILL_BRANCHES } from '@/app/lib/empire-store'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
@@ -496,6 +497,20 @@ async function stateOf(userId: string, e00: EmpireData) {
   const asmCfg = config().empire.assembly
   // فاز ۴۷ (فیدبک: «اجاره/کسب‌وکار مبهم است»): نرخِ شفافِ درآمدِ روزشمار — دقیقاً همان فرمول‌های accrueRentFor
   const rt47 = await rentTable().catch(() => ({ at: 0, byHood: new Map<string, number>(), global: 0 }))
+  // فاز ۱۸۱ — پیشنهادِ خریدِ بازهٔ جاری برای دارایی‌های سپرده‌شده (قطعی از هش، لنگر = ارزشِ واقعیِ روز)
+  const snCfg = config().empire.sellNego
+  const freshOffers: Record<string, { amount: number; slot: number; countered?: boolean }> = {}
+  if (snCfg?.enabled) {
+    const slotN = sellSlotOf(Date.now(), snCfg.offerHours)
+    for (const a of e.assets) {
+      if (!a.sale) continue
+      if (a.sale.offer && a.sale.offer.slot >= slotN) { freshOffers[a.id] = a.sale.offer; continue }
+      const market = Math.round((prices[a.listingId] || a.buyPrice / (a.unitsOwned || 1)) * (a.unitsOwned || 1) * (1 + (a.renovBoostPct || 0) / 100))
+      const amount = sellOfferOf(a.id, slotN, market, a.sale.asking, snCfg)
+      await setSaleOffer(userId, a.id, { amount, slot: slotN }).catch(() => {})
+      if (amount > 0) freshOffers[a.id] = { amount, slot: slotN }
+    }
+  }
   const assets = e.assets.map(a => {
     const rentM0 = rt47.byHood.get(a.hood) || rt47.global
     // فاز ۴۹: همان فرمولِ واحدِ واریز (assetMonthlyIncomeOf) — واحدهای تجمیعی ضرب می‌شوند
@@ -555,6 +570,8 @@ async function stateOf(userId: string, e00: EmpireData) {
       rented: a.construction.rented || 0,
       freeUnits: Math.max(0, a.construction.totalUnits - a.construction.presold - a.construction.sold - (a.construction.rented || 0)),
     } : undefined,
+    // فاز ۱۸۱ — وضعیتِ فروشِ سپرده‌شده به مشاور + پیشنهادِ فعالِ خریدار + زمانِ خریدارِ بعدی
+    sale: a.sale ? { asking: a.sale.asking, offer: freshOffers[a.id] || null, nextOfferAt: snCfg?.enabled ? (sellSlotOf(Date.now(), snCfg.offerHours) + 1) * Math.max(1, snCfg.offerHours) * 3600e3 : 0 } : undefined,
     url: listingHref(a.listingId, a.title, a.hood),   // پلِ بازی→واقعیت (جلد ۲۸)
   } })
   const today = dayNumberOf(Date.now())
@@ -1087,6 +1104,35 @@ export async function POST(req: NextRequest) {
     }
 
     // فروش (چرخهٔ عمر — فصل ۵): به قیمتِ روزِ واقعیِ آگهی؛ سود → XP، زیانِ اول → درسِ آموزشی.
+    // ── فاز ۱۸۱ — فروش با چانه‌زنی از طریقِ مشاور ──
+    case 'sellList': {
+      if (!config().empire.sellNego?.enabled) return NextResponse.json({ error: 'سپردنِ فروش فعلاً فعال نیست' }, { status: 403 })
+      const r = await listAssetForSale(userId, String(b.assetId || ''), Number(b.asking) || 0)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'sellCancel': {
+      const r = await cancelAssetSale(userId, String(b.assetId || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'sellCounter': {
+      const cfgN = config().empire.sellNego
+      const roll = counterRollOf(String(b.assetId || ''), sellSlotOf(Date.now(), cfgN.offerHours), cfgN)
+      const r = await counterSaleOffer(userId, String(b.assetId || ''), roll)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, walked: roll.walk, boostPct: roll.walk ? 0 : roll.boostPct, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'sellAccept': {
+      const eA = await getEmpire(userId)
+      const aA = eA?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!eA || !aA?.sale?.offer) return NextResponse.json({ error: 'پیشنهادِ فعالی برای قبول نیست' }, { status: 400 })
+      // قیمتِ نهایی = مبلغِ پیشنهاد؛ sellAsset از livePrice×units×(1+renov) می‌سازد → معادل‌سازی
+      const eqLive = aA.sale.offer.amount / ((aA.unitsOwned || 1) * (1 + (aA.renovBoostPct || 0) / 100))
+      const r = await sellAsset(userId, aA.id, eqLive, { commissionPct: config().empire.pros.advisorSellCommissionPct })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, salePrice: r.salePrice, profit: r.profit, ...(await stateOf(userId, r.empire!)) })
+    }
     case 'sell': {
       const e = await getEmpire(userId)
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
