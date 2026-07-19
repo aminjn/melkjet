@@ -1025,7 +1025,16 @@ export default function EmpirePage() {
   const [dmText, setDmText] = useState('')
   const loadSoc = async () => { const d = await api({ action: 'social' }); if (d) setSoc(d) }
   const loadDm = async (no: number) => { const d = await api({ action: 'dmThread', withNo: no }); if (d) setDmMsgs(d.msgs || []) }
-  const loadClan = async () => { const d = await api({ action: 'clanList' }); if (d) setClanD(d) }
+  const loadClan = async () => {
+    const d = await api({ action: 'clanList' }); if (d) setClanD(d)
+    // 🏆 فاز ۱۸۶ب: تابلوی اتحادها — قدرتِ واقعی (املاکِ اعضا/خزانه/قلمرو/کنسرسیوم) از سرور؛ خطا = تابلوی قبلی می‌ماند
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clanBoard' }) })
+      .then(r => r.ok ? r.json() : null).then(d2 => { if (d2?.ok) setClanBoardD(d2) }).catch(() => {})
+  }
+  // 🏰 فاز ۱۸۶ب — برگهٔ اختصاصیِ اتحاد (خواستهٔ مستقیم: «اتحاد رو پیدا نمی‌کنم»): از ریلِ لبه و مسیرهای قدیمی باز می‌شود
+  const [clanSheet, setClanSheet] = useState(false)
+  const [clanBoardD, setClanBoardD] = useState<any>(null)
+  const openClanSheet = () => { setClanSheet(true); if (!clanD || !clanBoardD) loadClan() }
   // فاز ۳۹ (سند ۲۶ فصل ۱۶): هوشِ سرمایه‌گذاری — اولویت‌های امروز/سلامتِ مالی/جریانِ نقدی/روندِ محله‌ها
   const [intel, setIntel] = useState<any>(null)
   // فاز ۴۰ (سند ۲۷ Part 13): فرمِ ساختِ قانونِ خودکار — فقط اطلاع/پیشنهاد، هرگز اجرا
@@ -1759,6 +1768,8 @@ export default function EmpirePage() {
       <div className="empHudPills" style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 12, justifyContent: 'flex-end' }}>
         {pulseChip}
         <span style={pill()} title="Empire Score">🏆 {fa(st.empireScore || 0)}</span>
+        {/* 💵 فاز ۱۸۷ب — سرمایهٔ نقد در HUD: جایزهٔ نقدیِ مأموریتِ ساعتی همان لحظه بالا رفتنش دیده شود (CountUp موجود) */}
+        <span style={pill()} title="سرمایهٔ نقد (تومان)">💵 <CountUp value={e.capital || 0} format={faB} /></span>
         <span style={pill(true)}>🪙 {fa(e.coins)}<span aria-hidden style={{ width: 14, height: 14, borderRadius: '50%', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 11, fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, boxShadow: '0 0 6px rgba(255,215,106,.5)' }}>＋</span></span>
         <span style={pill()}>🤖 {fa(e.aiTokens)}</span>
         {st.streak && st.streak.streak > 0 && <span style={pill()} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
@@ -1857,6 +1868,14 @@ export default function EmpirePage() {
               {n > 0 && <span style={{ position: 'absolute', top: -4, left: -4, minWidth: 17, height: 17, borderRadius: 9, background: 'linear-gradient(135deg,#ff5f4d,#e02f2f)', color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', boxShadow: '0 2px 8px rgba(224,47,47,.6)' }}>{fa(n)}</span>}
             </button>
           ))}
+          {/* 🏰 فاز ۱۸۶ب — اتحاد از ریلِ اصلی (خواستهٔ مستقیم: «اتحاد رو پیدا نمی‌کنم»)؛ زیرِ سطحِ لازم = 🔒 و پیامِ سطح داخلِ برگه */}
+          {st.unlocks?.clan?.enabled !== false && (
+            <button title="اتحاد" aria-label="اتحاد" onClick={openClanSheet} className="empChunkyDark"
+              style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(180deg, rgba(48,38,96,.92), rgba(20,14,48,.92))', backdropFilter: 'blur(6px)', fontSize: 20, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+              🏰
+              {!st.unlocks?.clan?.ok && <span aria-hidden style={{ position: 'absolute', bottom: -3, left: -3, fontSize: 11, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.6))' }}>🔒</span>}
+            </button>
+          )}
         </div>
       )
     })()}
@@ -2666,6 +2685,16 @@ export default function EmpirePage() {
                 ? <div style={{ color: '#ffe9a3', fontWeight: 900 }}>👑 تو فرمانروایی! ({fa(s.king.count)} ملک){s.total > s.mine ? <span style={{ color: 'var(--muted)', fontWeight: 500 }}> — رقیب‌ها {fa(s.total - s.mine)} ملک دارند؛ قلمرو را نگه دار</span> : null}</div>
                 : <div>👑 فرمانروا: <b>{s.king.name}</b> <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>#{fa(s.king.no)}</span> با <b style={{ color: '#ffe9a3' }}>{fa(s.king.count)}</b> ملک</div>
               : <div style={{ color: 'var(--muted)' }}>هنوز فرمانروایی ندارد — اولین ملکِ واقعی، تاج را می‌آورد.</div>}
+            {/* 🏰 فاز ۱۸۶ب — اتحادِ حاکمِ محله (از دادهٔ واقعیِ hoodBoard): جمعِ املاکِ اعضای هر اتحاد در همین محله */}
+            {s.clanKing && (() => {
+              const myClan = clanD?.mine?.name || (clanBoardD?.board || []).find((r: any) => r.isMine)?.name || ''
+              const mine186 = !!myClan && s.clanKing.name === myClan
+              return (
+                <div style={{ color: mine186 ? '#7ee0b8' : 'var(--muted)' }}>
+                  🏰 اتحادِ حاکم: <b style={{ color: mine186 ? '#7ee0b8' : '#c9a8f0' }}>{s.clanKing.name}</b> ({fa(s.clanKing.count)} ملک){mine186 && <b> — اتحادِ توست</b>}
+                </div>
+              )
+            })()}
             <div style={{ color: 'var(--muted)' }}>تو: <b style={{ color: 'var(--text)' }}>{fa(s.mine)}</b> ملک{!s.king?.isMe && <> — تا فرمانروایی: <b style={{ color: '#ff9d6b' }}>{fa(s.gap)}</b> ملک</>}</div>
           </div>
           <div style={{ marginTop: 9, paddingTop: 8, borderTop: '1px dashed var(--line)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 11.5 }}>
@@ -2825,12 +2854,13 @@ export default function EmpirePage() {
           </span>
         </span>
       </button>
-      <button className="empChunky" onClick={() => { setGtab('market'); setMktV('players') }}
+      {/* فاز ۱۸۶ب: اشارهٔ «اتحاد» حالا به برگهٔ اختصاصیِ 🏰 می‌رود (دوئل همچنان در بازار → امپراتورها) */}
+      <button className="empChunky" onClick={openClanSheet}
         style={{ ...card, cursor: 'pointer', textAlign: 'right', fontFamily: 'inherit', color: 'var(--text)', display: 'flex', gap: 10, alignItems: 'center' }}>
-        <span style={iconSq('#7d6ef0')}>🤝</span>
+        <span style={iconSq('#7d6ef0')}>🏰</span>
         <span style={{ flex: 1, minWidth: 0 }}>
-          <b style={{ fontSize: 13.5 }}>دوئل و اتحاد</b>
-          <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>با امپراتورهای واقعی رقابت یا هم‌پیمانی کن</span>
+          <b style={{ fontSize: 13.5 }}>اتحادها</b>
+          <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>تابلوی قدرت، خزانه، چت و کنسرسیوم — با امپراتورهای واقعی هم‌پیمان شو</span>
         </span>
       </button>
     </div>
@@ -3855,6 +3885,37 @@ export default function EmpirePage() {
     {ms && <div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {qSection('🌅', 'کوئست‌های دوره‌ای', '#ffd76a')}
+        {/* ⏱ فاز ۱۸۷ب — مأموریتِ این ساعت (فیدبک: «هر یک ساعت باشه و پول هم بده که قفل نشه»): تندترین حلقه،
+            بالای کوئستِ روزانه؛ جایزهٔ نقدیِ knob مستقیم به سرمایه — همان doClaim/Countdown موجود، صفر مکانیکِ تازه */}
+        {st.quests?.hourly && (() => {
+          const hq = st.quests.hourly
+          const href187 = hq.metric === 'market' ? '/market' : '/search'
+          return (
+            <div style={{ ...card, display: 'flex', gap: 12, opacity: hq.claimed ? .75 : 1, position: 'relative', borderColor: hq.done && !hq.claimed ? 'rgba(126,224,184,.55)' : 'rgba(255,215,106,.45)', background: 'linear-gradient(180deg, rgba(126,224,184,.06), rgba(255,255,255,.02))' }}>
+              <span style={iconSq('#7ee0b8')}>⏱</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <b style={{ fontSize: 13 }}>مأموریتِ این ساعت: {hq.title}</b>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ ...rewardChip, color: '#7ee0b8', border: '1px solid rgba(126,224,184,.4)' }}>💵 +{faB(hq.rewardCapital)} تومانِ نقد</span>
+                  {hq.rewardXp > 0 && <span style={rewardChip}>⚡ {fa(hq.rewardXp)}</span>}
+                </div>
+                {qBar(hq.progress, hq.target, !!hq.done)}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                  {hq.claimed
+                    ? <span style={{ fontSize: 12, color: '#7ee0b8', fontWeight: 800 }}>✓ دریافت شد · مأموریتِ بعدی در <Countdown until={hq.nextAt} onDone={load} /></span>
+                    : hq.done
+                      ? <button className="empPulse empChunky" style={{ ...btn, padding: '8px 20px', fontSize: 12.5, borderRadius: 999 }} disabled={busy} onClick={() => doClaim(hq.claimKey)}>💵 دریافتِ جایزهٔ نقدی</button>
+                      : <>
+                        <span style={tagChip('#9aa0b8')}>در جریان…</span>
+                        <Link href={href187} className="empChunky" style={{ ...btn, textDecoration: 'none', display: 'inline-block', padding: '6px 14px', fontSize: 11.5, borderRadius: 999 }}>برو انجامش بده ←</Link>
+                      </>}
+                  <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>هر {fa(hq.hours)} ساعت یک کارِ کوچکِ واقعی — جایزه مستقیم به سرمایهٔ نقدت می‌رود؛ پیشرفت از رفتارِ واقعی‌ات در ملک‌جت شمرده می‌شود.</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
         {/* کوئستِ روزانه/هفتگیِ شخصی (GDD جلد۲) — هر روز/هفته برای هر کاربر متفاوت */}
         {st.quests && [['🌅', 'کوئستِ امروزِ تو', st.quests.daily, '#ffb74d'], ['📅', 'کوئستِ این هفته', st.quests.weekly, '#7d6ef0']].map(([ic, lbl, q, clr]: any) => (
           <div key={q.claimKey} style={{ ...card, display: 'flex', gap: 12, opacity: q.claimed ? .65 : 1, position: 'relative' }}>
@@ -4539,12 +4600,13 @@ export default function EmpirePage() {
           </span>
         </span>
       </button>
-      <button className="empChunky" onClick={() => { setRankV('clan'); setAllFx(true) }}
+      {/* فاز ۱۸۶ب: اتحاد حالا برگهٔ اختصاصیِ خودش را دارد — این کارت مستقیم همان را باز می‌کند */}
+      <button className="empChunky" onClick={openClanSheet}
         style={{ ...card, cursor: 'pointer', textAlign: 'right', fontFamily: 'inherit', color: 'var(--text)', display: 'flex', gap: 10, alignItems: 'center' }}>
         <span style={iconSq('#7d6ef0')}>🏰</span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <b style={{ fontSize: 13.5 }}>اتحادها</b>
-          <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>با هم‌محله‌ای‌های واقعی هم‌پیمان شو</span>
+          <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>تابلوی قدرت، خزانه، چت و کنسرسیوم — با هم‌محله‌ای‌های واقعی هم‌پیمان شو</span>
         </span>
       </button>
     </div>
@@ -4555,7 +4617,7 @@ export default function EmpirePage() {
       ['compete', '🏆', 'رقابت و جدول‌ها'],
       ['hall', '🏛', 'تالارِ افتخارات'],
       ['clan', '🏰', 'اتحاد'],
-    ], rankV, setRankV)}
+    ], rankV, (k: any) => { setRankV(k); if (k === 'clan') openClanSheet() })}
 
     {rankV === 'compete' && <>
 
@@ -4863,16 +4925,129 @@ export default function EmpirePage() {
     </>}
 
     {rankV === 'clan' && <>
-    {/* 🏰 اتحاد (فاز ۳۷ — درخواستِ مستقیم): با هم باشید، با هم پیام بگذارید — از سطحِ knob به بعد */}
-    {st.unlocks?.clan?.enabled !== false && <div style={{ ...card, borderColor: '#9a7ac9' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <b style={{ fontSize: 14 }}>🏰 اتحاد</b>
-        <span style={{ fontSize: 11, color: 'var(--muted)' }}>هم‌پیمان شو — اعضای واقعی، پیام‌های واقعی</span>
-        <span style={{ flex: 1 }} />
-        <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} disabled={busy} onClick={loadClan}>↻</button>
+    {/* 🏰 فاز ۱۸۶ب: کلِ امکاناتِ اتحاد به برگهٔ اختصاصیِ خودش منتقل شد (خواستهٔ مستقیم: «اتحاد رو پیدا نمی‌کنم»)
+        — این مسیرِ قدیمی نمی‌شکند: همان برگه را باز می‌کند */}
+    <div style={{ ...card, borderColor: '#9a7ac9', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 22 }} aria-hidden>🏰</span>
+      <span style={{ flex: 1, minWidth: 180, fontSize: 12.5, color: 'var(--muted)', lineHeight: 2 }}><b style={{ color: 'var(--text)' }}>اتحاد</b> حالا برگهٔ اختصاصیِ خودش را دارد — تابلوی قدرتِ اتحادها، خزانه، چت و کنسرسیوم همه یک‌جا؛ از ریلِ کنارِ شهر هم با 🏰 باز می‌شود.</span>
+      <button className="empChunky" style={{ ...btn, padding: '8px 18px', fontSize: 12.5 }} onClick={openClanSheet}>بازکردنِ برگهٔ اتحاد</button>
+    </div>
+    </>}
+
+    {rankV === 'hall' && <>
+    {/* تایم‌لاینِ زندگی + دفترچهٔ ملک‌جت */}
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 12 }}>
+      <div style={card}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>📍 تایم‌لاینِ زندگیِ تو</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[...(e.timeline || [])].reverse().slice(0, 12).map((t: any, i: number) => (
+            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12 }}>
+              <span>{t.icon}</span>
+              <div><b>{t.title}</b>{t.detail && <span style={{ color: 'var(--muted)' }}> — {t.detail}</span>}<div style={{ color: 'var(--faint)', fontSize: 11 }}>{new Date(t.at).toLocaleDateString('fa-IR')}</div></div>
+            </div>
+          ))}
+        </div>
       </div>
-      {!st.unlocks?.clan?.ok && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>🔒 اتحاد از سطحِ {fa(st.unlocks?.clan?.need || 0)} باز می‌شود — الان سطحِ {fa(st.unlocks?.level || 1)} هستی.</div>}
-      {st.unlocks?.clan?.ok && <>
+      <div style={card}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>📔 دفترچهٔ ملک‌جت</div>
+        {!(e.journal || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز یادداشتی ندارد — با اولین تصمیم‌ها پر می‌شود.</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[...(e.journal || [])].reverse().slice(0, 8).map((j: any, i: number) => (
+            <div key={i} style={{ fontSize: 12, lineHeight: 1.9, color: 'var(--text)' }}>{j.text}<div style={{ color: 'var(--faint)', fontSize: 11 }}>{new Date(j.at).toLocaleDateString('fa-IR')}</div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* کلکسیون (جلد ۲۶) + نشان‌ها + مأموریت‌های مخفی + تغییرِ نام */}
+    <div style={card}>
+      <div style={{ fontWeight: 700, marginBottom: 10 }}>🗃 کلکسیونِ دارایی‌ها</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {(st.collection || []).map((c: any) => (
+          <span key={c.kind} style={{ ...card, padding: '8px 14px', fontSize: 13, background: 'var(--bg2)', opacity: c.owned ? 1 : 0.45, borderColor: c.owned ? 'var(--gold)' : 'var(--line)' }}>
+            {c.kind === 'apartment' ? '🏢 آپارتمان' : c.kind === 'villa' ? '🏡 ویلا' : c.kind === 'commercial' ? '🏬 تجاری' : '🏞 زمین'} {c.owned ? '✓' : ''}
+          </span>
+        ))}
+      </div>
+      {/* استادی‌های چندمحوره (جلد ۴۹ فصل ۵) — از شمارنده‌های واقعیِ رفتار */}
+      {(st.mastery || []).some((m: any) => m.level > 0 || m.count > 0) && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+        {(st.mastery || []).map((m: any) => (
+          <span key={m.key} title={m.next != null ? `${fa(m.count)} از ${fa(m.next)} تا سطحِ بعد` : 'بالاترین سطح'} style={{ ...card, padding: '6px 12px', fontSize: 12, background: 'var(--bg2)', opacity: m.level > 0 ? 1 : 0.5, borderColor: m.level >= 3 ? 'var(--gold)' : 'var(--line)' }}>
+            {m.icon} {m.label} {m.level > 0 && <b style={{ color: 'var(--gold)' }}>{'★'.repeat(Math.min(5, m.level))}</b>}
+            <span style={{ color: 'var(--faint)', fontSize: 10.5 }}> ({fa(m.count)})</span>
+          </span>
+        ))}
+      </div>}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 14 }}>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>🏅 نشان‌ها:</span>
+        {/* عنوانِ فعال (سند ۱۶): کلیک روی نشانِ کسب‌شده = انتخاب به‌عنوانِ Title — در سربرگ و لیدربوردها دیده می‌شود */}
+        {(e.badges || []).map((bd: string) => (
+          <button key={bd} disabled={busy} title={e.title === bd ? 'عنوانِ فعال — برای برداشتن دوباره بزن' : 'انتخاب به‌عنوانِ عنوانِ نمایشی'}
+            onClick={async () => { const d = await api({ action: 'setTitle', title: e.title === bd ? '' : bd }); if (d) setSt(d) }}
+            style={{ ...card, padding: '4px 10px', fontSize: 12, background: e.title === bd ? 'var(--goldDim)' : 'var(--bg2)', borderColor: e.title === bd ? 'var(--gold)' : 'var(--line)', color: e.title === bd ? 'var(--gold)' : 'var(--text)', cursor: 'pointer' }}>
+            {e.title === bd ? '👑 ' : ''}{bd}
+          </button>
+        ))}
+        {st.hiddenLeft > 0 && <details style={{ display: 'inline-block' }}>
+          <summary style={{ fontSize: 11.5, color: 'var(--faint)', cursor: 'pointer', listStyle: 'none' }}>🎖 {fa(st.hiddenLeft)} مأموریتِ مخفی در انتظارِ کشف... <span style={{ color: 'var(--gold)' }}>(سرنخ‌ها 🤫)</span></summary>
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {(st.hiddenHints || []).map((h74: string, i: number) => (
+              <div key={i} style={{ fontSize: 11.5, color: 'var(--muted)', fontStyle: 'italic', background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 10, padding: '7px 11px' }}>🕯 {h74}</div>
+            ))}
+            <div style={{ fontSize: 10, color: 'var(--faint)' }}>هیچ دکمه‌ای ندارند — در خودِ مسیر کشف می‌شوند؛ لحظهٔ کشف، نشانش با داستان در تایم‌لاینت ثبت می‌شود.</div>
+          </div>
+        </details>}
+        <span style={{ flex: 1 }} />
+        <button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={async () => { const n = prompt('نامِ جدیدِ امپراتوری:', e.name); if (n != null) { const d = await api({ action: 'rename', name: n }); if (d) load() } }}>تغییرِ نام</button>
+      </div>
+    </div>
+    </>}
+      </div>
+    </details>
+    </>}
+    </BottomSheet>
+
+    {/* 🏰 فاز ۱۸۶ب — برگهٔ اختصاصیِ اتحاد (خواستهٔ مستقیم: «اتحاد رو پیدا نمی‌کنم»): تابلوی قدرتِ واقعیِ اتحادها +
+        کلِ امکاناتِ موجودِ اتحاد (اعضا/چت/خزانه/کنسرسیوم — منتقل‌شده از تالارِ افتخار، همان state و handlerها). */}
+    <BottomSheet open={clanSheet} onClose={() => setClanSheet(false)} title="🏰 اتحاد">
+      {st.unlocks?.clan?.enabled === false && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>اتحادها فعلاً فعال نیستند.</div>}
+      {st.unlocks?.clan?.enabled !== false && !st.unlocks?.clan?.ok && (
+        <div style={{ ...card, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 10, lineHeight: 2 }}>
+          <span style={{ fontSize: 20 }} aria-hidden>🔒</span>
+          <span>اتحاد از سطحِ <b style={{ color: 'var(--gold)' }}>{fa(st.unlocks?.clan?.need || 0)}</b> باز می‌شود — الان سطحِ {fa(st.unlocks?.level || 1)} هستی. با تصمیم‌های واقعی XP بگیر؛ هم‌پیمانی نزدیک است.</span>
+        </div>
+      )}
+      {st.unlocks?.clan?.enabled !== false && st.unlocks?.clan?.ok && <>
+      {/* 🏆 تابلوی اتحادها (فاز ۱۸۶) — قدرتِ واقعی: املاکِ اعضا (بدونِ تخریب‌شده‌ها)، خزانه، قلمرو، کنسرسیوم؛ ترتیب از سرور */}
+      <div style={{ ...card, borderColor: '#9a7ac9' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <b style={{ fontSize: 13.5 }}>🏆 تابلوی اتحادها</b>
+          <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>قدرتِ واقعی: املاکِ اعضا · خزانه · قلمرو · کنسرسیوم</span>
+          <span style={{ flex: 1 }} />
+          <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} disabled={busy} onClick={loadClan}>↻</button>
+        </div>
+        {!clanBoardD && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>در حالِ بارگذاریِ تابلو…</div>}
+        {clanBoardD && !(clanBoardD.board || []).length && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, lineHeight: 2 }}>هنوز هیچ اتحادی ساخته نشده — اولین اتحادِ شهر را تو بساز؛ نامش بالای همین تابلو می‌نشیند.</div>}
+        {(clanBoardD?.board || []).map((r: any, i: number) => (
+          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '7px 10px', borderRadius: 10, marginTop: 6, fontSize: 11.5, background: r.isMine ? 'rgba(212,175,55,.10)' : 'var(--bg2)', border: `1px solid ${r.isMine ? 'rgba(255,215,106,.55)' : 'var(--line)'}` }}>
+            <span aria-hidden style={{ width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, fontWeight: 900, background: i === 0 ? 'linear-gradient(135deg,#ffd76a,#d4af37)' : 'rgba(255,255,255,.08)', color: i === 0 ? '#1a1503' : 'var(--muted)', flex: 'none' }}>{fa(i + 1)}</span>
+            <b style={{ color: r.isMine ? '#ffe9a3' : 'var(--text)' }}>🏰 {r.name}</b>
+            {r.isMine && <span style={{ fontSize: 9.5, color: '#ffe9a3', border: '1px solid rgba(255,215,106,.5)', borderRadius: 99, padding: '1px 7px' }}>اتحادِ توست</span>}
+            <span style={{ flex: 1 }} />
+            <span title="اعضای واقعی" style={{ color: 'var(--muted)' }}>👥 {fa(r.members)}</span>
+            <span title="املاکِ اعضا" style={{ color: 'var(--text)' }}>🏠 {fa(r.assets)}</span>
+            <span title="خزانهٔ اتحاد (تومان)" style={{ color: 'var(--gold)' }}>🏦 {faB(r.treasury)}</span>
+            <span title="محله‌هایی که این اتحاد حاکم است" style={{ color: '#ff9d6b' }}>⚔️ {fa(r.hoodsRuled || 0)}</span>
+            <span title="کنسرسیوم‌های تملک‌شده" style={{ color: '#c9a8f0' }}>🏛 {fa(r.projectsOwned || 0)}</span>
+          </div>
+        ))}
+      </div>
+      {/* 🤝 اتحادِ من / پیوستن / ساخت — فاز ۳۷/۱۰۲؛ عیناً همان UI و handlerهای قبلی، فقط جایش این‌جاست */}
+      <div style={{ ...card, borderColor: '#9a7ac9' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <b style={{ fontSize: 14 }}>🤝 اتحادِ من</b>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>هم‌پیمان شو — اعضای واقعی، پیام‌های واقعی</span>
+        </div>
         {!clanD && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حالِ بارگذاری…</div>}
         {clanD?.mine ? <div style={{ marginTop: 10 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -4977,82 +5152,8 @@ export default function EmpirePage() {
             }}>🏰 ساختِ اتحاد ({faB(clanD.createFee || 0)})</button>
           </div>
         </div>}
+      </div>
       </>}
-    </div>}
-
-    </>}
-
-    {rankV === 'hall' && <>
-    {/* تایم‌لاینِ زندگی + دفترچهٔ ملک‌جت */}
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 12 }}>
-      <div style={card}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>📍 تایم‌لاینِ زندگیِ تو</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[...(e.timeline || [])].reverse().slice(0, 12).map((t: any, i: number) => (
-            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12 }}>
-              <span>{t.icon}</span>
-              <div><b>{t.title}</b>{t.detail && <span style={{ color: 'var(--muted)' }}> — {t.detail}</span>}<div style={{ color: 'var(--faint)', fontSize: 11 }}>{new Date(t.at).toLocaleDateString('fa-IR')}</div></div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div style={card}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>📔 دفترچهٔ ملک‌جت</div>
-        {!(e.journal || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز یادداشتی ندارد — با اولین تصمیم‌ها پر می‌شود.</div>}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[...(e.journal || [])].reverse().slice(0, 8).map((j: any, i: number) => (
-            <div key={i} style={{ fontSize: 12, lineHeight: 1.9, color: 'var(--text)' }}>{j.text}<div style={{ color: 'var(--faint)', fontSize: 11 }}>{new Date(j.at).toLocaleDateString('fa-IR')}</div></div>
-          ))}
-        </div>
-      </div>
-    </div>
-
-    {/* کلکسیون (جلد ۲۶) + نشان‌ها + مأموریت‌های مخفی + تغییرِ نام */}
-    <div style={card}>
-      <div style={{ fontWeight: 700, marginBottom: 10 }}>🗃 کلکسیونِ دارایی‌ها</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {(st.collection || []).map((c: any) => (
-          <span key={c.kind} style={{ ...card, padding: '8px 14px', fontSize: 13, background: 'var(--bg2)', opacity: c.owned ? 1 : 0.45, borderColor: c.owned ? 'var(--gold)' : 'var(--line)' }}>
-            {c.kind === 'apartment' ? '🏢 آپارتمان' : c.kind === 'villa' ? '🏡 ویلا' : c.kind === 'commercial' ? '🏬 تجاری' : '🏞 زمین'} {c.owned ? '✓' : ''}
-          </span>
-        ))}
-      </div>
-      {/* استادی‌های چندمحوره (جلد ۴۹ فصل ۵) — از شمارنده‌های واقعیِ رفتار */}
-      {(st.mastery || []).some((m: any) => m.level > 0 || m.count > 0) && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-        {(st.mastery || []).map((m: any) => (
-          <span key={m.key} title={m.next != null ? `${fa(m.count)} از ${fa(m.next)} تا سطحِ بعد` : 'بالاترین سطح'} style={{ ...card, padding: '6px 12px', fontSize: 12, background: 'var(--bg2)', opacity: m.level > 0 ? 1 : 0.5, borderColor: m.level >= 3 ? 'var(--gold)' : 'var(--line)' }}>
-            {m.icon} {m.label} {m.level > 0 && <b style={{ color: 'var(--gold)' }}>{'★'.repeat(Math.min(5, m.level))}</b>}
-            <span style={{ color: 'var(--faint)', fontSize: 10.5 }}> ({fa(m.count)})</span>
-          </span>
-        ))}
-      </div>}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 14 }}>
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>🏅 نشان‌ها:</span>
-        {/* عنوانِ فعال (سند ۱۶): کلیک روی نشانِ کسب‌شده = انتخاب به‌عنوانِ Title — در سربرگ و لیدربوردها دیده می‌شود */}
-        {(e.badges || []).map((bd: string) => (
-          <button key={bd} disabled={busy} title={e.title === bd ? 'عنوانِ فعال — برای برداشتن دوباره بزن' : 'انتخاب به‌عنوانِ عنوانِ نمایشی'}
-            onClick={async () => { const d = await api({ action: 'setTitle', title: e.title === bd ? '' : bd }); if (d) setSt(d) }}
-            style={{ ...card, padding: '4px 10px', fontSize: 12, background: e.title === bd ? 'var(--goldDim)' : 'var(--bg2)', borderColor: e.title === bd ? 'var(--gold)' : 'var(--line)', color: e.title === bd ? 'var(--gold)' : 'var(--text)', cursor: 'pointer' }}>
-            {e.title === bd ? '👑 ' : ''}{bd}
-          </button>
-        ))}
-        {st.hiddenLeft > 0 && <details style={{ display: 'inline-block' }}>
-          <summary style={{ fontSize: 11.5, color: 'var(--faint)', cursor: 'pointer', listStyle: 'none' }}>🎖 {fa(st.hiddenLeft)} مأموریتِ مخفی در انتظارِ کشف... <span style={{ color: 'var(--gold)' }}>(سرنخ‌ها 🤫)</span></summary>
-          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {(st.hiddenHints || []).map((h74: string, i: number) => (
-              <div key={i} style={{ fontSize: 11.5, color: 'var(--muted)', fontStyle: 'italic', background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 10, padding: '7px 11px' }}>🕯 {h74}</div>
-            ))}
-            <div style={{ fontSize: 10, color: 'var(--faint)' }}>هیچ دکمه‌ای ندارند — با خودِ بازی کشف می‌شوند؛ لحظهٔ کشف، نشانش با داستان در تایم‌لاینت ثبت می‌شود.</div>
-          </div>
-        </details>}
-        <span style={{ flex: 1 }} />
-        <button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={async () => { const n = prompt('نامِ جدیدِ امپراتوری:', e.name); if (n != null) { const d = await api({ action: 'rename', name: n }); if (d) load() } }}>تغییرِ نام</button>
-      </div>
-    </div>
-    </>}
-      </div>
-    </details>
-    </>}
     </BottomSheet>
 
     {/* 🎮 فاز ۱۶۵ — داکِ سه‌تاییِ بازی: شهر (خانه) · مأموریت‌ها · پرتفوی؛ دنیا/بازار/رتبه‌ها فقط از بناهای مدنیِ روی نقشه */}
@@ -5132,10 +5233,14 @@ export default function EmpirePage() {
       <div style={{ display: 'flex', gap: 4, margin: '0 10px', background: 'linear-gradient(180deg, rgba(30,23,68,.92), rgba(16,12,42,.92))', border: '2px solid rgba(0,0,0,.45)', borderRadius: 22, padding: '6px 8px', boxShadow: '0 3px 0 rgba(5,3,20,.9), 0 14px 44px -8px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.08)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
         {([['city', '🏙', 'شهر'], ['missions', '🎯', 'مأموریت‌ها'], ['portfolio', '💼', 'پرتفوی']] as const).map(([k, ic, l]) => (
           <button key={k} onClick={() => { setGtab(k); try { window.scrollTo({ top: 0 }) } catch {} }}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 48, padding: '4px 7px 6px', borderRadius: 16, border: 'none', cursor: 'pointer', background: gtab === k ? 'linear-gradient(180deg,rgba(255,215,106,.26),rgba(212,175,55,.10))' : 'transparent', color: gtab === k ? '#ffe9a3' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500, boxShadow: gtab === k ? 'inset 0 0 0 1px rgba(212,175,55,.45)' : 'none' }}>
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 48, padding: '4px 7px 6px', borderRadius: 16, border: 'none', cursor: 'pointer', position: 'relative', background: gtab === k ? 'linear-gradient(180deg,rgba(255,215,106,.26),rgba(212,175,55,.10))' : 'transparent', color: gtab === k ? '#ffe9a3' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500, boxShadow: gtab === k ? 'inset 0 0 0 1px rgba(212,175,55,.45)' : 'none' }}>
             <span className={gtab === k ? 'empTabActive' : undefined} style={gtab === k
               ? { fontSize: 16, width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: '2px solid rgba(90,60,10,.55)', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.45)', transform: 'translateY(-6px)', marginBottom: -6 }
               : { fontSize: 17 }}>{ic}</span>{l}
+            {/* ⏱ فاز ۱۸۷ب — یادآورِ جایزهٔ نقدیِ آماده: badge قرمز روی «مأموریت‌ها» (همان الگوی badge ریل) */}
+            {k === 'missions' && st.quests?.hourly?.done && !st.quests.hourly.claimed && (
+              <span style={{ position: 'absolute', top: -3, left: -3, minWidth: 17, height: 17, borderRadius: 9, background: 'linear-gradient(135deg,#ff5f4d,#e02f2f)', color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', boxShadow: '0 2px 8px rgba(224,47,47,.6)' }}>۱</span>
+            )}
           </button>
         ))}
       </div>
