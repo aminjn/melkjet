@@ -11,10 +11,21 @@ export interface DealFields {
   meta?: Record<string, string>
 }
 
+// فاز ۱۷۷ (فیدبک: «می‌زنم اجاره همه‌چیز میاره») — طبقه‌بندی با «تقدمِ سیگنالِ قوی»، نه regex روی همه‌چیز:
+// (۱) متای صریحِ «نوع معامله» حرفِ آخر است. (۲) رشتهٔ قیمت (ودیعه/اجاره = rent، تومانِ ساده = sale).
+// (۳) فقط عنوان+دسته. تگ‌ها کلاً حذف شدند — تگِ عمومیِ «رهن و اجاره» همهٔ آگهی‌ها را اجاره‌ای می‌کرد.
 export function dealOf(it: DealFields): DealKind {
-  const dealTxt = `${it.price || ''} ${it.title || ''} ${it.category || ''} ${it.meta?.['نوع معامله'] || ''} ${(it.tags || []).join(' ')}`
-  if (/پیش[‌\s]?فروش/.test(dealTxt)) return 'presale'
-  if (it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(dealTxt)) return 'rent'
+  const explicit = it.meta?.['نوع معامله'] || ''
+  if (explicit) {
+    if (/پیش[‌\s]?فروش/.test(explicit)) return 'presale'
+    if (/اجاره|رهن|ودیعه/.test(explicit)) return 'rent'
+    if (/فروش|خرید/.test(explicit)) return 'sale'
+  }
+  const price = it.price || ''
+  if (/ودیعه|رهن|اجاره/.test(price)) return 'rent'
+  const tc = `${it.title || ''} ${it.category || ''}`
+  if (/پیش[‌\s]?فروش/.test(tc)) return 'presale'
+  if (/اجاره|رهن|ودیعه/.test(tc)) return 'rent'
   return 'sale'
 }
 

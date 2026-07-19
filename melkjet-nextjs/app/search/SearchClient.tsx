@@ -261,6 +261,13 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
 
   const toggleAmenity = (a: string) => setCheckedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
   const parsed = useMemo(() => parseQuery(searchTerm), [searchTerm])
+  // فاز ۱۷۷ (فیدبک: «از صفحهٔ اصلی سرچ می‌کنم چرت‌وپرت می‌ده») — صفحهٔ اصلی فقط q می‌فرستد؛
+  // نیتِ معامله از خودِ متن («اجارهٔ آپارتمان…») تبِ درست را انتخاب می‌کند تا آگهیِ فروش برای کوئریِ اجاره نیاید.
+  useEffect(() => {
+    if (parsed.deal === 'rent') setDealType('اجاره')
+    else if (parsed.deal === 'presale') setDealType('پیش‌فروش')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm])
 
   // مقادیرِ مؤثرِ فیلتر: فیلترِ دستی اولویت دارد، وگرنه از تشخیصِ متن
   const fKind = kind || parsed.kind || ''
@@ -279,7 +286,6 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const filteredProperties = useMemo(() => {
     const tabDeal = dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
     const areaName = fAreaName.toLowerCase()
-    const hasStructure = !!(parsed.kind || parsed.area || parsed.sizeNum || parsed.budgetMax || parsed.beds != null || parsed.amenities.length)
     return properties.filter(p => {
       if (p.deal !== tabDeal) return false
       if (fKind && p.kind && p.kind !== fKind) {
@@ -295,11 +301,12 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       if (yearMin > 0 && p.yearNum > 0 && p.yearNum < yearMin) return false
       for (const a of fAmen) { if (p.searchText.trim() && !p.searchText.includes(a.toLowerCase())) return false }
       if (areaName) { const hay = `${p.location} ${p.searchText}`.toLowerCase(); if (!hay.includes(areaName)) return false }
-      // جستجوی متنیِ نرم: فقط وقتی کوئری هیچ ساختاری ندارد، حداقل یکی از واژه‌ها باید بخورد
-      // (نه «همه»). این‌طوری یک واژهٔ اشتباه، کلِ نتیجه را خالی نمی‌کند.
-      if (parsed.tokens.length && !hasStructure) {
+      // فاز ۱۷۷ (فیدبک: «سرچ می‌کنم چرت‌وپرت می‌ده») — جستجوی متنیِ «سخت‌گیر»:
+      // هر واژهٔ باقی‌مانده (مثل نامِ محله/برج) باید بخورد — همیشه، حتی با کوئریِ ساختاردار
+      // (قبلاً با کوئریِ ساختاردار واژه‌ها کلاً نادیده می‌شدند و «آپارتمان ولنجک» همهٔ آپارتمان‌های شهر را می‌آورد).
+      if (parsed.tokens.length) {
         const hay = `${p.title} ${p.location} ${p.searchText}`.toLowerCase()
-        if (!parsed.tokens.some(t => hay.includes(t.toLowerCase()))) return false
+        if (!parsed.tokens.every(t => hay.includes(t.toLowerCase()))) return false
       }
       return true
     })
