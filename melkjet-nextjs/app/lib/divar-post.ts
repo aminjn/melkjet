@@ -103,7 +103,7 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: Br
   let any200 = false
   let reason: string | undefined
 
-  for (let page = 0; page < 40; page++) {
+  for (let page = 0; page < 120; page++) {   // تا ~۳۰۰۰ آگهی (هر صفحه ~۲۴)؛ حلقه با نبودِ آگهیِ جدید/کرسر خودش می‌ایستد
     const body = JSON.stringify({ request_data: { brand_token: slug, tracker_session_id: '' }, specification: { last_item_identifier: cursor } })
     let res
     try {
@@ -168,7 +168,7 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: Br
     } catch { if (!reason) reason = 'unreachable' }
   }
 
-  const list = Array.from(posts.values()).slice(0, 300)
+  const list = Array.from(posts.values()).slice(0, 3000)   // سقفِ ایمنی؛ همهٔ آگهی‌های آژانس (نه فقط ۳۰۰)
   if (!list.length) return { posts: [], name, reason: reason || (any200 ? 'no_tokens' : 'unreachable') }
   return { posts: list, name }
 }
@@ -183,14 +183,22 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
     || process.env.HTTP_PROXY || process.env.http_proxy
     || undefined
 
+  // فاز ۱۷۶ (پورت از خودروجت): وقتی ده‌ها آگهیِ پشتِ‌سرِهم می‌گیریم، دیوار بخشی را با 429/خطا/خالی
+  // رد می‌کند (ریشهٔ «آگهی‌های بی‌نام با متنِ خالی») — با backoff دوباره تلاش می‌کنیم تا متن واقعاً بیاید.
+  const url = `https://api.divar.ir/v8/posts-v2/web/${token}`
+  const headers = { accept: 'application/json, text/plain, */*', 'user-agent': UA, origin: 'https://divar.ir', referer: 'https://divar.ir/', 'x-standard-divar-error': 'true' }
+  const nap = (ms: number) => new Promise(r => setTimeout(r, ms))
+  let res: { status: number; body: string } | null = null
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      res = await proxiedRequest(url, { method: 'GET', headers, proxyUrl, timeout: 15000 })
+      if (res.status === 200 && res.body) break
+      if (res.status !== 200 && res.status !== 429 && res.status < 500) return { ...empty, reason: `http_${res.status}` }   // 404/گم‌شده = تلاشِ دوباره بی‌فایده
+    } catch { /* شبکه/تایم‌اوت — دوباره تلاش */ }
+    if (attempt < 3) await nap(700 * (attempt + 1))   // 0.7s, 1.4s, 2.1s
+  }
+  if (!res || res.status !== 200 || !res.body) return { ...empty, reason: res ? `http_${res.status}` : 'unreachable' }
   try {
-    const res = await proxiedRequest(`https://api.divar.ir/v8/posts-v2/web/${token}`, {
-      method: 'GET',
-      headers: { accept: 'application/json, text/plain, */*', 'user-agent': UA, origin: 'https://divar.ir', referer: 'https://divar.ir/', 'x-standard-divar-error': 'true' },
-      proxyUrl,
-      timeout: 15000,
-    })
-    if (res.status !== 200) return { ...empty, reason: `http_${res.status}` }
 
     const re = /https?:\\?\/\\?\/[^"'\s]*divarcdn[^"'\s]*\.(?:jpe?g|png|webp)/gi
     const found = (res.body.match(re) || []).map(u => u.replace(/\\\//g, '/'))

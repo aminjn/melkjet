@@ -1874,22 +1874,40 @@ function AgencyRosterPanel() {
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<string>('')
   const [phones, setPhones] = useState<Record<string, string>>({})
+  const [settings, setSettings] = useState<{ autoSync: boolean; startHour: number; endHour: number }>({ autoSync: true, startHour: 0, endHour: 6 })
+  const [setMsgTxt, setSetMsg] = useState('')
   const fa = (n: any) => (Number(n) || 0).toLocaleString('fa-IR')
+  const faHour = (h: number) => `${fa(h)}:۰۰`
   const setPhone = (k: string, v: string) => setPhones(p => ({ ...p, [k]: v }))
 
-  const load = () => fetch('/api/admin/agency-roster', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) setScrapes(j.scrapes || []) })
+  const load = () => fetch('/api/admin/agency-roster', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) { setScrapes(j.scrapes || []); if (j.settings) setSettings(j.settings) } })
   useEffect(() => { load() }, [])
-  useEffect(() => { if (!scrapes.some(s => s.running || s.runRequested)) return; const id = setInterval(load, 4000); return () => clearInterval(id) }, [scrapes])
+  useEffect(() => { if (!scrapes.some(s => s.running || s.runRequested || (s.advisors || []).some((a: any) => a.graduating))) return; const id = setInterval(load, 4000); return () => clearInterval(id) }, [scrapes])
 
   const post = (body: any) => fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json())
   const add = async () => { if (!slug.trim()) return; setBusy(true); setMsg(''); try { const j = await post({ action: 'add', slug: slug.trim(), agencyName: name.trim() }); if (j.ok) { setSlug(''); setName(''); setMsg('✅ افزوده شد — «همگام‌سازی الان» را بزن'); load() } else setMsg('❌ ' + (j.error || 'خطا')) } finally { setBusy(false) } }
   const sync = async (id: string) => { await post({ action: 'sync', id }); setMsg('⏳ در صفِ اینستنسِ ۰ — چند دقیقه بعد رفرش می‌شود'); load() }
+  const saveSettings = async (patch: Partial<typeof settings>) => {
+    const next = { ...settings, ...patch }; setSettings(next)
+    const j = await post({ action: 'settings', ...next })
+    if (j.ok) { setSetMsg('✅ ذخیره شد'); setTimeout(() => setSetMsg(''), 2500) } else setSetMsg('❌ خطا')
+  }
+  // زمان‌بندیِ اختصاصیِ یک اسکرپ — مقادیرِ خالی = پیروی از پیش‌فرضِ سراسری.
+  const saveScrapeSched = async (id: string, patch: { autoSync?: boolean; startHour?: number; endHour?: number }) => {
+    setScrapes(list => list.map(x => x.id === id ? { ...x, ...patch } : x))
+    await post({ action: 'scrape-schedule', id, ...patch })
+  }
+  const eff = (s: any, k: 'autoSync' | 'startHour' | 'endHour') => (s[k] !== undefined && s[k] !== null ? s[k] : (settings as any)[k])
   const remove = async (id: string) => { if (!confirm('این اسکرپ حذف شود؟ (حساب‌ها و فایل‌های ساخته‌شده می‌مانند)')) return; await post({ action: 'remove', id }); load() }
   const graduate = async (id: string, key: string) => {
     const ph = (phones[`${id}:${key}`] || '').replace(/\D/g, '')
     if (!/^09\d{9}$/.test(ph)) { setMsg('❌ شمارهٔ موبایلِ ۰۹... معتبر وارد کن'); return }
     const j = await post({ action: 'graduate', id, key, phone: ph })
-    if (j.ok) { setMsg(`✅ حساب ساخته شد و ${fa(j.moved)} فایل منتقل شد`); load() } else setMsg('❌ ' + (j.error || 'خطا'))
+    if (j.ok) { setMsg('⏳ در صفِ ساختِ حساب — انتقالِ فایل‌ها روی سرور انجام می‌شود (تا ۱–۲ دقیقه)'); load() } else setMsg('❌ ' + (j.error || 'خطا')) }
+  const removeAdvisor = async (id: string, key: string, name: string) => {
+    if (!confirm(`«${name}» از این فهرست حذف شود؟ (اگر حساب ساخته شده، خودِ حساب و فایل‌هایش می‌مانند)`)) return
+    const j = await post({ action: 'remove-advisor', id, key })
+    if (j.ok) { setMsg('✅ حذف شد'); load() } else setMsg('❌ ' + (j.error || 'خطا'))
   }
 
   const inp: React.CSSProperties = { direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
@@ -1908,6 +1926,31 @@ function AgencyRosterPanel() {
       </div>
       {msg && <div style={{ fontSize: 12.5, color: 'var(--gold)', marginBottom: 8 }}>{msg}</div>}
 
+      {/* زمان‌بندیِ همگام‌سازیِ خودکار — پنجرهٔ شبانه */}
+      <div style={{ border: '1px solid var(--line2)', borderRadius: 12, padding: 12, marginBottom: 12, background: 'var(--bg2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13.5, fontWeight: 800 }}>🕛 زمان‌بندیِ پیش‌فرضِ همگام‌سازی</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5, color: 'var(--muted)' }}>
+            <input type="checkbox" checked={settings.autoSync} onChange={e => saveSettings({ autoSync: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+            {settings.autoSync ? 'روشن' : 'خاموش'}
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginInlineStart: 'auto', opacity: settings.autoSync ? 1 : 0.45, pointerEvents: settings.autoSync ? 'auto' : 'none' }}>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>از</span>
+            <select value={settings.startHour} onChange={e => saveSettings({ startHour: Number(e.target.value) })} style={{ ...inp, padding: '6px 8px', direction: 'ltr' }}>
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{faHour(h)}</option>)}
+            </select>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>تا</span>
+            <select value={settings.endHour} onChange={e => saveSettings({ endHour: Number(e.target.value) })} style={{ ...inp, padding: '6px 8px', direction: 'ltr' }}>
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{faHour(h)}</option>)}
+            </select>
+            {setMsgTxt && <span style={{ fontSize: 12, color: 'var(--gold)', marginInlineStart: 6 }}>{setMsgTxt}</span>}
+          </div>
+        </div>
+        <p style={{ fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.9, margin: '8px 0 0' }}>
+          این <b>پیش‌فرض</b> برای آژانس‌هایی است که زمان‌بندیِ اختصاصی ندارند. هر آژانس می‌تواند زیرِ کارتِ خودش بازهٔ جداگانه بگذارد. همگام‌سازیِ خودکار فقط در بازه (به وقتِ ایران) اجرا می‌شود تا روزها ترافیک و دیوار درگیر نشوند — آژانس‌ها یکی‌یکی در صف می‌روند. دکمهٔ «🔄 همگام‌سازی الان» همیشه و بی‌درنگ کار می‌کند و به بازه وابسته نیست.
+        </p>
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {scrapes.map(s => (
           <div key={s.id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 12 }}>
@@ -1924,6 +1967,27 @@ function AgencyRosterPanel() {
               <button onClick={() => setOpen(open === s.id ? '' : s.id)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 10px', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>{open === s.id ? 'بستن' : `مشاورها (${fa(s.advisors?.length || 0)})`}</button>
               <button onClick={() => remove(s.id)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 9px', color: '#e06666', fontSize: 12, cursor: 'pointer' }}>حذف</button>
             </div>
+            {/* زمان‌بندیِ اختصاصیِ همین آژانس */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--line2)' }}>
+              <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>🕛 زمان‌بندیِ این آژانس:</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 11.5, color: 'var(--muted)' }}>
+                <input type="checkbox" checked={!!eff(s, 'autoSync')} onChange={e => saveScrapeSched(s.id, { autoSync: e.target.checked })} style={{ width: 15, height: 15, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+                {eff(s, 'autoSync') ? 'خودکار روشن' : 'خودکار خاموش'}
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: eff(s, 'autoSync') ? 1 : 0.45, pointerEvents: eff(s, 'autoSync') ? 'auto' : 'none' }}>
+                <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>از</span>
+                <select value={eff(s, 'startHour')} onChange={e => saveScrapeSched(s.id, { startHour: Number(e.target.value) })} style={{ ...inp, padding: '5px 7px', fontSize: 12, direction: 'ltr' }}>
+                  {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{faHour(h)}</option>)}
+                </select>
+                <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>تا</span>
+                <select value={eff(s, 'endHour')} onChange={e => saveScrapeSched(s.id, { endHour: Number(e.target.value) })} style={{ ...inp, padding: '5px 7px', fontSize: 12, direction: 'ltr' }}>
+                  {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{faHour(h)}</option>)}
+                </select>
+              </div>
+              {(s.autoSync === undefined && s.startHour === undefined && s.endHour === undefined)
+                ? <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>(از پیش‌فرض پیروی می‌کند)</span>
+                : <span style={{ fontSize: 10.5, color: 'var(--gold)' }}>● اختصاصی</span>}
+            </div>
             {open === s.id && (
               <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {(s.advisors || []).map((a: any) => (
@@ -1933,8 +1997,11 @@ function AgencyRosterPanel() {
                       <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(a.listingCount)} فایل</span>
                       {a.phone
                         ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {a.phone}</span>
-                        : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
-                          <button onClick={() => graduate(s.id, a.key)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب</button></>}
+                        : a.graduating
+                          ? <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>⏳ در حالِ ساختِ حساب…</span>
+                          : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
+                            <button onClick={() => graduate(s.id, a.key)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب</button></>}
+                      <button onClick={() => removeAdvisor(s.id, a.key, a.name)} title="حذف از فهرست" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: '#e06666', fontSize: 11.5, cursor: 'pointer' }}>حذف</button>
                     </div>
                     <DivarLinks tokens={a.tokens} />
                   </div>

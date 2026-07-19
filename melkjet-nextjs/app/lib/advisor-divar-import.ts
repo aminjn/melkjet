@@ -32,13 +32,15 @@ async function addAreaToProfile(o: string, neighborhood: string) {
 
 /** یک آگهیِ دیوار را (با توکن یا لینک) به‌عنوان فایلِ مشاور وارد می‌کند.
  *  hint: عنوان/تصویرِ واقعیِ آگهی از فهرستِ پروفایل (چون API تک‌آگهی گاهی عنوانِ دسته را می‌دهد). */
-export async function importDivarToken(o: string, input: string, hint?: BrandPost, sourceId?: string): Promise<ImportResult> {
+export async function importDivarToken(o: string, input: string, hint?: BrandPost, sourceId?: string, opts?: { publish?: boolean }): Promise<ImportResult> {
   const token = divarToken(input)
   if (!token) return { ok: false, reason: 'لینک یا توکنِ دیوار معتبر نیست' }
   // اگر قبلاً وارد شده، به‌جای رد کردن، با دادهٔ تازهٔ دیوار به‌روزرسانی می‌شود.
   const existing = getDivar(o).imports.find(i => i.token === token)
 
   const cfg = getDivar(o)
+  // فاز ۱۷۶ (پورت از خودروجت): انتشار قابلِ‌override — رُستر آگهیِ مالکِ موقت را عمومی نمی‌کند تا کاربر ساخته شود (graduate)
+  const doPublish = opts?.publish !== undefined ? opts.publish : cfg.autoPublish
   let post
   try { post = await fetchDivarPost(token) } catch (e: any) { return { ok: false, reason: e?.message || 'اتصال به دیوار ناموفق بود', token } }
   if (post.reason && !post.images.length && !post.title && !hint?.title) {
@@ -85,12 +87,12 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
     if (!updated) {
       // فایل حذف شده بوده — دوباره به‌عنوان جدید اضافه کن
       removeImport(o, token)
-      return importDivarToken(o, input, hint, sourceId)
+      return importDivarToken(o, input, hint, sourceId, opts)
     }
     // آگهی روی دیوار زنده است ولی فایل مهرِ فروخته/اجاره‌رفته دارد (بازنشر) → فعال برگردد، نه نسخهٔ دوم
     if (updated.status !== 'active') await setListingStatus(o, existing.listingId, 'active')
     let published = updated.published || false
-    if (cfg.autoPublish) { const pub = await publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // بازانتشار + پیش‌گرمِ تحلیل (ممیزی دسته‌ای توسطِ کرون)
+    if (doPublish) { const pub = await publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // بازانتشار + پیش‌گرمِ تحلیل (ممیزی دسته‌ای توسطِ کرون)
     recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: existing.at, published, sourceId: sourceId || existing.sourceId })
     return { ok: true, updated: true, listing: updated, token }
   }
@@ -113,7 +115,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
     // بازنشرِ همان ملک با توکنِ جدید در حالی که فایل مهرِ فروخته/اجاره‌رفته خورده → فعال برگردد
     if (updated && updated.status !== 'active') await setListingStatus(o, twin.id, 'active')
     let published = updated?.published || false
-    if (cfg.autoPublish && updated) { const pub = await publishListing(o, twin.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }
+    if (doPublish && updated) { const pub = await publishListing(o, twin.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }
     recordImport(o, { token, listingId: twin.id, title: (updated || twin).title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
     return { ok: true, updated: true, listing: updated || twin, token }
   }
@@ -121,7 +123,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   // ── افزودنِ آگهیِ جدید ──
   const listing = await addListing(o, payload)
   let published = false
-  if (cfg.autoPublish) { const pub = await publishListing(o, listing.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // پیش‌گرمِ تحلیل (ممیزی دسته‌ای توسطِ کرون)
+  if (doPublish) { const pub = await publishListing(o, listing.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // پیش‌گرمِ تحلیل (ممیزی دسته‌ای توسطِ کرون)
   recordImport(o, { token, listingId: listing.id, title: listing.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
   return { ok: true, listing, token }
 }
