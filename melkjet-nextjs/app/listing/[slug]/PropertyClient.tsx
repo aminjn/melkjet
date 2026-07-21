@@ -82,6 +82,7 @@ export default function PropertyClient({ id, initial }: { id: string; initial?: 
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
   const [revealed, setRevealed] = useState(false)
   const pendingReveal = useRef(false)
+  const retryCount191 = useRef(0)   // فاز ۱۹۱ — چکِ خودکارِ آماده‌شدنِ تحلیل (جاروی سرور در حالِ پرکردن است)
   const [loan, setLoan] = useState(5_000_000_000)
   const [ask, setAsk] = useState('')
   const [askMsgs, setAskMsgs] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
@@ -172,7 +173,12 @@ export default function PropertyClient({ id, initial }: { id: string; initial?: 
             // در پس‌زمینه در حالِ ساخت است — یک‌بار دیگر (بدونِ اجرای دوبارهٔ AI) از دیتابیس بخوان.
             setAiError('تحلیل هوشمند در حالِ آماده‌سازی است…')
             setTimeout(() => loadEnrich(true), 9000)
-          } else setAiError('تحلیل هوشمند هنوز آماده نیست — چند لحظه بعد دوباره باز کنید')
+          } else {
+            // فاز ۱۹۱ — جارویِ سرور دارد پُرش می‌کند؛ خودمان هم تا ۲ بارِ دیگر (۲۰ثانیه‌ای) چک می‌کنیم
+            setAiError('تحلیل هوشمند در حالِ آماده‌سازی است…')
+            if (retryCount191.current < 2) { retryCount191.current++; setTimeout(() => loadEnrich(true), 20000) }
+            else setAiError('تحلیل هوشمند هنوز آماده نیست — چند لحظه بعد دوباره باز کنید')
+          }
         }).catch(() => setAiError('خطا در ارتباط با هوش مصنوعی'))
       }
       loadEnrich()

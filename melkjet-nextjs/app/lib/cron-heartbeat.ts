@@ -11,6 +11,7 @@ export interface CronBeat {
   lastRosterDueAt?: number  // آخرین باری که «اسکرپِ سررسیده» دیده شد
   lastRosterSyncAt?: number // آخرین باری که syncRoster از کرون شروع شد
   lastRosterSyncSlug?: string
+  enrichPending?: number   // فاز ۱۹۱ — چند آگهیِ عمومی هنوز تحلیلِ هوشمند ندارند (جارو در حالِ پرکردن)
 }
 const KV = 'cron_heartbeat'
 const FILE = join(process.cwd(), '.cron-heartbeat.json')

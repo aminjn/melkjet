@@ -167,6 +167,7 @@ let moderating = false
 let moderatingSince = 0
 let rosterRunning = false
 let graduateRunning = false   // فاز ۱۷۶ — صفِ ساختِ حساب، مستقل از سینکِ رُستر
+let enrichSweeping = false    // فاز ۱۹۱ — جارویِ تحلیلِ هوشمند
 
 async function queueTick(): Promise<void> {
   if (queueRunning) {
@@ -216,6 +217,24 @@ async function queueTick(): Promise<void> {
           const { processGraduateQueue } = await import('./agency-roster-store')
           for (let i = 0; i < 10; i++) { const g = await processGraduateQueue(); if (!g.ran) break }
         } catch { /* کارِ بعدی در تیکِ بعد */ } finally { graduateRunning = false }
+      })()
+    }
+    // 🧠 فاز ۱۹۱ — جارویِ تحلیلِ هوشمند (فیدبک: «کاربر نباید با صحنهٔ "تحلیل ندارد" روبه‌رو بشه؛ سیستم
+    // خودش اتومات هرکدام را ندارد انجام بده و ذخیره کنه»): صفِ گرم‌سازی در حافظه بود و با ری‌استارت
+    // می‌پرید — آگهیِ جامانده برای همیشه بی‌تحلیل می‌ماند. حالا هر تیک تا ۲۰ آگهیِ عمومیِ بی‌تحلیل
+    // پیدا و از همان صفِ throttled (WARM_CONCURRENCY=2) پر می‌شود؛ شکست‌ها بعدِ کول‌داون دوباره جارو می‌شوند.
+    if (!enrichSweeping) {
+      enrichSweeping = true
+      ;(async () => {
+        try {
+          const { listItems } = await import('./scraper-store')
+          const { isEnriched, warmMany } = await import('./enrich-warm')
+          const pub = await listItems('listing', { publicOnly: true })
+          const missing = pub.filter(it => !isEnriched(it.id)).map(it => it.id)
+          if (missing.length) { warmMany(missing.slice(0, 20)); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming ${Math.min(20, missing.length)}`) }
+          const { touchCron } = await import('./cron-heartbeat')
+          await touchCron({ enrichPending: missing.length })
+        } catch { /* جاروی بعدی در تیکِ بعد */ } finally { enrichSweeping = false }
       })()
     }
     if (!rosterRunning) {
