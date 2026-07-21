@@ -36,6 +36,8 @@ function firstInt(s?: string): number | null { const m = faToEn(s || '').match(/
 // برچسبِ کوتاهِ قیمت روی نقشه: خرید/فروش بر اساسِ «میلیارد»، اجاره بر اساسِ «میلیون» (فارسی، بدونِ صفرِ اضافه)
 function pinPrice(deal: string, priceB: number): string {
   if (!(priceB > 0)) return '—'
+  // فاز ۱۹۰ — اجارهٔ روزانه: قیمتِ هر شب (میلیونی)، نه میلیاردیِ فروش
+  if (deal === 'daily') return `${toPersianDigits(Math.round(priceB * 1000))} م/شب`
   if (deal === 'rent') {
     if (priceB >= 1) return `${faNum(Math.round(priceB * 10) / 10)} میلیارد`
     return `${toPersianDigits(Math.round(priceB * 1000))} میلیون`
@@ -118,6 +120,7 @@ function parseQuery(raw: string): Parsed {
   const out: Parsed = { kind: '', area: '', sizeNum: 0, budgetMax: 0, beds: null, amenities: [], deal: '', tokens: [] }
   if (!raw.trim()) return out
   if (/پیش[‌\s]?فروش/.test(raw)) out.deal = 'presale'
+  else if (/کوتاه[‌\s]?مدت|روزانه|شبی\s/.test(raw)) out.deal = 'daily'   // فاز ۱۹۰: «اجارهٔ روزانه» قبل از rent
   else if (/اجاره|رهن|ودیعه/.test(raw)) out.deal = 'rent'
   out.kind = detectKind(raw)
   const sm = t.match(/(\d{2,4})\s*متر/); if (sm) out.sizeNum = parseInt(sm[1], 10)
@@ -153,7 +156,8 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const kindParam = searchParams.get('kind') || ''   // نوعِ ملک از URL (برای میان‌بُرهای منو)
   const dealFromParam = (t: string) => t === 'rent' || t === 'اجاره' ? 'اجاره'
     : t === 'presale' || t === 'pre-sale' || t === 'پیش‌فروش' ? 'پیش‌فروش'
-      : t === 'mortgage' || t === 'rahn' || t === 'رهن' ? 'رهن' : 'خرید'
+      : t === 'mortgage' || t === 'rahn' || t === 'رهن' ? 'رهن'
+        : t === 'daily' || t === 'روزانه' ? 'اجارهٔ روزانه' : 'خرید'
   // تبِ معامله = state (منبعِ واحدِ حقیقت برای فیلتر). از URL مقداردهیِ اولیه می‌شود،
   // با کلیکِ تب فوراً عوض می‌شود (state) و آدرس‌بار هم با replaceState همگام می‌شود.
   const [dealType, setDealType] = useState<string>(dealFromParam(typeParam))
@@ -162,7 +166,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   useEffect(() => {
     const onDeal = (e: Event) => {
       const slug = (e as CustomEvent).detail as string
-      setDealType(slug === 'rent' ? 'اجاره' : slug === 'presale' ? 'پیش‌فروش' : slug === 'mortgage' ? 'رهن' : 'خرید')
+      setDealType(slug === 'rent' ? 'اجاره' : slug === 'presale' ? 'پیش‌فروش' : slug === 'mortgage' ? 'رهن' : slug === 'daily' ? 'اجارهٔ روزانه' : 'خرید')
     }
     window.addEventListener('mj-deal', onDeal)
     return () => window.removeEventListener('mj-deal', onDeal)
@@ -275,7 +279,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     const t = setTimeout(() => {
       const p = new URLSearchParams()
       if (searchTerm) p.set('q', searchTerm)
-      const slug = dealType === 'اجاره' ? 'rent' : dealType === 'پیش‌فروش' ? 'presale' : dealType === 'رهن' ? 'mortgage' : ''
+      const slug = dealType === 'اجاره' ? 'rent' : dealType === 'پیش‌فروش' ? 'presale' : dealType === 'رهن' ? 'mortgage' : dealType === 'اجارهٔ روزانه' ? 'daily' : ''
       if (slug) p.set('type', slug)
       if (kind) p.set('kind', kind)
       if (beds !== 'همه') p.set('beds', beds)
@@ -312,6 +316,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   // نیتِ معامله از خودِ متن («اجارهٔ آپارتمان…») تبِ درست را انتخاب می‌کند تا آگهیِ فروش برای کوئریِ اجاره نیاید.
   useEffect(() => {
     if (parsed.deal === 'rent') setDealType('اجاره')
+    else if (parsed.deal === 'daily') setDealType('اجارهٔ روزانه')
     else if (parsed.deal === 'presale') setDealType('پیش‌فروش')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm])
@@ -331,7 +336,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     (floorMin > 0 ? 1 : 0) + (yearMin > 0 ? 1 : 0) + checkedAmenities.length
 
   const filteredProperties = useMemo(() => {
-    const tabDeal = dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
+    const tabDeal = dealType === 'پیش‌فروش' ? 'presale' : dealType === 'اجارهٔ روزانه' ? 'daily' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
     const areaName = fAreaName.toLowerCase()
     return properties.filter(p => {
       if (p.deal !== tabDeal) return false
@@ -583,7 +588,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
             بدونِ بازکردنِ پنلِ فیلتر. روی موبایل به‌جای شکستن، افقی اسکرول می‌شود. */}
         <div className="mjs-quickbar" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 12px', display: 'flex', gap: 8, alignItems: 'center', overflowX: 'auto', flexWrap: 'nowrap' }}>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            {['خرید', 'اجاره', 'پیش‌فروش'].map(type => {
+            {['خرید', 'اجاره', 'اجارهٔ روزانه', 'پیش‌فروش'].map(type => {
               const on = dealType === type || (type === 'اجاره' && dealType === 'رهن')
               return <button key={type} onClick={() => goDeal(type)} style={{ padding: '8px 18px', borderRadius: 10, border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'var(--goldDim)' : 'var(--surface)', color: on ? 'var(--goldText)' : 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: on ? 700 : 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>{type}</button>
             })}
@@ -618,7 +623,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
             <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
               <span style={lab}>نوع معامله:</span>
               <div style={{ display: 'flex', gap: 6 }}>
-                {['خرید', 'اجاره', 'رهن', 'پیش‌فروش'].map(type => (
+                {['خرید', 'اجاره', 'رهن', 'اجارهٔ روزانه', 'پیش‌فروش'].map(type => (
                   <button key={type} onClick={() => goDeal(type)} style={{ padding: '7px 16px', borderRadius: 10, border: `1px solid ${dealType === type ? 'var(--gold)' : 'var(--line2)'}`, background: dealType === type ? 'var(--goldDim)' : 'transparent', color: dealType === type ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>{type}</button>
                 ))}
               </div>

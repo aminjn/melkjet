@@ -92,7 +92,7 @@ const cosmeticIconOf = (e: Pick<EmpireData, 'cosmetics'>, kind: 'frame' | 'flair
 }
 const ptypeOf = (it: Item) => (it.meta || {})['نوع ملک'] || it.category || ''
 const priceOf = (it: Item) => parseFaNum(it.price)
-const isSale = (it: Item) => !/اجاره|رهن|ودیعه/.test(it.price || '') && (it.meta || {})['نوع معامله'] !== 'اجاره'
+const isSale = (it: Item) => !/اجاره|رهن|ودیعه/.test(it.price || '') && !/\/\s*شب|تومان\s*\/?\s*شب|شبی\s/.test(it.price || '') && (it.meta || {})['نوع معامله'] !== 'اجاره' && !/روزهای عادی|ظرفیت استاندارد/.test(Object.keys(it.meta || {}).join(' '))   // فاز ۱۹۰: اجارهٔ شبانه فروشی نیست
 // قیمتِ فروشِ معتبر: زیر این کف یعنی قیمتِ آگهی درست پارس نشده («۱۹٫۶ میلیارد» متنی) — کاندیدِ بازی نشود.
 const MIN_SALE = 100_000_000
 const isPricedSale = (it: Item) => isSale(it) && priceOf(it) >= MIN_SALE

@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     }
     // فاز ۱۵۱ — فیلترِ شهر/معامله؛ منطقِ مشترک با کلاینتِ جستجو در listing-filter.ts
     if (type === 'listing' && cityQ) items = items.filter(i => cityMatch(i, cityQ))
-    if (type === 'listing' && ['sale', 'rent', 'presale'].includes(dealQ)) items = items.filter(i => dealOf(i) === dealQ)
+    if (type === 'listing' && ['sale', 'rent', 'presale', 'daily'].includes(dealQ)) items = items.filter(i => dealOf(i) === dealQ)
     // featured first, then newest
     items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.scrapedAt - a.scrapedAt)
     // شماره هرگز در فهرستِ عمومی نمی‌رود؛ فقط با ورود از /api/listing-reveal دیده و ثبت می‌شود.
