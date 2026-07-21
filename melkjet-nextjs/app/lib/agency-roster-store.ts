@@ -220,7 +220,17 @@ export async function patchScrape(id: string, patch: Partial<RosterScrape>): Pro
 // نمی‌شود و اشتباهاً «فروخته» نمی‌خورد؛ و چون dedupِ محتوایی نسخهٔ دوم نمی‌سازد، تکراری هم رخ نمی‌دهد.
 async function importClusterTokens(owner: string, tokens: string[], sourceId: string, opts193?: { deadline?: number; onEach?: () => void; fetchPost?: any; shouldStop?: () => Promise<boolean> }): Promise<{ live: number; sold: number; aborted?: boolean; stopped?: boolean }> {
   const liveIds = new Set<string>()
+  // فاز ۱۹۶ج (فیدبک: «تعدادِ آگهی‌ها هی می‌رود از اول») — واردهٔ تازه «پیش‌محاسبه» و آنی skip می‌شود:
+  // یک خواندنِ store به‌جای ۲۰۰ خواندنِ تک‌تک؛ شمارنده در چند ثانیه به نقطهٔ ازسرگیری می‌پرد و
+  // فقط باقی‌مانده واقعاً از دیوار گرفته می‌شود. (فیکسِ atِ فاز ۱۹۶ تازگی را تضمین می‌کند.)
+  const FRESH_MS = 20 * 3600_000
+  const dvPre = getDivar(owner)
+  const advPre = await getAdvisor(owner)
+  const listingIdsPre = new Set((advPre.listings || []).map(l => l.id))
+  const freshByToken = new Map(dvPre.imports.filter(i => i.at && Date.now() - i.at < FRESH_MS && listingIdsPre.has(i.listingId)).map(i => [i.token, i.listingId]))
   for (const token of tokens) {
+    const freshId = freshByToken.get(token)
+    if (freshId) { liveIds.add(freshId); try { opts193?.onEach?.() } catch {}; continue }
     // فاز ۱۹۳ — بودجهٔ زمانیِ ران: از سقف گذشت → توقفِ تمیز؛ «رفته/فروخته» حساب نمی‌کنیم (دادهٔ ناقص) و ادامه خودکار است
     if (opts193?.deadline && Date.now() > opts193.deadline) return { live: liveIds.size, sold: 0, aborted: true }
     if (opts193?.shouldStop && await opts193.shouldStop()) return { live: liveIds.size, sold: 0, aborted: true, stopped: true }
