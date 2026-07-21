@@ -50,6 +50,7 @@ export interface RosterScrape {
   running?: boolean
   runStartedAt?: number    // برای تشخیصِ رانِ گیرکرده/مرده
   lastProgressAt?: number  // آخرین باری که پیشرفت نوشته شد — مبنای تشخیصِ «مرده» (نه زمانِ شروع)
+  runAttempts?: number     // فاز ۱۹۲ — شمارِ تلاش‌های ناتمام از آخرین موفقیت (توقفِ حلقهٔ بی‌پایان)
   progress?: { done: number; total: number }
   runRequested?: boolean   // «همگام‌سازی الان» — کرونِ اینستنسِ ۰ برمی‌دارد
 }
@@ -103,7 +104,7 @@ const isStale = (s: RosterScrape, now = Date.now()) => !!s.running && (now - (s.
 export async function listScrapes(): Promise<RosterScrape[]> {
   const now = Date.now()
   return Object.values((await load()).scrapes)
-    .map(s => isStale(s, now) ? { ...s, running: false, lastError: s.lastError || 'همگام‌سازی نیمه‌کاره ماند — دوباره «همگام‌سازی الان» را بزنید' } : s)
+    .map(s => isStale(s, now) ? { ...s, running: false, lastError: s.lastError || 'همگام‌سازی نیمه‌کاره ماند — خودکار از همان‌جا ادامه می‌یابد' } : s)
     .sort((a, b) => b.createdAt - a.createdAt)
 }
 export async function getScrape(id: string): Promise<RosterScrape | null> { return (await load()).scrapes[id] || null }
@@ -196,7 +197,7 @@ export async function saveScrapeSchedule(id: string, patch: { autoSync?: boolean
     return true
   })
 }
-async function patchScrape(id: string, patch: Partial<RosterScrape>): Promise<void> { await mutate(db => { if (db.scrapes[id]) Object.assign(db.scrapes[id], patch) }) }
+export async function patchScrape(id: string, patch: Partial<RosterScrape>): Promise<void> { await mutate(db => { if (db.scrapes[id]) Object.assign(db.scrapes[id], patch) }) }
 
 // ── ایمپورتِ یک خوشه (توکن‌ها) زیرِ یک owner — dedup-safe ──
 // رفعِ باگِ «تکراری + فروخته‌شده»: «رفته» بر اساسِ listingIdِ لمس‌شده در همین دور محاسبه می‌شود،
@@ -230,7 +231,16 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
 export async function syncRoster(id: string, onProgress?: (done: number, total: number) => void): Promise<{ ok: boolean; error?: string; advisors: number; total: number; unnamed: number }> {
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد', advisors: 0, total: 0, unnamed: 0 }
-  await patchScrape(id, { running: true, runStartedAt: Date.now(), lastProgressAt: Date.now(), runRequested: false, progress: { done: 0, total: 0 }, lastError: '' })
+  // فاز ۱۹۲ (فیدبک: «ده بار زدم، هر بار نیمه‌کاره ماند») — runRequested دیگر در «شروع» پاک نمی‌شود؛
+  // فقط پایانِ موفق یا خطای واقعیِ کد پاکش می‌کنند. پس رانی که وسطِ کار کشته شد (pm2 reload/دیپلوی)
+  // در تیکِ بعد خودکار و از همان‌جا (RowCache) ادامه می‌یابد — بدونِ کلیکِ دوباره. سقفِ ۸ تلاشِ ناتمام
+  // جلوی حلقهٔ بی‌پایانِ خرابیِ تکرارشونده را می‌گیرد.
+  const attempts192 = (scrape.runAttempts || 0) + 1
+  if (attempts192 > 8) {
+    await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastError: 'چند بار پشتِ‌سرِهم ناتمام ماند — لاگِ سرور را ببین و دوباره «همگام‌سازی الان» را بزن' })
+    return { ok: false, error: 'تلاش‌های ناتمامِ زیاد', advisors: 0, total: 0, unnamed: 0 }
+  }
+  await patchScrape(id, { running: true, runStartedAt: Date.now(), lastProgressAt: Date.now(), runAttempts: attempts192, progress: { done: 0, total: 0 }, lastError: '' })
   let done = false
   // ضربانِ زنده‌بودن: هر ۵ ثانیه lastProgressAt را می‌زند. اگر پروسه reload/کیل شود، این تایمر هم می‌میرد
   // و lastProgressAt یخ می‌زند → بعد از STALE_MS درست «مرده» تشخیص داده می‌شود (حتی وسطِ فازِ AI/ایمپورت).
@@ -253,7 +263,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       if (now - lastCacheWrite > 5000) { lastCacheWrite = now; saveRowCache(id, rowCache).catch(() => {}) }
     }
     const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow })
-    if (!roster.ok) { done = true; await patchScrape(id, { running: false, lastRun: Date.now(), lastError: roster.error || 'خطا در خوشه‌بندی' }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
+    if (!roster.ok) { done = true; await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: roster.error || 'خطا در خوشه‌بندی' }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
     const freshByKey = new Map(roster.advisors.map(a => [a.key, a]))
@@ -284,7 +294,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     await mutate(db => {
       const s = db.scrapes[id]; if (!s) return
       s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
-      s.running = false; s.lastRun = Date.now(); s.lastError = ''
+      s.running = false; s.runRequested = false; s.runAttempts = 0; s.lastRun = Date.now(); s.lastError = ''
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
     })
@@ -293,7 +303,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     return { ok: true, advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
   } catch (e: any) {
     done = true
-    await patchScrape(id, { running: false, lastRun: Date.now(), lastError: e?.message || 'خطای داخلی' })
+    await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: e?.message || 'خطای داخلی' })
     return { ok: false, error: e?.message || 'خطا', advisors: 0, total: 0, unnamed: 0 }
   } finally {
     clearInterval(heartbeat)
