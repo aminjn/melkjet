@@ -1880,6 +1880,15 @@ async function main() {
       ok('ادعای دوبارهٔ همان بازه رد می‌شود (سرمایه دست نمی‌خورد)', (await claimHourlyQuest(UH, 'hq_444', 200_000_000, 10)).ok === false && (await getEH(UH)).capital === cap0 + 200_000_000)
       ok('بازهٔ بعد ادعای تازهٔ خودش را دارد', (await claimHourlyQuest(UH, 'hq_445', 200_000_000, 10)).ok === true && (await getEH(UH)).capital === cap0 + 400_000_000)
     }
+    // فاز ۱۸۹: دفترِ ترینِ ML — ثبت/خواندنِ پایدار در PG (گزارشِ «واقعاً کار می‌کند» از همین می‌خواند)
+    {
+      const { logTrainRun, trainLog, lastTrainAt } = await import('../app/lib/reos/train-log.ts')
+      await logTrainRun({ at: 1000, kind: 'engage', ok: true, ms: 12, n: 150, auc: 0.71 })
+      await logTrainRun({ at: 2000, kind: 'lead', ok: false, ms: 5, note: 'دادهٔ کم' })
+      const tl = await trainLog()
+      ok('اجراها با نتیجهٔ واقعی ثبت و جدیدترین اول است', tl.runs[0].kind === 'lead' && tl.runs[0].ok === false && tl.runs[1].auc === 0.71)
+      ok('lastAt پایدار است (ری‌استارت گِیتِ ترین را صفر نمی‌کند)', (await lastTrainAt()) === 2000)
+    }
     // رویدادِ سیستمیِ ⚙️ وضعیتِ «جدید» را دست نمی‌زند
     const CU2 = '09120001752'
     await addStaffAct(CU2, { by: 'ادمین', byPhone: STF, kind: 'note', text: '⚙️ ارجاع به سارا' })

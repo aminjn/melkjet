@@ -294,6 +294,20 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     }, 250)
     return () => clearTimeout(t)
   }, [searchTerm, dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, hood, sortBy, nearMe])
+  // 🧠 فاز ۱۸۹ — رویدادِ جستجو بالاخره ثبت می‌شود (ML هرگز رفتارِ جستجو را نمی‌دید و کوئستِ «جستجو بزن»
+  // غیرقابلِ‌انجام بود): جستجوی معنادار بعدِ آرام‌شدنِ تایپ، هر امضای یکتا فقط یک‌بار در این بازدید.
+  const searchedSigs = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const meaningful = searchTerm.trim() || hood || beds !== 'همه' || priceMin > 0 || priceMax < PRICE_MAX
+    if (!meaningful) return
+    const t = setTimeout(() => {
+      const sig = [searchTerm.trim(), hood, dealType, beds, priceMin, priceMax].join('|')
+      if (searchedSigs.current.has(sig)) return
+      searchedSigs.current.add(sig)
+      fetch('/api/reos/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user_searched', meta: { q: searchTerm.trim(), hood, deal: dealType } }) }).catch(() => {})
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [searchTerm, hood, dealType, beds, priceMin, priceMax])
   // فاز ۱۷۷ (فیدبک: «از صفحهٔ اصلی سرچ می‌کنم چرت‌وپرت می‌ده») — صفحهٔ اصلی فقط q می‌فرستد؛
   // نیتِ معامله از خودِ متن («اجارهٔ آپارتمان…») تبِ درست را انتخاب می‌کند تا آگهیِ فروش برای کوئریِ اجاره نیاید.
   useEffect(() => {

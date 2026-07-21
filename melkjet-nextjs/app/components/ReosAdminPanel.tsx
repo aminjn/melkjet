@@ -29,6 +29,15 @@ type Overview = {
   ai: { calls: number; tokens: number; cost: number; cacheHitRate: number; avgMs: number; byModel: Record<string, { calls: number }> }
   events: { total: number; byType: Record<string, number>; recent: Ev[] }
   topProperties: Top[]
+  // فاز ۱۸۹ — اثباتِ «واقعاً کار می‌کند»: دفترِ ترین + تازگیِ هر منبعِ رویداد + پرتعامل‌ترین کاربران
+  training?: { lastAt: number; runs: Array<{ at: number; kind: string; ok: boolean; ms: number; n?: number; auc?: number; note?: string }>; autoHours: number; enabled: boolean; nextAt: number }
+  coverage?: Array<{ type: string; count: number; lastAt: number }>
+  topUsers?: Array<{ userId: string; engagement: number }>
+}
+type UProfile = {
+  userId: string; events: number; views: number; saves: number; searches: number; contacts: number
+  topHoods: Array<{ hood: string; count: number }>; priceBand: { min: number; median: number; max: number } | null
+  recentQueries: string[]; lastActiveAt: number | null; engagement: number; known: boolean
 }
 const EV_LABEL: Record<string, string> = {
   user_clicked_property: 'بازدید', user_saved_property: 'سیو', user_searched: 'جستجو',
@@ -154,6 +163,10 @@ export default function ReosAdminPanel() {
                 ))}
             </div>
           </div>
+          {/* 🏋️ فاز ۱۸۹ — سلامتِ ترین: دفترِ اجراها + ترینِ فوری (اثباتِ زنده‌بودنِ یادگیری) */}
+          <Reos189Training ov={ov} reload={loadOv} />
+          {/* 👤 فاز ۱۸۹ — شناختِ کاربر از رفتارِ واقعی */}
+          <Reos189Users ov={ov} />
           <div style={card}>
             <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>مصرفِ AI (Gateway) + صفِ رویداد + گرافِ دانش</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12 }}>
@@ -338,6 +351,123 @@ export default function ReosAdminPanel() {
           <ReosExperimentsAdmin />
           <ReosAttributionAdmin />
           <ReosGeoHeat />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── 🏋️ فاز ۱۸۹ — سلامتِ ترین: دفترِ اجراهای واقعی + دکمهٔ «ترینِ الان» ─────────────────────────
+const faT = (at: number) => at ? new Date(at).toLocaleString('fa-IR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
+const agoFa = (at: number) => { if (!at) return 'هرگز'; const m = Math.floor((Date.now() - at) / 60000); return m < 1 ? 'همین الان' : m < 60 ? `${m.toLocaleString('fa-IR')} دقیقه پیش` : m < 1440 ? `${Math.floor(m / 60).toLocaleString('fa-IR')} ساعت پیش` : `${Math.floor(m / 1440).toLocaleString('fa-IR')} روز پیش` }
+const KIND_FA: Record<string, string> = { engage: 'مدلِ تعامل', lead: 'مدلِ لید', graph: 'گرافِ دانش' }
+function Reos189Training({ ov, reload }: { ov: Overview; reload: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [res, setRes] = useState('')
+  const t = ov.training
+  const stale = !!t && (!t.lastAt || Date.now() - t.lastAt > Math.max(1, t.autoHours) * 2 * 3600e3)
+  const trainNow = async () => {
+    setBusy(true); setRes('')
+    const d = await fetch('/api/reos/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'train' }) }).then(r => r.json()).catch(() => null)
+    setBusy(false)
+    if (d?.ok) { const e = d.results?.engage, l = d.results?.lead; setRes(`✓ ترین انجام شد — تعامل: ${e?.error ? 'خطا' : `n=${(e?.n || 0).toLocaleString('fa-IR')}، AUC=${e?.auc ?? '—'}${e?.usedDefault ? ' (دادهٔ کم → پیش‌فرض)' : ''}`} · لید: ${l?.error ? 'خطا' : `n=${(l?.n || 0).toLocaleString('fa-IR')}، AUC=${l?.auc ?? '—'}`}`); reload() }
+    else setRes('خطا در ترین — لاگِ سرور را ببین')
+  }
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <div style={{ fontSize: 15, fontWeight: 800 }}>🏋️ سلامتِ یادگیری (ترینِ خودکار)</div>
+        <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: stale ? 'rgba(240,82,82,.12)' : 'rgba(52,211,153,.12)', color: stale ? '#f05252' : '#34d399' }}>
+          {stale ? `⚠ آخرین ترین: ${agoFa(t?.lastAt || 0)} — عقب است` : `✓ آخرین ترین: ${agoFa(t?.lastAt || 0)}`}
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>هر {(t?.autoHours || 6).toLocaleString('fa-IR')} ساعت خودکار{t?.enabled === false ? ' (خاموش!)' : ''} · روی اینستنسِ ۰</span>
+        <span style={{ flex: 1 }} />
+        <button disabled={busy} onClick={trainNow} style={{ background: 'var(--gold)', color: '#1a1503', border: 'none', borderRadius: 10, padding: '8px 18px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>{busy ? 'در حالِ ترین…' : '🧠 ترینِ الان'}</button>
+      </div>
+      {res && <div style={{ fontSize: 12, color: 'var(--gold)', marginBottom: 8 }}>{res}</div>}
+      {!t?.runs?.length ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>هنوز هیچ اجرایی ثبت نشده — دکمهٔ «ترینِ الان» را بزن یا منتظرِ چرخهٔ خودکار بمان. (اگر بعدِ چند ساعت هم خالی ماند، کرونِ اینستنسِ ۰ را چک کن.)</div> : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead><tr style={{ color: 'var(--muted)', textAlign: 'right' }}><th style={{ padding: '4px 6px' }}>زمان</th><th style={{ padding: '4px 6px' }}>مدل</th><th style={{ padding: '4px 6px' }}>نمونه‌ها</th><th style={{ padding: '4px 6px' }}>AUC</th><th style={{ padding: '4px 6px' }}>مدت</th><th style={{ padding: '4px 6px' }}>وضعیت</th></tr></thead>
+            <tbody>
+              {t.runs.map((r, i) => (
+                <tr key={i} style={{ borderTop: '1px solid var(--line)' }}>
+                  <td style={{ padding: '5px 6px', whiteSpace: 'nowrap' }}>{faT(r.at)}</td>
+                  <td style={{ padding: '5px 6px' }}>{KIND_FA[r.kind] || r.kind}</td>
+                  <td style={{ padding: '5px 6px' }}>{r.n != null ? r.n.toLocaleString('fa-IR') : '—'}</td>
+                  <td style={{ padding: '5px 6px' }}>{r.auc != null ? String(r.auc) : '—'}</td>
+                  <td style={{ padding: '5px 6px' }}>{Math.round((r.ms || 0) / 100) / 10} ث</td>
+                  <td style={{ padding: '5px 6px', color: r.ok ? '#34d399' : '#f05252' }}>{r.ok ? '✓' : '✗'} <span style={{ color: 'var(--muted)' }}>{r.note || ''}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {!!ov.coverage?.length && (
+        <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px dashed var(--line)' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 8 }}>🩺 تازگیِ منابعِ یادگیری (هر نوع رویداد آخرین‌بار کی رسید؟)</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {ov.coverage.map(c => {
+              const dead = !c.lastAt || Date.now() - c.lastAt > 48 * 3600e3
+              return <span key={c.type} style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 99, background: 'var(--bg2)', border: `1px solid ${dead ? 'rgba(240,82,82,.4)' : 'var(--line)'}` }}>
+                {EV_LABEL[c.type] || c.type}: <b>{c.count.toLocaleString('fa-IR')}</b> · <span style={{ color: dead ? '#f05252' : '#34d399' }}>{agoFa(c.lastAt)}</span>
+              </span>
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── 👤 فاز ۱۸۹ — شناختِ کاربر از رفتارِ واقعی: جستجوی پروفایلِ رفتاری + پرتعامل‌ترین‌ها ────────────
+const faB189 = (n: number) => n >= 1e9 ? `${Math.round(n / 1e8) / 10} میلیارد` : n >= 1e6 ? `${Math.round(n / 1e5) / 10} میلیون` : n.toLocaleString('fa-IR')
+function Reos189Users({ ov }: { ov: Overview }) {
+  const [phone, setPhone] = useState('')
+  const [p, setP] = useState<UProfile | null>(null)
+  const [busy, setBusy] = useState(false)
+  const lookup = async (ph: string) => {
+    if (!ph.trim()) return
+    setBusy(true)
+    const d = await fetch(`/api/reos/admin?profile=${encodeURIComponent(ph.trim())}`, { cache: 'no-store' }).then(r => r.json()).catch(() => null)
+    setBusy(false)
+    if (d?.ok) setP(d.profile)
+  }
+  return (
+    <div style={card}>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>👤 شناختِ کاربر از رفتارِ واقعی</div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>پروفایلِ رفتاری ۱۰۰٪ از رویدادهای واقعی ساخته می‌شود: بازدید/ذخیره/جستجو/تماس، محله‌های محبوب و بازهٔ قیمتیِ واقعاً دیده‌شده.</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <input value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') lookup(phone) }} placeholder="شمارهٔ کاربر (مثلاً ۰۹۱۲…)" dir="ltr"
+          style={{ flex: 1, minWidth: 180, padding: '9px 12px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' }} />
+        <button disabled={busy || !phone.trim()} onClick={() => lookup(phone)} style={{ background: 'var(--gold)', color: '#1a1503', border: 'none', borderRadius: 10, padding: '8px 18px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>{busy ? '…' : 'بشناس'}</button>
+      </div>
+      {p && (
+        <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 14, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            <b style={{ fontSize: 13 }} dir="ltr">{p.userId}</b>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 99, background: p.known ? 'rgba(52,211,153,.12)' : 'rgba(240,173,78,.12)', color: p.known ? '#34d399' : '#f0ad4e' }}>{p.known ? '✓ شناخته‌شده' : 'هنوز شناختِ کافی نیست'}</span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>آخرین فعالیت: {agoFa(p.lastActiveAt || 0)} · امتیازِ تعامل: {p.engagement.toLocaleString('fa-IR')}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12.5, marginBottom: 8 }}>
+            <span>👁 بازدید: <b>{p.views.toLocaleString('fa-IR')}</b></span>
+            <span>♥ ذخیره: <b>{p.saves.toLocaleString('fa-IR')}</b></span>
+            <span>🔎 جستجو: <b>{p.searches.toLocaleString('fa-IR')}</b></span>
+            <span>☎ تماس: <b>{p.contacts.toLocaleString('fa-IR')}</b></span>
+          </div>
+          {!!p.topHoods.length && <div style={{ fontSize: 12.5, marginBottom: 6 }}>📍 محله‌های محبوب: {p.topHoods.map(h => `${h.hood} (${h.count.toLocaleString('fa-IR')})`).join('، ')}</div>}
+          {p.priceBand && <div style={{ fontSize: 12.5, marginBottom: 6 }}>💰 بازهٔ قیمتیِ دیده‌شده: {faB189(p.priceBand.min)} تا {faB189(p.priceBand.max)} (میانه {faB189(p.priceBand.median)})</div>}
+          {!!p.recentQueries.length && <div style={{ fontSize: 12.5 }}>⌨️ جستجوهای اخیر: {p.recentQueries.map(q => `«${q}»`).join('، ')}</div>}
+          {!p.events && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هیچ رویدادی از این کاربر ثبت نشده.</div>}
+        </div>
+      )}
+      {!!ov.topUsers?.length && (
+        <div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>پرتعامل‌ترین کاربران (امتیازِ یادگرفته‌شده)</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {ov.topUsers.map(u => <button key={u.userId} onClick={() => { setPhone(u.userId); lookup(u.userId) }} style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 99, background: 'var(--bg2)', border: '1px solid var(--line)', color: 'var(--text)', cursor: 'pointer', fontFamily: 'inherit' }} dir="ltr">{u.userId} · {u.engagement.toLocaleString('fa-IR')}</button>)}
+          </div>
         </div>
       )}
     </div>

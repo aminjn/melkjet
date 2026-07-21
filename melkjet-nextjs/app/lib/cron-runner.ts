@@ -65,11 +65,21 @@ async function tick(): Promise<{ due: number; synced: number }> {
     try { const { maybeRunMorning } = await import('./empire-morning'); const nm = await maybeRunMorning(Date.now()); if (nm) console.log(`[empire] morning bell: ${nm} users`) } catch { /* زنگِ صبحگاهی */ }
     // ⏰ فاز ۱۷۳ — یادآورِ خودکارِ CRM پرسنل: پیگیری/وظیفهٔ سررسیدشده → پوش + پیامک به خودِ پرسنل (اتمیک، یک‌بار)
     try { const { runStaffReminders } = await import('./staff-crm-reminders'); const nr = await runStaffReminders(Date.now()); if (nr) console.log(`[staff-crm] reminders sent: ${nr}`) } catch { /* یادآورِ CRM */ }
+    // فاز ۱۸۹ — گِیتِ ترین «پایدار» شد: متغیرِ ماژول با هر reload صفر می‌شد و هیچ ردی از اجراها نبود
+    // («ML خودش رو ترین نمی‌کنه و معلوم نیست کار می‌کنه») → lastAt از دفترِ ترین + ثبتِ هر اجرا با n/auc/زمان.
+    if (lastReosTrainAt === 0) { try { const { lastTrainAt } = await import('./reos/train-log'); lastReosTrainAt = await lastTrainAt() } catch {} }
     if (reosCfg.training.enabled && Date.now() - lastReosTrainAt > Math.max(1, reosCfg.training.autoHours) * 60 * 60 * 1000) {
       lastReosTrainAt = Date.now()
-      try { const w = await trainEngageModel(); console.log(`[reos] engage model: n=${w.n} auc=${w.auc} default=${w.usedDefault}`) } catch { /* آموزشِ REOS */ }
-      try { const { trainLeadModel, primeLeadModel } = await import('./reos/lead-model'); const lw = await trainLeadModel(); await primeLeadModel(); console.log(`[reos] lead model: n=${lw.n} auc=${lw.auc} default=${lw.usedDefault}`) } catch { /* آموزشِ مدلِ لید */ }
-      try { const g = await syncGraphFromEvents(5000); console.log(`[reos] knowledge graph: +${g.nodes} nodes, +${g.edges} edges`) } catch { /* گرافِ دانشِ REOS */ }
+      const tl189 = await import('./reos/train-log').catch(() => null)
+      const logTrainRun = tl189 ? tl189.logTrainRun : async (_r: unknown) => {}
+      const t189 = Date.now()
+      try { const w = await trainEngageModel(); console.log(`[reos] engage model: n=${w.n} auc=${w.auc} default=${w.usedDefault}`); await logTrainRun({ at: Date.now(), kind: 'engage', ok: true, ms: Date.now() - t189, n: w.n, auc: w.auc, note: w.usedDefault ? 'default (دادهٔ کم)' : 'learned' }) }
+      catch (e) { await logTrainRun({ at: Date.now(), kind: 'engage', ok: false, ms: Date.now() - t189, note: String((e as Error)?.message || e).slice(0, 120) }).catch(() => {}) }
+      const t189b = Date.now()
+      try { const { trainLeadModel, primeLeadModel } = await import('./reos/lead-model'); const lw = await trainLeadModel(); await primeLeadModel(); console.log(`[reos] lead model: n=${lw.n} auc=${lw.auc} default=${lw.usedDefault}`); await logTrainRun({ at: Date.now(), kind: 'lead', ok: true, ms: Date.now() - t189b, n: lw.n, auc: lw.auc, note: lw.usedDefault ? 'default (دادهٔ کم)' : 'learned' }) }
+      catch (e) { await logTrainRun({ at: Date.now(), kind: 'lead', ok: false, ms: Date.now() - t189b, note: String((e as Error)?.message || e).slice(0, 120) }).catch(() => {}) }
+      const t189c = Date.now()
+      try { const g = await syncGraphFromEvents(5000); console.log(`[reos] knowledge graph: +${g.nodes} nodes, +${g.edges} edges`); await logTrainRun({ at: Date.now(), kind: 'graph', ok: true, ms: Date.now() - t189c, n: g.nodes + g.edges }) } catch { /* گرافِ دانشِ REOS */ }
       try { const { computeMarketFeatures } = await import('./reos/market-features'); const areas = await computeMarketFeatures(); console.log(`[reos] market features: ${areas} areas`) } catch { /* ویژگی‌های بازارِ REOS */ }
       try { const { runIdleAutomations } = await import('./reos/crm'); const acted = await runIdleAutomations(); if (acted) console.log(`[reos] CRM idle automations: ${acted} actions`) } catch { /* اتوماسیونِ CRM OS */ }
       try { const { runAllIdleWorkflows } = await import('./reos/workflow-builder'); const w = await runAllIdleWorkflows(); if (w) console.log(`[reos] workflows: ${w} actions`) } catch { /* گردش‌کارِ REOS */ }
