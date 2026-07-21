@@ -51,6 +51,7 @@ export interface RosterScrape {
   runStartedAt?: number    // برای تشخیصِ رانِ گیرکرده/مرده
   lastProgressAt?: number  // آخرین باری که پیشرفت نوشته شد — مبنای تشخیصِ «مرده» (نه زمانِ شروع)
   runAttempts?: number     // فاز ۱۹۲ — شمارِ تلاش‌های ناتمام از آخرین موفقیت (توقفِ حلقهٔ بی‌پایان)
+  phase?: 'scrape' | 'import'   // فاز ۱۹۳ — کدام مرحله؟ (پیشرفتِ ایمپورت هم دیده شود، نه فقط اسکرپ)
   progress?: { done: number; total: number }
   runRequested?: boolean   // «همگام‌سازی الان» — کرونِ اینستنسِ ۰ برمی‌دارد
 }
@@ -203,15 +204,19 @@ export async function patchScrape(id: string, patch: Partial<RosterScrape>): Pro
 // رفعِ باگِ «تکراری + فروخته‌شده»: «رفته» بر اساسِ listingIdِ لمس‌شده در همین دور محاسبه می‌شود،
 // نه توکن. پس آگهیِ بازنشرشده (توکنِ جدید) که موتورِ شباهت روی همان فایل می‌نشاندش، «رفته» حساب
 // نمی‌شود و اشتباهاً «فروخته» نمی‌خورد؛ و چون dedupِ محتوایی نسخهٔ دوم نمی‌سازد، تکراری هم رخ نمی‌دهد.
-async function importClusterTokens(owner: string, tokens: string[], sourceId: string): Promise<{ live: number; sold: number }> {
+async function importClusterTokens(owner: string, tokens: string[], sourceId: string, opts193?: { deadline?: number; onEach?: () => void }): Promise<{ live: number; sold: number; aborted?: boolean }> {
   const liveIds = new Set<string>()
   for (const token of tokens) {
+    // فاز ۱۹۳ — بودجهٔ زمانیِ ران: از سقف گذشت → توقفِ تمیز؛ «رفته/فروخته» حساب نمی‌کنیم (دادهٔ ناقص) و ادامه خودکار است
+    if (opts193?.deadline && Date.now() > opts193.deadline) return { live: liveIds.size, sold: 0, aborted: true }
     try {
       // مالکِ موقتِ رُستر: آگهی وارد می‌شود ولی عمومی نمی‌شود تا کاربر ساخته شود (graduate).
-      const res = await importDivarToken(owner, token, undefined, sourceId, { publish: false })
-      if (res.ok && res.listing) liveIds.add(res.listing.id)
-    } catch {}
-    await sleep(300)   // throttle — روی اینستنسِ ۰
+      // واردهٔ تازهٔ زیرِ ۲۰ ساعت دوباره از دیوار گرفته نمی‌شود (سرعتِ ازسرگیری/رانِ دوم).
+      const res = await importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: 20 * 3600_000 })
+      if (res.ok && res.listing) { liveIds.add(res.listing.id); if (!res.skipped) await sleep(300) }
+      else await sleep(300)
+    } catch { await sleep(300) }
+    try { opts193?.onEach?.() } catch {}
   }
   // فایل‌هایی که این منبع قبلاً آورده بود ولی امسال لمس نشدند = فروخته/اجاره‌رفته.
   const priorIds = new Set(getDivar(owner).imports.filter(i => i.sourceId === sourceId).map(i => i.listingId))
@@ -240,7 +245,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastError: 'چند بار پشتِ‌سرِهم ناتمام ماند — لاگِ سرور را ببین و دوباره «همگام‌سازی الان» را بزن' })
     return { ok: false, error: 'تلاش‌های ناتمامِ زیاد', advisors: 0, total: 0, unnamed: 0 }
   }
-  await patchScrape(id, { running: true, runStartedAt: Date.now(), lastProgressAt: Date.now(), runAttempts: attempts192, progress: { done: 0, total: 0 }, lastError: '' })
+  await patchScrape(id, { running: true, runStartedAt: Date.now(), lastProgressAt: Date.now(), runAttempts: attempts192, phase: 'scrape', progress: { done: 0, total: 0 }, lastError: '' })
   let done = false
   // ضربانِ زنده‌بودن: هر ۵ ثانیه lastProgressAt را می‌زند. اگر پروسه reload/کیل شود، این تایمر هم می‌میرد
   // و lastProgressAt یخ می‌زند → بعد از STALE_MS درست «مرده» تشخیص داده می‌شود (حتی وسطِ فازِ AI/ایمپورت).
@@ -286,9 +291,26 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     for (const rec of recs) { const f = freshByKey.get(rec.key); jobs.push({ rec, owner: rec.owner, tokens: f ? f.tokens : [] }) }
     jobs.push({ owner: scrape.agencyOwner, tokens: roster.unnamed.tokens })
 
+    // فاز ۱۹۳ — پیشرفتِ فازِ ایمپورت هم دیده می‌شود (قبلاً UI روی «N/N» یخ می‌زد و هنگ به نظر می‌رسید)
+    const totalTokens193 = jobs.reduce((a, j) => a + j.tokens.length, 0)
+    let done193 = 0, lastImpWrite = 0
+    const impTick = () => {
+      done193++
+      const now = Date.now()
+      if (done193 === totalTokens193 || now - lastImpWrite > 3000) { lastImpWrite = now; patchScrape(id, { phase: 'import', progress: { done: done193, total: totalTokens193 }, lastProgressAt: now }).catch(() => {}) }
+    }
+    await patchScrape(id, { phase: 'import', progress: { done: 0, total: totalTokens193 } })
+    const deadline193 = Date.now() + 45 * 60_000   // بودجهٔ زمانیِ هر ران؛ ادامه در رانِ بعد (خودکار، فاز ۱۹۲)
+    let budgetHit = false
     for (const j of jobs) {
-      const r = await importClusterTokens(j.owner, j.tokens, scrape.id)
+      const r = await importClusterTokens(j.owner, j.tokens, scrape.id, { deadline: deadline193, onEach: impTick })
       if (j.rec) j.rec.listingCount = r.live
+      if (r.aborted) { budgetHit = true; break }
+    }
+    if (budgetHit) {
+      done = true
+      await mutate(db => { const s2 = db.scrapes[id]; if (!s2) return; s2.advisors = recs; s2.running = false; s2.lastError = 'بودجهٔ زمانیِ این ران تمام شد — ادامه خودکار در چند لحظهٔ دیگر' })
+      return { ok: false, error: 'بودجهٔ زمانی — ادامه خودکار', advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
     }
 
     await mutate(db => {

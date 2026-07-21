@@ -32,11 +32,17 @@ async function addAreaToProfile(o: string, neighborhood: string) {
 
 /** یک آگهیِ دیوار را (با توکن یا لینک) به‌عنوان فایلِ مشاور وارد می‌کند.
  *  hint: عنوان/تصویرِ واقعیِ آگهی از فهرستِ پروفایل (چون API تک‌آگهی گاهی عنوانِ دسته را می‌دهد). */
-export async function importDivarToken(o: string, input: string, hint?: BrandPost, sourceId?: string, opts?: { publish?: boolean }): Promise<ImportResult> {
+export async function importDivarToken(o: string, input: string, hint?: BrandPost, sourceId?: string, opts?: { publish?: boolean; skipFreshMs?: number }): Promise<ImportResult> {
   const token = divarToken(input)
   if (!token) return { ok: false, reason: 'لینک یا توکنِ دیوار معتبر نیست' }
   // اگر قبلاً وارد شده، به‌جای رد کردن، با دادهٔ تازهٔ دیوار به‌روزرسانی می‌شود.
   const existing = getDivar(o).imports.find(i => i.token === token)
+  // فاز ۱۹۳ (سینکِ رُستر: «یک ساعت روی ۵۴۰/۵۴۰ ماند») — واردهٔ تازه (زیرِ skipFreshMs) دوباره از دیوار
+  // گرفته نمی‌شود؛ ازسرگیری/رانِ دوم فقط توکن‌های جدید را می‌گیرد و از ساعت‌ها به دقیقه‌ها می‌رسد.
+  if (opts?.skipFreshMs && existing && existing.at && Date.now() - existing.at < opts.skipFreshMs) {
+    const lFresh = (await getAdvisor(o)).listings.find(x => x.id === existing.listingId)
+    if (lFresh) return { ok: true, skipped: true, listing: lFresh, token }
+  }
 
   const cfg = getDivar(o)
   // فاز ۱۷۶ (پورت از خودروجت): انتشار قابلِ‌override — رُستر آگهیِ مالکِ موقت را عمومی نمی‌کند تا کاربر ساخته شود (graduate)
