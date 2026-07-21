@@ -228,6 +228,7 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
   const advPre = await getAdvisor(owner)
   const listingIdsPre = new Set((advPre.listings || []).map(l => l.id))
   const freshByToken = new Map(dvPre.imports.filter(i => i.at && Date.now() - i.at < FRESH_MS && listingIdsPre.has(i.listingId)).map(i => [i.token, i.listingId]))
+  let slowStreak193 = 0   // فاز ۱۹۷ب — سرعتِ تطبیقی در برابرِ rate-limit دیوار
   for (const token of tokens) {
     const freshId = freshByToken.get(token)
     if (freshId) { liveIds.add(freshId); try { opts193?.onEach?.() } catch {}; continue }
@@ -245,9 +246,15 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
       const ms = Date.now() - t0
       // فاز ۱۹۷ — چشمِ حلقه: توکنِ کند/شکست‌خورده با علت لاگ می‌شود تا «گیر» دیگر نامرئی نباشد
       if (ms > 30_000 || !res.ok) console.log(`[roster] token=${token} ms=${ms} ok=${res.ok}${!res.ok && 'reason' in res ? ' reason=' + String((res as any).reason).slice(0, 80) : ''}`)
-      if (res.ok && 'listing' in res && res.listing) { liveIds.add(res.listing.id); if (!('skipped' in res && res.skipped)) await sleep(300) }
-      else await sleep(300)
-    } catch (e) { console.log(`[roster] token=${token} threw: ${String((e as Error)?.message || e).slice(0, 80)}`); await sleep(300) }
+      // فاز ۱۹۷ب — سرعتِ تطبیقی (حدسِ درستِ کاربر: دیوار با درخواستِ زیاد rate-limit می‌کند):
+      // توکنِ کند/ناموفق = نشانهٔ محدودیت → فاصلهٔ بعدی پله‌پله زیاد می‌شود (تا ۳۰ث) تا محدودیت باز شود؛ موفقِ سریع = برگشت به ریتمِ عادی
+      if (!res.ok || ms > 20_000) slowStreak193 = Math.min(slowStreak193 + 1, 5)
+      else slowStreak193 = 0
+      const pace = slowStreak193 === 0 ? 300 : [2_000, 5_000, 10_000, 20_000, 30_000][slowStreak193 - 1]
+      if (slowStreak193 >= 2) console.log(`[roster] divar کند/محدود — فاصلهٔ درخواست‌ها ${Math.round(pace / 1000)}ث شد`)
+      if (res.ok && 'listing' in res && res.listing) { liveIds.add(res.listing.id); if (!('skipped' in res && res.skipped)) await sleep(pace) }
+      else await sleep(pace)
+    } catch (e) { console.log(`[roster] token=${token} threw: ${String((e as Error)?.message || e).slice(0, 80)}`); await sleep(2_000) }
     try { opts193?.onEach?.() } catch {}
   }
   // فایل‌هایی که این منبع قبلاً آورده بود ولی امسال لمس نشدند = فروخته/اجاره‌رفته.
@@ -286,7 +293,14 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
   let lastStopCheck = 0, stopFlag = false
   const shouldStop = async () => {
     const now = Date.now()
-    if (now - lastStopCheck > 4000) { lastStopCheck = now; stopFlag = (await getScrape(id))?.stopRequested === true }
+    if (now - lastStopCheck > 4000) {
+      lastStopCheck = now
+      // فاز ۱۹۷ب — این چک هرگز نباید پاس را بکشد: خطا/کندیِ گذرایِ store نادیده گرفته می‌شود (پرچمِ قبلی می‌ماند)
+      try {
+        const sc = await Promise.race([getScrape(id), new Promise<null>(r => setTimeout(() => r(null), 3000))])
+        if (sc) stopFlag = sc.stopRequested === true
+      } catch { /* خطای گذرای PG → چکِ بعدی */ }
+    }
     return stopFlag
   }
   const heartbeat = setInterval(() => { patchScrape(id, { lastProgressAt: Date.now() }).catch(() => {}) }, 5000)
@@ -383,8 +397,15 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     return { ok: true, advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
   } catch (e: any) {
     done = true
-    await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: e?.message || 'خطای داخلی' })
-    return { ok: false, error: e?.message || 'خطا', advisors: 0, total: 0, unnamed: 0 }
+    const msg = String(e?.message || e || 'خطای داخلی')
+    // فاز ۱۹۷ب — پاسِ مرده دیگر «بی‌صدا» نیست و خطای گذرای زیرساخت (PG/شبکه) درخواست را نمی‌بندد:
+    // مثلِ کیل رفتار می‌شود و رانِ بعدیِ کرون خودکار از همان‌جا ادامه می‌دهد.
+    const transient = /timeout|connect|ECONN|pool|terminat|socket/i.test(msg)
+    console.error(`[roster] pass FAILED (${transient ? 'transient — ادامهٔ خودکار' : 'fatal'}): ${msg.slice(0, 200)}`)
+    await patchScrape(id, transient
+      ? { running: false, lastRun: Date.now(), lastError: 'خطای گذرای زیرساخت — ادامهٔ خودکار در چند لحظه' }
+      : { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: msg })
+    return { ok: false, error: msg, advisors: 0, total: 0, unnamed: 0 }
   } finally {
     clearInterval(heartbeat)
     // تضمین: اگر جایی زودتر return شد یا خطای ناگرفته رخ داد، running قفل نماند.

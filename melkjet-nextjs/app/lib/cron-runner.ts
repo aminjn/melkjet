@@ -237,7 +237,8 @@ async function queueTick(): Promise<void> {
           const { isEnriched, warmMany } = await import('./enrich-warm')
           const pub = await listItems('listing', { publicOnly: true })
           const missing = pub.filter(it => !isEnriched(it.id)).map(it => it.id)
-          if (missing.length) { warmMany(missing.slice(0, 20)); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming ${Math.min(20, missing.length)}`) }
+          // فاز ۱۹۷ب — ۸ به‌جای ۲۰ در هر تیک: فشارِ درخواست به دیوار (حدسِ درستِ کاربر: rate-limit) خیلی کمتر، بک‌لاگ همچنان خالی می‌شود
+          if (missing.length) { warmMany(missing.slice(0, 8)); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming ${Math.min(8, missing.length)}`) }
           const { touchCron } = await import('./cron-heartbeat')
           await touchCron({ enrichPending: missing.length })
         } catch { /* جاروی بعدی در تیکِ بعد */ } finally { enrichSweeping = false }
