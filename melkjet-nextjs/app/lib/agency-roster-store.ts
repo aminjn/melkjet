@@ -237,13 +237,17 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
     try {
       // مالکِ موقتِ رُستر: آگهی وارد می‌شود ولی عمومی نمی‌شود تا کاربر ساخته شود (graduate).
       // واردهٔ تازهٔ زیرِ ۲۰ ساعت دوباره از دیوار گرفته نمی‌شود (سرعتِ ازسرگیری/رانِ دوم).
+      const t0 = Date.now()
       const res = await Promise.race([
         importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: 20 * 3600_000, fetchPost: opts193?.fetchPost }),
         new Promise<{ ok: false; reason: string }>(r => setTimeout(() => r({ ok: false, reason: 'timeout 2min — رد شد' }), 120_000)),   // فاز ۱۹۵: هیچ توکنی حلقه را نگه نمی‌دارد
       ])
+      const ms = Date.now() - t0
+      // فاز ۱۹۷ — چشمِ حلقه: توکنِ کند/شکست‌خورده با علت لاگ می‌شود تا «گیر» دیگر نامرئی نباشد
+      if (ms > 30_000 || !res.ok) console.log(`[roster] token=${token} ms=${ms} ok=${res.ok}${!res.ok && 'reason' in res ? ' reason=' + String((res as any).reason).slice(0, 80) : ''}`)
       if (res.ok && 'listing' in res && res.listing) { liveIds.add(res.listing.id); if (!('skipped' in res && res.skipped)) await sleep(300) }
       else await sleep(300)
-    } catch { await sleep(300) }
+    } catch (e) { console.log(`[roster] token=${token} threw: ${String((e as Error)?.message || e).slice(0, 80)}`); await sleep(300) }
     try { opts193?.onEach?.() } catch {}
   }
   // فایل‌هایی که این منبع قبلاً آورده بود ولی امسال لمس نشدند = فروخته/اجاره‌رفته.
@@ -268,6 +272,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
   // فقط پایانِ موفق یا خطای واقعیِ کد پاکش می‌کنند. پس رانی که وسطِ کار کشته شد (pm2 reload/دیپلوی)
   // در تیکِ بعد خودکار و از همان‌جا (RowCache) ادامه می‌یابد — بدونِ کلیکِ دوباره. سقفِ ۸ تلاشِ ناتمام
   // جلوی حلقهٔ بی‌پایانِ خرابیِ تکرارشونده را می‌گیرد.
+  console.log(`[roster] pass start id=${id} slug=${scrape.slug} attempt=${(scrape.runAttempts || 0) + 1}`)
   const attempts192 = (scrape.runAttempts || 0) + 1
   if (attempts192 > 8) {
     await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastError: 'چند بار پشتِ‌سرِهم ناتمام ماند — لاگِ سرور را ببین و دوباره «همگام‌سازی الان» را بزن' })
@@ -311,6 +316,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // فاز ۱۹۶ب — پیشرفتِ واقعی شمارندهٔ تلاش را می‌بخشد: رسیدن به این‌جا یعنی اسکرپ+AI کامل شد؛
     // کیلِ دیپلوی وسطِ ایمپورت نباید به سمتِ «چند بار ناتمام ماند» بشمارد (فیدبک: give-up الکی).
     if (roster.ok) await patchScrape(id, { runAttempts: 0 })
+    console.log(`[roster] scrape+AI done: rows=${roster.scanned} advisors=${roster.advisors.length} unnamed=${roster.unnamed.tokens.length}`)
     if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
@@ -339,6 +345,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     let done193 = 0, lastImpWrite = 0
     const impTick = () => {
       done193++
+      if (done193 % 20 === 0 || done193 === totalTokens193) console.log(`[roster] import ${done193}/${totalTokens193}`)
       const now = Date.now()
       if (done193 === totalTokens193 || now - lastImpWrite > 3000) { lastImpWrite = now; patchScrape(id, { phase: 'import', progress: { done: done193, total: totalTokens193 }, lastProgressAt: now }).catch(() => {}) }
     }
@@ -359,6 +366,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
         if (wasStopped) { s2.runRequested = false; s2.stopRequested = false; s2.runAttempts = 0; s2.lastError = 'با دکمهٔ توقف متوقف شد' }
         else s2.lastError = 'بودجهٔ زمانیِ این ران تمام شد — ادامه خودکار در چند لحظهٔ دیگر'
       })
+      console.log(`[roster] pass end (${wasStopped ? 'stopped' : 'budget'}) imported=${done193}/${totalTokens193}`)
       return { ok: false, error: wasStopped ? 'متوقف شد' : 'بودجهٔ زمانی — ادامه خودکار', advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
     }
 
@@ -369,6 +377,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
     })
+    console.log(`[roster] pass end OK: advisors=${recs.length} total=${roster.total} unnamed=${roster.unnamed.tokens.length}`)
     await clearRowCache(id)   // موفق شد → کش پاک تا سینکِ بعدی دادهٔ تازه بگیرد
     done = true
     return { ok: true, advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
