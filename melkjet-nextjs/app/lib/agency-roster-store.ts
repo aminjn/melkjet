@@ -131,7 +131,7 @@ export async function removeScrape(id: string): Promise<void> { await mutate(db 
 // از دیوار گرفته شوند (کشِ کهنهٔ دورهٔ پروکسیِ مرده که متنِ خالی داشت، دیگر استفاده نمی‌شود).
 export async function requestRun(id: string): Promise<boolean> {
   let hadError = false
-  const ok = await mutate(db => { const s = db.scrapes[id]; if (!s) return false; hadError = !!s.lastError; s.runRequested = true; if (isStale(s)) s.running = false; return true })
+  const ok = await mutate(db => { const s = db.scrapes[id]; if (!s) return false; hadError = !!s.lastError; s.runRequested = true; s.stopRequested = false; s.runAttempts = 0; s.lastError = ''; if (isStale(s)) s.running = false; return true })   // فاز ۱۹۶ب: کلیکِ دستی = شروعِ تمیز
   // فاز ۱۹۶: کشِ ازسرگیری فقط وقتی پاک می‌شود که رانِ قبلی «موفق» بوده (دادهٔ تازه بخواهیم)؛
   // بعدِ رانِ ناتمام، کلیکِ دستی یعنی «ادامه بده» — نه «همه را از نو».
   if (ok && !hadError) { try { await clearRowCache(id) } catch {} }
@@ -298,6 +298,9 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // فاز ۱۹۶ — flushِ نهاییِ کشِ ازسرگیری: ذخیرهٔ throttled (هر ۵ث) دُمِ کش (و نام‌های AI) را جا می‌گذاشت
     // → پاسِ بعد دوباره از دیوار می‌خواند و AI را دوباره می‌پرسید. (خودِ تستِ شبیه‌سازی این را گرفت.)
     await saveRowCache(id, rowCache).catch(() => {})
+    // فاز ۱۹۶ب — پیشرفتِ واقعی شمارندهٔ تلاش را می‌بخشد: رسیدن به این‌جا یعنی اسکرپ+AI کامل شد؛
+    // کیلِ دیپلوی وسطِ ایمپورت نباید به سمتِ «چند بار ناتمام ماند» بشمارد (فیدبک: give-up الکی).
+    if (roster.ok) await patchScrape(id, { runAttempts: 0 })
     if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
