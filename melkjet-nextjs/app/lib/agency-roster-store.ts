@@ -51,7 +51,7 @@ export interface RosterScrape {
   runStartedAt?: number    // برای تشخیصِ رانِ گیرکرده/مرده
   lastProgressAt?: number  // آخرین باری که پیشرفت نوشته شد — مبنای تشخیصِ «مرده» (نه زمانِ شروع)
   runAttempts?: number     // فاز ۱۹۲ — شمارِ تلاش‌های ناتمام از آخرین موفقیت (توقفِ حلقهٔ بی‌پایان)
-  phase?: 'scrape' | 'import'   // فاز ۱۹۳ — کدام مرحله؟ (پیشرفتِ ایمپورت هم دیده شود، نه فقط اسکرپ)
+  phase?: 'scrape' | 'cluster' | 'import'   // فاز ۱۹۳/۱۹۴ — کدام مرحله؟ (اسکرپ/شناساییِ نام‌ها/ایمپورت)
   progress?: { done: number; total: number }
   runRequested?: boolean   // «همگام‌سازی الان» — کرونِ اینستنسِ ۰ برمی‌دارد
 }
@@ -267,7 +267,9 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       const now = Date.now()
       if (now - lastCacheWrite > 5000) { lastCacheWrite = now; saveRowCache(id, rowCache).catch(() => {}) }
     }
-    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow })
+    // فاز ۱۹۴ — فازِ شناساییِ نام‌ها (AI) هم پیشرفتِ دیدنی دارد
+    const onCluster = (d: number, t: number) => { patchScrape(id, { phase: 'cluster', progress: { done: d, total: t }, lastProgressAt: Date.now() }).catch(() => {}) }
+    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow, onCluster })
     if (!roster.ok) { done = true; await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: roster.error || 'خطا در خوشه‌بندی' }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
