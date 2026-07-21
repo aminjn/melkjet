@@ -76,7 +76,7 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> { if (pgEnabled()) retur
 // ── چک‌پوینتِ ازسرگیری: متنِ آگهی‌های اسکرپ‌شده (توکن→{title,desc}) در یک کلیدِ جدا، برای هر اسکرپ ──
 // اگر سینک نیمه‌کاره بماند (reload/کیل)، رانِ بعدی آگهی‌های کش‌شده را دوباره از دیوار نمی‌گیرد و ادامه می‌دهد.
 // در پایانِ موفق پاک می‌شود تا سینکِ روزانه‌ی بعدی دادهٔ تازه بگیرد.
-type RowCache = Record<string, { title: string; desc: string }>
+type RowCache = Record<string, { title: string; desc: string; name?: string }>   // name = نامِ AI (کش — فاز ۱۹۶؛ '' یعنی پرسیده و نداشت)
 const CACHE_KV = 'agency_roster_cache'
 const CACHE_FILE = join(process.cwd(), '.agency-roster-cache.json')
 function cacheFileLoad(): Record<string, RowCache> { if (existsSync(CACHE_FILE)) { try { return JSON.parse(readFileSync(CACHE_FILE, 'utf-8')) } catch {} } return {} }
@@ -129,8 +129,11 @@ export async function removeScrape(id: string): Promise<void> { await mutate(db 
 // «همگام‌سازیِ الان» — سینکِ دستی همیشه «تازه» است: کشِ ازسرگیری پاک می‌شود تا آگهی‌ها دوباره
 // از دیوار گرفته شوند (کشِ کهنهٔ دورهٔ پروکسیِ مرده که متنِ خالی داشت، دیگر استفاده نمی‌شود).
 export async function requestRun(id: string): Promise<boolean> {
-  const ok = await mutate(db => { const s = db.scrapes[id]; if (!s) return false; s.runRequested = true; if (isStale(s)) s.running = false; return true })
-  if (ok) { try { await clearRowCache(id) } catch {} }
+  let hadError = false
+  const ok = await mutate(db => { const s = db.scrapes[id]; if (!s) return false; hadError = !!s.lastError; s.runRequested = true; if (isStale(s)) s.running = false; return true })
+  // فاز ۱۹۶: کشِ ازسرگیری فقط وقتی پاک می‌شود که رانِ قبلی «موفق» بوده (دادهٔ تازه بخواهیم)؛
+  // بعدِ رانِ ناتمام، کلیکِ دستی یعنی «ادامه بده» — نه «همه را از نو».
+  if (ok && !hadError) { try { await clearRowCache(id) } catch {} }
   return ok
 }
 const PERIOD: Record<RosterScrape['schedule'], number> = { off: 0, '6h': 6 * 3600_000, daily: 24 * 3600_000 }
@@ -212,8 +215,11 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
     try {
       // مالکِ موقتِ رُستر: آگهی وارد می‌شود ولی عمومی نمی‌شود تا کاربر ساخته شود (graduate).
       // واردهٔ تازهٔ زیرِ ۲۰ ساعت دوباره از دیوار گرفته نمی‌شود (سرعتِ ازسرگیری/رانِ دوم).
-      const res = await importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: 20 * 3600_000 })
-      if (res.ok && res.listing) { liveIds.add(res.listing.id); if (!res.skipped) await sleep(300) }
+      const res = await Promise.race([
+        importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: 20 * 3600_000 }),
+        new Promise<{ ok: false; reason: string }>(r => setTimeout(() => r({ ok: false, reason: 'timeout 2min — رد شد' }), 120_000)),   // فاز ۱۹۵: هیچ توکنی حلقه را نگه نمی‌دارد
+      ])
+      if (res.ok && 'listing' in res && res.listing) { liveIds.add(res.listing.id); if (!('skipped' in res && res.skipped)) await sleep(300) }
       else await sleep(300)
     } catch { await sleep(300) }
     try { opts193?.onEach?.() } catch {}
@@ -261,9 +267,9 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // ازسرگیری: کشِ آگهی‌های قبلاً اسکرپ‌شده را بارگذاری کن؛ آگهی‌های تازه را افزوده و throttleشده ذخیره کن.
     const rowCache: RowCache = await loadRowCache(id)
     let lastCacheWrite = 0
-    const onRow = (token: string, r: { title: string; desc: string }) => {
+    const onRow = (token: string, r: { title: string; desc: string; name?: string }) => {
       if (!r.desc) return   // متنِ خالی را کش نکن تا دفعهٔ بعد دوباره گرفته شود (خودترمیمی)
-      rowCache[token] = r
+      rowCache[token] = { ...rowCache[token], ...r }   // فاز ۱۹۶: نامِ AI هم روی همان رکورد می‌نشیند
       const now = Date.now()
       if (now - lastCacheWrite > 5000) { lastCacheWrite = now; saveRowCache(id, rowCache).catch(() => {}) }
     }

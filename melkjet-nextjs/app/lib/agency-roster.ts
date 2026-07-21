@@ -179,8 +179,8 @@ export interface AgencyRoster {
 export async function buildAgencyRoster(
   slugOrUrl: string,
   opts: { useAI?: boolean; maxDetails?: number; onProgress?: (done: number, total: number) => void;
-    cached?: Record<string, { title: string; desc: string }>;   // توکن→متنِ قبلاً اسکرپ‌شده (ازسرگیری)
-    onRow?: (token: string, r: { title: string; desc: string }) => void;
+    cached?: Record<string, { title: string; desc: string; name?: string }>;   // توکن→متن + نامِ AI (ازسرگیری)
+    onRow?: (token: string, r: { title: string; desc: string; name?: string }) => void;
     onCluster?: (done: number, total: number) => void } = {},   // فاز ۱۹۴ — پیشرفتِ فازِ AI هم دیده شود
 ): Promise<AgencyRoster> {
   // توکنِ برندِ دیوار حساس به بزرگ/کوچکیِ حروف است — هرگز lowercase نکن.
@@ -218,17 +218,28 @@ export async function buildAgencyRoster(
   // (heuristic + نام‌های آموخته‌شده کار را ادامه می‌دهند) + سقفِ ۸ دقیقه برای کلِ فاز.
   let aiMap: Record<number, string> = {}
   if (opts.useAI !== false) {
-    const chunksTotal = Math.ceil(rows.length / 12)
+    // فاز ۱۹۶ (فیدبک: «شناساییِ AI را دوبار انجام داده، خواندنِ فهرست را ۴ بار») — نامِ AI هم مثلِ متن
+    // در کشِ ازسرگیری می‌ماند؛ پاسِ بعدی فقط ردیف‌های نپرسیده را می‌پرسد، نه ۴۵ فراخوانِ تکراری.
+    const pending: { idx: number; row: (typeof rows)[number] }[] = []
+    rows.forEach((r, idx) => {
+      const cachedName = opts.cached?.[r.post.token]?.name
+      if (cachedName !== undefined) aiMap[idx] = cachedName
+      else pending.push({ idx, row: r })
+    })
+    const chunksTotal = Math.ceil(pending.length / 12)
     const aiDeadline = Date.now() + 8 * 60_000
     let emptyStreak = 0, chunkNo = 0
-    for (let i = 0; i < rows.length; i += 12) {
+    for (let i = 0; i < pending.length; i += 12) {
       chunkNo++
       if (Date.now() > aiDeadline) { console.log('[roster] AI phase budget hit — continuing without AI'); break }
-      const chunk = rows.slice(i, i + 12).map((r, k) => ({ i: i + k, title: r.title, desc: r.desc }))
+      const slice = pending.slice(i, i + 12)
+      const chunk = slice.map(p2 => ({ i: p2.idx, title: p2.row.title, desc: p2.row.desc }))
       try {
         const got = (await aiCanonical(chunk)).map
         Object.assign(aiMap, got)
         emptyStreak = Object.keys(got).length === 0 ? emptyStreak + 1 : 0
+        // چک‌پوینتِ نام‌ها: پرسیده‌شده = ذخیره (نبودِ نام هم با '' ذخیره می‌شود تا دوباره پرسیده نشود)
+        for (const p2 of slice) { try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '' }) } catch {} }
       } catch { emptyStreak++ }
       try { opts.onCluster?.(chunkNo, chunksTotal) } catch {}
       if (emptyStreak >= 3) { console.log('[roster] AI returned nothing 3 chunks in a row — skipping rest (heuristic continues)'); break }

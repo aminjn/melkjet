@@ -227,6 +227,12 @@ async function queueTick(): Promise<void> {
       enrichSweeping = true
       ;(async () => {
         try {
+          // فاز ۱۹۵ — وقتی سینکِ رُستر در حال اجراست جارو صبر می‌کند: هر دو از همان پروکسیِ دیوار
+          // می‌گذرند و ۲۰ گرم‌سازی در هر تیک، ایمپورتِ رُستر را پشتِ صفِ پروکسی یخ می‌زد («روی ۱۲۶ گیر کرد»)
+          try {
+            const { listScrapes } = await import('./agency-roster-store')
+            if ((await listScrapes()).some(sc => sc.running)) { console.log('[enrich] sweep paused — roster sync in progress'); return }
+          } catch {}
           const { listItems } = await import('./scraper-store')
           const { isEnriched, warmMany } = await import('./enrich-warm')
           const pub = await listItems('listing', { publicOnly: true })
