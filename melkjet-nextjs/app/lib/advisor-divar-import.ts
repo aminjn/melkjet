@@ -32,7 +32,7 @@ async function addAreaToProfile(o: string, neighborhood: string) {
 
 /** یک آگهیِ دیوار را (با توکن یا لینک) به‌عنوان فایلِ مشاور وارد می‌کند.
  *  hint: عنوان/تصویرِ واقعیِ آگهی از فهرستِ پروفایل (چون API تک‌آگهی گاهی عنوانِ دسته را می‌دهد). */
-export async function importDivarToken(o: string, input: string, hint?: BrandPost, sourceId?: string, opts?: { publish?: boolean; skipFreshMs?: number }): Promise<ImportResult> {
+export async function importDivarToken(o: string, input: string, hint?: BrandPost, sourceId?: string, opts?: { publish?: boolean; skipFreshMs?: number; fetchPost?: typeof fetchDivarPost }): Promise<ImportResult> {
   const token = divarToken(input)
   if (!token) return { ok: false, reason: 'لینک یا توکنِ دیوار معتبر نیست' }
   // اگر قبلاً وارد شده، به‌جای رد کردن، با دادهٔ تازهٔ دیوار به‌روزرسانی می‌شود.
@@ -48,7 +48,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   // فاز ۱۷۶ (پورت از خودروجت): انتشار قابلِ‌override — رُستر آگهیِ مالکِ موقت را عمومی نمی‌کند تا کاربر ساخته شود (graduate)
   const doPublish = opts?.publish !== undefined ? opts.publish : cfg.autoPublish
   let post
-  try { post = await fetchDivarPost(token) } catch (e: any) { return { ok: false, reason: e?.message || 'اتصال به دیوار ناموفق بود', token } }
+  try { post = await (opts?.fetchPost || fetchDivarPost)(token) } catch (e: any) { return { ok: false, reason: e?.message || 'اتصال به دیوار ناموفق بود', token } }
   if (post.reason && !post.images.length && !post.title && !hint?.title) {
     return { ok: false, reason: `آگهی از دیوار خوانده نشد (${post.reason})`, token }
   }
@@ -99,7 +99,9 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
     if (updated.status !== 'active') await setListingStatus(o, existing.listingId, 'active')
     let published = updated.published || false
     if (doPublish) { const pub = await publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // بازانتشار + پیش‌گرمِ تحلیل (ممیزی دسته‌ای توسطِ کرون)
-    recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: existing.at, published, sourceId: sourceId || existing.sourceId })
+    // فاز ۱۹۶ — at «تازه» می‌شود: قبلاً existing.at می‌ماند و skipFreshMs هرگز فعال نمی‌شد → هر پاسِ رُستر همهٔ
+    // توکن‌ها را دوباره از دیوار می‌گرفت و بودجه همیشه می‌بُرید (لوپِ دوروزه). at = زمانِ آخرین همگام‌سازی.
+    recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId: sourceId || existing.sourceId })
     return { ok: true, updated: true, listing: updated, token }
   }
 

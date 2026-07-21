@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule } from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule } from '@/app/lib/agency-roster-store'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { logAudit } from '@/app/lib/audit-store'
 
@@ -43,6 +43,11 @@ export async function POST(req: NextRequest) {
     if (!b.id) return NextResponse.json({ error: 'id لازم است' }, { status: 400 })
     const ok = await requestRun(String(b.id))
     return NextResponse.json({ ok, queued: ok, note: ok ? 'در صفِ همگام‌سازیِ اینستنسِ ۰ قرار گرفت' : 'اسکرپ یافت نشد' })
+  }
+  // فاز ۱۹۶ — «⏹ توقفِ همگام‌سازی»: state فوراً بسته می‌شود؛ رانِ زنده در اولین چک می‌ایستد
+  if (action === 'stop') {
+    const ok = await requestStop(String(b.id))
+    return NextResponse.json(ok ? { ok: true } : { ok: false, error: 'اسکرپ یافت نشد' })
   }
   if (action === 'remove') {
     if (!b.id) return NextResponse.json({ error: 'id لازم است' }, { status: 400 })

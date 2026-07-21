@@ -1887,6 +1887,7 @@ function AgencyRosterPanel() {
   const post = (body: any) => fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json())
   const add = async () => { if (!slug.trim()) return; setBusy(true); setMsg(''); try { const j = await post({ action: 'add', slug: slug.trim(), agencyName: name.trim() }); if (j.ok) { setSlug(''); setName(''); setMsg('✅ افزوده شد — «همگام‌سازی الان» را بزن'); load() } else setMsg('❌ ' + (j.error || 'خطا')) } finally { setBusy(false) } }
   const sync = async (id: string) => { await post({ action: 'sync', id }); setMsg('⏳ در صفِ اینستنسِ ۰ — چند دقیقه بعد رفرش می‌شود'); load() }
+  const stopSync = async (id: string) => { await post({ action: 'stop', id }); setMsg('⏹ متوقف شد — دیگر صف نمی‌شود'); load() }   // فاز ۱۹۶
   const saveSettings = async (patch: Partial<typeof settings>) => {
     const next = { ...settings, ...patch }; setSettings(next)
     const j = await post({ action: 'settings', ...next })
@@ -1964,6 +1965,7 @@ function AgencyRosterPanel() {
                 {s.lastTotal != null ? `${fa(s.lastTotal)} آگهی · ${fa(s.advisors?.length || 0)} مشاور · ${fa(s.lastUnnamed || 0)} بی‌نام` : 'هنوز همگام نشده'}
               </span>
               <GoldButton disabled={s.running} onClick={() => sync(s.id)}>{s.running ? '…' : '🔄 همگام‌سازی الان'}</GoldButton>
+              {(s.running || s.runRequested) && <button onClick={() => stopSync(s.id)} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #f05252', background: 'rgba(240,82,82,.08)', color: '#f05252', fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>⏹ توقف</button>}
               <button onClick={() => setOpen(open === s.id ? '' : s.id)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 10px', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>{open === s.id ? 'بستن' : `مشاورها (${fa(s.advisors?.length || 0)})`}</button>
               <button onClick={() => remove(s.id)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 9px', color: '#e06666', fontSize: 12, cursor: 'pointer' }}>حذف</button>
             </div>

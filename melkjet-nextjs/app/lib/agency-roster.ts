@@ -181,14 +181,16 @@ export async function buildAgencyRoster(
   opts: { useAI?: boolean; maxDetails?: number; onProgress?: (done: number, total: number) => void;
     cached?: Record<string, { title: string; desc: string; name?: string }>;   // توکن→متن + نامِ AI (ازسرگیری)
     onRow?: (token: string, r: { title: string; desc: string; name?: string }) => void;
-    onCluster?: (done: number, total: number) => void } = {},   // فاز ۱۹۴ — پیشرفتِ فازِ AI هم دیده شود
+    onCluster?: (done: number, total: number) => void;   // فاز ۱۹۴ — پیشرفتِ فازِ AI هم دیده شود
+    f?: { profileTokens?: typeof fetchDivarProfileTokens; post?: typeof fetchDivarPost; ai?: typeof aiCanonical };   // فاز ۱۹۶ — تزریق برای تستِ کاملِ چرخه
+    shouldStop?: () => Promise<boolean> } = {},   // فاز ۱۹۶ — دکمهٔ توقف
 ): Promise<AgencyRoster> {
   // توکنِ برندِ دیوار حساس به بزرگ/کوچکیِ حروف است — هرگز lowercase نکن.
   const slug = (divarProfileSlug(slugOrUrl) || String(slugOrUrl || '').trim())
   const base: AgencyRoster = { ok: false, slug, total: 0, scanned: 0, advisors: [], unnamed: { tokens: [], posts: [] } }
   if (!slug || !/^[A-Za-z0-9_-]{2,}$/.test(slug)) return { ...base, error: 'slug/لینکِ برند نامعتبر است' }
 
-  const { posts, name, reason } = await fetchDivarProfileTokens(slug)
+  const { posts, name, reason } = await (opts.f?.profileTokens || fetchDivarProfileTokens)(slug)
   if (!posts.length) return { ...base, agencyName: name, error: reason === 'unreachable' ? 'به دیوار نرسید (پروکسی؟)' : 'آگهی‌ای یافت نشد' }
 
   // همهٔ آگهی‌ها پردازش می‌شوند (سقفِ ایمنی ۳۰۰۰). هر آگهی جزئیات + throttle دارد، پس سینکِ بزرگ
@@ -197,6 +199,7 @@ export async function buildAgencyRoster(
   // برای هر آگهی: عنوان + توضیحات را می‌گیریم و کاندیدای امضا را می‌سازیم.
   const rows: { post: BrandPost; title: string; desc: string; cand: string[] }[] = []
   for (let i = 0; i < maxDetails; i++) {
+    if (i % 5 === 0 && opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
     const p = posts[i]
     let title = p.title || '', desc = ''
     // ازسرگیری فقط اگر متنِ کامل کش شده باشد. کشِ desc-خالی (از دورهٔ پروکسیِ مرده) دوباره گرفته
@@ -204,7 +207,7 @@ export async function buildAgencyRoster(
     const hit = opts.cached?.[p.token]
     if (hit && hit.desc) { title = (hit.title || title || '').trim(); desc = hit.desc.trim() }
     else {
-      try { const d = await fetchDivarPost(p.token); title = (d.title || title || '').trim(); desc = (d.description || '').trim() } catch {}
+      try { const d = await (opts.f?.post || fetchDivarPost)(p.token); title = (d.title || title || '').trim(); desc = (d.description || '').trim() } catch {}
       try { opts.onRow?.(p.token, { title, desc }) } catch {}   // چک‌پوینت برای ازسرگیری
       await sleep(600)   // نرخِ کندتر تا دیوار زیرِ فشار آگهی‌ها را رد نکند (fetchDivarPost خودش retry هم دارد)
     }
@@ -232,10 +235,11 @@ export async function buildAgencyRoster(
     for (let i = 0; i < pending.length; i += 12) {
       chunkNo++
       if (Date.now() > aiDeadline) { console.log('[roster] AI phase budget hit — continuing without AI'); break }
+      if (opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
       const slice = pending.slice(i, i + 12)
       const chunk = slice.map(p2 => ({ i: p2.idx, title: p2.row.title, desc: p2.row.desc }))
       try {
-        const got = (await aiCanonical(chunk)).map
+        const got = (await (opts.f?.ai || aiCanonical)(chunk)).map
         Object.assign(aiMap, got)
         emptyStreak = Object.keys(got).length === 0 ? emptyStreak + 1 : 0
         // چک‌پوینتِ نام‌ها: پرسیده‌شده = ذخیره (نبودِ نام هم با '' ذخیره می‌شود تا دوباره پرسیده نشود)

@@ -52,6 +52,7 @@ export interface RosterScrape {
   lastProgressAt?: number  // آخرین باری که پیشرفت نوشته شد — مبنای تشخیصِ «مرده» (نه زمانِ شروع)
   runAttempts?: number     // فاز ۱۹۲ — شمارِ تلاش‌های ناتمام از آخرین موفقیت (توقفِ حلقهٔ بی‌پایان)
   phase?: 'scrape' | 'cluster' | 'import'   // فاز ۱۹۳/۱۹۴ — کدام مرحله؟ (اسکرپ/شناساییِ نام‌ها/ایمپورت)
+  stopRequested?: boolean  // فاز ۱۹۶ — دکمهٔ «⏹ توقف»: رانِ زنده در اولین چکِ بعدی تمیز می‌ایستد
   progress?: { done: number; total: number }
   runRequested?: boolean   // «همگام‌سازی الان» — کرونِ اینستنسِ ۰ برمی‌دارد
 }
@@ -136,6 +137,16 @@ export async function requestRun(id: string): Promise<boolean> {
   if (ok && !hadError) { try { await clearRowCache(id) } catch {} }
   return ok
 }
+// فاز ۱۹۶ — «⏹ توقفِ همگام‌سازی» (درخواستِ کاربر بعدِ لوپِ دوروزه): state همان لحظه بسته می‌شود و
+// اگر پروسه‌ای زنده وسطِ کار باشد، در اولین چکِ بعدی (حداکثر چند ثانیه) تمیز می‌ایستد و دیگر صف نمی‌شود.
+export async function requestStop(id: string): Promise<boolean> {
+  return mutate(db => {
+    const s = db.scrapes[id]; if (!s) return false
+    s.stopRequested = true; s.runRequested = false; s.running = false; s.runAttempts = 0
+    s.lastError = 'با دکمهٔ توقف متوقف شد'
+    return true
+  })
+}
 const PERIOD: Record<RosterScrape['schedule'], number> = { off: 0, '6h': 6 * 3600_000, daily: 24 * 3600_000 }
 
 // ── تنظیماتِ سراسریِ زمان‌بندی ──
@@ -207,16 +218,17 @@ export async function patchScrape(id: string, patch: Partial<RosterScrape>): Pro
 // رفعِ باگِ «تکراری + فروخته‌شده»: «رفته» بر اساسِ listingIdِ لمس‌شده در همین دور محاسبه می‌شود،
 // نه توکن. پس آگهیِ بازنشرشده (توکنِ جدید) که موتورِ شباهت روی همان فایل می‌نشاندش، «رفته» حساب
 // نمی‌شود و اشتباهاً «فروخته» نمی‌خورد؛ و چون dedupِ محتوایی نسخهٔ دوم نمی‌سازد، تکراری هم رخ نمی‌دهد.
-async function importClusterTokens(owner: string, tokens: string[], sourceId: string, opts193?: { deadline?: number; onEach?: () => void }): Promise<{ live: number; sold: number; aborted?: boolean }> {
+async function importClusterTokens(owner: string, tokens: string[], sourceId: string, opts193?: { deadline?: number; onEach?: () => void; fetchPost?: any; shouldStop?: () => Promise<boolean> }): Promise<{ live: number; sold: number; aborted?: boolean; stopped?: boolean }> {
   const liveIds = new Set<string>()
   for (const token of tokens) {
     // فاز ۱۹۳ — بودجهٔ زمانیِ ران: از سقف گذشت → توقفِ تمیز؛ «رفته/فروخته» حساب نمی‌کنیم (دادهٔ ناقص) و ادامه خودکار است
     if (opts193?.deadline && Date.now() > opts193.deadline) return { live: liveIds.size, sold: 0, aborted: true }
+    if (opts193?.shouldStop && await opts193.shouldStop()) return { live: liveIds.size, sold: 0, aborted: true, stopped: true }
     try {
       // مالکِ موقتِ رُستر: آگهی وارد می‌شود ولی عمومی نمی‌شود تا کاربر ساخته شود (graduate).
       // واردهٔ تازهٔ زیرِ ۲۰ ساعت دوباره از دیوار گرفته نمی‌شود (سرعتِ ازسرگیری/رانِ دوم).
       const res = await Promise.race([
-        importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: 20 * 3600_000 }),
+        importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: 20 * 3600_000, fetchPost: opts193?.fetchPost }),
         new Promise<{ ok: false; reason: string }>(r => setTimeout(() => r({ ok: false, reason: 'timeout 2min — رد شد' }), 120_000)),   // فاز ۱۹۵: هیچ توکنی حلقه را نگه نمی‌دارد
       ])
       if (res.ok && 'listing' in res && res.listing) { liveIds.add(res.listing.id); if (!('skipped' in res && res.skipped)) await sleep(300) }
@@ -239,7 +251,7 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
 }
 
 // ── سینکِ کاملِ یک اسکرپِ آژانس: خوشه‌بندی + ایمپورتِ هر خوشه زیرِ ownerِ درست ──
-export async function syncRoster(id: string, onProgress?: (done: number, total: number) => void): Promise<{ ok: boolean; error?: string; advisors: number; total: number; unnamed: number }> {
+export async function syncRoster(id: string, onProgress?: (done: number, total: number) => void, opts196?: { budgetMs?: number; f?: { profileTokens?: any; post?: any; ai?: any }; fetchPost?: any }): Promise<{ ok: boolean; error?: string; advisors: number; total: number; unnamed: number }> {
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد', advisors: 0, total: 0, unnamed: 0 }
   // فاز ۱۹۲ (فیدبک: «ده بار زدم، هر بار نیمه‌کاره ماند») — runRequested دیگر در «شروع» پاک نمی‌شود؛
@@ -255,6 +267,13 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
   let done = false
   // ضربانِ زنده‌بودن: هر ۵ ثانیه lastProgressAt را می‌زند. اگر پروسه reload/کیل شود، این تایمر هم می‌میرد
   // و lastProgressAt یخ می‌زند → بعد از STALE_MS درست «مرده» تشخیص داده می‌شود (حتی وسطِ فازِ AI/ایمپورت).
+  // فاز ۱۹۶ — چکِ توقفِ throttled (هر ~۴ ثانیه یک خواندنِ store)
+  let lastStopCheck = 0, stopFlag = false
+  const shouldStop = async () => {
+    const now = Date.now()
+    if (now - lastStopCheck > 4000) { lastStopCheck = now; stopFlag = (await getScrape(id))?.stopRequested === true }
+    return stopFlag
+  }
   const heartbeat = setInterval(() => { patchScrape(id, { lastProgressAt: Date.now() }).catch(() => {}) }, 5000)
   try {
     // پیشرفتِ زنده (throttleشده تا هر ۳ ثانیه یک نوشت) + heartbeatِ lastProgressAt تا سینکِ زنده «مرده» علامت نخورد.
@@ -275,8 +294,11 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     }
     // فاز ۱۹۴ — فازِ شناساییِ نام‌ها (AI) هم پیشرفتِ دیدنی دارد
     const onCluster = (d: number, t: number) => { patchScrape(id, { phase: 'cluster', progress: { done: d, total: t }, lastProgressAt: Date.now() }).catch(() => {}) }
-    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow, onCluster })
-    if (!roster.ok) { done = true; await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: roster.error || 'خطا در خوشه‌بندی' }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
+    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow, onCluster, f: opts196?.f, shouldStop })
+    // فاز ۱۹۶ — flushِ نهاییِ کشِ ازسرگیری: ذخیرهٔ throttled (هر ۵ث) دُمِ کش (و نام‌های AI) را جا می‌گذاشت
+    // → پاسِ بعد دوباره از دیوار می‌خواند و AI را دوباره می‌پرسید. (خودِ تستِ شبیه‌سازی این را گرفت.)
+    await saveRowCache(id, rowCache).catch(() => {})
+    if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
     const freshByKey = new Map(roster.advisors.map(a => [a.key, a]))
@@ -308,23 +330,29 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       if (done193 === totalTokens193 || now - lastImpWrite > 3000) { lastImpWrite = now; patchScrape(id, { phase: 'import', progress: { done: done193, total: totalTokens193 }, lastProgressAt: now }).catch(() => {}) }
     }
     await patchScrape(id, { phase: 'import', progress: { done: 0, total: totalTokens193 } })
-    const deadline193 = Date.now() + 45 * 60_000   // بودجهٔ زمانیِ هر ران؛ ادامه در رانِ بعد (خودکار، فاز ۱۹۲)
+    const deadline193 = Date.now() + (opts196?.budgetMs ?? 45 * 60_000)   // بودجهٔ زمانیِ هر ران؛ ادامه در رانِ بعد (خودکار، فاز ۱۹۲)
     let budgetHit = false
     for (const j of jobs) {
-      const r = await importClusterTokens(j.owner, j.tokens, scrape.id, { deadline: deadline193, onEach: impTick })
+      const r = await importClusterTokens(j.owner, j.tokens, scrape.id, { deadline: deadline193, onEach: impTick, fetchPost: opts196?.fetchPost, shouldStop })
       if (j.rec) j.rec.listingCount = r.live
       if (r.aborted) { budgetHit = true; break }
     }
     if (budgetHit) {
       done = true
-      await mutate(db => { const s2 = db.scrapes[id]; if (!s2) return; s2.advisors = recs; s2.running = false; s2.lastError = 'بودجهٔ زمانیِ این ران تمام شد — ادامه خودکار در چند لحظهٔ دیگر' })
-      return { ok: false, error: 'بودجهٔ زمانی — ادامه خودکار', advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
+      const wasStopped = stopFlag || (await getScrape(id))?.stopRequested === true
+      await mutate(db => {
+        const s2 = db.scrapes[id]; if (!s2) return
+        s2.advisors = recs; s2.running = false
+        if (wasStopped) { s2.runRequested = false; s2.stopRequested = false; s2.runAttempts = 0; s2.lastError = 'با دکمهٔ توقف متوقف شد' }
+        else s2.lastError = 'بودجهٔ زمانیِ این ران تمام شد — ادامه خودکار در چند لحظهٔ دیگر'
+      })
+      return { ok: false, error: wasStopped ? 'متوقف شد' : 'بودجهٔ زمانی — ادامه خودکار', advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
     }
 
     await mutate(db => {
       const s = db.scrapes[id]; if (!s) return
       s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
-      s.running = false; s.runRequested = false; s.runAttempts = 0; s.lastRun = Date.now(); s.lastError = ''
+      s.running = false; s.runRequested = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastError = ''
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
     })
