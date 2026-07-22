@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
     const cfg = getConfig()
     if (!cfg.user || !cfg.pass) return NextResponse.json({ error: 'یوزر/پسوردِ پرشین سازه را اول ذخیره کن' }, { status: 400 })
     if (isRunning()) return NextResponse.json({ error: 'اسکرپ در حال اجراست' }, { status: 409 })
+    if (isRevealing()) return NextResponse.json({ error: 'گرفتنِ شماره‌ها در حال اجراست — بعدِ اتمام دوباره بزن (دو Chrome هم‌زمان سشن را می‌سوزانند)' }, { status: 409 })
     startJob('persiansaze-scrape.mjs', LOG_FILE, LOCK_FILE)
     saveConfig({ lastScrapeAt: new Date().toISOString(), lastError: '' })
     return NextResponse.json({ ok: true, message: 'اسکرپ شروع شد (در پس‌زمینه).' })
@@ -95,6 +96,9 @@ export async function POST(req: NextRequest) {
     const cfg = getConfig()
     if (!cfg.user || !cfg.pass) return NextResponse.json({ error: 'یوزر/پسوردِ پرشین سازه را اول ذخیره کن' }, { status: 400 })
     if (isRevealing()) return NextResponse.json({ error: 'گرفتنِ شماره در حال اجراست' }, { status: 409 })
+    // فاز ۲۰۰ب — قفلِ متقابل (فیدبک: «زدم هیچی نگرفت»): وسطِ اسکرپِ فهرست، لاگینِ کرومِ دوم سشنِ اولی را
+    // می‌سوزاند و رِویل بی‌نتیجه می‌ماند. هر دو مسیرِ اسکرپ (دکمه + کرونِ هفتگی) چک می‌شوند.
+    if (isRunning() || pidAlive(path.join(process.cwd(), '.persiansaze-scrape.lock'))) return NextResponse.json({ error: 'اسکرپِ فهرستِ پروژه‌ها در حال اجراست — چند دقیقه صبر کن و بعدِ اتمامش دوباره بزن' }, { status: 409 })
     const extra: Record<string, string> = {}
     if (b.max) extra.PS_MAX_REVEALS = String(Math.max(1, Math.min(500, Number(b.max) || 0)))
     startJob('persiansaze-reveal.mjs', REVEAL_LOG, REVEAL_LOCK, extra)
