@@ -27,7 +27,7 @@ export interface RosterAdvisor {
   graduating?: boolean   // در صفِ «ساختِ حساب» روی اینستنسِ ۰
 }
 // کارِ صفِ «ساختِ حساب» — سنگین (انتقالِ فایل‌ها)، روی اینستنسِ ۰ اجرا می‌شود تا درخواستِ ادمین قفل نشود.
-export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; error?: string }
+export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; error?: string }   // فاز ۱۹۹ — claim برای صفِ at-least-once
 export interface RosterScrape {
   id: string
   slug: string
@@ -105,8 +105,12 @@ const isStale = (s: RosterScrape, now = Date.now()) => !!s.running && (now - (s.
 
 export async function listScrapes(): Promise<RosterScrape[]> {
   const now = Date.now()
-  return Object.values((await load()).scrapes)
+  const db = await load()
+  const q = db.graduateQueue || []
+  return Object.values(db.scrapes)
     .map(s => isStale(s, now) ? { ...s, running: false, lastError: s.lastError || 'همگام‌سازی نیمه‌کاره ماند — خودکار از همان‌جا ادامه می‌یابد' } : s)
+    // فاز ۱۹۹ — پرچمِ یتیمِ «در حال ساخت»: اگر کاری در صف نیست، پرچم در نمایش خاموش می‌شود (خودترمیم)
+    .map(s => ({ ...s, advisors: (s.advisors || []).map(a => a.graduating && !q.some(j => j.id === s.id && j.key === a.key) ? { ...a, graduating: false } : a) }))
     .sort((a, b) => b.createdAt - a.createdAt)
 }
 export async function getScrape(id: string): Promise<RosterScrape | null> { return (await load()).scrapes[id] || null }
@@ -530,11 +534,16 @@ export async function enqueueGraduate(id: string, key: string, phone: string, ro
 
 // اینستنسِ ۰: یک کارِ صفِ graduate را بردار و اجرا کن (خارج از قفلِ mutate اجرا می‌شود).
 export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boolean; error?: string }> {
+  // فاز ۱۹۹ (فیدبک: «"در حال ساخت حساب" برای همیشه می‌ماند ولی حساب ساخته شده») — ریشه: کار «قبل از انجام»
+  // از صف برداشته می‌شد؛ کیلِ وسطِ کار (دیپلوی/reload) = کارِ گم‌شده و پرچمِ ابدی. حالا at-least-once:
+  // کار claim می‌شود (startedAt) و فقط بعدِ اتمام حذف؛ claimِ رهاشده (>۱۰د) دوباره برداشته می‌شود —
+  // graduateAdvisor هم ایدمپوتنت است (حسابِ موجود دوباره ساخته نمی‌شود، فایل‌های باقی‌مانده منتقل می‌شوند).
   const job = await mutate(db => {
     const q = db.graduateQueue || []
-    const j = q.shift()
-    db.graduateQueue = q
-    return j || null
+    const now = Date.now()
+    const j = q.find(x => !x.startedAt || now - x.startedAt > 10 * 60_000)
+    if (j) j.startedAt = now
+    return j ? { ...j } : null
   })
   if (!job) return { ran: false }
   try {
@@ -542,14 +551,24 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
     const t0 = Date.now()
     const r = await graduateAdvisor(job.id, job.key, job.phone, job.role)
     console.log(`[roster] graduate job end ok=${r.ok} moved=${r.moved ?? 0} ms=${Date.now() - t0}${r.error ? ' err=' + r.error : ''}`)
+    await mutate(db => { db.graduateQueue = (db.graduateQueue || []).filter(x => x.jid !== job.jid) })   // فاز ۱۹۹: حذف فقط بعدِ اتمام
     if (!r.ok) {
       // رکوردِ مشاور را از حالتِ «در حالِ ساخت» درآور و خطا را ثبت کن.
       await mutate(db => { const s = db.scrapes[job.id]; if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) { rec.graduating = false } s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` } })
     }
     return { ran: true, ok: r.ok, error: r.error }
   } catch (e: any) {
-    await mutate(db => { const s = db.scrapes[job.id]; if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; s.lastError = `ساختِ حساب ناموفق: ${e?.message || 'خطا'}` } })
-    return { ran: true, ok: false, error: e?.message || 'خطا' }
+    // فاز ۱۹۹: خطای گذرا (شبکه/PG) → کار در صف می‌ماند (claim بعدِ ۱۰د آزاد و دوباره تلاش)؛ خطای قطعی → حذف + پیام
+    const msg = String(e?.message || e || 'خطا')
+    const transient = /timeout|connect|ECONN|pool|terminat|socket/i.test(msg)
+    console.error(`[roster] graduate job ${transient ? 'transient-fail (retry later)' : 'FAILED'}: ${msg.slice(0, 150)}`)
+    if (!transient) {
+      await mutate(db => {
+        db.graduateQueue = (db.graduateQueue || []).filter(x => x.jid !== job.jid)
+        const s = db.scrapes[job.id]; if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; s.lastError = `ساختِ حساب ناموفق: ${msg}` }
+      })
+    }
+    return { ran: true, ok: false, error: msg }
   }
 }
 export async function hasGraduateJobs(): Promise<boolean> { return ((await load()).graduateQueue || []).length > 0 }
