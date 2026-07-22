@@ -77,7 +77,7 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> { if (pgEnabled()) retur
 // ── چک‌پوینتِ ازسرگیری: متنِ آگهی‌های اسکرپ‌شده (توکن→{title,desc}) در یک کلیدِ جدا، برای هر اسکرپ ──
 // اگر سینک نیمه‌کاره بماند (reload/کیل)، رانِ بعدی آگهی‌های کش‌شده را دوباره از دیوار نمی‌گیرد و ادامه می‌دهد.
 // در پایانِ موفق پاک می‌شود تا سینکِ روزانه‌ی بعدی دادهٔ تازه بگیرد.
-type RowCache = Record<string, { title: string; desc: string; name?: string }>   // name = نامِ AI (کش — فاز ۱۹۶؛ '' یعنی پرسیده و نداشت)
+type RowCache = Record<string, { title: string; desc: string; name?: string; at?: number }>   // name = نامِ AI؛ at = زمانِ اسکرپِ ردیف (فاز ۱۹۸ — کشِ دائمیِ اینکرمنتال)
 const CACHE_KV = 'agency_roster_cache'
 const CACHE_FILE = join(process.cwd(), '.agency-roster-cache.json')
 function cacheFileLoad(): Record<string, RowCache> { if (existsSync(CACHE_FILE)) { try { return JSON.parse(readFileSync(CACHE_FILE, 'utf-8')) } catch {} } return {} }
@@ -132,9 +132,8 @@ export async function removeScrape(id: string): Promise<void> { await mutate(db 
 export async function requestRun(id: string): Promise<boolean> {
   let hadError = false
   const ok = await mutate(db => { const s = db.scrapes[id]; if (!s) return false; hadError = !!s.lastError; s.runRequested = true; s.stopRequested = false; s.runAttempts = 0; s.lastError = ''; if (isStale(s)) s.running = false; return true })   // فاز ۱۹۶ب: کلیکِ دستی = شروعِ تمیز
-  // فاز ۱۹۶: کشِ ازسرگیری فقط وقتی پاک می‌شود که رانِ قبلی «موفق» بوده (دادهٔ تازه بخواهیم)؛
-  // بعدِ رانِ ناتمام، کلیکِ دستی یعنی «ادامه بده» — نه «همه را از نو».
-  if (ok && !hadError) { try { await clearRowCache(id) } catch {} }
+  // فاز ۱۹۸ — کش دائمی است (اینکرمنتال)؛ کلیکِ دستی هرگز کش را دور نمی‌ریزد. تازگی با چرخشِ ۱۴روزه تأمین می‌شود.
+  void hadError
   return ok
 }
 // فاز ۱۹۶ — «⏹ توقفِ همگام‌سازی» (درخواستِ کاربر بعدِ لوپِ دوروزه): state همان لحظه بسته می‌شود و
@@ -257,6 +256,7 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
     } catch (e) { console.log(`[roster] token=${token} threw: ${String((e as Error)?.message || e).slice(0, 80)}`); await sleep(2_000) }
     try { opts193?.onEach?.() } catch {}
   }
+  console.log(`[roster] finalize cluster owner=${owner}: live=${liveIds.size}`)
   // فایل‌هایی که این منبع قبلاً آورده بود ولی امسال لمس نشدند = فروخته/اجاره‌رفته.
   const priorIds = new Set(getDivar(owner).imports.filter(i => i.sourceId === sourceId).map(i => i.listingId))
   const goneIds = [...priorIds].filter(id => !liveIds.has(id))
@@ -303,26 +303,37 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     }
     return stopFlag
   }
-  const heartbeat = setInterval(() => { patchScrape(id, { lastProgressAt: Date.now() }).catch(() => {}) }, 5000)
+  // فاز ۱۹۸ — ضربان دیگر «کور» نیست: فقط تا وقتی کارِ واقعی (ردیف/تکه/توکن) در ۳ دقیقهٔ اخیر جلو رفته می‌زند.
+  // قبلاً تایمر حتی وقتی حلقه واقعاً مرده بود هم می‌زد → تشخیصِ stale هرگز فعال نمی‌شد (زامبیِ ۸ساعتهٔ ۵۲۳/۵۲۳).
+  let lastWorkAt = Date.now()
+  const workTick = () => { lastWorkAt = Date.now() }
+  const heartbeat = setInterval(() => { if (Date.now() - lastWorkAt < 3 * 60_000) patchScrape(id, { lastProgressAt: Date.now() }).catch(() => {}) }, 5000)
   try {
     // پیشرفتِ زنده (throttleشده تا هر ۳ ثانیه یک نوشت) + heartbeatِ lastProgressAt تا سینکِ زنده «مرده» علامت نخورد.
     let lastWrite = 0
     const prog = (d: number, t: number) => {
+      workTick()
       try { onProgress?.(d, t) } catch {}
       const now = Date.now()
       if (d === t || now - lastWrite > 3000) { lastWrite = now; patchScrape(id, { progress: { done: d, total: t }, lastProgressAt: now }).catch(() => {}) }
     }
     // ازسرگیری: کشِ آگهی‌های قبلاً اسکرپ‌شده را بارگذاری کن؛ آگهی‌های تازه را افزوده و throttleشده ذخیره کن.
     const rowCache: RowCache = await loadRowCache(id)
+    // فاز ۱۹۸ (مقیاسِ ۱۰۰۰ آژانس) — کش «دائمی» است: سینکِ روزانه فقط توکن‌های جدید را از دیوار می‌گیرد.
+    // تازه‌سازیِ چرخشی: در هر ران حداکثر ۳۰ ردیفِ کهنه‌تر از ۱۴ روز حذف می‌شوند تا دوباره گرفته شوند.
+    const REFRESH_AGE = 14 * 864e5
+    const staleRows = Object.entries(rowCache).filter(([, v]) => !v.at || Date.now() - (v.at || 0) > REFRESH_AGE).slice(0, 30)
+    for (const [k] of staleRows) delete rowCache[k]
+    if (staleRows.length) console.log(`[roster] incremental: refreshing ${staleRows.length} stale rows`)
     let lastCacheWrite = 0
     const onRow = (token: string, r: { title: string; desc: string; name?: string }) => {
       if (!r.desc) return   // متنِ خالی را کش نکن تا دفعهٔ بعد دوباره گرفته شود (خودترمیمی)
-      rowCache[token] = { ...rowCache[token], ...r }   // فاز ۱۹۶: نامِ AI هم روی همان رکورد می‌نشیند
+      rowCache[token] = { ...rowCache[token], ...r, at: rowCache[token]?.at && !('title' in r && r.title) ? rowCache[token].at : Date.now() }   // فاز ۱۹۶/۱۹۸: نامِ AI روی همان رکورد + مهرِ زمان
       const now = Date.now()
       if (now - lastCacheWrite > 5000) { lastCacheWrite = now; saveRowCache(id, rowCache).catch(() => {}) }
     }
     // فاز ۱۹۴ — فازِ شناساییِ نام‌ها (AI) هم پیشرفتِ دیدنی دارد
-    const onCluster = (d: number, t: number) => { patchScrape(id, { phase: 'cluster', progress: { done: d, total: t }, lastProgressAt: Date.now() }).catch(() => {}) }
+    const onCluster = (d: number, t: number) => { workTick(); patchScrape(id, { phase: 'cluster', progress: { done: d, total: t }, lastProgressAt: Date.now() }).catch(() => {}) }
     const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow, onCluster, f: opts196?.f, shouldStop })
     // فاز ۱۹۶ — flushِ نهاییِ کشِ ازسرگیری: ذخیرهٔ throttled (هر ۵ث) دُمِ کش (و نام‌های AI) را جا می‌گذاشت
     // → پاسِ بعد دوباره از دیوار می‌خواند و AI را دوباره می‌پرسید. (خودِ تستِ شبیه‌سازی این را گرفت.)
@@ -358,6 +369,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     const totalTokens193 = jobs.reduce((a, j) => a + j.tokens.length, 0)
     let done193 = 0, lastImpWrite = 0
     const impTick = () => {
+      workTick()
       done193++
       if (done193 % 20 === 0 || done193 === totalTokens193) console.log(`[roster] import ${done193}/${totalTokens193}`)
       const now = Date.now()
@@ -392,7 +404,12 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
     })
     console.log(`[roster] pass end OK: advisors=${recs.length} total=${roster.total} unnamed=${roster.unnamed.tokens.length}`)
-    await clearRowCache(id)   // موفق شد → کش پاک تا سینکِ بعدی دادهٔ تازه بگیرد
+    // فاز ۱۹۸ — کش دیگر پاک نمی‌شود (اینکرمنتال): فقط توکن‌هایی که دیگر در پروفایلِ دیوار نیستند هرس می‌شوند.
+    // سینکِ بعدی = فهرستِ پروفایل + فقط آگهی‌های جدید + ≤۳۰ تازه‌سازیِ چرخشی → دقیقه‌ای، نه ساعتی.
+    const currentTokens = new Set<string>([...roster.advisors.flatMap(a => a.tokens), ...roster.unnamed.tokens])
+    for (const k of Object.keys(rowCache)) if (!currentTokens.has(k)) delete rowCache[k]
+    await saveRowCache(id, rowCache).catch(() => {})
+    console.log(`[roster] incremental cache kept ${Object.keys(rowCache).length} rows`)
     done = true
     return { ok: true, advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
   } catch (e: any) {
@@ -450,8 +467,18 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   if (fromOwner === p) return { ok: false, error: 'این شماره از قبل تنظیم شده' }
 
   if (!accountExists(p)) {
-    const cr = createAccount(p, { name, role })
+    // فاز ۱۹۸ (فیدبک: «حساب ساخته شد ولی نقشِ مشاور املاک را نداد») — شناسهٔ نقش در role-store تصادفی است؛
+    // رشتهٔ ثابتِ 'advisor' هیچ نقشی نبود. نقشِ واقعی با داشبورد پیدا می‌شود: مشاور=/pros، آژانس=/agency.
+    let roleId = ''
+    try {
+      const { listRoles } = await import('./role-store')
+      const roles = listRoles()
+      const wantDash = isAgency || role === 'agency' ? '/agency' : '/pros'
+      roleId = roles.find(r => r.dashboard === wantDash && r.active)?.id || ''
+    } catch {}
+    const cr = createAccount(p, { name, role: roleId || undefined })
     if (!cr.ok) return { ok: false, error: cr.error }
+    console.log(`[roster] graduate: account created phone=${p} name=${name} role=${roleId || '(نقش پیدا نشد!)'}`)
   }
   try { await updateAdvisorProfile(p, { name, phone: p, agency: scrape.agencyName }) } catch {}
 
@@ -511,7 +538,10 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
   })
   if (!job) return { ran: false }
   try {
+    console.log(`[roster] graduate job start key=${job.key} phone=${job.phone}`)
+    const t0 = Date.now()
     const r = await graduateAdvisor(job.id, job.key, job.phone, job.role)
+    console.log(`[roster] graduate job end ok=${r.ok} moved=${r.moved ?? 0} ms=${Date.now() - t0}${r.error ? ' err=' + r.error : ''}`)
     if (!r.ok) {
       // رکوردِ مشاور را از حالتِ «در حالِ ساخت» درآور و خطا را ثبت کن.
       await mutate(db => { const s = db.scrapes[job.id]; if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) { rec.graduating = false } s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` } })
