@@ -8,7 +8,7 @@
 //
 // کانفیگ از env یا از فایلِ .persiansaze-config.json (gitignore) خوانده می‌شود.
 
-import { chromium } from 'playwright'
+import { chromium } from 'playwright-core'
 import fs from 'node:fs'
 import path from 'node:path'
 

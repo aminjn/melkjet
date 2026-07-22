@@ -3,7 +3,7 @@
 //   PS_CHANNEL=chrome PS_USER=09122862184 PS_PASS='...' PS_HASH=44511088 node scripts/persiansaze-project.mjs
 // (پیش‌فرض hashId همانی است که قبلاً دیده شده، تا سهمیهٔ اضافه مصرف نشود.)
 
-import { chromium } from 'playwright'
+import { chromium } from 'playwright-core'
 
 const USER = process.env.PS_USER || '', PASS = process.env.PS_PASS || ''
 const HASH = process.env.PS_HASH || '44511088'

@@ -6,7 +6,7 @@
 //   PS_CHANNEL=chrome PS_USER=09122862184 PS_PASS='...' node scripts/persiansaze-discover-reveal.mjs
 // (۱ شماره از سهمیه کم می‌شود — برای کشفِ endpoint لازم است.)
 
-import { chromium } from 'playwright'
+import { chromium } from 'playwright-core'
 
 const USER = process.env.PS_USER || ''
 const PASS = process.env.PS_PASS || ''

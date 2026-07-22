@@ -6,7 +6,7 @@
 //
 // اگر موفق شد، اسکرپرِ کامل را روی همین مبنا می‌سازم.
 
-import { chromium } from 'playwright'
+import { chromium } from 'playwright-core'
 
 const USER = process.env.PS_USER || ''
 const PASS = process.env.PS_PASS || ''
