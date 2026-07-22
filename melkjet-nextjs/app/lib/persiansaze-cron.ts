@@ -37,6 +37,8 @@ export function maybeRunReveal(now = Date.now()): boolean {
   // تا ۶ ساعت دوباره Chrome راه نمی‌افتد — به‌جای هر ۵ دقیقه یک Chromeِ سنگین.
   const lastAttempt = readNum(REVEAL_ATTEMPT)
   if (lastAttempt && now - lastAttempt < ATTEMPT_COOLDOWN) return false
+  // فاز ۲۰۰ب — قفلِ متقابل: اگر اسکرپِ فهرست در حالِ اجراست، رِویل صبر کند (یک Chrome در لحظه)
+  if (alive(path.join(process.cwd(), '.persiansaze-scrape.lock'))) return false
 
   // گیتِ زمانی (ارزان) تا فایلِ بزرگ بی‌جهت خوانده نشود.
   const reveals = getReveals()
