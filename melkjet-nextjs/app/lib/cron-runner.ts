@@ -6,7 +6,7 @@ import { processTrackerQueue } from './tracker-sender'
 import { processSavedSearches } from './alerts-runner'
 import { processProfileGate } from './profile-gate-runner'
 import { processWorkflows } from './workflow-runner'
-import { maybeRunReveal, maybeCreateAccounts } from './persiansaze-cron'
+import { maybeRunReveal, maybeCreateAccounts, maybeRunScrape } from './persiansaze-cron'
 import { maybeAutoScrape } from './hypersaz-scraper'
 import { maybeAutoSyncCost } from './cost-store'
 import { flushQueue } from './reos/queue'
@@ -52,7 +52,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
     try { await processSavedSearches(Date.now()) } catch { /* هشدارِ آگهیِ جدید */ }
     try { await processProfileGate(Date.now()) } catch { /* سامانهٔ تکمیلِ پروفایل */ }
     try { await processWorkflows(Date.now()) } catch { /* موتورِ اتوماسیونِ گردش‌کار */ }
-    try { maybeRunReveal(Date.now()) } catch { /* گرفتنِ هفتگیِ شمارهٔ سازنده‌های پرشین سازه */ }
+    try { if (maybeRunReveal(Date.now())) console.log('[persiansaze] weekly reveal spawned') } catch { /* گرفتنِ هفتگیِ شمارهٔ سازنده‌های پرشین سازه */ }
+    try { maybeRunScrape(Date.now()) } catch { /* فاز ۲۰۰ — اسکرپِ هفتگیِ فهرستِ پروژه‌های پرشین سازه */ }
     try { maybeCreateAccounts() } catch { /* ساختِ خودکارِ حسابِ سازنده پس از به‌روزشدنِ پروفایل‌ها */ }
     try { maybeAutoScrape(Date.now()) } catch { /* اسکرپِ خودکارِ زمان‌بندی‌شدهٔ کاتالوگ */ }
     maybeAutoSyncCost(Date.now()).catch(() => { /* سینکِ هفتگیِ قیمتِ مدل‌های AI از API */ })

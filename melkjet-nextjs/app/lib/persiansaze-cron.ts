@@ -64,6 +64,45 @@ export function maybeRunReveal(now = Date.now()): boolean {
   } catch { return false }
 }
 
+// فاز ۲۰۰ (فیدبک: «قرار بود هفتگی اسکرپ کنه تا کامل بشه ولی نشده») — اسکرپِ «فهرستِ پروژه‌ها» هم
+// هفتگی خودکار می‌شود: بدونِ این، استخر ثابت می‌ماند و پروژه‌های جدیدِ سایت هرگز وارد نمی‌شوند.
+// همان الگوی ایمنِ reveal: قفل + کول‌داونِ تلاش + نگهبانِ Chromeِ هنگ‌کرده. رِویل خودش فقط
+// نگرفته‌ها را می‌زند (orderPending قبلاً‌گرفته‌ها را رد می‌کند) — سهمیه هرگز تکراری مصرف نمی‌شود.
+const SCRAPE_LOG = path.join(process.cwd(), '.persiansaze-scrape.log')
+const SCRAPE_LOCK = path.join(process.cwd(), '.persiansaze-scrape.lock')
+const SCRAPE_ATTEMPT = path.join(process.cwd(), '.persiansaze-scrape.attempt')
+export function maybeRunScrape(now = Date.now()): boolean {
+  const cfg = getConfig()
+  if (!cfg.enabled || !cfg.user || !cfg.pass) return false
+  if (alive(SCRAPE_LOCK)) {
+    const started = readNum(SCRAPE_ATTEMPT)
+    if (started && now - started > MAX_RUN) {
+      try { const pid = Number(fs.readFileSync(SCRAPE_LOCK, 'utf8')); if (pid) process.kill(pid, 'SIGKILL') } catch {}
+      try { fs.unlinkSync(SCRAPE_LOCK) } catch {}
+    }
+    return false
+  }
+  const lastAttempt = readNum(SCRAPE_ATTEMPT)
+  if (lastAttempt && now - lastAttempt < ATTEMPT_COOLDOWN) return false
+  // اگر رِویل در حالِ اجراست، اسکرپ صبر کند (یک Chrome در لحظه؛ لاگینِ همزمان سشن را می‌سوزاند)
+  if (alive(REVEAL_LOCK)) return false
+  const meta = getMeta()
+  const last = meta.lastSync ? Date.parse(meta.lastSync) : 0
+  if (last && now - last < WEEK) return false
+  try {
+    fs.writeFileSync(SCRAPE_ATTEMPT, String(now))
+    const out = fs.openSync(SCRAPE_LOG, 'w')
+    const child = spawn(process.execPath, [path.join(process.cwd(), 'scripts', 'persiansaze-scrape.mjs')], {
+      detached: true, stdio: ['ignore', out, out],
+      env: { ...process.env, PS_USER: cfg.user, PS_PASS: cfg.pass, PS_CHANNEL: cfg.channel || 'chrome' },
+    })
+    fs.writeFileSync(SCRAPE_LOCK, String(child.pid))
+    child.unref()
+    console.log('[persiansaze] weekly project-list scrape spawned')
+    return true
+  } catch { return false }
+}
+
 // پس از هر بار به‌روزشدنِ پروفایل‌ها (یعنی بعدِ هر reveal)، حساب‌های سازنده را خودکار می‌سازد.
 export function maybeCreateAccounts(): boolean {
   const cfg = getConfig()
