@@ -78,8 +78,14 @@ async function generate(id: string): Promise<Enrichment> {
         facts: cur.facts || [], description: cur.description || it.excerpt || '',
         meta: it.meta, amenities: cur.amenities || [],
       })
-      if (a.analysis) cur = patchEnrichment(id, { v: ENRICH_V, analysis: a.analysis, analysisOk: true, analysisErr: false })
-      else cur = patchEnrichment(id, { v: ENRICH_V, analysisErr: true })   // فاز ۵۷: کول‌داونِ کوتاه برای شکستِ سرویسی
+      if (a.analysis) cur = patchEnrichment(id, { v: ENRICH_V, analysis: a.analysis, analysisOk: true, analysisErr: false, analysisNote: '' })
+      else {
+        // فاز ۲۱۰ (فیدبک: «همچنان آگهی بدونِ تحلیل هست» — بارِ سوم): شکست دیگر بی‌صدا نیست؛
+        // علتِ دقیق هم در کش می‌نشیند (در پاسخِ /api/listing/enrich دیده می‌شود) هم در لاگِ pm2.
+        const note = String(a.error || 'خطای نامشخص').slice(0, 200)
+        console.error(`[enrich] analysis FAILED ${id}: ${note}`)
+        cur = patchEnrichment(id, { v: ENRICH_V, analysisErr: true, analysisNote: note })   // فاز ۵۷: کول‌داونِ کوتاه برای شکستِ سرویسی
+      }
     }
   }
   return cur
