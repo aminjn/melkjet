@@ -20,15 +20,17 @@ export async function GET(req: NextRequest) {
     }
     const testKey = async (label: string, k?: string) => {
       if (!k) return { label, set: false }
-      const [search, reverse, matrix] = await Promise.all([
+      const [search, reverse, matrix, geocode] = await Promise.all([
         hit(k, `https://api.neshan.org/v1/search?term=${encodeURIComponent('بانک')}&lat=${lat}&lng=${lng}`),
         hit(k, `https://api.neshan.org/v5/reverse?lat=${lat}&lng=${lng}`),
         hit(k, `https://api.neshan.org/v1/distance-matrix?type=car&origins=${lat},${lng}&destinations=${lat + 0.01},${lng + 0.01}`),
+        // فاز ۲۰۶ج: سلامتِ geocoding هم دیده شود — مسیرِ جایگزینِ nearby (بدونِ Search) به آن تکیه دارد
+        hit(k, `https://api.neshan.org/v4/geocoding?address=${encodeURIComponent('میدان آزادی تهران')}`),
       ])
-      return { label, set: true, tail: '***' + k.slice(-4), search, reverse, matrix }
+      return { label, set: true, tail: '***' + k.slice(-4), search, reverse, matrix, geocode }
     }
     const [service, map] = await Promise.all([testKey('serviceKey', nz?.serviceKey), testKey('mapKey', nz?.mapKey)])
-    return NextResponse.json({ debug: true, service, map, hint: 'برای «دسترسی‌های اطراف» باید search و matrix روی یکی از کلیدها status:200 بدهند.' })
+    return NextResponse.json({ debug: true, service, map, hint: 'دقیق‌ترین حالت: search+matrix هر دو ۲۰۰ روی یک کلید. مسیرِ جایگزین (بدونِ Search): reverse+geocode+matrix ۲۰۰ کافی است.' })
   }
 
   const r = await computeNearby(lat, lng)
