@@ -261,7 +261,10 @@ async function queueTick(): Promise<void> {
           }
           const missing = pub.filter(it => !isEnriched(it.id)).map(it => it.id)
           // فاز ۱۹۷ب — ۸ به‌جای ۲۰ در هر تیک: فشارِ درخواست به دیوار (حدسِ درستِ کاربر: rate-limit) خیلی کمتر، بک‌لاگ همچنان خالی می‌شود
-          if (missing.length) { warmMany(missing.slice(0, 8)); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming ${Math.min(8, missing.length)}`) }
+          // فاز ۲۰۷ (فیدبک: «قرار بود هیچ آگهی بدونِ تحلیل نباشد — این آگهیِ ۱۰روزه تحلیل ندارد»):
+          // فهرست جدیدترین-اول بود → با ورودِ مداومِ آگهیِ جدید، قدیمی‌ها هرگز نوبت نمی‌گرفتند (گرسنگیِ صف).
+          // جارو از قدیمی‌ترین شروع می‌کند — آگهیِ تازه همان لحظهٔ ورود (warmMany در اسکرپ/انتشار) و بازدید هم فوری گرم می‌شود.
+          if (missing.length) { warmMany(missing.slice(-8)); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming oldest ${Math.min(8, missing.length)}`) }
           const { touchCron } = await import('./cron-heartbeat')
           await touchCron({ enrichPending: missing.length })
         } catch { /* جاروی بعدی در تیکِ بعد */ } finally { enrichSweeping = false }

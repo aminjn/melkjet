@@ -18,7 +18,10 @@ export async function GET(req: NextRequest) {
   const complete = cached?.v === ENRICH_V && cached?.baseDone && cached?.analysisOk
   if (!complete) warmEnrichment(id)   // پس‌زمینه، بدونِ انتظار — نتیجه در اسکرپِ بعدی/رفرش می‌آید
   // فاز ۲۰۳: geo از کش یا از متایِ خودِ آگهی (آگهیِ ثبتِ کاربر geo دیواری ندارد ولی مختصات دارد)
-  if (cached?.baseDone && !cached.nearby?.length && Date.now() - (cached.nearbyTriedAt || 0) > NEARBY_RETRY_MS) {
+  // فاز ۲۰۷ب: nearbyِ «همه-دور» (میراثِ شعاعِ ۷کیلومتری — فیدبک: «کاربر مسخره می‌کند») هم خراب حساب
+  // می‌شود: در پس‌زمینه با منطقِ سخت‌گیرِ جدید بازسازی و جایگزین می‌شود؛ نشد → پاک (هیچ بهتر از مضحک).
+  const allFar = (cached?.nearby?.length || 0) > 0 && cached!.nearby!.every(n => typeof (n as { meters?: number }).meters === 'number' && (n as { meters?: number }).meters! > 3500)
+  if (cached?.baseDone && (!cached.nearby?.length || allFar) && Date.now() - (cached.nearbyTriedAt || 0) > NEARBY_RETRY_MS) {
     const cachedGeo = cached.geo
     patchEnrichment(id, { nearbyTriedAt: Date.now() })
     ;(async () => {
@@ -34,6 +37,7 @@ export async function GET(req: NextRequest) {
         const { computeNearby } = await import('@/app/lib/nearby')
         const n = (await computeNearby(g.lat, g.lng)).nearby
         if (n?.length) patchEnrichment(id, { nearby: n, geo: g })
+        else if (allFar) patchEnrichment(id, { nearby: [] })   // فهرستِ مضحکِ قدیمی پاک شود
       } catch { /* تلاشِ بعدی بعدِ کول‌داون */ }
     })()
   }

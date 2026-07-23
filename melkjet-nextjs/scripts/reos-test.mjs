@@ -282,6 +282,10 @@ console.log('\n── REOS v4: Property Digital Twin ──')
   const rentRisk = riskProfile({ priceVsMarket: 0.25, demand: 0.1, completeness: 1 }, 'rent')
   ok('riskProfile اجاره‌ای: عامل‌ها با ادبیاتِ اجاره', rentRisk.factors[0] === 'اجارهٔ بالاتر از میانهٔ محله' && rentRisk.factors[1] === 'تقاضای اجارهٔ پایین')
   ok('پیش‌فرض همچنان ادبیاتِ فروش (بدونِ تغییرِ رفتار)', riskProfile({ priceVsMarket: 0.25, demand: 0.5, completeness: 1 }).factors[0] === 'قیمتِ بالاتر از بازار' && rentRisk.score === riskProfile({ priceVsMarket: 0.25, demand: 0.1, completeness: 1 }).score)
+  // فاز ۲۰۷ب (فیدبک: «مکان‌های نزدیک همگی دری‌وری است — علامه حلی ۱:۲۰ فاصله دارد؛ کاربر مسخره می‌کند»)
+  const { keepVerifiedNearby } = await import('../app/lib/nearby.ts')
+  ok('فقط مکان‌های واقعاً نزدیک (≤۲.۵کیلومتر) می‌مانند', JSON.stringify(keepVerifiedNearby([{ km: 0.4 }, { km: 1.9 }, { km: 6.5 }]).map(p => p.km)) === '[0.4,1.9]')
+  ok('زیرِ حدنصاب یا خالی → صادقانه هیچ (نه فهرستِ مضحک)', keepVerifiedNearby([{ km: 0.4 }, { km: 6 }]).length === 0 && keepVerifiedNearby([]).length === 0 && keepVerifiedNearby([{ km: 5 }, { km: 6 }, { km: 7 }]).length === 0)
   ok('aiConfidence rises with comps + completeness', aiConfidence(10, 1) > aiConfidence(1, 0.3) && aiConfidence(10, 1) <= 100)
 }
 

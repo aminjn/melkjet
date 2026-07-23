@@ -202,7 +202,15 @@ async function neshanGeocode(key: string, address: string): Promise<{ lat: numbe
   return null
 }
 
-const AI_SYS = `تو متخصص جغرافیای شهری ایران هستی. برای یک محله، نزدیک‌ترین و معروف‌ترین مکان‌های واقعی همان محله را نام ببر که حتماً وجود دارند و روی نقشه قابل جستجو هستند. فقط یک آرایهٔ JSON برگردان (بدون توضیح):
+// فاز ۲۰۷ب (فیدبک: «مکان‌های نزدیک همگی دری‌وری است — علامه حلی ۱:۲۰ فاصله دارد؛ کاربر مسخره می‌کند»):
+// مسیرِ AI+geocode تا ۷کیلومتر را قبول می‌کرد (در تهران = ۲۰+ دقیقه با ماشین). فقط مکان‌های واقعاً
+// نزدیکِ تأییدشده می‌مانند؛ اگر به حدنصاب نرسید، صادقانه هیچ — بهتر از فهرستِ مضحک. (خالص و تست‌پذیر)
+export function keepVerifiedNearby<T extends { km: number }>(places: T[], maxKm = 2.5, minKeep = 2): T[] {
+  const close = places.filter(p => p.km <= maxKm)
+  return close.length >= minKeep ? close : []
+}
+
+const AI_SYS = `تو متخصص جغرافیای شهری ایران هستی. برای یک محله، نزدیک‌ترین مکان‌های واقعی «داخلِ خودِ همان محله یا حداکثر یکی‌دو کیلومتری‌اش» را نام ببر که حتماً وجود دارند و روی نقشه قابل جستجو هستند. مکان‌های معروفِ مرکزِ شهر یا محله‌های دور را هرگز نیاور (کاربر محلی است و متوجه می‌شود). فقط یک آرایهٔ JSON برگردان (بدون توضیح):
 [{"type":"مترو","name":"ایستگاه مترو ..."},{"type":"بیمارستان","name":"بیمارستان ..."},{"type":"پارک","name":"بوستان ..."},{"type":"مرکز خرید","name":"..."},{"type":"بانک","name":"..."},{"type":"داروخانه","name":"داروخانه ..."},{"type":"مدرسه","name":"..."},{"type":"دانشگاه","name":"..."}]
 name باید نام دقیق و واقعی مکان باشد (نه عمومی). فقط مکان‌هایی که واقعاً نزدیک همان محله‌اند.`
 
@@ -230,6 +238,8 @@ async function aiGroundedNearby(key: string, lat: number, lng: number): Promise<
     if (km > 7) continue
     located.push({ type: c.type || 'مکان', name: c.name, lat: g.lat, lng: g.lng, km })
   }
-  if (!located.length) return { nearby: [], source: 'neshan', note: 'مکان نزدیکی پیدا/تأیید نشد.' }
-  return await withTimes(key, lat, lng, located, 'neshan-geocoded')
+  // فاز ۲۰۷ب: فقط واقعاً نزدیک‌ها (≤۲.۵کیلومتر) و با حدنصاب — وگرنه صادقانه هیچ
+  const kept = keepVerifiedNearby(located)
+  if (!kept.length) return { nearby: [], source: 'neshan', note: 'مکانِ نزدیکِ تأییدشده‌ای پیدا نشد.' }
+  return await withTimes(key, lat, lng, kept, 'neshan-geocoded')
 }
