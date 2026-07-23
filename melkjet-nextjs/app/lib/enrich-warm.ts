@@ -57,7 +57,7 @@ async function generate(id: string): Promise<Enrichment> {
     }
     let nearby: any[] = []
     if (geo) { try { nearby = (await computeNearby(geo.lat, geo.lng)).nearby } catch { nearby = [] } }
-    cur = patchEnrichment(id, { v: ENRICH_V, gallery, facts, amenities, description, geo, nearby, baseDone: true })
+    cur = patchEnrichment(id, { v: ENRICH_V, gallery, facts, amenities, description, geo, nearby, nearbyV: 2, baseDone: true })
     // فاز ۲۰۱ (فیدبک: «نزدیک ۴۰۰۰ آگهی داریم ولی نقشه ۴۰ تا نشون می‌ده»): مختصاتِ به‌دست‌آمده از
     // دیوار روی خودِ آگهی هم بنشیند (meta.__lat/__lng) تا نقشهٔ جستجو پین‌دار شود — فقط اگر نداشت.
     if (geo && !(Number(it.meta?.['__lat']) && Number(it.meta?.['__lng']))) {

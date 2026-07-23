@@ -20,6 +20,7 @@ export interface Enrichment {
   baseTriedAt?: number   // فاز ۲۰۱: آخرین تلاشِ ناموفقِ واکشیِ دیوار (شکستِ گذرا baseDone نمی‌شود؛ بعدِ کول‌داون دوباره)
   baseRepairedAt?: number // فاز ۲۰۱: مهرِ ترمیمِ یک‌بارهٔ کش‌های خراب (baseDone بدونِ گالری) — جلوگیری از حلقهٔ ترمیم
   nearbyTriedAt?: number // فاز ۲۰۱: آخرین تلاشِ بازسازیِ «دسترسی‌های اطراف» وقتی geo هست ولی nearby خالی کش شده
+  nearbyV?: number       // فاز ۲۱۳: نسخهٔ منطقِ nearby — کش‌های نسخهٔ قدیمی (اعتبارسنجیِ دوریِ محله‌ای/شعاعِ شل) بازنشسته می‌شوند
   enrichedAt?: number
 }
 

@@ -223,7 +223,7 @@ name باید نام دقیق و واقعی مکان باشد (نه عمومی).
 
 // مسیر دوم: نام‌ها از AI، اعتبارسنجی و مکان‌یابی با geocoding نشان، زمان با matrix
 async function aiGroundedNearby(key: string, lat: number, lng: number): Promise<NearbyResult> {
-  const { area } = await neshanReverse(key, lat, lng)
+  const { area, city } = await neshanReverse(key, lat, lng)
   const model = agentModel('pricing', 'text') || agentModel('content', 'text') || agentModel('chat', 'text')
   if (!model) return { nearby: [], source: 'neshan', note: 'برای دسترسی‌ها به مدل AI نیاز است (پنل → API و مدل‌های AI).' }
 
@@ -235,11 +235,15 @@ async function aiGroundedNearby(key: string, lat: number, lng: number): Promise<
   } catch { /* parse failed */ }
   if (!Array.isArray(cands) || !cands.length) return { nearby: [], source: 'neshan', note: 'فهرست دسترسی‌ها ساخته نشد.' }
 
-  // هر نام را geocode کن؛ فقط مواردی که نشان پیدا کرد و نزدیک ملک‌اند بمانند
+  // هر نام را geocode کن؛ فقط مواردی که نشان پیدا کرد و نزدیک ملک‌اند بمانند.
+  // فاز ۲۱۳ (فیدبک+نقشهٔ گوگل: «بیمارستان هاشمی‌نژاد ۱۴کیلومتر دورتر است ولی "۳ دقیقه پیاده" نشان می‌داد
+  // — اعتماد را نابود می‌کند»): پسوندِ «، محله» اعتبارسنجی را دوری می‌کرد — نشان وقتی POI را پیدا
+  // نمی‌کرد خودِ محله (۲۰۰متریِ ملک!) را برمی‌گرداند و هر نامِ غلطی از فیلترِ فاصله رد می‌شد.
+  // حالا با متنِ «شهر» geocode می‌شود: مکانِ واقعی به مختصاتِ واقعی‌اش می‌رسد و فیلترِ ۱کیلومتر کارش را می‌کند.
   const located: Located[] = []
   for (const c of cands.slice(0, 10)) {
     if (!c?.name) continue
-    const g = await neshanGeocode(key, `${c.name}، ${area}`)
+    const g = await neshanGeocode(key, `${c.name}، ${city}`)
     if (!g) continue
     const km = haversine(lat, lng, g.lat, g.lng)
     if (km > 7) continue
