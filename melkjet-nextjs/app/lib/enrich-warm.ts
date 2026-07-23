@@ -112,8 +112,9 @@ export function ensureEnrichment(id: string): Promise<Enrichment> {
 // هنگامِ اسکرپ ممکن است ده‌ها آگهیِ جدید بیاید؛ نباید هم‌زمان ده‌ها درخواستِ AI بفرستیم.
 const warmQueue: string[] = []
 let warmRunning = 0
-// فاز ۲۱۱: ۲→۳ — با بک‌لاگِ ۱۲هزارتایی و قانونِ «اولین بازدید تحلیل‌دار»، توانِ بیشتر لازم است
-const WARM_CONCURRENCY = 3
+// فاز ۲۱۱→۲۱۲: ۲→۳→۴ — بک‌لاگِ هزاران آگهیِ قدیمیِ بی‌تحلیل باید ظرفِ چند ساعت (نه چند روز) خالی شود؛
+// بالاتر نمی‌رویم تا واکشی‌های دیوارِ داخلِ generate پروکسی را اشباع نکند (تجربهٔ «روی ۱۲۶ گیر کرد»).
+const WARM_CONCURRENCY = 4
 function pumpWarm() {
   while (warmRunning < WARM_CONCURRENCY && warmQueue.length) {
     const id = warmQueue.shift()!

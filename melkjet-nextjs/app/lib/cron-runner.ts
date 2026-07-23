@@ -275,7 +275,8 @@ async function queueTick(): Promise<void> {
           // فاز ۲۱۱ (فیدبک: «آگهی باید برای اولین بازشدن هم تحلیل داشته باشد؛ کاربر نباید بدونِ تحلیل ببیند»):
           // گرم‌سازیِ لحظهٔ ورود در حافظه است و با هر دیپلوی می‌میرد → جارویِ «دوسر»: هر تیک ۶ تازه‌ترین
           // (قربانیانِ دیپلوی — قبل از اینکه کسی بازشان کند) + ۶ قدیمی‌ترین (دُمِ بک‌لاگ) — دو سر به هم می‌رسند.
-          if (missing.length) { const batch211 = sweepPick(missing, 6); warmMany(batch211); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming newest+oldest ${batch211.length}`) }
+          // فاز ۲۱۲: صف باید همیشه پر بماند تا ظرفیتِ ۴تاییِ گرم‌سازی هرگز بی‌کار نماند (تخلیهٔ چندساعتهٔ بک‌لاگ)
+          if (missing.length) { const batch211 = sweepPick(missing, 12); warmMany(batch211); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming newest+oldest ${batch211.length}`) }
           const { touchCron } = await import('./cron-heartbeat')
           await touchCron({ enrichPending: missing.length })
         } catch { /* جاروی بعدی در تیکِ بعد */ } finally { enrichSweeping = false }
