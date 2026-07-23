@@ -17,6 +17,7 @@ import { readCity } from '@/app/components/CitySelector'
 import { openAuth } from '@/app/components/AuthModal'
 import { PROPERTY_KINDS } from '@/app/lib/taxonomy'
 import { listingHref } from '@/app/lib/listing-url'
+import { pinBoundsView, geocodeKeysOf, geoKeyOf, hoodPartOf } from '@/app/lib/map-pins'
 
 function seedNum(s: string): number {
   let h = 0
@@ -452,11 +453,12 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const promotedIdSet = useMemo(() => new Set(promoted.map(p => p.id)), [promoted])
 
   // پرتکرارترین محلهٔ آگهی‌های نمایش‌داده‌شده (برای مرکزِ نقشه وقتی هیچ پینی نیست)
+  // فاز ۲۰۲: روی کلِ نتیجه‌ها، نه ۴۰ تای اول — ۴۰ تای اولِ مرتب‌سازی می‌توانست همه از یک محله باشند
   const mapArea = useMemo(() => {
     const counts: Record<string, number> = {}
-    for (const p of shownProperties.slice(0, 40)) { const n = (p.location || '').split(/[،,]/)[0].trim(); if (n && n !== 'نامشخص') counts[n] = (counts[n] || 0) + 1 }
+    for (const p of shownProperties) { const n = hoodPartOf(p.location || '', selectedCity || ''); if (n) counts[n] = (counts[n] || 0) + 1 }
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || ''
-  }, [shownProperties])
+  }, [shownProperties, selectedCity])
   // مرکزِ نقشهٔ شهر/محله (geocode، با کش) — برای حالتی که آگهی مختصات ندارد
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null)
   useEffect(() => {
@@ -472,12 +474,11 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   }, [mapArea, selectedCity])
 
   // ── پین‌کردنِ آگهی‌ها روی نقشه: مختصاتِ هر آگهی را از متا یا با geocodeِ محله‌اش می‌گیریم ──
+  // فاز ۲۰۲ (فیدبک: «۴۰۰۰ آگهی داریم، نقشه ۴۰ تا نشون می‌ده؛ محله انتخاب نکردم باید کلِ شهر رو نشون بده»):
+  // پین‌ها دیگر به ۴۰ تای اولِ مرتب‌سازی محدود نیستند — کلِ استخرِ فیلترشدهٔ همین شهر/تب پین می‌شود
+  // (خوشه‌بندی ازدحام را جمع می‌کند)؛ geocodeِ محله‌ها یکتا/سقف‌دار و تکه‌تکه (سقفِ ۴۰تاییِ سرور) می‌رود.
   const [locCoords, setLocCoords] = useState<Record<string, { lat: number; lng: number }>>({})
-  const needGeocode = useMemo(() => {
-    const set = new Set<string>()
-    for (const p of shownProperties.slice(0, 40)) { if (!(p.lat && p.lng) && p.location && p.location !== 'نامشخص') set.add(`${p.location.split(/[،,]/)[0].trim()} ${selectedCity || ''}`.trim()) }
-    return Array.from(set)
-  }, [shownProperties, selectedCity])
+  const needGeocode = useMemo(() => geocodeKeysOf(shownProperties, selectedCity || ''), [shownProperties, selectedCity])
   useEffect(() => {
     const todo = needGeocode.filter(q => !GEO_CACHE.has(q))
     const fromCache: Record<string, { lat: number; lng: number }> = {}
@@ -485,24 +486,30 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     if (Object.keys(fromCache).length) setLocCoords(prev => ({ ...prev, ...fromCache }))
     if (!todo.length) return
     let alive = true
-    fetch('/api/geo/geocode-batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ queries: todo }) })
-      .then(r => r.ok ? r.json() : null).then(d => {
-        if (!alive || !d?.results) return
-        const add: Record<string, { lat: number; lng: number }> = {}
-        for (const [q, c] of Object.entries(d.results)) { if (c) { GEO_CACHE.set(q, c as any); add[q] = c as any } else GEO_CACHE.set(q, null as any) }
-        if (Object.keys(add).length) setLocCoords(prev => ({ ...prev, ...add }))
-      }).catch(() => {})
+    ;(async () => {
+      for (let i = 0; i < todo.length && alive; i += 40) {
+        try {
+          const r = await fetch('/api/geo/geocode-batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ queries: todo.slice(i, i + 40) }) })
+          const d = r.ok ? await r.json() : null
+          if (!alive || !d?.results) continue
+          const add: Record<string, { lat: number; lng: number }> = {}
+          for (const [q, c] of Object.entries(d.results)) { if (c) { GEO_CACHE.set(q, c as any); add[q] = c as any } else GEO_CACHE.set(q, null as any) }
+          if (Object.keys(add).length) setLocCoords(prev => ({ ...prev, ...add }))
+        } catch { /* تکهٔ بعدی */ }
+      }
+    })()
     return () => { alive = false }
   }, [needGeocode])
 
   // پین‌ها — مختصاتِ دقیقِ آگهی (از دیوار) یا geocodeِ محله (با jitterِ کوچک)؛ برچسبِ کوتاهِ فارسی
   const pins = useMemo(() => {
     const out: { id: string; lat: number; lng: number; label: string }[] = []
-    for (const p of shownProperties.slice(0, 40)) {
+    for (const p of shownProperties) {
       let lat = p.lat, lng = p.lng
       if (!(lat && lng)) {
-        const key = `${(p.location || '').split(/[،,]/)[0].trim()} ${selectedCity || ''}`.trim()
-        const c = locCoords[key] || GEO_CACHE.get(key)
+        // فاز ۲۰۲: همان کلیدِ geoKeyOf — تکهٔ اولِ «تهران، جنت‌آباد» نامِ شهر است نه محله
+        const key = geoKeyOf(p.location || '', selectedCity || '')
+        const c = key ? (locCoords[key] || GEO_CACHE.get(key)) : null
         if (c) {
           const h = seedNum(p.id)
           lat = c.lat + (((h % 1000) / 1000 - 0.5) * 0.005)
@@ -524,14 +531,9 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     // انتخابِ صریحِ محله (چیپ/جستجو) بر GPS مقدم است — همان قانونی که فیلترِ آگهی‌ها دارد؛
     // وگرنه با «نزدیکِ من»ِ روشن، نقشه روی محلهٔ خودِ کاربر گیر می‌کرد و به محلهٔ انتخابی نمی‌رفت.
     // فاز ۹۳: مرکزِ نقشه هرگز موقعیتِ (نادقیقِ) کاربر نیست — فقط پین‌های واقعی/شهرِ انتخابی
-    if (pins.length) {
-      const lats = pins.map(p => p.lat), lngs = pins.map(p => p.lng)
-      const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
-      const center = { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 }
-      const span = Math.max(maxLat - minLat, maxLng - minLng, 0.004)
-      const zoom = Math.max(11, Math.min(15, Math.floor(Math.log2(360 / span)) - 1))
-      return { center, zoom }
-    }
+    // فاز ۲۰۲: قاب = گسترهٔ همهٔ پین‌های شهر (کلِ شهر دیده می‌شود)، با کرانهٔ صدکی ضدِ مختصاتِ پرت
+    const fitted = pinBoundsView(pins)
+    if (fitted) return fitted
     if (mapCenter) return { center: mapCenter, zoom: 13 }
 
     return null
