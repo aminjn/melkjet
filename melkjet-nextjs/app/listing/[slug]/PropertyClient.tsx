@@ -8,6 +8,7 @@ import CompareButton from '@/app/components/CompareButton'
 import LikeHeart, { useFav } from '@/app/components/home/LikeHeart'
 import ReosTwinCard from '@/app/components/ReosTwinCard'
 import { openAuth } from '@/app/components/AuthModal'
+import { listingAgeLabel, isFreshListing } from '@/app/lib/fa-time'
 
 interface Item {
   id: string; type: string; category?: string; title: string; price?: string
@@ -349,7 +350,16 @@ export default function PropertyClient({ id, initial }: { id: string; initial?: 
                   {item.price && <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)' }}>{item.price}</span>}
                   {perMeter && <span style={{ padding: '4px 12px', borderRadius: 999, background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 13, fontWeight: 700 }}>{perMeter}</span>}
                 </div>
-                {item.location && <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: 'var(--muted)' }}>📍 {item.location}</div>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  {item.location && <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: 'var(--muted)' }}>📍 {item.location}</div>}
+                  {/* فاز ۲۰۸ (فیدبک: «آگهی‌ها معلوم نیست برای کی هست — خیلی مهمه») — سنِ آگهی، برجسته کنارِ موقعیت */}
+                  {item.scrapedAt > 0 && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 13px', borderRadius: 999, fontSize: 12.5, fontWeight: 800, ...(isFreshListing(item.scrapedAt) ? { background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', boxShadow: '0 3px 14px -4px rgba(201,168,76,0.6)' } : { background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--goldText)' }) }}>
+                      <span aria-hidden="true">{isFreshListing(item.scrapedAt) ? '⚡' : '🕐'}</span>
+                      {isFreshListing(item.scrapedAt) ? `آگهیِ جدید · ${listingAgeLabel(item.scrapedAt)}` : `ثبت‌شده ${listingAgeLabel(item.scrapedAt)}`}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {specs.length > 0 && (

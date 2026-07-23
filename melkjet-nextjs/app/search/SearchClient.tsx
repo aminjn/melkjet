@@ -20,6 +20,7 @@ import { hoodPartOf } from '@/app/lib/map-pins'
 // فاز ۲۰۴: استخراج/فیلترِ آگهی حالا در کتابخانهٔ مشترکِ listing-search است —
 // همان منطقی که /api/map/clusters روی کلِ استخر اجرا می‌کند (نقشه و کارت‌ها هم‌زبان).
 import { parseQuery, deriveListing, effectiveFiltersOf, matchesListing } from '@/app/lib/listing-search'
+import { listingAgeLabel, isFreshListing } from '@/app/lib/fa-time'
 
 function toPersianDigits(n: number | string): string { return String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
 function faNum(n: number): string { return (Number(n) || 0).toLocaleString('fa-IR') }
@@ -61,7 +62,7 @@ function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): nu
 
 function toProperty(it: ContentItem) {
   // فاز ۲۰۴: فیلدهای فیلترپذیر از کتابخانهٔ مشترک (همان که سرورِ نقشه استفاده می‌کند)؛
-  // این‌جا فقط فیلدهای نمایشی اضافه می‌شود.
+  // این‌جا فقط فیلدهای نمایشی اضافه می‌شود. فاز ۲۰۸: scrapedAt برای برچسبِ «کی ثبت شده».
   const d = deriveListing(it)
   const ds = it.meta?.['__dealStatus']
   const dealStatus: 'sold' | 'rented' | '' = ds === 'sold' ? 'sold' : ds === 'rented' ? 'rented' : ''
@@ -72,6 +73,7 @@ function toProperty(it: ContentItem) {
     size: d.areaNum ? toPersianDigits(d.areaNum) : '—',
     year: d.yearNum ? toPersianDigits(d.yearNum) : '—',
     dealStatus,
+    scrapedAt: it.scrapedAt,
     // بدونِ «امتیازِ AI»ِ ساختگی — score فقط برای ترتیبِ پایدارِ «پیشنهاد ملک‌جت» (از هش؛ نمایش داده نمی‌شود)
     tag: '',
     img: it.image ? '' : gradientFor(it.title), image: it.image, url: it.url,
@@ -602,6 +604,13 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
                     <div style={{ height: 156, background: p.img, position: 'relative', overflow: 'hidden', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
                       {p.image && <CardImg src={p.image} alt={p.title} eager={index < 4} priority={index < 2 ? 'high' : 'low'} />}
                       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
+                      {/* فاز ۲۰۸ (فیدبک: «آگهی‌ها معلوم نیست برای کی هست») — سنِ آگهی از مهرِ واقعیِ ثبت */}
+                      {p.scrapedAt > 0 && (
+                        <span style={{ position: 'absolute', bottom: 9, insetInlineStart: 10, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3.5px 9px', borderRadius: 999, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1px', ...(isFreshListing(p.scrapedAt) ? { background: 'linear-gradient(140deg,var(--gold2,#e8cf7a),var(--gold))', color: '#16140f', boxShadow: '0 2px 10px -2px rgba(201,168,76,0.55)' } : { background: 'rgba(10,9,8,0.72)', color: '#f0ede6', border: '1px solid rgba(255,255,255,0.18)', backdropFilter: 'blur(6px)' }) }}>
+                          <span aria-hidden="true" style={{ fontSize: 9.5 }}>{isFreshListing(p.scrapedAt) ? '⚡' : '🕐'}</span>
+                          {isFreshListing(p.scrapedAt) ? `جدید · ${listingAgeLabel(p.scrapedAt)}` : listingAgeLabel(p.scrapedAt)}
+                        </span>
+                      )}
                       {!p.dealStatus && <LikeHeart listingId={p.id} />}
                       {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 44 }}><PromoBadge kind={p.promoKind || 'ویژه'} /></div>}
                       {p.dealStatus && (

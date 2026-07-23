@@ -282,10 +282,15 @@ console.log('\n── REOS v4: Property Digital Twin ──')
   const rentRisk = riskProfile({ priceVsMarket: 0.25, demand: 0.1, completeness: 1 }, 'rent')
   ok('riskProfile اجاره‌ای: عامل‌ها با ادبیاتِ اجاره', rentRisk.factors[0] === 'اجارهٔ بالاتر از میانهٔ محله' && rentRisk.factors[1] === 'تقاضای اجارهٔ پایین')
   ok('پیش‌فرض همچنان ادبیاتِ فروش (بدونِ تغییرِ رفتار)', riskProfile({ priceVsMarket: 0.25, demand: 0.5, completeness: 1 }).factors[0] === 'قیمتِ بالاتر از بازار' && rentRisk.score === riskProfile({ priceVsMarket: 0.25, demand: 0.1, completeness: 1 }).score)
-  // فاز ۲۰۷ب (فیدبک: «مکان‌های نزدیک همگی دری‌وری است — علامه حلی ۱:۲۰ فاصله دارد؛ کاربر مسخره می‌کند»)
+  // فاز ۲۰۷ب/۲۰۸ (فیدبک: «مکان‌های نزدیک همگی دری‌وری است؛ کاربر مسخره می‌کند» + «شعاع رو بکن ۱ کیلومتر»)
   const { keepVerifiedNearby } = await import('../app/lib/nearby.ts')
-  ok('فقط مکان‌های واقعاً نزدیک (≤۲.۵کیلومتر) می‌مانند', JSON.stringify(keepVerifiedNearby([{ km: 0.4 }, { km: 1.9 }, { km: 6.5 }]).map(p => p.km)) === '[0.4,1.9]')
-  ok('زیرِ حدنصاب یا خالی → صادقانه هیچ (نه فهرستِ مضحک)', keepVerifiedNearby([{ km: 0.4 }, { km: 6 }]).length === 0 && keepVerifiedNearby([]).length === 0 && keepVerifiedNearby([{ km: 5 }, { km: 6 }, { km: 7 }]).length === 0)
+  ok('فقط مکان‌های واقعاً نزدیک (≤۱کیلومتر) می‌مانند', JSON.stringify(keepVerifiedNearby([{ km: 0.4 }, { km: 0.9 }, { km: 1.9 }, { km: 6.5 }]).map(p => p.km)) === '[0.4,0.9]')
+  ok('زیرِ حدنصاب یا خالی → صادقانه هیچ (نه فهرستِ مضحک)', keepVerifiedNearby([{ km: 0.4 }, { km: 1.9 }]).length === 0 && keepVerifiedNearby([]).length === 0 && keepVerifiedNearby([{ km: 2 }, { km: 3 }, { km: 7 }]).length === 0)
+  // فاز ۲۰۸ — برچسبِ سنِ آگهی (فیدبک: «آگهی‌ها معلوم نیست برای کی هست») — از مهرِ واقعیِ ثبت
+  const { listingAgeLabel, isFreshListing } = await import('../app/lib/fa-time.ts')
+  const NOW = 1_800_000_000_000, H = 3600_000, D = 24 * H
+  ok('پله‌های سن: دقایقی/ساعت/دیروز/روز/هفته/ماه', listingAgeLabel(NOW - 20 * 60_000, NOW) === 'دقایقی پیش' && listingAgeLabel(NOW - 7 * H, NOW) === '۷ ساعت پیش' && listingAgeLabel(NOW - 30 * H, NOW) === 'دیروز' && listingAgeLabel(NOW - 10 * D, NOW) === '۱ هفته پیش' && listingAgeLabel(NOW - 3 * D, NOW) === '۳ روز پیش' && listingAgeLabel(NOW - 65 * D, NOW) === '۲ ماه پیش')
+  ok('بی‌مهر/آینده → خالی (نه ادعای ساختگی) و «تازه» فقط زیرِ ۲۴ساعت', listingAgeLabel(0, NOW) === '' && listingAgeLabel(NOW + 10 * 60_000, NOW) === '' && isFreshListing(NOW - 5 * H, NOW) === true && isFreshListing(NOW - 30 * H, NOW) === false)
   ok('aiConfidence rises with comps + completeness', aiConfidence(10, 1) > aiConfidence(1, 0.3) && aiConfidence(10, 1) <= 100)
 }
 
