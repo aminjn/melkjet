@@ -247,6 +247,11 @@ export async function moderatePending(max = 300): Promise<{ moderated: number; r
   const decided = results.filter(r => r.status === 'approved' || r.status === 'rejected' || r.status === 'duplicate' || (r.status === 'pending' && r.settled))
   // فاز ۱۵۶ (B2): ممیزیِ خودکار هرگز حکمِ تازهٔ ادمین را بازنویسی نمی‌کند (فقط pendingها)
   await setModerationBatch(decided.map(r => ({ id: r.id, status: r.status, reason: r.reason, score: r.score })), { onlyPending: true })
+  // فاز ۲۱۱ (فیدبک: «کاربر نباید آگهیِ بدونِ تحلیل ببیند»): لحظهٔ عمومی‌شدنِ آگهی همین تأیید است —
+  // همان لحظه گرم می‌شود (روی اینستنسِ کرون) تا تا اولین بازدید، تحلیل حاضر باشد؛ گرمِ لحظهٔ ثبت
+  // ممکن است با دیپلوی مرده باشد.
+  const approvedIds = decided.filter(r => r.status === 'approved').map(r => r.id)
+  if (approvedIds.length) import('./enrich-warm').then(m => m.warmMany(approvedIds)).catch(() => {})
   const err = (!model && decided.length === 0) ? 'مدلِ AI تنظیم نشده و دادهٔ یادگیری هنوز کافی نیست' : undefined
   return { moderated: decided.length, results, error: err }
 }

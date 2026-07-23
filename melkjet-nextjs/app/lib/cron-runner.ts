@@ -29,6 +29,14 @@ declare global {
 export function lockStuck(lockedSince: number | undefined, now: number, maxMs: number): boolean {
   return !!lockedSince && now - lockedSince > maxMs
 }
+
+// فاز ۲۱۱ — انتخابِ «دوسرِ» جارویِ enrich (خالص، تست‌پذیر): perEnd تازه‌ترین + perEnd قدیمی‌ترین،
+// بدونِ تکرار وقتی فهرست کوچک است. تازه‌ها = قربانیانِ دیپلوی (صفِ گرمِ در حافظه می‌میرد)؛
+// قدیمی‌ها = دُمِ بک‌لاگ — دو سر جلو می‌روند تا به هم برسند و «هیچ آگهی» بی‌تحلیل نماند.
+export function sweepPick(ids: string[], perEnd = 6): string[] {
+  if (ids.length <= perEnd * 2) return [...ids]
+  return [...ids.slice(0, perEnd), ...ids.slice(-perEnd)]
+}
 const TICK_STUCK_MS = 30 * 60_000    // بدنهٔ tick (آموزشِ REOS و…) در بدترین حالت چند دقیقه است
 const QUEUE_STUCK_MS = 10 * 60_000   // بدنهٔ queueTick باید چند ثانیه باشد — ۱۰ دقیقه یعنی هنگ
 
@@ -264,7 +272,10 @@ async function queueTick(): Promise<void> {
           // فاز ۲۰۷ (فیدبک: «قرار بود هیچ آگهی بدونِ تحلیل نباشد — این آگهیِ ۱۰روزه تحلیل ندارد»):
           // فهرست جدیدترین-اول بود → با ورودِ مداومِ آگهیِ جدید، قدیمی‌ها هرگز نوبت نمی‌گرفتند (گرسنگیِ صف).
           // جارو از قدیمی‌ترین شروع می‌کند — آگهیِ تازه همان لحظهٔ ورود (warmMany در اسکرپ/انتشار) و بازدید هم فوری گرم می‌شود.
-          if (missing.length) { warmMany(missing.slice(-8)); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming oldest ${Math.min(8, missing.length)}`) }
+          // فاز ۲۱۱ (فیدبک: «آگهی باید برای اولین بازشدن هم تحلیل داشته باشد؛ کاربر نباید بدونِ تحلیل ببیند»):
+          // گرم‌سازیِ لحظهٔ ورود در حافظه است و با هر دیپلوی می‌میرد → جارویِ «دوسر»: هر تیک ۶ تازه‌ترین
+          // (قربانیانِ دیپلوی — قبل از اینکه کسی بازشان کند) + ۶ قدیمی‌ترین (دُمِ بک‌لاگ) — دو سر به هم می‌رسند.
+          if (missing.length) { const batch211 = sweepPick(missing, 6); warmMany(batch211); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming newest+oldest ${batch211.length}`) }
           const { touchCron } = await import('./cron-heartbeat')
           await touchCron({ enrichPending: missing.length })
         } catch { /* جاروی بعدی در تیکِ بعد */ } finally { enrichSweeping = false }
