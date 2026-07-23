@@ -192,7 +192,7 @@ async function neshanGeocode(key: string, address: string): Promise<{ lat: numbe
     `https://api.neshan.org/v4/geocoding?address=${encodeURIComponent(address)}`,
   ]) {
     try {
-      const { status, json } = await neshanGet(url, key)
+      const { status, json } = await neshanGet(url, key, 5000)   // فاز ۲۱۵: ۸ث→۵ث — نامِ پیدانشدنی نباید ۱۶ثانیه بسوزاند
       if (status !== 200 || !json) continue
       const loc = json.location || json.items?.[0]?.location || json.results?.[0]?.location
       const y = loc?.y ?? loc?.latitude, x = loc?.x ?? loc?.longitude
@@ -240,15 +240,17 @@ async function aiGroundedNearby(key: string, lat: number, lng: number): Promise<
   // — اعتماد را نابود می‌کند»): پسوندِ «، محله» اعتبارسنجی را دوری می‌کرد — نشان وقتی POI را پیدا
   // نمی‌کرد خودِ محله (۲۰۰متریِ ملک!) را برمی‌گرداند و هر نامِ غلطی از فیلترِ فاصله رد می‌شد.
   // حالا با متنِ «شهر» geocode می‌شود: مکانِ واقعی به مختصاتِ واقعی‌اش می‌رسد و فیلترِ ۱کیلومتر کارش را می‌کند.
-  const located: Located[] = []
-  for (const c of cands.slice(0, 10)) {
-    if (!c?.name) continue
+  // فاز ۲۱۵ (بک‌لاگ ~۱/دقیقه با ۴ کارگر = ~۳ دقیقه برای هر آگهی): حلقهٔ geocode «سریالی» بود —
+  // تا ۱۰ کاندید × ۲ endpoint × ۸ث تایم‌اوت = تا ۱۶۰ثانیه. حالا ۶ کاندید، موازی، تایم‌اوتِ ۵ث.
+  const results = await Promise.all(cands.slice(0, 6).map(async (c) => {
+    if (!c?.name) return null
     const g = await neshanGeocode(key, `${c.name}، ${city}`)
-    if (!g) continue
+    if (!g) return null
     const km = haversine(lat, lng, g.lat, g.lng)
-    if (km > 7) continue
-    located.push({ type: c.type || 'مکان', name: c.name, lat: g.lat, lng: g.lng, km })
-  }
+    if (km > 7) return null
+    return { type: c.type || 'مکان', name: c.name, lat: g.lat, lng: g.lng, km } as Located
+  }))
+  const located = results.filter(Boolean) as Located[]
   // فاز ۲۰۷ب: فقط واقعاً نزدیک‌ها (≤۲.۵کیلومتر) و با حدنصاب — وگرنه صادقانه هیچ
   const kept = keepVerifiedNearby(located)
   if (!kept.length) return { nearby: [], source: 'neshan', note: 'مکانِ نزدیکِ تأییدشده‌ای پیدا نشد.' }

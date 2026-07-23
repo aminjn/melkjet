@@ -30,6 +30,9 @@ async function generate(id: string): Promise<Enrichment> {
   if (!it) return {}
   let cur = getEnrichment(id) || {}
   if (cur.v !== ENRICH_V) cur = {}
+  // فاز ۲۱۵ — سنجهٔ زمان: تخلیهٔ کندِ بک‌لاگ دیگر با حدس دیباگ نمی‌شود؛ گرم‌سازیِ کند علتش را لاگ می‌کند
+  const t0 = Date.now()
+  let tDivar = 0, tNearby = 0, tAna = 0
 
   if (!cur.baseDone) {
     // فاز ۲۰۱: بعدِ شکستِ گذرا تا پایانِ کول‌داون دوباره سراغِ دیوار نرو (تلاش در جاروی بعدی)
@@ -38,7 +41,9 @@ async function generate(id: string): Promise<Enrichment> {
     let geo: { lat: number; lng: number } | undefined
     const token = divarToken(it.url)
     if (token) {
+      const d0 = Date.now()
       const g = await fetchDivarPost(token)
+      tDivar = Date.now() - d0
       if (g.reason && !g.images?.length && !g.description && !permanentReason(g.reason)) {
         // شکستِ گذرا (پروکسی/شبکه/429) — نهایی نکن؛ فقط مهرِ تلاش بزن تا جارو بعداً برگردد.
         return patchEnrichment(id, { v: ENRICH_V, baseTriedAt: Date.now() })
@@ -56,7 +61,7 @@ async function generate(id: string): Promise<Enrichment> {
       if (mlat && mlng) geo = { lat: mlat, lng: mlng }
     }
     let nearby: any[] = []
-    if (geo) { try { nearby = (await computeNearby(geo.lat, geo.lng)).nearby } catch { nearby = [] } }
+    if (geo) { const n0 = Date.now(); try { nearby = (await computeNearby(geo.lat, geo.lng)).nearby } catch { nearby = [] } finally { tNearby = Date.now() - n0 } }
     cur = patchEnrichment(id, { v: ENRICH_V, gallery, facts, amenities, description, geo, nearby, nearbyV: 2, baseDone: true })
     // فاز ۲۰۱ (فیدبک: «نزدیک ۴۰۰۰ آگهی داریم ولی نقشه ۴۰ تا نشون می‌ده»): مختصاتِ به‌دست‌آمده از
     // دیوار روی خودِ آگهی هم بنشیند (meta.__lat/__lng) تا نقشهٔ جستجو پین‌دار شود — فقط اگر نداشت.
@@ -73,11 +78,13 @@ async function generate(id: string): Promise<Enrichment> {
     const tried = cur.analysisTriedAt || 0
     if (Date.now() - tried >= cooldownOf(cur)) {
       cur = patchEnrichment(id, { v: ENRICH_V, analysisTriedAt: Date.now() })
+      const a0 = Date.now()
       const a = await analyzeListing({
         title: it.title, price: it.price, location: it.location,
         facts: cur.facts || [], description: cur.description || it.excerpt || '',
         meta: it.meta, amenities: cur.amenities || [],
       })
+      tAna = Date.now() - a0
       if (a.analysis) cur = patchEnrichment(id, { v: ENRICH_V, analysis: a.analysis, analysisOk: true, analysisErr: false, analysisNote: '' })
       else {
         // فاز ۲۱۰ (فیدبک: «همچنان آگهی بدونِ تحلیل هست» — بارِ سوم): شکست دیگر بی‌صدا نیست؛
@@ -87,6 +94,12 @@ async function generate(id: string): Promise<Enrichment> {
         cur = patchEnrichment(id, { v: ENRICH_V, analysisErr: true, analysisNote: note })   // فاز ۵۷: کول‌داونِ کوتاه برای شکستِ سرویسی
       }
     }
+  }
+  // فاز ۲۱۵ — گرم‌سازیِ کند دیگر بی‌صدا نیست: سهمِ هر مرحله لاگ می‌شود تا گلوگاه بدونِ حدس پیدا شود
+  const total = Date.now() - t0
+  if (total > 25_000) {
+    const s = (ms: number) => Math.round(ms / 1000)
+    console.log(`[enrich] slow generate ${id}: ${s(total)}s (divar ${s(tDivar)}s, nearby ${s(tNearby)}s, analysis ${s(tAna)}s)`)
   }
   return cur
 }
