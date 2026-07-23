@@ -30,11 +30,13 @@ export function saleProbability(days: number, windowDays = 45): number {
   return Math.round((1 - Math.exp(-windowDays / Math.max(1, days))) * 100)
 }
 // پروفایلِ ریسک: قیمتِ خیلی بالای بازار، تقاضای پایین، آگهیِ ناقص، کهنگی.
-export function riskProfile(input: { priceVsMarket: number; demand: number; completeness: number; ageDays?: number }): { score: number; level: 'کم' | 'متوسط' | 'بالا'; factors: string[] } {
+// فاز ۲۰۶ (فیدبک: «برای ملکِ اجاره‌ای موارد باید منطبق بر اجاره باشد»): برای فایلِ اجاره‌ای
+// همان منطق با ادبیاتِ اجاره — priceVsMarket آن‌جا «اجاره نسبت به میانهٔ محله» است.
+export function riskProfile(input: { priceVsMarket: number; demand: number; completeness: number; ageDays?: number }, mode: 'sale' | 'rent' = 'sale'): { score: number; level: 'کم' | 'متوسط' | 'بالا'; factors: string[] } {
   const factors: string[] = []
   let s = 0
-  if (input.priceVsMarket > 0.12) { s += 0.35; factors.push('قیمتِ بالاتر از بازار') }
-  if (input.demand < 0.3) { s += 0.3; factors.push('تقاضای پایین') }
+  if (input.priceVsMarket > 0.12) { s += 0.35; factors.push(mode === 'rent' ? 'اجارهٔ بالاتر از میانهٔ محله' : 'قیمتِ بالاتر از بازار') }
+  if (input.demand < 0.3) { s += 0.3; factors.push(mode === 'rent' ? 'تقاضای اجارهٔ پایین' : 'تقاضای پایین') }
   if (input.completeness < 0.6) { s += 0.2; factors.push('اطلاعاتِ ناقصِ آگهی') }
   if ((input.ageDays ?? 0) > 90) { s += 0.15; factors.push('آگهیِ قدیمی') }
   const score = Math.round(clamp01(s) * 100)
@@ -136,7 +138,7 @@ async function buildRentTwin(it: Item, p: PropertyEntity, demand: number): Promi
     daysToSell: 0, saleProbability: 0,
     priceVsMarket: Math.round(rentVsMarket * 1000) / 10,   // درصدِ اجاره نسبت به میانهٔ محله
     rentalYield: null,
-    risk: riskProfile({ priceVsMarket: rentVsMarket, demand, completeness, ageDays: p.createdAt ? (Date.now() - p.createdAt) / 864e5 : 0 }),
+    risk: riskProfile({ priceVsMarket: rentVsMarket, demand, completeness, ageDays: p.createdAt ? (Date.now() - p.createdAt) / 864e5 : 0 }, 'rent'),
     aiConfidence: aiConfidence(perM.length, completeness),
     trend: intel?.trend || 'flat',
     note: !fairRentPerM || !myRentPerM

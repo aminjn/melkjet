@@ -56,8 +56,10 @@ export default function ReosTwinCard({ propertyId }: { propertyId: string }) {
             {d.rent?.monthly ? tile('اجارهٔ این فایل', fa(d.rent.monthly) + ' ت/ماه', 'var(--text)', d.rent.rentPerM ? `${fa(d.rent.rentPerM)} ت/متر` : '') : null}
             {d.rent?.deposit ? tile('ودیعه', fa(d.rent.deposit) + ' ت') : null}
             {(d.rent?.samples || 0) > 0 && d.rent?.rentPerM ? tile('اجاره نسبت به محله', (d.priceVsMarket > 0 ? '+' : '') + fa(d.priceVsMarket) + '٪', d.priceVsMarket > 12 ? '#e74c3c' : d.priceVsMarket < -8 ? '#34d399' : 'var(--text)', d.priceVsMarket > 12 ? 'بالاتر از میانه' : d.priceVsMarket < -8 ? 'زیرِ میانه' : 'نزدیکِ میانه') : null}
-            {tile('نقدشوندگی', fa(d.liquidity) + '/۱۰', '#60a5fa')}
-            {tile('ریسک', d.risk.level, riskColor, d.risk.factors[0])}
+            {/* فاز ۲۰۶ (فیدبک: «نقدشوندگی یعنی چی؟ باید منطبق بر اجاره باشه») — نقدشوندگی سنجهٔ فروش است؛
+                برای اجاره «تقاضا» از بازدید/تماسِ واقعیِ همین فایل معنی دارد */}
+            {tile('تقاضای اجاره', fa(Math.round(d.demand * 10)) + '/۱۰', '#60a5fa', 'از بازدید و تماسِ واقعیِ این فایل')}
+            {tile('ریسکِ اجاره', d.risk.level, riskColor, d.risk.factors[0])}
             {tile('روندِ منطقه', trendTxt.t, trendTxt.c)}
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 12 }}>{d.note} · فایلِ اجاره‌ای است — مقایسه فقط با اجاره‌های واقعیِ همین محله انجام می‌شود.</div>

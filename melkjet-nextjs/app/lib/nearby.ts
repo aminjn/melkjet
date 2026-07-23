@@ -73,6 +73,23 @@ async function pickSearchKey(keys: string[], lat: number, lng: number): Promise<
   return null
 }
 
+// فاز ۲۰۶ب (دیباگِ واقعیِ prod: کلیدِ سرویس روی هر سه سرویس ۴۸۳ «نوعِ کلید نامناسب» بود ولی کلیدِ
+// نقشه Reverse/Matrix را ۲۰۰ می‌داد) — مسیرِ جایگزین کورکورانه keys[0] (همان کلیدِ خراب) را برمی‌داشت
+// و «دسترسی‌های اطراف» همیشه خالی می‌ماند. حالا کلیدِ REST-سالم با پروبِ reverse انتخاب می‌شود.
+async function pickRestKey(keys: string[], lat: number, lng: number): Promise<string | null> {
+  for (const k of keys) {
+    try {
+      const { status } = await neshanGet(`https://api.neshan.org/v5/reverse?lat=${lat}&lng=${lng}`, k)
+      if (status === 200) return k
+    } catch { /* try next */ }
+  }
+  return null
+}
+
+// نتیجهٔ پروبِ کلیدها ۱۰ دقیقه کش می‌شود تا هر تماسِ بی‌کش دوباره پروب نزند.
+let keyPickCache: { at: number; search: string | null; rest: string | null } | null = null
+const KEY_PICK_TTL = 10 * 60 * 1000
+
 async function routeMatrix(key: string, lat: number, lng: number, dests: { lat: number; lng: number }[]) {
   const origins = `${lat},${lng}`
   const destinations = dests.map(d => `${d.lat},${d.lng}`).join('|')
@@ -111,8 +128,13 @@ async function computeNearbyUncached(lat: number, lng: number): Promise<NearbyRe
   const keys = Array.from(new Set([nz?.serviceKey, nz?.mapKey].filter(Boolean) as string[]))
   if (!keys.length) return { nearby: [], source: 'none', note: 'کلید نشان تنظیم نشده است.' }
 
+  // فاز ۲۰۶ب: انتخابِ کلیدِ سالم برای هر مسیر، با پروبِ واقعی (کش ۱۰ دقیقه)
+  if (!keyPickCache || Date.now() - keyPickCache.at > KEY_PICK_TTL) {
+    keyPickCache = { at: Date.now(), search: await pickSearchKey(keys, lat, lng), rest: await pickRestKey(keys, lat, lng) }
+  }
+
   // مسیر اول: اگر کلیدی مجوز Search داشت، دقیق‌ترین حالت
-  const searchKey = await pickSearchKey(keys, lat, lng)
+  const searchKey = keyPickCache.search
   if (searchKey) {
     const places = (await Promise.all(CATEGORIES.map(async (c) => {
       try {
@@ -125,7 +147,8 @@ async function computeNearbyUncached(lat: number, lng: number): Promise<NearbyRe
   }
 
   // مسیر دوم (وقتی Search نبود): reverse → نام‌های واقعی با AI → geocoding اعتبارسنجی → matrix
-  const key = keys[0]
+  // با کلیدی که REST را واقعاً جواب می‌دهد — نه کورکورانه keys[0] که ممکن است کلاً نوعِ اشتباه (۴۸۳) باشد
+  const key = keyPickCache.rest || keys[0]
   return await aiGroundedNearby(key, lat, lng)
 }
 

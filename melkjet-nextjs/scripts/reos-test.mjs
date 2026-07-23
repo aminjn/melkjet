@@ -278,6 +278,10 @@ console.log('\n── REOS v4: Property Digital Twin ──')
   const loRisk = riskProfile({ priceVsMarket: -0.05, demand: 0.8, completeness: 0.9, ageDays: 5 })
   ok('riskProfile: overpriced+cold+stale = high', hiRisk.level === 'بالا' && hiRisk.factors.length >= 2)
   ok('riskProfile: fair+hot+fresh = low', loRisk.level === 'کم')
+  // فاز ۲۰۶ (فیدبک: «برای ملکِ اجاره‌ای موارد باید منطبق بر اجاره باشد») — همان منطق با ادبیاتِ اجاره
+  const rentRisk = riskProfile({ priceVsMarket: 0.25, demand: 0.1, completeness: 1 }, 'rent')
+  ok('riskProfile اجاره‌ای: عامل‌ها با ادبیاتِ اجاره', rentRisk.factors[0] === 'اجارهٔ بالاتر از میانهٔ محله' && rentRisk.factors[1] === 'تقاضای اجارهٔ پایین')
+  ok('پیش‌فرض همچنان ادبیاتِ فروش (بدونِ تغییرِ رفتار)', riskProfile({ priceVsMarket: 0.25, demand: 0.5, completeness: 1 }).factors[0] === 'قیمتِ بالاتر از بازار' && rentRisk.score === riskProfile({ priceVsMarket: 0.25, demand: 0.1, completeness: 1 }).score)
   ok('aiConfidence rises with comps + completeness', aiConfidence(10, 1) > aiConfidence(1, 0.3) && aiConfidence(10, 1) <= 100)
 }
 
