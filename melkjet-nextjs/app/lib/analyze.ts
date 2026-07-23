@@ -46,7 +46,10 @@ export async function analyzeListing(b: AnalyzePayload): Promise<{ analysis?: an
 - در cons هرگز نگو امکانی نیست اگر در «امکانات موجود» آمده. اعداد scores ۰ تا ۱۰ و confidence ۰ تا ۱۰۰.`
 
   try {
-    let text = await chatCompleteSafe(model, [{ role: 'system', content: system }, { role: 'user', content: info }], { temperature: 0.5 })
+    // فاز ۲۱۴ (لاگِ واقعیِ prod: «Unexpected end of JSON input» — تخلیهٔ بک‌لاگ ~۱/دقیقه به‌جای ~۲۰):
+    // بدونِ max_tokens، سقفِ پیش‌فرضِ gateway جوابِ JSONِ بلند را وسط می‌بُرید → parse شکست →
+    // کول‌داون → چرخهٔ بی‌پایان. سقفِ صریحِ کافی برای کلِ ساختار (facts+priceTrend+…).
+    let text = await chatCompleteSafe(model, [{ role: 'system', content: system }, { role: 'user', content: info }], { temperature: 0.5, max_tokens: 2200 })
     const m = text.match(/\{[\s\S]*\}/)
     if (m) text = m[0]
     return { analysis: JSON.parse(text) }
