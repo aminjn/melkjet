@@ -49,6 +49,12 @@ async function generate(id: string): Promise<Enrichment> {
       description = g.description || undefined
       if (typeof g.lat === 'number' && typeof g.lng === 'number') geo = { lat: g.lat, lng: g.lng }
     }
+    // فاز ۲۰۳ (فیدبک: «همچنان مکان‌های نزدیک رو نشون نمی‌ده» — آگهیِ ثبتِ کاربر): geo فقط از دیوار
+    // می‌آمد؛ آگهیِ ثبتِ کاربر/مشاور مختصاتش در متایِ خودِ آگهی است → nearby هرگز ساخته نمی‌شد.
+    if (!geo) {
+      const mlat = Number(it.meta?.['__lat']), mlng = Number(it.meta?.['__lng'])
+      if (mlat && mlng) geo = { lat: mlat, lng: mlng }
+    }
     let nearby: any[] = []
     if (geo) { try { nearby = (await computeNearby(geo.lat, geo.lng)).nearby } catch { nearby = [] } }
     cur = patchEnrichment(id, { v: ENRICH_V, gallery, facts, amenities, description, geo, nearby, baseDone: true })

@@ -17,14 +17,23 @@ export async function GET(req: NextRequest) {
   const cached = getEnrichment(id)
   const complete = cached?.v === ENRICH_V && cached?.baseDone && cached?.analysisOk
   if (!complete) warmEnrichment(id)   // پس‌زمینه، بدونِ انتظار — نتیجه در اسکرپِ بعدی/رفرش می‌آید
-  if (cached?.baseDone && cached.geo && !cached.nearby?.length && Date.now() - (cached.nearbyTriedAt || 0) > NEARBY_RETRY_MS) {
-    const g = cached.geo
+  // فاز ۲۰۳: geo از کش یا از متایِ خودِ آگهی (آگهیِ ثبتِ کاربر geo دیواری ندارد ولی مختصات دارد)
+  if (cached?.baseDone && !cached.nearby?.length && Date.now() - (cached.nearbyTriedAt || 0) > NEARBY_RETRY_MS) {
+    const cachedGeo = cached.geo
     patchEnrichment(id, { nearbyTriedAt: Date.now() })
     ;(async () => {
       try {
+        let g = cachedGeo
+        if (!g) {
+          const { getItemById } = await import('@/app/lib/scraper-store')
+          const it = await getItemById(id)
+          const mlat = Number(it?.meta?.['__lat']), mlng = Number(it?.meta?.['__lng'])
+          if (mlat && mlng) g = { lat: mlat, lng: mlng }
+        }
+        if (!g) return
         const { computeNearby } = await import('@/app/lib/nearby')
         const n = (await computeNearby(g.lat, g.lng)).nearby
-        if (n?.length) patchEnrichment(id, { nearby: n })
+        if (n?.length) patchEnrichment(id, { nearby: n, geo: g })
       } catch { /* تلاشِ بعدی بعدِ کول‌داون */ }
     })()
   }

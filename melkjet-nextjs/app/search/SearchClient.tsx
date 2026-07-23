@@ -11,29 +11,18 @@ import CardImg from '@/app/components/CardImg'
 import LikeHeart from '@/app/components/home/LikeHeart'
 import NeighborhoodPicker from '@/app/components/NeighborhoodPicker'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
-import { dealOf } from '@/app/lib/listing-filter'
 import { readLoc } from '@/app/components/LocationDetector'
 import { readCity } from '@/app/components/CitySelector'
 import { openAuth } from '@/app/components/AuthModal'
 import { PROPERTY_KINDS } from '@/app/lib/taxonomy'
 import { listingHref } from '@/app/lib/listing-url'
-import { pinBoundsView, geocodeKeysOf, geoKeyOf, hoodPartOf } from '@/app/lib/map-pins'
+import { hoodPartOf } from '@/app/lib/map-pins'
+// فاز ۲۰۴: استخراج/فیلترِ آگهی حالا در کتابخانهٔ مشترکِ listing-search است —
+// همان منطقی که /api/map/clusters روی کلِ استخر اجرا می‌کند (نقشه و کارت‌ها هم‌زبان).
+import { parseQuery, deriveListing, effectiveFiltersOf, matchesListing } from '@/app/lib/listing-search'
 
-function seedNum(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-  return Math.abs(h)
-}
-
-const FA_DIGITS: Record<string, string> = {
-  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
-  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
-}
-function faToEn(s: string): string { return (s || '').replace(/[۰-۹٠-٩]/g, d => FA_DIGITS[d] ?? d) }
 function toPersianDigits(n: number | string): string { return String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
 function faNum(n: number): string { return (Number(n) || 0).toLocaleString('fa-IR') }
-
-function firstInt(s?: string): number | null { const m = faToEn(s || '').match(/(\d{1,4})/); return m ? parseInt(m[1], 10) : null }
 // برچسبِ کوتاهِ قیمت روی نقشه: خرید/فروش بر اساسِ «میلیارد»، اجاره بر اساسِ «میلیون» (فارسی، بدونِ صفرِ اضافه)
 function pinPrice(deal: string, priceB: number): string {
   if (!(priceB > 0)) return '—'
@@ -46,8 +35,6 @@ function pinPrice(deal: string, priceB: number): string {
   return priceB >= 50 ? `${toPersianDigits(Math.round(priceB))} میلیارد` : `${faNum(Math.round(priceB * 10) / 10)} میلیارد`
 }
 
-// همهٔ امکاناتِ قابلِ تشخیص (برای فیلتر + تشخیصِ متن)
-const AMENITY_ALL = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'مبله', 'روف گاردن', 'استخر', 'سونا', 'جکوزی', 'لابی', 'سند تک‌برگ', 'بازسازی', 'نوساز']
 const AMENITY_FILTER = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'مبله', 'روف گاردن', 'استخر', 'لابی', 'نوساز']
 const PRICE_MAX = 500 // «بدون سقف»
 // گزینه‌های آمادهٔ فیلتر (دراپ‌داون — کاربر تایپ نمی‌کند)
@@ -72,81 +59,26 @@ function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): nu
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)))
 }
 
-// واحدِ ملک (آپارتمان/ویلا/…) را از متن تشخیص می‌دهد
-function detectKind(text: string): string {
-  for (const k of PROPERTY_KINDS) {
-    for (const seg of k.split('/')) { if (seg && text.includes(seg)) return k }
-  }
-  return ''
-}
-
 function toProperty(it: ContentItem) {
-  const h = seedNum(it.id)
-  const enTitle = faToEn(it.title)
-  const rawPrice = parseFloat(faToEn(it.price || '').replace(/[^\d.]/g, '')) || 0
-  const ptxt = it.price || ''
-  const priceNum = /میلیارد/.test(ptxt) ? rawPrice : /میلیون/.test(ptxt) ? rawPrice / 1000 : rawPrice / 1e9
-  const bedsNum = (() => { const m = faToEn(`${it.title} ${it.excerpt || ''} ${it.meta?.['اتاق خواب'] || ''}`).match(/(\d+)\s*خواب/); return m ? parseInt(m[1], 10) : null })()
-  const searchText = [it.title, it.location, it.excerpt, it.category, ...(it.tags || [])].filter(Boolean).join(' ').toLowerCase()
-  // فاز ۱۵۱: همان دسته‌بندی‌ای که سرور در /api/content به‌کار می‌برد — تا شمارِ «N از total» با کارت‌ها بخواند
-  const deal = dealOf(it)
-  const areaNum = firstInt(it.meta?.['متراژ']) ?? (enTitle.match(/(\d+)\s*متر/) ? parseInt(enTitle.match(/(\d+)\s*متر/)![1], 10) : 0)
-  const floorNum = firstInt(it.meta?.['طبقه'])
-  const yearNum = (() => { const y = firstInt(it.meta?.['سال ساخت']) ?? firstInt(it.meta?.['ساخت']); return y && y > 50 ? y : 0 })()
-  const kind = detectKind(`${it.title} ${it.category || ''} ${it.meta?.['نوع ملک'] || ''}`)
-  const lat = Number(it.meta?.['__lat']) || undefined
-  const lng = Number(it.meta?.['__lng']) || undefined
+  // فاز ۲۰۴: فیلدهای فیلترپذیر از کتابخانهٔ مشترک (همان که سرورِ نقشه استفاده می‌کند)؛
+  // این‌جا فقط فیلدهای نمایشی اضافه می‌شود.
+  const d = deriveListing(it)
   const ds = it.meta?.['__dealStatus']
   const dealStatus: 'sold' | 'rented' | '' = ds === 'sold' ? 'sold' : ds === 'rented' ? 'rented' : ''
   return {
-    id: it.id, deal, title: it.title, location: it.location || 'نامشخص',
-    price: it.price || '—', priceNum,
-    beds: bedsNum != null ? toPersianDigits(bedsNum) : '—', bedsNum,
-    size: areaNum ? toPersianDigits(areaNum) : '—', areaNum,
-    floorNum, yearNum, kind, lat, lng, dealStatus,
-    year: yearNum ? toPersianDigits(yearNum) : '—',
+    ...d,
+    price: it.price || '—',
+    beds: d.bedsNum != null ? toPersianDigits(d.bedsNum) : '—',
+    size: d.areaNum ? toPersianDigits(d.areaNum) : '—',
+    year: d.yearNum ? toPersianDigits(d.yearNum) : '—',
+    dealStatus,
     // بدونِ «امتیازِ AI»ِ ساختگی — score فقط برای ترتیبِ پایدارِ «پیشنهاد ملک‌جت» (از هش؛ نمایش داده نمی‌شود)
-    tag: '', score: h % 100,
+    tag: '',
     img: it.image ? '' : gradientFor(it.title), image: it.image, url: it.url,
-    category: it.category || '', searchText, promoKind: (it as any).promoKind || '',
+    category: it.category || '', promoKind: (it as any).promoKind || '',
   }
 }
 type PropertyT = ReturnType<typeof toProperty>
-
-// ─── تشخیصِ واقعیِ پارامترها از متنِ جستجو (نه فیک) ───────────────────────────
-interface Parsed { kind: string; area: string; sizeNum: number; budgetMax: number; beds: number | null; amenities: string[]; deal: string; tokens: string[] }
-const STOP = new Set(['در', 'با', 'و', 'زیر', 'تا', 'حدود', 'حداکثر', 'سقف', 'متری', 'متر', 'میلیارد', 'میلیون', 'تومان', 'خواب', 'خوابه', 'نزدیک', 'حوالی', 'منطقه', 'محله', 'یک', 'دو', 'سه', 'چهار', 'برای', 'فروش', 'اجاره', 'رهن', 'پیش‌فروش', 'پیش'])
-function parseQuery(raw: string): Parsed {
-  const t = faToEn(raw)
-  const out: Parsed = { kind: '', area: '', sizeNum: 0, budgetMax: 0, beds: null, amenities: [], deal: '', tokens: [] }
-  if (!raw.trim()) return out
-  if (/پیش[‌\s]?فروش/.test(raw)) out.deal = 'presale'
-  else if (/کوتاه[‌\s]?مدت|روزانه|شبی\s/.test(raw)) out.deal = 'daily'   // فاز ۱۹۰: «اجارهٔ روزانه» قبل از rent
-  else if (/اجاره|رهن|ودیعه/.test(raw)) out.deal = 'rent'
-  out.kind = detectKind(raw)
-  const sm = t.match(/(\d{2,4})\s*متر/); if (sm) out.sizeNum = parseInt(sm[1], 10)
-  const bm = t.match(/(\d+)\s*خواب/); if (bm) out.beds = parseInt(bm[1], 10)
-  const bg = t.match(/(?:زیر|تا|حداکثر|سقف)\s*([\d.]+)\s*(میلیارد|میلیون)?/)
-  if (bg) { const n = parseFloat(bg[1]); out.budgetMax = /میلیون/.test(bg[2] || '') ? n / 1000 : n }
-  for (const a of AMENITY_ALL) if (raw.includes(a)) out.amenities.push(a)
-  const am = raw.match(/در\s+([^\d،,]+?)(?:\s+(?:زیر|با|تا|حدود|حداکثر)|،|$)/)
-  if (am) out.area = am[1].replace(/‌/g, ' ').trim()
-  // توکن‌های باقی‌مانده (مثلِ نامِ محله/برج) برای جستجوی متنی
-  const consumed = new Set<string>([...out.amenities, ...(out.area ? out.area.split(/\s+/) : []), ...(out.kind ? out.kind.split('/') : [])])
-  for (const w of raw.split(/[\s،,]+/)) {
-    const word = w.trim()
-    if (word.length < 2 || STOP.has(word) || consumed.has(word) || /^\d/.test(faToEn(word))) continue
-    out.tokens.push(word)
-  }
-  return out
-}
-
-function bedsMatch(target: number | null, bedsNum: number | null): boolean {
-  if (target == null) return true
-  if (bedsNum == null) return true
-  if (target >= 4) return bedsNum >= 4
-  return bedsNum === target
-}
 
 // فاز ۹۹ (SSR جستجو): دادهٔ اولیه و شهرِ کوکی از صفحهٔ سروری می‌آید تا کارت‌ها
 // و تصویرِ LCP در HTML اولیه باشند؛ رفتارِ بعد از هیدریت عیناً مثلِ قبل است.
@@ -222,7 +154,6 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [properties, setProperties] = useState<PropertyT[]>(() => initial.map(toProperty))
   const [poolTotal, setPoolTotal] = useState(0)          // فاز ۱۵۱: کلِ نتیجهٔ واقعیِ فیلترِ شهر/تب در سرور
-  const gotOnce151 = useRef(false)                        // بعد از بارِ اول، تعویضِ شهر/تب بدونِ تأخیرِ ۲.۵ث
   // فاز ۹۲ (پرفورمنس: رندرِ ۱۰۰۰ کارت + ۱۰۰۰ تصویرِ background = ۴۴MB و LCP ~۱۰ث): رندرِ تدریجیِ ۲۴تایی
   const [visN, setVisN] = useState(24)
   const [promoted, setPromoted] = useState<PropertyT[]>([])
@@ -245,6 +176,9 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     // فاز ۹۶ (TBT) + فاز ۱۵۱ (فیدبک: «کلی ملک هست چرا ۲۸ تا؟»): استخرِ کامل حالا «فیلترشدهٔ
     // شهر/تبِ همین کاربر» است که سرور روی کلِ آگهی‌ها ساخته — نه ۱۰۰۰ تای آخرِ همهٔ شهرها.
     const tab151 = dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
+    // فاز ۲۰۵ (فیدبک: «اول ۱۰ تا آگهی نشون می‌ده، ۳ ثانیه بعد آگهی‌های درست — غیرحرفه‌ای و آزاردهنده»):
+    // تأخیرِ عمدیِ ۲.۵ثانیه‌ایِ فاز ۹۶ (نگرانیِ TBTِ رندرِ ۱۰۰۰ کارت) منسوخ بود — رندر از فاز ۹۲
+    // تدریجیِ ۲۴تایی است. استخرِ کامل حالا بلافاصله می‌آید؛ سوییچ در حدِ یک لودِ عادی حس می‌شود.
     const t96 = setTimeout(() => {
       if (!alive) return
       const q = new URLSearchParams({ type: 'listing', limit: '1000', slim: '1', deal: tab151 })
@@ -252,8 +186,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       fetch(`/api/content?${q.toString()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : { items: [], total: 0 }).then((d) => {
         if (alive) { gotFull = true; setProperties((d.items || []).map(toProperty)); setPoolTotal(Number(d.total) || 0); setLoading(false) }
       }).catch(() => { if (alive) setLoading(false) })
-    }, gotOnce151.current ? 0 : 2500)
-    gotOnce151.current = true
+    }, 0)
     fetch('/api/promotions?slot=search_top', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { items: [] })).then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) }).catch(() => {})
     return () => { alive = false; clearTimeout(t96) }
   }, [selectedCity, dealType, fresh180])
@@ -322,48 +255,22 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm])
 
-  // مقادیرِ مؤثرِ فیلتر: فیلترِ دستی اولویت دارد، وگرنه از تشخیصِ متن
-  const fKind = kind || parsed.kind || ''
-  const fBeds = beds !== 'همه' ? parseInt(faToEn(beds), 10) : parsed.beds
-  const fBudgetMax = priceMax < PRICE_MAX ? priceMax : (parsed.budgetMax || 0)
-  const fSizeMin = areaMin > 0 ? areaMin : (parsed.sizeNum ? Math.floor(parsed.sizeNum * 0.8) : 0)
-  const fSizeMax = areaMax > 0 ? areaMax : (parsed.sizeNum ? Math.ceil(parsed.sizeNum * 1.2) : 0)
-  const fAmen = useMemo(() => Array.from(new Set([...checkedAmenities, ...parsed.amenities])), [checkedAmenities, parsed.amenities])
-  const fAreaName = parsed.area || ''
-
   const activeFilterCount =
     (dealType !== 'خرید' ? 1 : 0) + (kind ? 1 : 0) + (beds !== 'همه' ? 1 : 0) +
     (priceMin > 0 ? 1 : 0) + (priceMax < PRICE_MAX ? 1 : 0) + (areaMin > 0 ? 1 : 0) + (areaMax > 0 ? 1 : 0) +
     (floorMin > 0 ? 1 : 0) + (yearMin > 0 ? 1 : 0) + checkedAmenities.length
 
+  // فاز ۲۰۴: همان منطقِ مشترکِ listing-search (فیلترِ دستی اولویت دارد، وگرنه تشخیصِ متن؛
+  // predicate عیناً همان فاز ۱۷۷/۱۵۱) — سرورِ نقشه هم دقیقاً همین را روی کلِ استخر اجرا می‌کند.
   const filteredProperties = useMemo(() => {
     const tabDeal = dealType === 'پیش‌فروش' ? 'presale' : dealType === 'اجارهٔ روزانه' ? 'daily' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
-    const areaName = fAreaName.toLowerCase()
-    return properties.filter(p => {
-      if (p.deal !== tabDeal) return false
-      if (fKind && p.kind && p.kind !== fKind) {
-        // اگر واحدِ تشخیص‌داده‌شده فرق دارد، رد کن (اگر واحدِ آگهی نامشخص است، تحمل کن)
-        return false
-      }
-      if (!bedsMatch(fBeds ?? null, p.bedsNum)) return false
-      if (priceMin > 0 && p.priceNum > 0 && p.priceNum < priceMin) return false
-      if (fBudgetMax > 0 && p.priceNum > 0 && p.priceNum > fBudgetMax) return false
-      if (fSizeMin > 0 && p.areaNum > 0 && p.areaNum < fSizeMin) return false
-      if (fSizeMax > 0 && p.areaNum > 0 && p.areaNum > fSizeMax) return false
-      if (floorMin > 0 && p.floorNum != null && p.floorNum < floorMin) return false
-      if (yearMin > 0 && p.yearNum > 0 && p.yearNum < yearMin) return false
-      for (const a of fAmen) { if (p.searchText.trim() && !p.searchText.includes(a.toLowerCase())) return false }
-      if (areaName) { const hay = `${p.location} ${p.searchText}`.toLowerCase(); if (!hay.includes(areaName)) return false }
-      // فاز ۱۷۷ (فیدبک: «سرچ می‌کنم چرت‌وپرت می‌ده») — جستجوی متنیِ «سخت‌گیر»:
-      // هر واژهٔ باقی‌مانده (مثل نامِ محله/برج) باید بخورد — همیشه، حتی با کوئریِ ساختاردار
-      // (قبلاً با کوئریِ ساختاردار واژه‌ها کلاً نادیده می‌شدند و «آپارتمان ولنجک» همهٔ آپارتمان‌های شهر را می‌آورد).
-      if (parsed.tokens.length) {
-        const hay = `${p.title} ${p.location} ${p.searchText}`.toLowerCase()
-        if (!parsed.tokens.every(t => hay.includes(t.toLowerCase()))) return false
-      }
-      return true
+    const eff = effectiveFiltersOf({
+      tab: tabDeal, q: searchTerm, kind, bedsLabel: beds,
+      priceMin, priceMax: priceMax < PRICE_MAX ? priceMax : 0,
+      areaMin, areaMax, floorMin, yearMin, amenities: checkedAmenities,
     })
-  }, [properties, dealType, fKind, fBeds, priceMin, fBudgetMax, fSizeMin, fSizeMax, floorMin, yearMin, fAmen, fAreaName, parsed.tokens])
+    return properties.filter(p => matchesListing(p, eff))
+  }, [properties, dealType, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities])
 
   // ─── فیلترِ هوشمندِ مکان ──────────────────────────────────────────────────
   // شهر = فیلترِ قطعی (اگر آگهی نبود، خالی نشان می‌دهد؛ هیچ‌وقت آگهیِ شهرِ دیگر را نشان نمی‌دهد).
@@ -473,71 +380,28 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     return () => { alive = false }
   }, [mapArea, selectedCity])
 
-  // ── پین‌کردنِ آگهی‌ها روی نقشه: مختصاتِ هر آگهی را از متا یا با geocodeِ محله‌اش می‌گیریم ──
-  // فاز ۲۰۲ (فیدبک: «۴۰۰۰ آگهی داریم، نقشه ۴۰ تا نشون می‌ده؛ محله انتخاب نکردم باید کلِ شهر رو نشون بده»):
-  // پین‌ها دیگر به ۴۰ تای اولِ مرتب‌سازی محدود نیستند — کلِ استخرِ فیلترشدهٔ همین شهر/تب پین می‌شود
-  // (خوشه‌بندی ازدحام را جمع می‌کند)؛ geocodeِ محله‌ها یکتا/سقف‌دار و تکه‌تکه (سقفِ ۴۰تاییِ سرور) می‌رود.
-  const [locCoords, setLocCoords] = useState<Record<string, { lat: number; lng: number }>>({})
-  const needGeocode = useMemo(() => geocodeKeysOf(shownProperties, selectedCity || ''), [shownProperties, selectedCity])
-  useEffect(() => {
-    const todo = needGeocode.filter(q => !GEO_CACHE.has(q))
-    const fromCache: Record<string, { lat: number; lng: number }> = {}
-    for (const q of needGeocode) { const c = GEO_CACHE.get(q); if (c) fromCache[q] = c }
-    if (Object.keys(fromCache).length) setLocCoords(prev => ({ ...prev, ...fromCache }))
-    if (!todo.length) return
-    let alive = true
-    ;(async () => {
-      for (let i = 0; i < todo.length && alive; i += 40) {
-        try {
-          const r = await fetch('/api/geo/geocode-batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ queries: todo.slice(i, i + 40) }) })
-          const d = r.ok ? await r.json() : null
-          if (!alive || !d?.results) continue
-          const add: Record<string, { lat: number; lng: number }> = {}
-          for (const [q, c] of Object.entries(d.results)) { if (c) { GEO_CACHE.set(q, c as any); add[q] = c as any } else GEO_CACHE.set(q, null as any) }
-          if (Object.keys(add).length) setLocCoords(prev => ({ ...prev, ...add }))
-        } catch { /* تکهٔ بعدی */ }
-      }
-    })()
-    return () => { alive = false }
-  }, [needGeocode])
+  // ── فاز ۲۰۴ — نقشهٔ سرورساید (معماریِ دیوار برای ۱۲هزار+ آگهی) ──────────────
+  // کلاینت دیگر نه آگهی پین می‌کند نه geocode می‌زند: فقط «فیلترهای فعلی» را به
+  // /api/map/clusters می‌فرستد؛ سرور روی کلِ استخر خوشه/پینِ همان قاب را برمی‌گرداند.
+  const mapQuery = useMemo(() => {
+    const tab = dealType === 'پیش‌فروش' ? 'presale' : dealType === 'اجارهٔ روزانه' ? 'daily' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
+    const p = new URLSearchParams({ deal: tab })
+    if (selectedCity) p.set('city', selectedCity)
+    if (searchTerm.trim()) p.set('q', searchTerm.trim())
+    if (kind) p.set('kind', kind)
+    if (beds !== 'همه') p.set('beds', beds)
+    if (priceMin > 0) p.set('pmin', String(priceMin))
+    if (priceMax < PRICE_MAX) p.set('pmax', String(priceMax))
+    if (areaMin > 0) p.set('amin', String(areaMin))
+    if (areaMax > 0) p.set('amax', String(areaMax))
+    if (floorMin > 0) p.set('fmin', String(floorMin))
+    if (yearMin > 0) p.set('ymin', String(yearMin))
+    if (checkedAmenities.length) p.set('amen', checkedAmenities.join('،'))
+    return p.toString()
+  }, [dealType, selectedCity, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities])
 
-  // پین‌ها — مختصاتِ دقیقِ آگهی (از دیوار) یا geocodeِ محله (با jitterِ کوچک)؛ برچسبِ کوتاهِ فارسی
-  const pins = useMemo(() => {
-    const out: { id: string; lat: number; lng: number; label: string }[] = []
-    for (const p of shownProperties) {
-      let lat = p.lat, lng = p.lng
-      if (!(lat && lng)) {
-        // فاز ۲۰۲: همان کلیدِ geoKeyOf — تکهٔ اولِ «تهران، جنت‌آباد» نامِ شهر است نه محله
-        const key = geoKeyOf(p.location || '', selectedCity || '')
-        const c = key ? (locCoords[key] || GEO_CACHE.get(key)) : null
-        if (c) {
-          const h = seedNum(p.id)
-          lat = c.lat + (((h % 1000) / 1000 - 0.5) * 0.005)
-          lng = c.lng + ((((h >> 10) % 1000) / 1000 - 0.5) * 0.005)
-        }
-      }
-      if (lat && lng) out.push({ id: p.id, lat, lng, label: pinPrice(p.deal, p.priceNum) })
-    }
-    return out
-  }, [shownProperties, locCoords, selectedCity])
-
-  // نمای نقشه (مرکز + زوم) — متناسب با گسترهٔ پین‌ها، وگرنه مرکزِ شهر/محله
-  const mapView = useMemo(() => {
-    // اولویتِ اول: موقعیتِ واقعیِ کاربر (GPS) — محدودهٔ نزدیکِ خودش را نشان بده (نه کلِ شهر)،
-    // مگر اینکه عمداً شهرِ دیگری انتخاب کرده باشد.
-    const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '')
-    const gpsCityOk = !selectedCity || !userCity || norm(selectedCity) === norm(userCity) || norm(userCity).includes(norm(selectedCity)) || norm(selectedCity).includes(norm(userCity))
-    // فقط وقتی «نزدیکِ من» روشن است روی موقعیتِ کاربر زوم کن؛ خاموش = نمای کلِ شهر.
-    // انتخابِ صریحِ محله (چیپ/جستجو) بر GPS مقدم است — همان قانونی که فیلترِ آگهی‌ها دارد؛
-    // وگرنه با «نزدیکِ من»ِ روشن، نقشه روی محلهٔ خودِ کاربر گیر می‌کرد و به محلهٔ انتخابی نمی‌رفت.
-    // فاز ۹۳: مرکزِ نقشه هرگز موقعیتِ (نادقیقِ) کاربر نیست — فقط پین‌های واقعی/شهرِ انتخابی
-    // فاز ۲۰۲: قاب = گسترهٔ همهٔ پین‌های شهر (کلِ شهر دیده می‌شود)، با کرانهٔ صدکی ضدِ مختصاتِ پرت
-    const fitted = pinBoundsView(pins)
-    if (fitted) return fitted
-    if (mapCenter) return { center: mapCenter, zoom: 13 }
-
-    return null
-  }, [pins, mapCenter, userLoc, selectedCity, userCity, nearMe, hood, parsed.area])
+  // نمای اولیهٔ جایگزین وقتی سرور هیچ نقطه‌ای ندارد (شهرِ بی‌آگهی): مرکزِ geocodeشدهٔ شهر/محله
+  const mapView = useMemo(() => (mapCenter ? { center: mapCenter, zoom: 13 } : null), [mapCenter])
 
   // چیپ‌های تشخیصِ AI — فقط مواردِ واقعاً تشخیص‌داده‌شده
   const aiChips = useMemo(() => {
@@ -711,7 +575,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
           {/* روی موبایل نقشه پیش‌فرض نشان داده نمی‌شود (فضای آگهی‌ها را نمی‌گیرد)؛ با دکمهٔ
               شناورِ «نقشه» به‌صورتِ تمام‌صفحه باز می‌شود — مثلِ دیوار. */}
           {/* «آگهی جدید اومد خبرم کن» */}
-          <NotifyBar count={shownProperties.length} criteria={{ city: selectedCity, area: mapArea || prefArea, deal: (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'), kind: fKind, priceMax: fBudgetMax }} />
+          <NotifyBar count={shownProperties.length} criteria={{ city: selectedCity, area: mapArea || prefArea, deal: (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'), kind: kind || parsed.kind || '', priceMax: priceMax < PRICE_MAX ? priceMax : (parsed.budgetMax || 0) }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--goldText)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span>{poolTotal > properties.length ? <> از <span style={{ fontWeight: 700 }}>{toPersianDigits(poolTotal)}</span></> : null} ملک پیدا شد{selectedCity ? <span style={{ color: 'var(--muted)' }}> · {selectedCity}</span> : ''}</div>
             <div style={{ fontSize: 13, color: 'var(--muted)' }}>مرتب‌سازی: <span style={{ color: 'var(--text)' }}>{sortBy}</span></div>
@@ -783,7 +647,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
         {/* نقشهٔ واقعیِ نشان — فقط دسکتاپ (کنارِ نتایج، چسبان) */}
         <div className="map-panel mjs-map" style={{ position: 'sticky', top: 88, height: 'calc(100vh - 108px)', paddingTop: 20, paddingRight: 12 }}>
           <style>{`@media (max-width: 768px) { .map-panel { display: none !important; } }`}</style>
-          <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} cityKey={selectedCity} />
+          <SearchMap view={mapView} query={mapQuery} city={mapArea || selectedCity || userArea} cityKey={selectedCity} />
         </div>
       </main>
 
@@ -798,7 +662,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       {mapOpenMobile && (
         <div className="mjs-mapfull" style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'var(--bg)', display: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, padding: 8 }}>
-            <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} cityKey={selectedCity} />
+            <SearchMap view={mapView} query={mapQuery} city={mapArea || selectedCity || userArea} cityKey={selectedCity} />
           </div>
           <button onClick={() => setMapOpenMobile(false)}
             style={{ position: 'fixed', bottom: 84, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'flex', alignItems: 'center', gap: 7, padding: '11px 22px', borderRadius: 999, border: 'none', background: '#e7674a', color: '#fff', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.6)', cursor: 'pointer' }}>
@@ -870,11 +734,13 @@ function unproject(x: number, y: number, zoom: number) {
   const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
   return { lat, lng }
 }
-const clampZoom = (z: number) => Math.max(11, Math.min(18, z))
+// فاز ۲۰۴: کفِ زوم ۹ تا نمای «کلِ شهر» (زوم ۱۰ از سرور) دست‌یافتنی و قابلِ عقب‌رفتن باشد
+const clampZoom = (z: number) => Math.max(9, Math.min(18, z))
 
 // نقشهٔ تعاملیِ نشان (زوم + جابه‌جایی) با پین‌های قیمتِ آگهی‌ها — مثلِ دیوار
 type MapView = { center: { lat: number; lng: number }; zoom: number } | null
-function SearchMap({ view, pins, city, cityKey }: { view: MapView; pins: { id: string; lat: number; lng: number; label: string }[]; city: string; cityKey: string }) {
+type MapData = { clusters: { lat: number; lng: number; count: number }[]; singles: { id: string; lat: number; lng: number; deal: string; priceNum: number }[]; total: number }
+function SearchMap({ view, query, city, cityKey }: { view: MapView; query: string; city: string; cityKey: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [iv, setIv] = useState<MapView>(view)
@@ -907,31 +773,64 @@ function SearchMap({ view, pins, city, cityKey }: { view: MapView; pins: { id: s
   const [shown, setShown] = useState<{ view: MapView; src: string } | null>(null)
   const loading179 = !!src && shown?.src !== src
 
-  // خوشه‌بندیِ پین‌ها → «حباب‌های شمارش» مثلِ دیوار: در زوم پایین، پین‌های نزدیک به هم در
-  // یک حبابِ عدد جمع می‌شوند؛ با زوم/کلیک باز می‌شوند به پین‌های تکیِ قیمت.
+  // فاز ۲۰۴ — دادهٔ نقشه از سرور: خوشه‌ها/پین‌های «همین قاب با همین زوم و فیلترها» (روی کلِ استخر).
+  const [data, setData] = useState<MapData | null>(null)
+  // بارِ اول / تغییرِ فیلترها: بدونِ bbox → سرور قابِ پیشنهادی (کلِ گسترهٔ نتیجه‌ها = کلِ شهر) را هم می‌دهد
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/map/clusters?${query}`).then(r => r.ok ? r.json() : null).then(d => {
+      if (!alive || !d?.ok) return
+      if (!touched.current && d.view) setIv(d.view)
+      setData({ clusters: d.clusters || [], singles: d.singles || [], total: d.total || 0 })
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [query])
+  // جابه‌جایی/زوم: قابِ فعلی (با ۲۵٪ حاشیه) را بپرس — debounced تا هر درگ یک درخواست نشود
+  const lastReq204 = useRef('')
+  useEffect(() => {
+    if (!iv || !size.w || !size.h) return
+    const t = setTimeout(() => {
+      const pc = project(iv.center.lat, iv.center.lng, iv.zoom)
+      const a = unproject(pc.x - size.w * 0.75, pc.y - size.h * 0.75, iv.zoom)
+      const b = unproject(pc.x + size.w * 0.75, pc.y + size.h * 0.75, iv.zoom)
+      const bbox = `${Math.min(a.lat, b.lat).toFixed(5)},${Math.min(a.lng, b.lng).toFixed(5)},${Math.max(a.lat, b.lat).toFixed(5)},${Math.max(a.lng, b.lng).toFixed(5)}`
+      const url = `/api/map/clusters?${query}&bbox=${bbox}&zoom=${Math.round(iv.zoom)}`
+      if (lastReq204.current === url) return
+      lastReq204.current = url
+      fetch(url).then(r => r.ok ? r.json() : null).then(d => {
+        if (d?.ok) setData({ clusters: d.clusters || [], singles: d.singles || [], total: d.total || 0 })
+      }).catch(() => {})
+    }, 350)
+    return () => clearTimeout(t)
+  }, [iv?.center.lat, iv?.center.lng, iv?.zoom, size.w, size.h, query])
+
+  // تصویرکردنِ دادهٔ سرور روی قابِ نمایش (پین‌ها همیشه با نمای تصویرِ روی صفحه — اتمیک، فاز ۱۷۹)
   const clusters = useMemo(() => {
-    const pv = shown?.view || iv    // پین‌ها همیشه با نمای تصویرِ روی صفحه
-    if (!pv || !ready || err) return [] as { x: number; y: number; count: number; id: string; label: string; lat: number; lng: number }[]
+    const pv = shown?.view || iv
+    if (!pv || !ready || err || !data) return [] as { x: number; y: number; count: number; id: string; label: string; lat: number; lng: number }[]
     const pc = project(pv.center.lat, pv.center.lng, pv.zoom)
-    const pts = pins.map(p => { const pp = project(p.lat, p.lng, pv.zoom); return { id: p.id, label: p.label, x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y), lat: p.lat, lng: p.lng } })
-      .filter(p => p.x >= 0 && p.x <= size.w && p.y >= 6 && p.y <= size.h - 6)
-    const R = 46   // شعاعِ خوشه (پیکسل)
+    const xy = (lat: number, lng: number) => { const pp = project(lat, lng, pv.zoom); return { x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y) } }
+    const inFrame = (p: { x: number; y: number }) => p.x >= 0 && p.x <= size.w && p.y >= 6 && p.y <= size.h - 6
     const out: { x: number; y: number; count: number; id: string; label: string; lat: number; lng: number }[] = []
-    for (const p of pts) {
-      const c = out.find(q => Math.abs(q.x - p.x) < R && Math.abs(q.y - p.y) < R)
-      if (c) c.count++
-      else out.push({ x: p.x, y: p.y, count: 1, id: p.id, label: p.label, lat: p.lat, lng: p.lng })
+    for (const c of data.clusters) {
+      const p = xy(c.lat, c.lng)
+      if (inFrame(p)) out.push({ ...p, count: c.count, id: `${c.lat.toFixed(4)},${c.lng.toFixed(4)}`, label: '', lat: c.lat, lng: c.lng })
+    }
+    const singles: typeof out = []
+    for (const s of data.singles) {
+      const p = xy(s.lat, s.lng)
+      if (inFrame(p)) singles.push({ ...p, count: 1, id: s.id, label: pinPrice(s.deal, s.priceNum), lat: s.lat, lng: s.lng })
     }
     // پین‌های تکی را برای نیفتادن روی هم کمی جدا کن (declutter عمودی).
     const PW = 62, PH = 26
-    for (let i = 0; i < out.length; i++) {
-      const p = out[i]; if (p.count > 1) continue
+    for (let i = 0; i < singles.length; i++) {
+      const p = singles[i]
       let y = p.y, t = 0
-      while (t < 8 && out.some((q, j) => j < i && Math.abs(q.x - p.x) < PW && Math.abs(q.y - y) < PH)) { y += PH; t++ }
+      while (t < 8 && singles.some((q, j) => j < i && Math.abs(q.x - p.x) < PW && Math.abs(q.y - y) < PH)) { y += PH; t++ }
       p.y = Math.min(y, size.h - 6)
     }
-    return out
-  }, [pins, iv, shown, size, err, ready])
+    return [...out, ...singles]
+  }, [data, iv, shown, size, err, ready])
   const zoomToCluster = (lat: number, lng: number) => { touched.current = true; setIv(v => v ? { center: { lat, lng }, zoom: clampZoom(v.zoom + 2) } : v) }
 
   const pt = (e: React.MouseEvent | React.TouchEvent) => {
@@ -1008,7 +907,7 @@ function SearchMap({ view, pins, city, cityKey }: { view: MapView; pins: { id: s
       </div>
 
       <div style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(10px)', borderRadius: 9, padding: '6px 12px', fontSize: 12, color: '#f0ede6', border: '1px solid rgba(255,255,255,.12)', pointerEvents: 'none', zIndex: 30 }}>
-        {(() => { const n = clusters.reduce((a, c) => a + c.count, 0); return n > 0 ? `${n.toLocaleString('fa-IR')} ملک روی نقشه` : (city ? `نقشهٔ ${city}` : 'نقشهٔ منطقه') })()}
+        {data && data.total > 0 ? `${data.total.toLocaleString('fa-IR')} ملک روی نقشه` : (city ? `نقشهٔ ${city}` : 'نقشهٔ منطقه')}
       </div>
     </div>
   )

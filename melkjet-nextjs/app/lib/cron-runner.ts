@@ -247,12 +247,17 @@ async function queueTick(): Promise<void> {
             for (const it of pub) {
               if (repaired >= 20) break
               const c = getEnrichment(it.id)
-              if (c?.baseDone && !c.gallery?.length && !c.baseRepairedAt && divarToken(it.url)) {
+              if (!c?.baseDone || c.baseRepairedAt) continue
+              const damagedDivar = !c.gallery?.length && !!divarToken(it.url)
+              // فاز ۲۰۳: آگهیِ ثبتِ کاربر — geo دیواری ندارد ولی مختصات در متایِ خودِ آگهی است؛
+              // nearby هرگز ساخته نشده بود («همچنان مکان‌های نزدیک رو نشون نمی‌ده»)
+              const missingNearby = !c.nearby?.length && !c.geo && !!(Number(it.meta?.['__lat']) && Number(it.meta?.['__lng']))
+              if (damagedDivar || missingNearby) {
                 patchEnrichment(it.id, { baseDone: false, baseTriedAt: 0, baseRepairedAt: Date.now() })
                 repaired++
               }
             }
-            if (repaired) console.log(`[enrich] repair: reopened ${repaired} damaged caches (baseDone without gallery) for re-warm`)
+            if (repaired) console.log(`[enrich] repair: reopened ${repaired} damaged caches (empty gallery/nearby) for re-warm`)
           }
           const missing = pub.filter(it => !isEnriched(it.id)).map(it => it.id)
           // فاز ۱۹۷ب — ۸ به‌جای ۲۰ در هر تیک: فشارِ درخواست به دیوار (حدسِ درستِ کاربر: rate-limit) خیلی کمتر، بک‌لاگ همچنان خالی می‌شود
