@@ -17,6 +17,13 @@ const ANALYSIS_COOLDOWN = 6 * 60 * 60 * 1000
 // مشکل، تحلیل خودش ظرفِ چند دقیقه برگردد؛ کول‌داونِ بلند فقط مالِ حالتِ موفق است (بازتولید نکن).
 const ANALYSIS_ERR_COOLDOWN = 10 * 60 * 1000
 const cooldownOf = (c: Enrichment) => ((c.analysisOk || c.analysisErr === false) ? ANALYSIS_COOLDOWN : ANALYSIS_ERR_COOLDOWN)
+// فاز ۲۰۱ (فیدبک: «جدیداً مکان‌های نزدیک رو نمی‌گه، عکس‌ها باز نمی‌شه»): جارویِ enrich در ساعاتی که
+// پروکسیِ دیوار اشباع بود اجرا شد؛ fetchDivarPost شکست را با reason برمی‌گرداند (نه exception) و
+// generate همان جوابِ خالی را baseDone قطعی کش می‌کرد → گالری/geo/nearby برای همیشه خالی می‌ماند.
+// حالا شکستِ گذرا فقط baseTriedAt می‌گیرد و بعدِ این کول‌داون دوباره تلاش می‌شود.
+export const BASE_ERR_COOLDOWN = 30 * 60 * 1000
+// شکستِ قطعی (توکنِ خراب یا 4xx غیر از 429 — آگهیِ حذف‌شده): تلاشِ دوباره بی‌فایده است → همان‌جا نهایی کن.
+const permanentReason = (r?: string) => !!r && (r === 'bad_token' || (/^http_4\d\d$/.test(r) && r !== 'http_429'))
 
 async function generate(id: string): Promise<Enrichment> {
   const it = await getItemById(id)
@@ -25,11 +32,17 @@ async function generate(id: string): Promise<Enrichment> {
   if (cur.v !== ENRICH_V) cur = {}
 
   if (!cur.baseDone) {
+    // فاز ۲۰۱: بعدِ شکستِ گذرا تا پایانِ کول‌داون دوباره سراغِ دیوار نرو (تلاش در جاروی بعدی)
+    if (cur.baseTriedAt && Date.now() - cur.baseTriedAt < BASE_ERR_COOLDOWN) return cur
     let gallery: string[] | undefined, facts: any[] = [], amenities: string[] = [], description: string | undefined
     let geo: { lat: number; lng: number } | undefined
     const token = divarToken(it.url)
     if (token) {
       const g = await fetchDivarPost(token)
+      if (g.reason && !g.images?.length && !g.description && !permanentReason(g.reason)) {
+        // شکستِ گذرا (پروکسی/شبکه/429) — نهایی نکن؛ فقط مهرِ تلاش بزن تا جارو بعداً برگردد.
+        return patchEnrichment(id, { v: ENRICH_V, baseTriedAt: Date.now() })
+      }
       gallery = g.images?.length ? g.images : undefined
       facts = g.facts || []
       amenities = g.amenities || []
@@ -39,6 +52,14 @@ async function generate(id: string): Promise<Enrichment> {
     let nearby: any[] = []
     if (geo) { try { nearby = (await computeNearby(geo.lat, geo.lng)).nearby } catch { nearby = [] } }
     cur = patchEnrichment(id, { v: ENRICH_V, gallery, facts, amenities, description, geo, nearby, baseDone: true })
+    // فاز ۲۰۱ (فیدبک: «نزدیک ۴۰۰۰ آگهی داریم ولی نقشه ۴۰ تا نشون می‌ده»): مختصاتِ به‌دست‌آمده از
+    // دیوار روی خودِ آگهی هم بنشیند (meta.__lat/__lng) تا نقشهٔ جستجو پین‌دار شود — فقط اگر نداشت.
+    if (geo && !(Number(it.meta?.['__lat']) && Number(it.meta?.['__lng']))) {
+      try {
+        const { setItemCoords } = await import('./scraper-store')
+        await setItemCoords(id, geo.lat, geo.lng)
+      } catch { /* غیرحیاتی — جاروی بعدی دوباره geo دارد */ }
+    }
   }
 
   if (!cur.analysisOk) {
@@ -60,7 +81,9 @@ async function generate(id: string): Promise<Enrichment> {
 
 export function isEnriched(id: string): boolean {
   const c = getEnrichment(id)
-  if (!c || c.v !== ENRICH_V || !c.baseDone) return false
+  if (!c || c.v !== ENRICH_V) return false
+  // فاز ۲۰۱: پایه بعدِ شکستِ گذرا در کول‌داون است → فعلاً «رها کن» (جارو بعدِ کول‌داون برمی‌گردد)
+  if (!c.baseDone) return !!c.baseTriedAt && (Date.now() - c.baseTriedAt < BASE_ERR_COOLDOWN)
   if (c.analysisOk) return true
   // تحلیل اخیراً تلاش شده ولی هنوز نشده → تا پایانِ کول‌داون دوباره گرم نکن (جلوگیری از تکرارِ AI).
   return !!c.analysisTriedAt && (Date.now() - c.analysisTriedAt < cooldownOf(c))

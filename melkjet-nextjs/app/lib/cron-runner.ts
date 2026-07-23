@@ -237,6 +237,23 @@ async function queueTick(): Promise<void> {
           const { listItems } = await import('./scraper-store')
           const { isEnriched, warmMany } = await import('./enrich-warm')
           const pub = await listItems('listing', { publicOnly: true })
+          // فاز ۲۰۱ — ترمیمِ آسیبِ گذشته (فیدبک: «مکان‌های نزدیک رو نمی‌گه، عکس‌ها نیست»): جارو در ساعاتِ
+          // اشباعِ پروکسیِ دیوار جوابِ خالی را baseDone قطعی کش کرده بود. کش‌های «baseDone ولی بدونِ گالری»
+          // که توکنِ دیوار دارند یک‌بار (مهرِ baseRepairedAt) باز می‌شوند تا جارو دوباره گرم‌شان کند.
+          {
+            const { getEnrichment, patchEnrichment } = await import('./enrich-store')
+            const { divarToken } = await import('./divar-post')
+            let repaired = 0
+            for (const it of pub) {
+              if (repaired >= 20) break
+              const c = getEnrichment(it.id)
+              if (c?.baseDone && !c.gallery?.length && !c.baseRepairedAt && divarToken(it.url)) {
+                patchEnrichment(it.id, { baseDone: false, baseTriedAt: 0, baseRepairedAt: Date.now() })
+                repaired++
+              }
+            }
+            if (repaired) console.log(`[enrich] repair: reopened ${repaired} damaged caches (baseDone without gallery) for re-warm`)
+          }
           const missing = pub.filter(it => !isEnriched(it.id)).map(it => it.id)
           // فاز ۱۹۷ب — ۸ به‌جای ۲۰ در هر تیک: فشارِ درخواست به دیوار (حدسِ درستِ کاربر: rate-limit) خیلی کمتر، بک‌لاگ همچنان خالی می‌شود
           if (missing.length) { warmMany(missing.slice(0, 8)); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming ${Math.min(8, missing.length)}`) }

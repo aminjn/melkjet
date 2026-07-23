@@ -406,6 +406,19 @@ export async function updateItem(itemId: string, patch: EditableItem) {
   })
 }
 
+// فاز ۲۰۱ — مختصاتِ به‌دست‌آمده هنگامِ غنی‌سازی (دیوار) روی خودِ آگهی می‌نشیند تا نقشهٔ جستجو پین‌دار شود.
+// فقط اگر آگهی مختصات نداشت (مختصاتِ دستی/مشاور هرگز بازنویسی نمی‌شود).
+export async function setItemCoords(itemId: string, lat: number, lng: number) {
+  if (!lat || !lng) return
+  return mutate(db => {
+    const it = db.items.find(i => i.id === itemId)
+    if (!it) return
+    it.meta = it.meta || {}
+    if (Number(it.meta['__lat']) && Number(it.meta['__lng'])) return
+    it.meta['__lat'] = String(lat); it.meta['__lng'] = String(lng)
+  })
+}
+
 // وضعیتِ معاملهٔ آگهیِ عمومی (فروخته‌شده/اجاره‌رفته) روی خودِ آیتم مهر می‌خورد تا در صفحه/کارت‌ها دیده شود.
 // status = '' یعنی برگشت به «فعال» (مهر برداشته می‌شود).
 export async function setItemDealStatus(itemId: string, status: 'sold' | 'rented' | '') {

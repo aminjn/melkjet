@@ -66,6 +66,8 @@ export default function PropertyClient({ id, initial }: { id: string; initial?: 
   const [loading, setLoading] = useState(!initial)
   const [gallery, setGallery] = useState<string[]>([])
   const [activeImg, setActiveImg] = useState(0)
+  // فاز ۲۰۱ (فیدبک: «عکس‌های آگهی هست، فقط کلیک می‌کنی باز نمی‌شه بزرگ ببینی») — نمایشگرِ تمام‌صفحهٔ عکس‌ها
+  const [lightbox, setLightbox] = useState(false)
   const [facts, setFacts] = useState<Fact[]>([])
   const [aiAmenities, setAiAmenities] = useState<string[]>([])
   const [divarAmenities, setDivarAmenities] = useState<string[]>([])
@@ -190,6 +192,21 @@ export default function PropertyClient({ id, initial }: { id: string; initial?: 
 
 
   const images = gallery.length ? gallery : (item?.image ? [item.image] : [])
+
+  // فاز ۲۰۱ — کیبورد و قفلِ اسکرول برای نمایشگرِ عکس (Escape = بستن، ← → = قبلی/بعدی)
+  useEffect(() => {
+    if (!lightbox) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(false)
+      else if (e.key === 'ArrowRight') setActiveImg(i => (i - 1 + images.length) % images.length)
+      else if (e.key === 'ArrowLeft') setActiveImg(i => (i + 1) % images.length)
+    }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
+  }, [lightbox, images.length])
+
   const dealStatus: 'sold' | 'rented' | '' = item?.meta?.['__dealStatus'] === 'sold' ? 'sold' : item?.meta?.['__dealStatus'] === 'rented' ? 'rented' : ''
   const amenities = (() => {
     const text = (item?.excerpt || '') + ' ' + facts.map(f => f.label + ' ' + f.value).join(' ')
@@ -276,7 +293,7 @@ export default function PropertyClient({ id, initial }: { id: string; initial?: 
             </nav>
             <div className="mjp-gallery" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gridTemplateRows: '200px 200px', gap: 10, borderRadius: 20, overflow: 'hidden', height: 410 }}>
               <div style={{ gridRow: '1/3', position: 'relative', background: 'var(--surface)' }}>
-                {images.length ? <img src={images[activeImg]} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: dealStatus ? 'grayscale(0.5) brightness(0.72)' : 'none' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, opacity: 0.1 }}>🏠</div>}
+                {images.length ? <img src={images[activeImg]} alt={item.title} onClick={() => setLightbox(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in', filter: dealStatus ? 'grayscale(0.5) brightness(0.72)' : 'none' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, opacity: 0.1 }}>🏠</div>}
                 {(item as any).promoKind && !dealStatus && <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2 }}><PromoBadge kind={(item as any).promoKind} /></div>}
                 {/* ذخیرهٔ واقعیِ آگهی — همان سیگنالی که کوئستِ «۱ آگهی ذخیره کن» می‌خواند */}
                 {!dealStatus && <LikeHeart listingId={item.id} />}
@@ -289,7 +306,7 @@ export default function PropertyClient({ id, initial }: { id: string; initial?: 
                 )}
               </div>
               {[1, 2].map((i, k) => (
-                <div key={i} onClick={() => images[i] && setActiveImg(i)} style={{ position: 'relative', background: 'var(--surface)', cursor: 'pointer', overflow: 'hidden' }}>
+                <div key={i} onClick={() => { if (images[i]) { setActiveImg(i); setLightbox(true) } }} style={{ position: 'relative', background: 'var(--surface)', cursor: 'pointer', overflow: 'hidden' }}>
                   {images[i] ? <img src={images[i]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, opacity: 0.1 }}>🏠</div>}
                   {k === 1 && images.length > 3 && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>+{toFa(images.length - 3)} عکس</div>}
                 </div>
@@ -305,6 +322,23 @@ export default function PropertyClient({ id, initial }: { id: string; initial?: 
               </div>
             )}
           </section>
+
+          {/* فاز ۲۰۱ — نمایشگرِ تمام‌صفحهٔ عکس‌ها (کلیک روی عکس = بزرگ‌دیدن؛ ← → ورق، Escape/بیرون = بستن) */}
+          {lightbox && images.length > 0 && (
+            <div onClick={() => setLightbox(false)} style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.93)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img src={images[activeImg]} alt={item.title} onClick={e => e.stopPropagation()} style={{ maxWidth: '94vw', maxHeight: '88vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 20px 80px rgba(0,0,0,0.8)' }} />
+              <button onClick={() => setLightbox(false)} aria-label="بستن" style={{ position: 'absolute', top: 16, left: 16, width: 44, height: 44, borderRadius: 12, border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 20, cursor: 'pointer' }}>✕</button>
+              {images.length > 1 && (
+                <>
+                  <button onClick={e => { e.stopPropagation(); setActiveImg(i => (i - 1 + images.length) % images.length) }} aria-label="عکس قبلی" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 22, cursor: 'pointer' }}>‹</button>
+                  <button onClick={e => { e.stopPropagation(); setActiveImg(i => (i + 1) % images.length) }} aria-label="عکس بعدی" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 22, cursor: 'pointer' }}>›</button>
+                  <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 999, padding: '6px 16px', fontSize: 13, fontWeight: 700 }}>
+                    {toFa(activeImg + 1)} / {toFa(images.length)}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <section className="mjp-grid" style={{ maxWidth: 1280, margin: '0 auto', padding: '28px 24px 80px', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 32, alignItems: 'start' }}>
             {/* LEFT */}
