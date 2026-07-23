@@ -286,6 +286,10 @@ console.log('\n── REOS v4: Property Digital Twin ──')
   const { keepVerifiedNearby } = await import('../app/lib/nearby.ts')
   ok('فقط مکان‌های واقعاً نزدیک (≤۱کیلومتر) می‌مانند', JSON.stringify(keepVerifiedNearby([{ km: 0.4 }, { km: 0.9 }, { km: 1.9 }, { km: 6.5 }]).map(p => p.km)) === '[0.4,0.9]')
   ok('زیرِ حدنصاب یا خالی → صادقانه هیچ (نه فهرستِ مضحک)', keepVerifiedNearby([{ km: 0.4 }, { km: 1.9 }]).length === 0 && keepVerifiedNearby([]).length === 0 && keepVerifiedNearby([{ km: 2 }, { km: 3 }, { km: 7 }]).length === 0)
+  // فاز ۲۰۹ (فیدبک: «باز همون مزخرف اومد») — کشِ همه-دور شناسایی و از پاسخ حذف می‌شود
+  const { isAllFarNearby } = await import('../app/lib/nearby.ts')
+  ok('فهرستِ همه-دور (میراثِ شعاعِ شل) شناسایی می‌شود', isAllFarNearby([{ meters: 9000 }, { meters: 12000 }]) === true && isAllFarNearby([{ meters: 9000 }, { meters: 800 }]) === false)
+  ok('خالی/بی‌متر خراب حساب نمی‌شود', isAllFarNearby([]) === false && isAllFarNearby(undefined) === false && isAllFarNearby([{}]) === false)
   // فاز ۲۰۸ — برچسبِ سنِ آگهی (فیدبک: «آگهی‌ها معلوم نیست برای کی هست») — از مهرِ واقعیِ ثبت
   const { listingAgeLabel, isFreshListing } = await import('../app/lib/fa-time.ts')
   const NOW = 1_800_000_000_000, H = 3600_000, D = 24 * H

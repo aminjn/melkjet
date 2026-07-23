@@ -202,6 +202,12 @@ async function neshanGeocode(key: string, address: string): Promise<{ lat: numbe
   return null
 }
 
+// فاز ۲۰۹ — تشخیصِ فهرستِ «همه-دور»ِ کش‌شده (میراثِ شعاعِ شلِ قدیم؛ خالص و تست‌پذیر):
+// با قانونِ ۱کیلومتر، هر کشی که «همهٔ» مواردش دورتر از ~۱.۶کیلومترِ مسیری است خراب حساب می‌شود.
+export function isAllFarNearby(nearby?: { meters?: number }[] | null, maxMeters = 1600): boolean {
+  return !!nearby?.length && nearby.every(n => typeof n.meters === 'number' && n.meters > maxMeters)
+}
+
 // فاز ۲۰۷ب (فیدبک: «مکان‌های نزدیک همگی دری‌وری است — علامه حلی ۱:۲۰ فاصله دارد؛ کاربر مسخره می‌کند»):
 // مسیرِ AI+geocode تا ۷کیلومتر را قبول می‌کرد (در تهران = ۲۰+ دقیقه با ماشین). فقط مکان‌های واقعاً
 // نزدیکِ تأییدشده می‌مانند؛ اگر به حدنصاب نرسید، صادقانه هیچ — بهتر از فهرستِ مضحک. (خالص و تست‌پذیر)

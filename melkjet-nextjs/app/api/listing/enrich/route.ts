@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getEnrichment, patchEnrichment } from '@/app/lib/enrich-store'
 import { ENRICH_V, warmEnrichment } from '@/app/lib/enrich-warm'
+import { isAllFarNearby } from '@/app/lib/nearby'
 
 // کشِ غنی‌سازیِ هر آگهی: دادهٔ دیوار + تحلیلِ AI فقط یک‌بار (هنگامِ اسکرپ) محاسبه و ذخیره می‌شود.
 // این endpoint فقط از دیتابیس می‌خواند و هرگز در مسیرِ بازکردنِ آگهی، AI را به‌صورتِ همزمان اجرا نمی‌کند —
@@ -18,10 +19,11 @@ export async function GET(req: NextRequest) {
   const complete = cached?.v === ENRICH_V && cached?.baseDone && cached?.analysisOk
   if (!complete) warmEnrichment(id)   // پس‌زمینه، بدونِ انتظار — نتیجه در اسکرپِ بعدی/رفرش می‌آید
   // فاز ۲۰۳: geo از کش یا از متایِ خودِ آگهی (آگهیِ ثبتِ کاربر geo دیواری ندارد ولی مختصات دارد)
-  // فاز ۲۰۷ب: nearbyِ «همه-دور» (میراثِ شعاعِ ۷کیلومتری — فیدبک: «کاربر مسخره می‌کند») هم خراب حساب
-  // می‌شود: در پس‌زمینه با منطقِ سخت‌گیرِ جدید بازسازی و جایگزین می‌شود؛ نشد → پاک (هیچ بهتر از مضحک).
-  const allFar = (cached?.nearby?.length || 0) > 0 && cached!.nearby!.every(n => typeof (n as { meters?: number }).meters === 'number' && (n as { meters?: number }).meters! > 3500)
-  if (cached?.baseDone && (!cached.nearby?.length || allFar) && Date.now() - (cached.nearbyTriedAt || 0) > NEARBY_RETRY_MS) {
+  // فاز ۲۰۷ب/۲۰۹: nearbyِ «همه-دور» (میراثِ شعاعِ شل — فیدبک: «باز همون مزخرف اومد») خراب حساب می‌شود:
+  // همان لحظه از پاسخ حذف (کاربر هرگز فهرستِ مضحک نمی‌بیند) و ترمیمش کول‌داونِ کوتاه دارد نه ۶ساعته.
+  const allFar = isAllFarNearby(cached?.nearby as { meters?: number }[] | undefined)
+  const retryMs = allFar ? 10 * 60 * 1000 : NEARBY_RETRY_MS
+  if (cached?.baseDone && (!cached.nearby?.length || allFar) && Date.now() - (cached.nearbyTriedAt || 0) > retryMs) {
     const cachedGeo = cached.geo
     patchEnrichment(id, { nearbyTriedAt: Date.now() })
     ;(async () => {
@@ -41,5 +43,6 @@ export async function GET(req: NextRequest) {
       } catch { /* تلاشِ بعدی بعدِ کول‌داون */ }
     })()
   }
-  return NextResponse.json({ ok: true, cached: !!complete, pending: !complete, ...(cached || {}) })
+  // فاز ۲۰۹: فهرستِ همه-دور هرگز به کاربر نمی‌رسد — تا بازسازیِ پس‌زمینه، بخشِ دسترسی‌ها خالی می‌ماند
+  return NextResponse.json({ ok: true, cached: !!complete, pending: !complete, ...(cached || {}), ...(allFar ? { nearby: [] } : {}) })
 }
