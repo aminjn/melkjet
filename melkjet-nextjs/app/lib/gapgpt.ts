@@ -189,7 +189,7 @@ export async function chatComplete(model: string, messages: { role: string; cont
 
 // Like chatComplete, but if the chosen model fails (e.g. 503/unavailable on
 // GapGPT), retry once with a known-good cheap model so the feature still works.
-export async function chatCompleteSafe(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<string> {
+export async function chatCompleteSafe(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string; timeoutMs?: number } = {}, provider?: string): Promise<string> {
   // فاز ۷۸ (مدارشکن): مدلی که چند بارِ پیاپی شکست خورده، تا مدتی مستقیم دور زده می‌شود —
   // دیگر هر درخواست یک تماسِ سوخته + تأخیرِ ۹۰ثانیه‌ای خرجِ مدلِ خراب نمی‌کند.
   if (model !== 'gpt-4o-mini' && modelDown(model)) {
@@ -314,7 +314,7 @@ export function aiFor(src: string) {
   return {
     chatComplete: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; timeoutMs?: number } = {}, provider?: string) =>
       chatComplete(model, messages, { ...opts, src }, provider),
-    chatCompleteSafe: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string) =>
+    chatCompleteSafe: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; timeoutMs?: number } = {}, provider?: string) =>
       chatCompleteSafe(model, messages, { ...opts, src }, provider),
     chatCompleteUsage: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string) =>
       chatCompleteUsage(model, messages, { ...opts, src }, provider),

@@ -229,7 +229,7 @@ async function aiGroundedNearby(key: string, lat: number, lng: number): Promise<
 
   let cands: { type: string; name: string }[] = []
   try {
-    let out = await chatCompleteSafe(model, [{ role: 'system', content: AI_SYS }, { role: 'user', content: `محله: ${area}` }], { temperature: 0.4, max_tokens: 500 })
+    let out = await chatCompleteSafe(model, [{ role: 'system', content: AI_SYS }, { role: 'user', content: `محله: ${area}` }], { temperature: 0.4, max_tokens: 500, timeoutMs: 30_000 })
     const m = out.match(/\[[\s\S]*\]/); if (m) out = m[0]
     cands = JSON.parse(out)
   } catch { /* parse failed */ }

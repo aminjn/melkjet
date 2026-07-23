@@ -49,7 +49,9 @@ export async function analyzeListing(b: AnalyzePayload): Promise<{ analysis?: an
     // فاز ۲۱۴ (لاگِ واقعیِ prod: «Unexpected end of JSON input» — تخلیهٔ بک‌لاگ ~۱/دقیقه به‌جای ~۲۰):
     // بدونِ max_tokens، سقفِ پیش‌فرضِ gateway جوابِ JSONِ بلند را وسط می‌بُرید → parse شکست →
     // کول‌داون → چرخهٔ بی‌پایان. سقفِ صریحِ کافی برای کلِ ساختار (facts+priceTrend+…).
-    let text = await chatCompleteSafe(model, [{ role: 'system', content: system }, { role: 'user', content: info }], { temperature: 0.5, max_tokens: 2200 })
+    // فاز ۲۱۶ (سنجهٔ ۲۱۵: «analysis 187s» — مدلِ کند تا تایم‌اوتِ ۹۰ث می‌سوزد بعد fallback دوباره وقت
+    // می‌گیرد): تایم‌اوتِ کوتاه‌تر تا fallbackِ سریع (gpt-4o-mini) زودتر بیاید؛ مدلِ سالم در ۴۵ث جواب می‌دهد.
+    let text = await chatCompleteSafe(model, [{ role: 'system', content: system }, { role: 'user', content: info }], { temperature: 0.5, max_tokens: 2200, timeoutMs: 45_000 })
     const m = text.match(/\{[\s\S]*\}/)
     if (m) text = m[0]
     return { analysis: JSON.parse(text) }
