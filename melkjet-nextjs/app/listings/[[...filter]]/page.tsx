@@ -23,17 +23,22 @@ const FILTERS: Record<string, { fa: string; match: (it: any) => boolean }> = {
 const hay = (it: any) => `${it.title || ''} ${it.category || ''} ${it.price || ''} ${it.meta?.['نوع معامله'] || ''}`
 const money = (s?: string) => (s || '').trim()
 
-export async function generateMetadata({ params }: { params: Promise<{ filter?: string[] }> }): Promise<Metadata> {
+const PER_PAGE = 48
+
+export async function generateMetadata({ params, searchParams }: { params: Promise<{ filter?: string[] }>; searchParams: Promise<{ page?: string }> }): Promise<Metadata> {
   const { filter } = await params
+  const { page } = await searchParams
+  const p = Math.max(1, parseInt(page || '1', 10) || 1)
   const key = (filter || [])[0]
   const f = key ? FILTERS[key] : null
   const title = f ? `${f.fa} ملک در ایران` : 'آگهی‌های ملک — خرید، اجاره و پیش‌فروش'
-  const url = `https://melkjet.com/listings${key ? '/' + key : ''}`
-  return { title: `${title} | ملک‌جت`, description: `${title} در ملک‌جت — جدیدترین آگهی‌های خرید، رهن و اجارهٔ املاک.`, alternates: { canonical: url } }
+  const url = `https://melkjet.com/listings${key ? '/' + key : ''}${p > 1 ? `?page=${p}` : ''}`
+  return { title: `${title}${p > 1 ? ` — صفحهٔ ${p}` : ''} | ملک‌جت`, description: `${title} در ملک‌جت — جدیدترین آگهی‌های خرید، رهن و اجارهٔ املاک.`, alternates: { canonical: url } }
 }
 
-export default async function Listings({ params }: { params: Promise<{ filter?: string[] }> }) {
+export default async function Listings({ params, searchParams }: { params: Promise<{ filter?: string[] }>; searchParams: Promise<{ page?: string }> }) {
   const { filter } = await params
+  const { page } = await searchParams
   const parts = (filter || []).filter(Boolean)
   if (parts.length > 1) notFound()
   const key = parts[0]
@@ -42,6 +47,17 @@ export default async function Listings({ params }: { params: Promise<{ filter?: 
 
   let items = await listItems('listing', { publicOnly: true })
   if (f) items = items.filter(f.match)
+
+  // فاز ۲۱۷ (سئو — «چرا گوگل آگهی‌ها را نمی‌گیرد؟»): صفحه‌بندیِ SSR — قبلاً فقط ۴۸ آگهیِ اول لینکِ
+  // داخلی داشت و ~۱۲هزار آگهیِ دیگر فقط به سایت‌مپ تکیه داشتند؛ برای دامنهٔ جوان، گوگل URLِ
+  // بدونِ لینکِ داخلی را با اولویتِ خیلی پایین می‌خزد. حالا زنجیرهٔ لینکِ خزیدنی به همهٔ آگهی‌ها هست.
+  const totalPages = Math.max(1, Math.ceil(items.length / PER_PAGE))
+  const p = Math.min(totalPages, Math.max(1, parseInt(page || '1', 10) || 1))
+  const pageItems = items.slice((p - 1) * PER_PAGE, p * PER_PAGE)
+  const hub = `/listings${key ? '/' + key : ''}`
+  const pageHref = (n: number) => (n <= 1 ? hub : `${hub}?page=${n}`)
+  // پنجرهٔ شماره‌ها: اول، آخر، و اطرافِ صفحهٔ فعلی
+  const nums = Array.from(new Set([1, totalPages, p - 2, p - 1, p, p + 1, p + 2].filter(n => n >= 1 && n <= totalPages))).sort((a, b) => a - b)
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
@@ -64,8 +80,10 @@ export default async function Listings({ params }: { params: Promise<{ filter?: 
           <div style={{ background: 'var(--surface)', border: '1px dashed var(--line2)', borderRadius: 16, padding: 40, textAlign: 'center', color: 'var(--muted)' }}>آگهیِ فعالی در این دسته نیست.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
-            {items.slice(0, 48).map((it, i) => (
-              <Link key={it.id} href={it.url || listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
+            {/* فاز ۲۱۷: لینکِ کارت همیشه داخلی — it.url برای آگهی‌های دیواری آدرسِ divar.ir بود و
+                هاب، کاربر و گوگل را به سایتِ دیگر می‌فرستاد (نشتِ سئو + تجربهٔ غلط) */}
+            {pageItems.map((it, i) => (
+              <Link key={it.id} href={listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
                 <div style={{ height: 152, position: 'relative', overflow: 'hidden', background: it.image ? undefined : gradientFor(it.title) }}>
                   {it.image && <CardImg src={it.image} alt={it.title} eager={i < 3} priority={i < 2 ? 'high' : undefined} />}
                 </div>
@@ -77,6 +95,19 @@ export default async function Listings({ params }: { params: Promise<{ filter?: 
               </Link>
             ))}
           </div>
+        )}
+        {/* فاز ۲۱۷ — ناوبریِ صفحه‌بندیِ SSR: مسیرِ خزیدنی به تک‌تکِ آگهی‌ها */}
+        {totalPages > 1 && (
+          <nav aria-label="صفحه‌ها" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginTop: 30 }}>
+            {p > 1 && <Link href={pageHref(p - 1)} style={chip(false)}>← قبلی</Link>}
+            {nums.map((n, i) => (
+              <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                {i > 0 && nums[i - 1] < n - 1 && <span style={{ color: 'var(--faint)' }}>…</span>}
+                <Link href={pageHref(n)} style={chip(n === p)}>{n.toLocaleString('fa-IR')}</Link>
+              </span>
+            ))}
+            {p < totalPages && <Link href={pageHref(p + 1)} style={chip(false)}>بعدی ←</Link>}
+          </nav>
         )}
         <p style={{ marginTop: 26, fontSize: 13, color: 'var(--muted)' }}>به‌دنبالِ ملک در محلهٔ خاصی هستید؟ <Link href="/locations" style={{ color: 'var(--gold)', fontWeight: 700 }}>مرور بر اساسِ محله ←</Link></p>
       </div>
