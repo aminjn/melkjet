@@ -7,7 +7,13 @@ export default function robots(): MetadataRoute.Robots {
     rules: [{
       userAgent: '*',
       allow: '/',
-      disallow: ['/api/', '/admin', '/auth', '/panel', '/crm', '/marketing', '/workflow', '/website-builder', '/plan-ai', '/content', '/catalog-admin'],
+      // فاز ۲۱۸ (ممیزیِ سئو): داشبوردهای کاربری هم بسته شدند — پوستهٔ کلاینتیِ بی‌محتوا بودجهٔ خزش را
+      // هدر می‌داد. مسیرهایی که فرزندِ عمومیِ [slug] دارند با «$» فقط خودِ صفحهٔ داشبورد بسته می‌شوند.
+      disallow: [
+        '/api/', '/admin', '/auth', '/panel', '/crm', '/marketing', '/workflow', '/website-builder', '/plan-ai', '/content', '/catalog-admin',
+        '/empire', '/reos-admin', '/buyer', '/owner', '/club', '/vip', '/compare', '/submit', '/support',
+        '/pros$', '/agency$', '/builder$', '/materials$', '/finance$', '/legal$', '/notary$', '/architect$', '/appraiser$', '/contractor$', '/lawfirm$',
+      ],
     }],
     sitemap: `${base}/sitemap.xml`,
     host: base,

@@ -11,6 +11,8 @@ import MissionChip from './components/MissionChip'
 import ThemeFab from './components/ThemeFab'
 
 export const metadata: Metadata = {
+  // فاز ۲۱۸ (ممیزیِ سئو): مبنای همهٔ URLهای نسبیِ متادیتا (og:image و…) — بدونش نسبی‌ها ناقص resolve می‌شدند
+  metadataBase: new URL('https://melkjet.com'),
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
   description: 'بزرگ‌ترین اکوسیستم هوشمند صنعت املاک و ساختمان ایران',
   manifest: '/manifest.json',

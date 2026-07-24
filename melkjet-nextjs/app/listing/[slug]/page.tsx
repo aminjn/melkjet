@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { getItemById } from '@/app/lib/scraper-store'
-import { idFromListingSlug } from '@/app/lib/listing-url'
+import { idFromListingSlug, listingHref } from '@/app/lib/listing-url'
 import PropertyClient from './PropertyClient'
 
 export const dynamic = 'force-dynamic'
@@ -23,7 +23,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const loc = it.location || it.meta?.['محله'] || it.meta?.['شهر'] || ''
   const title = `${it.title}${loc ? ` — ${loc}` : ''}`
   const desc = (it.excerpt || `${it.title}${it.price ? `، ${it.price}` : ''}${loc ? `، ${loc}` : ''}. مشاهدهٔ جزئیات، تحلیلِ هوش مصنوعی و اطلاعاتِ تماس در ملک‌جت.`).slice(0, 180)
-  const url = `https://melkjet.com/listing/${idFromListingSlug(slug)}${slug.includes('-') ? slug.slice(idFromListingSlug(slug).length) : ''}`
+  // فاز ۲۱۸ (ممیزیِ کاملِ سئو): canonical قبلاً «همان slugِ درخواستی» بود — هر واریانتی خودش را
+  // canonical اعلام می‌کرد و گوگل نسخه‌های تکراری نگه می‌داشت. حالا همیشه «یک» URLِ حقیقی.
+  const url = `https://melkjet.com${listingHref(it.id, it.title, it.location)}`
   return {
     title: `${title} | ملک‌جت`,
     description: desc,
@@ -36,6 +38,10 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params
   const it = await load(slug)
   if (!it) notFound()
+  // فاز ۲۱۸: هر slugِ غیرِ حقیقی (عنوانِ عوض‌شده/لینکِ قدیمی/دست‌ساز) با ۳۰۸ به URLِ یکتا می‌رود —
+  // گوگل هرگز دو نسخه از یک آگهی نمی‌بیند.
+  const canonicalPath = listingHref(it.id, it.title, it.location)
+  if (`/listing/${decodeURIComponent(slug)}` !== canonicalPath) permanentRedirect(canonicalPath)
   const id = idFromListingSlug(slug)
   const loc = it.location || ''
   const area = num(it.meta?.['متراژ'])
