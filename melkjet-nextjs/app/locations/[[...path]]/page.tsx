@@ -37,7 +37,10 @@ async function listingsIn(node: LocationNode | null): Promise<any[]> {
   if (!node) return []
   const all = await listItems('listing', { publicOnly: true })
   const name = node.nameFa
-  return all.filter(it => `${it.location || ''} ${it.title || ''}`.includes(name))
+  // فاز ۲۲۲: includes(نامِ کامل) نامِ مرکب («گیشا (کوی نصر)») را هرگز نمی‌گرفت → محلهٔ پرآگهی
+  // «کم‌محتوا» و noindex می‌شد (کشفِ GSC). حالا تطبیقِ تکه‌ای با مرزِ واژه.
+  const { matchesLocationName } = await import('@/app/lib/location-match')
+  return all.filter(it => matchesLocationName(name, `${it.location || ''} ${it.title || ''}`))
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ path?: string[] }> }): Promise<Metadata> {
@@ -49,10 +52,11 @@ export async function generateMetadata({ params }: { params: Promise<{ path?: st
   const act = action ? ACTIONS[action] : null
   const name = r.node.nameFa
   const title = act ? `${act.fa} در ${name}` : `املاک ${name} — خرید، اجاره و قیمت`
-  const listings = act?.kind !== 'provider' ? await listingsIn(r.node) : []
-  const thin = !act && r.node.children.length === 0 && listings.length < 3
+  // فاز ۲۲۲ (دستورِ صریحِ کاربر: «هیچ‌جا نباید noindex داشته باشه») — منطقِ «کم‌محتوا → noindex»
+  // به‌کل حذف شد؛ همهٔ صفحاتِ محله ایندکس‌پذیرند. (کشفِ GSC: تشخیصِ کم‌محتوا هم خراب بود و
+  // محله‌های پرآگهی مثلِ گیشا را noindex می‌کرد.)
   const url = `https://melkjet.com/locations/${locSlugs.join('/')}${action ? '/' + action : ''}`
-  return { title: `${title} | ملک‌جت`, description: `${title} در ملک‌جت — آگهی‌ها، متخصصان و اطلاعاتِ بازارِ ${name}.`, alternates: { canonical: url }, robots: thin ? { index: false, follow: true } : undefined }
+  return { title: `${title} | ملک‌جت`, description: `${title} در ملک‌جت — آگهی‌ها، متخصصان و اطلاعاتِ بازارِ ${name}.`, alternates: { canonical: url } }
 }
 
 export default async function LocationPage({ params }: { params: Promise<{ path?: string[] }> }) {

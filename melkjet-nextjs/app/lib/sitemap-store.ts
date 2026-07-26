@@ -102,7 +102,9 @@ export async function buildShards(force = false): Promise<Shard[]> {
   // ── مکان‌ها: شهر همیشه؛ منطقه/محله فقط اگر آگهی داشته باشد ──
   if (enabled(sections, 'locations')) {
     const hay = listings.map(it => `${it.location || ''} ${it.title || ''}`)
-    const has = (nameFa: string) => !!nameFa && hay.some(h => h.includes(nameFa))
+    // فاز ۲۲۲: includes(نامِ کامل) نامِ مرکب/نیم‌فاصله را نمی‌گرفت و محله‌های پرآگهی از سایت‌مپ می‌افتادند
+    const { makeLocationMatcher } = await import('./location-match')
+    const has = makeLocationMatcher(hay)
     const s: UrlEntry[] = []
     try {
       for (const prov of locationTree()) for (const city of prov.children) {
