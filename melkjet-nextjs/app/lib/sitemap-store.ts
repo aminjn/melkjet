@@ -66,7 +66,7 @@ export async function buildShards(force = false): Promise<Shard[]> {
   // ── ثابت‌ها ──
   if (enabled(sections, 'static')) {
     const s: UrlEntry[] = [{ url: `${BASE}/`, priority: 1, changeFrequency: 'daily' }]
-    for (const p of ['/blog', '/locations', '/listings', '/projects', '/search', '/directory', '/store', '/pricing', '/about', '/contact'])
+    for (const p of ['/blog', '/locations', '/listings', '/projects', '/search', '/directory', '/store', '/pricing', '/about', '/contact', '/browse'])
       s.push({ url: `${BASE}${p}`, priority: 0.7, changeFrequency: 'weekly' })
     addSection('static', 'ثابت', s)
   }

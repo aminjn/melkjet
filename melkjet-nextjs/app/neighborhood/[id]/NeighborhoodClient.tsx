@@ -233,7 +233,7 @@ export default function NeighborhoodClient({ name }: { name: string }) {
             </h2>
             <div className="mjn-listings" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '1rem' }}>
               {areaListings.map((l) => (
-                <Link key={l.id} href={l.url || listingHref(l.id, l.title, l.location)} style={{ textDecoration: 'none', display: 'block' }}>
+                <Link key={l.id} href={listingHref(l.id, l.title, l.location)} style={{ textDecoration: 'none', display: 'block' }}>
                   <div
                     style={{ border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden', cursor: 'pointer', transition: 'border-color 0.2s, box-shadow 0.2s', height: '100%' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(212,175,55,0.15)'; }}
