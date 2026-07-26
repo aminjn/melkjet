@@ -7,6 +7,7 @@
 const norm = (s: string) => ' ' + String(s || '')
   .replace(/ي/g, 'ی').replace(/ك/g, 'ک')
   .replace(/‌/g, ' ')
+  .replace(/[،؛؟«»٬]/g, ' ')   // نقطه‌گذاریِ فارسی داخلِ بازهٔ ؀-ۿ است و باید صریح مرز شود («تهران،»)
   .replace(/[^؀-ۿa-zA-Z0-9]+/g, ' ')
   .replace(/\s+/g, ' ').trim() + ' '
 

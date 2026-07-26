@@ -33,14 +33,21 @@ function parse(path?: string[]): { locSlugs: string[]; action?: string } {
   return { locSlugs: p }
 }
 const money = (s?: string) => (s || '').trim()
-async function listingsIn(node: LocationNode | null): Promise<any[]> {
+async function listingsIn(node: LocationNode | null, cityName?: string): Promise<any[]> {
   if (!node) return []
   const all = await listItems('listing', { publicOnly: true })
-  const name = node.nameFa
-  // فاز ۲۲۲: includes(نامِ کامل) نامِ مرکب («گیشا (کوی نصر)») را هرگز نمی‌گرفت → محلهٔ پرآگهی
-  // «کم‌محتوا» و noindex می‌شد (کشفِ GSC). حالا تطبیقِ تکه‌ای با مرزِ واژه.
   const { matchesLocationName } = await import('@/app/lib/location-match')
-  return all.filter(it => matchesLocationName(name, `${it.location || ''} ${it.title || ''}`))
+  // فاز ۲۲۳ (فیدبک: «منطقه ۷ کرج نشان می‌دهد»): شهر «قطعی و فقط از فیلدِ location» چک می‌شود —
+  // آگهیِ شهرِ دیگر که در عنوانش «(منطقه ۷) در تهران» دارد دیگر نشت نمی‌کند.
+  const inCity = cityName ? all.filter(it => matchesLocationName(cityName, it.location || '')) : all
+  if (!node.path || node.path.length <= 1) return inCity   // سطحِ شهر = همهٔ آگهی‌های شهر
+  // فاز ۲۲۳ (فیدبک: «آگهی‌های منطقه ۲ خیلی بیشتر از این است»): آگهی‌ها با نامِ «محله» ثبت می‌شوند نه
+  // «منطقه N» — پس نامِ خودِ گره + همهٔ زیرمجموعه‌هایش می‌شمارند. تطبیقِ مرزِ واژه‌ایِ فاز ۲۲۲ هم
+  // «منطقه ۲» را از «منطقه ۲۲» جدا نگه می‌دارد.
+  const names: string[] = []
+  const collect = (n: LocationNode) => { if (n.nameFa) names.push(n.nameFa); for (const c of (n.children || [])) collect(c) }
+  collect(node)
+  return inCity.filter(it => { const hay = `${it.location || ''} ${it.title || ''}`; return names.some(nm => matchesLocationName(nm, hay)) })
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ path?: string[] }> }): Promise<Metadata> {
@@ -79,7 +86,7 @@ export default async function LocationPage({ params }: { params: Promise<{ path?
 
   // پاراگرافِ پویا (ضدِ محتوای تکراری) + داده.
   const listings = (!act || act.kind === 'listing') ? await (async () => {
-    let ls = await listingsIn(node)
+    let ls = await listingsIn(node, r.trail[0]?.nameFa)
     if (act?.deal) ls = ls.filter(it => act.deal === 'rent' ? /اجاره|رهن|ودیعه/.test(`${it.price} ${it.title} ${it.meta?.['نوع معامله'] || ''}`) : !/اجاره|رهن|ودیعه/.test(`${it.price} ${it.title} ${it.meta?.['نوع معامله'] || ''}`))
     return ls
   })() : []
