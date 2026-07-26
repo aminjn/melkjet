@@ -2269,6 +2269,16 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('مختصاتِ صفر/نامعتبر هرگز ثبت نمی‌شود', (await getItemById(it201.id)).meta['__lat'] === '35.7')
       await deleteItem(it201.id)
     }
+    // فاز ۲۲۸ — عنوان/توضیحِ سئویِ بازساخته (ضدِ تکراری با دیوار؛ فقط از دادهٔ واقعی)
+    {
+      const { seoListingTitle, seoListingDescription } = await import('../app/lib/listing-search.ts')
+      const d = { deal: 'sale', kind: 'آپارتمان', areaNum: 120, bedsNum: 2, floorNum: 3, yearNum: 1400, priceNum: 36, location: 'تهران، جنت‌آباد شمالی', title: 'عنوانِ اصلیِ دیواری' }
+      const t = seoListingTitle(d)
+      ok('عنوانِ سئو کاملاً بازساخته از دادهٔ ساختاریافته (نه کپیِ دیوار)', t.includes('فروش آپارتمان ۱۲۰ متری ۲ خوابه در جنت‌آباد شمالی، تهران') && t.includes('متری ۳۰۰ میلیون') && !t.includes('دیواری'))
+      ok('توضیحِ سئو طبقه/سال/قیمت را دارد و کوتاه است', (() => { const s = seoListingDescription(d, '۳۶,۰۰۰,۰۰۰,۰۰۰ تومان'); return s.includes('طبقهٔ ۳') && s.includes('ساختِ ۱٬۴۰۰') && s.length <= 300 })())
+      ok('دادهٔ ناکافی → عنوانِ اصلی می‌ماند (عنوانِ نصفه نمی‌سازیم)', seoListingTitle({ deal: 'sale', kind: '', areaNum: 0, bedsNum: null, priceNum: 0, location: '', title: 'اصل' }) === 'اصل')
+      ok('اجاره‌ای بدونِ قیمتِ متری', seoListingTitle({ ...d, deal: 'rent', priceNum: 1.7 }).includes('رهن و اجارهٔ') && !seoListingTitle({ ...d, deal: 'rent' }).includes('متری ۳'))
+    }
     // فاز ۲۲۶ — امتیازِ اصالتِ واقعی (فیدبک: «جعلی بودن واقعاً کار می‌کنه؟» — درصدِ AIساخته حذف شد)
     {
       const { originalityOf } = await import('../app/lib/originality.ts')

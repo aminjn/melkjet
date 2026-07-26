@@ -138,6 +138,37 @@ export function matchesListing(p: DerivedListing, f: EffectiveFilters): boolean 
   return true
 }
 
+// ─── فاز ۲۲۸ — عنوان/توضیحِ سئویِ بازساخته از دادهٔ ساختاریافته (ضدِ تکراری با دیوار) ───
+// تگِ <title> و description «به‌کل» از فیلدهای واقعیِ خودِ آگهی ساخته می‌شود — متفاوت از متنِ
+// دیوار، غنی‌تر، و بدونِ ذره‌ای دادهٔ ساختگی. H1ِ صفحه همان متنِ صاحبِ آگهی می‌ماند.
+const faN = (n: number) => n.toLocaleString('fa-IR')
+const DEAL_FA: Record<string, string> = { sale: 'فروش', rent: 'رهن و اجارهٔ', presale: 'پیش‌فروشِ', daily: 'اجارهٔ روزانهٔ' }
+export function seoListingTitle(d: Pick<DerivedListing, 'deal' | 'kind' | 'areaNum' | 'bedsNum' | 'priceNum' | 'location' | 'title'>): string {
+  const kind = (d.kind || '').split('/')[0]
+  const parts = (d.location || '').split(/[،,]/).map(s => s.trim()).filter(Boolean)
+  const hood = parts.length > 1 ? parts[parts.length - 1] : ''
+  const city = parts[0] || ''
+  const place = [hood, city].filter(Boolean).join('، ')
+  // بدونِ حداقلِ داده (نوع+متراژ+مکان) عنوانِ اصلی می‌ماند — عنوانِ نصفه‌نیمه نمی‌سازیم
+  if (!kind || !d.areaNum || !place) return d.title
+  const deal = DEAL_FA[d.deal] || ''
+  let t = `${deal ? deal + ' ' : ''}${kind} ${faN(d.areaNum)} متری${d.bedsNum ? ` ${faN(d.bedsNum)} خوابه` : ''} در ${place}`
+  if (d.deal === 'sale' && d.priceNum > 0 && d.areaNum > 0) {
+    const perM = Math.round((d.priceNum * 1e9) / d.areaNum / 1e6)
+    if (perM > 0) t += ` — متری ${faN(perM)} میلیون`
+  }
+  return t
+}
+export function seoListingDescription(d: Pick<DerivedListing, 'deal' | 'kind' | 'areaNum' | 'bedsNum' | 'floorNum' | 'yearNum' | 'priceNum' | 'location' | 'title'>, price?: string): string {
+  const t = seoListingTitle(d)
+  const extras = [
+    d.floorNum != null && d.floorNum > 0 ? `طبقهٔ ${faN(d.floorNum)}` : '',
+    d.yearNum ? `ساختِ ${faN(d.yearNum)}` : '',
+    price ? `قیمت ${price}` : '',
+  ].filter(Boolean).join('، ')
+  return `${t}${extras ? ` — ${extras}` : ''}. مشاهدهٔ عکس‌ها، تحلیلِ هوشمند، دسترسی‌های اطراف و اطلاعاتِ تماس در ملک‌جت.`.slice(0, 300)
+}
+
 export const normFa = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
 /** شهر = فیلترِ قطعی (همان قانونِ فاز ۱۵۱). */
 export const cityMatch = (location: string, city: string) => !city || normFa(location).includes(normFa(city))

@@ -20,9 +20,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params
   const it = await load(slug)
   if (!it) return { title: 'آگهی یافت نشد | ملک‌جت' }
-  const loc = it.location || it.meta?.['محله'] || it.meta?.['شهر'] || ''
-  const title = `${it.title}${loc ? ` — ${loc}` : ''}`
-  const desc = (it.excerpt || `${it.title}${it.price ? `، ${it.price}` : ''}${loc ? `، ${loc}` : ''}. مشاهدهٔ جزئیات، تحلیلِ هوش مصنوعی و اطلاعاتِ تماس در ملک‌جت.`).slice(0, 180)
+  // فاز ۲۲۸ (ضدِ تکراری با دیوار): title/description «به‌کل» از دادهٔ ساختاریافتهٔ خودِ آگهی بازساخته
+  // می‌شود — نه کپیِ متنِ دیوار. H1ِ صفحه همان متنِ صاحبِ آگهی می‌ماند (هیچ دستکاری‌ای در نمایش).
+  const { seoListingTitle, seoListingDescription, deriveListing } = await import('@/app/lib/listing-search')
+  const d228 = deriveListing(it as Parameters<typeof deriveListing>[0])
+  const title = seoListingTitle(d228)
+  const desc = seoListingDescription(d228, it.price)
   // فاز ۲۱۸ (ممیزیِ کاملِ سئو): canonical قبلاً «همان slugِ درخواستی» بود — هر واریانتی خودش را
   // canonical اعلام می‌کرد و گوگل نسخه‌های تکراری نگه می‌داشت. حالا همیشه «یک» URLِ حقیقی.
   const url = `https://melkjet.com${listingHref(it.id, it.title, it.location)}`
