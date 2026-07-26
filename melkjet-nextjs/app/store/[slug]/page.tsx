@@ -8,7 +8,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params
   const shop = await publicShop(slug)
   if (!shop) return { title: 'فروشگاه یافت نشد | ملک‌جت' }
-  return { title: `${shop.name} | فروشگاه مصالح ملک‌جت`, description: shop.tagline || shop.about?.slice(0, 150) || `فروشگاه مصالح ساختمانی ${shop.name}` }
+  // فاز ۲۲۱ (خروجیِ seo-verify روی prod: تنها ✗ — «/store/… بدونِ canonical»)
+  return { title: `${shop.name} | فروشگاه مصالح ملک‌جت`, description: shop.tagline || shop.about?.slice(0, 150) || `فروشگاه مصالح ساختمانی ${shop.name}`, alternates: { canonical: `https://melkjet.com/store/${slug}` } }
 }
 
 export default async function StorefrontPage({ params }: { params: Promise<{ slug: string }> }) {
