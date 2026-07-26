@@ -2269,6 +2269,17 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('مختصاتِ صفر/نامعتبر هرگز ثبت نمی‌شود', (await getItemById(it201.id)).meta['__lat'] === '35.7')
       await deleteItem(it201.id)
     }
+    // فاز ۲۲۹ — نوارِ آمارِ صفحهٔ اصلی (سورسِ لایوِ کاربر «۰+ متخصص» و «۱+ فروشگاه» نشان می‌داد):
+    // آمارِ زیرِ آستانه پنهان می‌شود — نه عددِ ساختگی، نه ویترینِ خالی.
+    {
+      const { visibleHomeStats, HOME_STAT_MIN } = await import('../app/lib/home-stats.ts')
+      const prod = { listings: 5819, products: 6135, shops: 1, advisors: 0, builders: 15873 }
+      const v = visibleHomeStats(prod)
+      ok('صفر و یکِ خجالت‌آور پنهان؛ عددهای واقعیِ بزرگ می‌مانند', v.length === 3 && v.every(r => r.n >= HOME_STAT_MIN) && !v.some(r => r.l.includes('فروشگاه')) && !v.some(r => r.l.includes('متخصص')))
+      ok('ترتیب و برچسب‌ها حفظ می‌شود', v[0].l === 'آگهیِ فعالِ ملک' && v[1].l === 'محصولِ مصالح' && v[2].l === 'سازنده در دیتابیس')
+      ok('همه زیرِ آستانه → نوارِ کاملاً پنهان (آرایهٔ خالی)', visibleHomeStats({ listings: 3, products: 0, shops: 1, advisors: 2, builders: 9 }).length === 0)
+      ok('دقیقاً روی آستانه نمایش داده می‌شود؛ ورودیِ خراب امن است', visibleHomeStats({ listings: HOME_STAT_MIN, products: NaN, shops: -5, advisors: 10, builders: 0 }).length === 2 && visibleHomeStats(null).length === 0)
+    }
     // فاز ۲۲۸ — عنوان/توضیحِ سئویِ بازساخته (ضدِ تکراری با دیوار؛ فقط از دادهٔ واقعی)
     {
       const { seoListingTitle, seoListingDescription } = await import('../app/lib/listing-search.ts')

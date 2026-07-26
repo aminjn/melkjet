@@ -14,6 +14,7 @@ import HomeAssistant from './components/home/HomeAssistant'
 import ReosFeed from './components/ReosFeed'
 import { gradientFor, initialsFor, type ContentItem } from './lib/content-display'
 import { listingHref } from './lib/listing-url'
+import { visibleHomeStats } from './lib/home-stats'
 import type { HomeData } from './lib/home-data'
 
 // محله‌های محبوب — فقط لینکِ ناوبری؛ قیمت/رشدِ ساختگی حذف شد (آمارِ واقعی در صفحهٔ خودِ محله).
@@ -214,26 +215,16 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
         </div>
       </section>
 
-      {/* STATS — فقط آمارِ واقعیِ سیستم؛ بدونِ عددِ ساختگی (اگر نبود، نوار پنهان می‌شود) */}
-      {sysStats && (
+      {/* STATS — فقط آمارِ واقعیِ سیستم؛ آمارِ زیرِ آستانه اصلاً نمایش داده نمی‌شود (نه عددِ ساختگی، نه «۰+») */}
+      {visibleHomeStats(sysStats).length > 0 && (
       <section style={{ marginTop: 'clamp(40px,5vw,64px)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', background: 'var(--bg2)' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 18 }}>
-          {(() => {
-            const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
-            const live = [
-              { n: `${fa(sysStats.listings)}+`, l: 'آگهیِ فعالِ ملک' },
-              { n: `${fa(sysStats.products)}+`, l: 'محصولِ مصالح' },
-              { n: `${fa(sysStats.shops)}+`, l: 'فروشگاهِ مصالح' },
-              { n: `${fa(sysStats.advisors)}+`, l: 'متخصص و مشاور' },
-              { n: `${fa(sysStats.builders)}+`, l: 'سازنده در دیتابیس' },
-            ]
-            return live.map(s => (
-              <div key={s.l} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 'clamp(22px,3vw,32px)', fontWeight: 800, color: 'var(--gold)', letterSpacing: '-.5px' }}>{s.n}</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{s.l}</div>
-              </div>
-            ))
-          })()}
+          {visibleHomeStats(sysStats).map(s => (
+            <div key={s.l} style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 'clamp(22px,3vw,32px)', fontWeight: 800, color: 'var(--gold)', letterSpacing: '-.5px' }}>{s.n.toLocaleString('fa-IR')}+</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{s.l}</div>
+            </div>
+          ))}
         </div>
       </section>
       )}

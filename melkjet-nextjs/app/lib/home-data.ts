@@ -105,6 +105,18 @@ async function compute(): Promise<HomeData> {
   try { sysStats.products = catalogStats().products } catch {}
   try { sysStats.shops = (await listPublicShops()).length } catch {}
   try { sysStats.builders = getMeta().totalBuilders || 0 } catch {}
+  // فاز ۲۲۹: «متخصص و مشاور» فقط آیتم‌های اسکرپیِ directory را می‌شمرد (روی پروژهٔ لایو = ۰)
+  // در حالی که متخصصانِ واقعیِ سایت پروفایل‌های عمومی‌اند — همان منبعِ سایت‌مپ و /browse/specialists.
+  // بزرگ‌ترینِ دو شمارشِ واقعی نمایش داده می‌شود.
+  try {
+    const { urlTypeForRole } = await import('./provider-public')
+    const { allProviderSlugsByPhone } = await import('./provider-slug-store')
+    const slugs = await allProviderSlugsByPhone()
+    const norm = (p: string) => String(p || '').replace(/\D/g, '')
+    const { listAccounts } = await import('./account-store')
+    const providers = listAccounts().filter(a => urlTypeForRole(a.role) && slugs[norm(a.phone)]).length
+    sysStats.advisors = Math.max(sysStats.advisors, providers)
+  } catch {}
   return {
     listings: listingsAll.slice(0, 12),
     advisorItems: advisorsAll.slice(0, 6),
