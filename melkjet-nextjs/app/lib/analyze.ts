@@ -33,7 +33,9 @@ export async function analyzeListing(b: AnalyzePayload): Promise<{ analysis?: an
   ].filter(Boolean).join('\n')
 
   const txt = `${b.price || ''} ${b.title || ''} ${b.meta?.['نوع معامله'] || ''}`
-  const isRent = /ودیعه|اجاره|رهن/.test(txt) && !/فروش|خرید|قیمت کل/.test(txt)
+  // فاز ۲۳۰: اجارهٔ روزانه (شبی/روزانه-هفتگی) هرگز «فروشی» تحلیل نشود — نشانه‌ها اغلب فقط در توضیحات‌اند.
+  const isDaily = /کوتاه[‌\s]?مدت/.test(txt) || /شبی\s*[\d۰-۹]|روزانه\s*[-–—ـ_]\s*هفتگی|اجاره(?:ی|ٔ)?\s*(?:روزانه|کوتاه[‌\s]?مدت)/.test(`${txt} ${b.description || ''}`)
+  const isRent = isDaily || (/ودیعه|اجاره|رهن/.test(txt) && !/فروش|خرید|قیمت کل/.test(txt))
   const scoreKeys = isRent
     ? '"ارزش اجاره":8.5,"موقعیت محله":8,"دسترسی":9,"کیفیت ساخت":8,"امکانات":8.5'
     : '"ارزش خرید":8.5,"سرمایه‌گذاری":8,"موقعیت محله":9,"دسترسی":8.5,"کیفیت ساخت":8'

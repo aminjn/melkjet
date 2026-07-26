@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { parseFaNum } from './reos/features'
+import { dealOf } from './listing-filter'
 
 // حداقلِ ورودیِ یک آگهی برای محاسبات (ساختاری — تا توابعِ خالص بدونِ scraper-store تست شوند).
 export interface Lst { id: string; title: string; location?: string; price?: string; meta?: Record<string, string> }
@@ -17,7 +18,7 @@ export interface Lst { id: string; title: string; location?: string; price?: str
 const MIN_SALE = 100_000_000   // کفِ قیمتِ فروشِ معتبر — هم‌راستا با /api/empire (قیمتِ بدپارس‌شده کاندید نشود)
 export const cityOfLoc = (loc?: string) => String(loc || '').split(/[،,]/)[0]?.trim() || ''
 const priceOfL = (it: Lst) => parseFaNum(it.price)
-const isSaleL = (it: Lst) => !/اجاره|رهن|ودیعه/.test(it.price || '') && !/\/\s*شب|تومان\s*\/?\s*شب|شبی\s/.test(it.price || '') && (it.meta || {})['نوع معامله'] !== 'اجاره' && !/روزهای عادی|ظرفیت استاندارد/.test(Object.keys(it.meta || {}).join(' '))   // فاز ۱۹۰: اجارهٔ شبانه فروشی نیست
+const isSaleL = (it: Lst) => dealOf(it) === 'sale'   // فاز ۲۳۰: مرجعِ واحد (اجارهٔ شبانه/ماهانه هرگز فروشی نیست)
 const areaOfL = (it: Lst) => parseFaNum((it.meta || {})['متراژ']) || 0
 const monthlyRentOfL = (it: Lst) => { const m = (it.price || '').match(/اجاره[^\d۰-۹]*([\d,٬۰-۹]+)/); return m ? parseFaNum(m[1]) : 0 }
 const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)] }

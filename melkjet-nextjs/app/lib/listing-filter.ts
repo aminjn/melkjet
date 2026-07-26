@@ -9,6 +9,7 @@ export interface DealFields {
   category?: string
   tags?: string[]
   meta?: Record<string, string>
+  excerpt?: string
 }
 
 // فاز ۱۷۷ (فیدبک: «می‌زنم اجاره همه‌چیز میاره») — طبقه‌بندی با «تقدمِ سیگنالِ قوی»، نه regex روی همه‌چیز:
@@ -19,18 +20,26 @@ export interface DealFields {
 // (روزهای عادی/آخر هفته/ظرفیت استاندارد). چون «اجارهٔ کوتاه‌مدت» واژهٔ اجاره را دارد، روزانه قبل از rent چک می‌شود.
 const DAILY_RE = /کوتاه[‌\s]?مدت|روزانه/
 const NIGHT_PRICE_RE = /\/\s*شب|تومان\s*\/?\s*شب|هر\s*شب|شبی\s/
+// فاز ۲۳۰ (فیدبک+اسکرین‌شات: «آگهیِ اجارهٔ شبی توی فروش می‌رود») — نشانه‌های «قطعیِ» اجارهٔ روزانه
+// که فقط در توضیحات می‌آیند: قیمتِ شبی («شبی ۶۵۰۰»)، الگوی «روزانه-هفتگی-ماهانه»، «اجارهٔ روزانه/کوتاه‌مدت».
+// عمداً تنگ‌اند («روزانه»ی تنها کافی نیست — «نظافت روزانه» در آگهیِ اجارهٔ عادی هم هست).
+const DAILY_STRONG_RE = /شبی\s*[\d۰-۹]|روزانه\s*[-–—ـ_]\s*هفتگی|اجاره(?:ی|ٔ)?\s*(?:روزانه|کوتاه[‌\s]?مدت)/
+const DAILY_META_KEYS_RE = /روزهای عادی|آخر هفته|ظرفیت استاندارد|تعطیلات و مناسبت/
 export function dealOf(it: DealFields): DealKind {
+  const price = it.price || ''
+  const excerpt = it.excerpt || ''
+  const metaKeys = Object.keys(it.meta || {}).join(' ')
+  // شواهدِ سختِ روزانه — مستقل از متایِ صریح، چون ایمپورتِ قدیمیِ دیوار (که «روزانه» را نمی‌شناخت)
+  // همین آگهی‌ها را صریحاً «نوع معامله: فروش» مهر کرده بود؛ شاهدِ سخت باید آن مهرِ غلط را بشکند.
+  const strongDaily = NIGHT_PRICE_RE.test(price) || DAILY_META_KEYS_RE.test(metaKeys) || DAILY_STRONG_RE.test(price) || DAILY_STRONG_RE.test(excerpt)
   const explicit = it.meta?.['نوع معامله'] || ''
   if (explicit) {
     if (/پیش[‌\s]?فروش/.test(explicit)) return 'presale'
     if (DAILY_RE.test(explicit)) return 'daily'
     if (/اجاره|رهن|ودیعه/.test(explicit)) return 'rent'
-    if (/فروش|خرید/.test(explicit)) return 'sale'
+    if (/فروش|خرید/.test(explicit)) return strongDaily ? 'daily' : 'sale'
   }
-  const price = it.price || ''
-  if (NIGHT_PRICE_RE.test(price)) return 'daily'
-  const metaKeys = Object.keys(it.meta || {}).join(' ')
-  if (/روزهای عادی|آخر هفته|ظرفیت استاندارد|تعطیلات و مناسبت/.test(metaKeys)) return 'daily'
+  if (strongDaily) return 'daily'
   if (/ودیعه|رهن|اجاره/.test(price)) return 'rent'
   const tc = `${it.title || ''} ${it.category || ''}`
   if (/پیش[‌\s]?فروش/.test(tc)) return 'presale'

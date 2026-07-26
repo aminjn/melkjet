@@ -17,7 +17,7 @@ export interface DivarPost {
   district?: string
   neighborhood?: string
   location?: string
-  deal?: 'sale' | 'rent'
+  deal?: 'sale' | 'rent' | 'daily'
   ptype?: string
   price?: number          // قیمت کل (فروش) یا ودیعه (اجاره) — تومان
   rentMonthly?: number    // اجارهٔ ماهانه — تومان
@@ -337,8 +337,12 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
     }
 
     // ── نوعِ معامله — اولویتِ قاطع با اسلاگِ دسته؛ بعد وجودِ ودیعه/اجاره؛ بعد واژه‌های عنوان ──
-    let deal: 'sale' | 'rent'
-    if (/rent/.test(cat)) deal = 'rent'
+    // فاز ۲۳۰: «اجارهٔ کوتاه‌مدت» (شبی/روزانه) نوعِ سوم است — دستهٔ دیوار (temporary-rent) یا
+    // نشانه‌های قطعیِ توضیحات («شبی ۶۵۰۰»، «روزانه-هفتگی-ماهانه»)؛ قبل از rent چون اسلاگش rent را دارد.
+    let deal: 'sale' | 'rent' | 'daily'
+    const dailyStrong = /temporary|short/.test(cat) || /کوتاه[‌\s]?مدت/.test(`${cat} ${title}`) || /شبی\s*[\d۰-۹]|روزانه\s*[-–—ـ_]\s*هفتگی|اجاره(?:ی|ٔ)?\s*(?:روزانه|کوتاه[‌\s]?مدت)/.test(`${tt} ${dsc}`)
+    if (dailyStrong) deal = 'daily'
+    else if (/rent/.test(cat)) deal = 'rent'
     else if (/(sell|sale)/.test(cat)) deal = 'sale'
     else if (deposit || monthly || /(اجاره|رهن|ودیعه)/.test(tt)) deal = 'rent'
     else deal = 'sale'
@@ -349,7 +353,7 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
     if (deal === 'rent') {
       if (!deposit) { const m = dsc.match(/(?:ودیعه|رهن)\D{0,14}([\d۰-۹][\d۰-۹,.\s]*(?:میلیون|میلیارد)?)/); if (m && bigEnough(m[1])) deposit = m[1] }
       if (!monthly) { const m = dsc.match(/اجاره\D{0,14}([\d۰-۹][\d۰-۹,.\s]*(?:میلیون|میلیارد)?)/); if (m && bigEnough(m[1])) monthly = m[1] }
-    } else {
+    } else if (deal === 'sale') {
       if (!total) { const m = dsc.match(/(?:قیمت|مبلغ کل)\D{0,14}([\d۰-۹][\d۰-۹,.\s]*(?:میلیون|میلیارد)?)/); if (m && bigEnough(m[1])) total = m[1] }
     }
 
@@ -373,7 +377,7 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
     if (deal === 'rent') {
       if (!deposit) deposit = afterLabel(/ودیعه|رهن/) || rawNum(/credit|deposit/, 7)
       if (!monthly) monthly = afterLabel(/اجاره/) || rawNum(/rent/, 6)
-    } else {
+    } else if (deal === 'sale') {
       if (!total) total = afterLabel(/قیمت کل|قیمت فروش|مبلغ کل/) || rawNum(/total_?price|sale_?price|price/, 8)
     }
 
@@ -382,7 +386,7 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
       title, city, district, neighborhood, ptype,
       location: [city, neighborhood].filter(Boolean).join('، '),
       deal,
-      price: deal === 'rent' ? parseToman(deposit) : parseToman(total),
+      price: deal === 'rent' ? parseToman(deposit) : deal === 'daily' ? 0 : parseToman(total),
       rentMonthly: deal === 'rent' ? parseToman(monthly) : 0,
       area, rooms, floor, yearBuilt,
     }

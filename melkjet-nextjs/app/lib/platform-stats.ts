@@ -1,13 +1,10 @@
 import { listItems, listOwners, type Item } from './scraper-store'
 import { listPoints } from './market-data'
 import { parsePrice, parseArea } from './market-stats'
+import { dealOf } from './listing-filter'
 
-function isRent(it: Item): boolean {
-  const cat = it.meta?.['category'] || ''
-  if (/rent/.test(cat)) return true
-  if (/sell/.test(cat)) return false
-  return /ودیعه|اجاره|رهن/.test(`${it.price || ''} ${it.title || ''} ${it.meta?.['نوع معامله'] || ''}`)
-}
+// فاز ۲۳۰: مرجعِ واحد dealOf — اجارهٔ روزانه دیگر «فروش» شمرده نمی‌شود.
+function isRent(it: Item): boolean { return dealOf(it) !== 'sale' }
 function cityOf(it: Item) { return it.meta?.['شهر'] || (it.location || '').split('،').slice(-1)[0]?.trim() || 'نامشخص' }
 function districtOf(it: Item) { return it.meta?.['محله'] || (it.location || '').split('،')[0]?.trim() || 'نامشخص' }
 

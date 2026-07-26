@@ -7,18 +7,15 @@ import { getAdminData } from './admin-store'
 import { shecanRequest } from './shecan-https'
 import { PROPERTY_KINDS } from './taxonomy'
 import { matchesLocationName } from './location-match'
+import { dealOf } from './listing-filter'
 import { listForPhone, removeByEndpoint } from './push-store'
 import { sendPush } from './web-push'
 
 const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
 const toLatin = (s: string) => (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
 
-function itemDeal(it: any): 'sale' | 'rent' | 'presale' {
-  const txt = `${it.price || ''} ${it.title || ''} ${it.category || ''} ${it.meta?.['نوع معامله'] || ''} ${(it.tags || []).join(' ')}`
-  if (/پیش[‌\s]?فروش/.test(txt)) return 'presale'
-  if (it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(txt)) return 'rent'
-  return 'sale'
-}
+// فاز ۲۳۰: مرجعِ واحد dealOf — اجارهٔ روزانه نه «فروش» حساب می‌شود نه هشدارِ اجارهٔ عادی می‌گیرد.
+const itemDeal = (it: any) => dealOf(it)
 function priceB(it: any): number {
   const raw = parseFloat(toLatin(String(it.price || '')).replace(/[^\d.]/g, '')) || 0
   const t = it.price || ''

@@ -8,6 +8,7 @@ import { listItems } from '@/app/lib/scraper-store'
 import { gradientFor, initialsFor } from '@/app/lib/content-display'
 import { providersInArea } from '@/app/lib/provider-public'
 import { listingHref } from '@/app/lib/listing-url'
+import { dealOf } from '@/app/lib/listing-filter'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,7 +91,8 @@ export default async function LocationPage({ params }: { params: Promise<{ path?
   // پاراگرافِ پویا (ضدِ محتوای تکراری) + داده.
   const listings = (!act || act.kind === 'listing') ? await (async () => {
     let ls = await listingsIn(node, r.trail[0]?.nameFa)
-    if (act?.deal) ls = ls.filter(it => act.deal === 'rent' ? /اجاره|رهن|ودیعه/.test(`${it.price} ${it.title} ${it.meta?.['نوع معامله'] || ''}`) : !/اجاره|رهن|ودیعه/.test(`${it.price} ${it.title} ${it.meta?.['نوع معامله'] || ''}`))
+    // فاز ۲۳۰: مرجعِ واحد dealOf — اجارهٔ روزانه دیگر نه در «خرید» می‌آید نه در «اجاره»ی عادی.
+    if (act?.deal) ls = ls.filter(it => dealOf(it) === act.deal)
     return ls
   })() : []
 

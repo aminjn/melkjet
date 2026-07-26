@@ -4,7 +4,7 @@ import { getCommissionConfig, type CommMode } from './agency-store'
 import { getProfile } from './profile-store'
 
 // تجمیعِ فایل‌ها (آگهی‌ها) و کمیسیونِ مشاورانِ عضوِ یک آژانس — از پنلِ خودِ مشاوران (advisor-store).
-export interface AgencyAdvisorListing { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number; publicId?: string }
+export interface AgencyAdvisorListing { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent' | 'daily'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number; publicId?: string }
 export interface MonthPoint { key: string; label: string; amount: number; deals: number }
 export interface AgencyAdvisorRow {
   advisorPhone: string

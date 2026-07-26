@@ -25,7 +25,7 @@ export interface Lead {
   activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number; reminderAt?: number
 }
 export interface Listing {
-  id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number
+  id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent' | 'daily'; status: ListingStatus; createdAt: number
   // جزئیات کامل فایل (همه اختیاری برای سازگاری با دادهٔ قبلی)
   city?: string; neighborhood?: string; facing?: string
   province?: string; district?: string; lat?: number; lng?: number
@@ -231,7 +231,7 @@ export async function addListing(o: string, input: Partial<Listing>): Promise<Li
     c = {
       id: id('f_'), title: String(input.title || 'فایل جدید'), ptype: String(input.ptype || 'آپارتمان'),
       location: String(input.location || ''), price: Number(input.price) || 0,
-      deal: input.deal === 'rent' ? 'rent' : 'sale', status: 'active', createdAt: Date.now(),
+      deal: input.deal === 'rent' ? 'rent' : input.deal === 'daily' ? 'daily' : 'sale', status: 'active', createdAt: Date.now(),
       city: input.city ? String(input.city) : undefined,
       neighborhood: input.neighborhood ? String(input.neighborhood) : undefined,
       province: input.province ? String(input.province) : undefined,
@@ -281,14 +281,18 @@ export async function deleteListing(o: string, fid: string): Promise<void> { let
 // ---- انتشار عمومی روی سایت (آگهی پابلیک) ----
 function faNum(n?: number): string { return n ? n.toLocaleString('fa-IR') : '' }
 function publicPayload(l: Listing, advisorName: string, ownerPhone?: string) {
+  // فاز ۲۳۰: قیمتِ صفر دیگر «تومانِ» خالی نمی‌سازد (faNum(0)='') — صادقانه «توافقی»؛
+  // اجارهٔ روزانه هم قیمتش شبی است، نه کل.
   const price = l.deal === 'rent'
     ? `ودیعه ${faNum(l.price)} تومان${l.rentMonthly ? ` · اجارهٔ ماهانه ${faNum(l.rentMonthly)} تومان` : ''}`
-    : `${faNum(l.price)} تومان`
+    : l.deal === 'daily'
+      ? (l.price ? `شبی ${faNum(l.price)} تومان` : 'توافقی')
+      : (l.price ? `${faNum(l.price)} تومان` : 'توافقی')
   const loc = [l.city, l.neighborhood].filter(Boolean).join('، ') || l.location || ''
   const meta: Record<string, string> = {}
   const put = (k: string, v?: string | number) => { if (v !== undefined && v !== '' && v !== 0) meta[k] = String(v) }
   put('استان', l.province); put('شهر', l.city); put('منطقه', l.district); put('محله', l.neighborhood)
-  put('نوع معامله', l.deal === 'rent' ? 'اجاره' : 'فروش')
+  put('نوع معامله', l.deal === 'rent' ? 'اجاره' : l.deal === 'daily' ? 'اجارهٔ کوتاه‌مدت' : 'فروش')
   put('نوع ملک', l.ptype); put('متراژ', l.area ? `${faNum(l.area)} متر` : ''); put('اتاق خواب', faNum(l.rooms))
   put('طبقه', faNum(l.floor)); put('تعداد طبقات', faNum(l.totalFloors)); put('سال ساخت', faNum(l.yearBuilt))
   put('جهت', l.facing); put('سند', l.docType)

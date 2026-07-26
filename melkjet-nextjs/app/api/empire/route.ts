@@ -48,6 +48,7 @@ import { materialsIndexState, materialsFactorOf } from '@/app/lib/materials-inde
 import { grantWarReward, absorbNpcAssets, moveCapital, doPrestige, spendSkillPoint, prestigeEffectsOf, SKILL_BRANCHES } from '@/app/lib/empire-store'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
 import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-store'
+import { dealOf } from '@/app/lib/listing-filter'
 import { parseFaNum } from '@/app/lib/reos/features'
 import { recentEvents } from '@/app/lib/reos/store'
 import { forIds } from '@/app/lib/listing-stats-store'
@@ -92,7 +93,7 @@ const cosmeticIconOf = (e: Pick<EmpireData, 'cosmetics'>, kind: 'frame' | 'flair
 }
 const ptypeOf = (it: Item) => (it.meta || {})['نوع ملک'] || it.category || ''
 const priceOf = (it: Item) => parseFaNum(it.price)
-const isSale = (it: Item) => !/اجاره|رهن|ودیعه/.test(it.price || '') && !/\/\s*شب|تومان\s*\/?\s*شب|شبی\s/.test(it.price || '') && (it.meta || {})['نوع معامله'] !== 'اجاره' && !/روزهای عادی|ظرفیت استاندارد/.test(Object.keys(it.meta || {}).join(' '))   // فاز ۱۹۰: اجارهٔ شبانه فروشی نیست
+const isSale = (it: Item) => dealOf(it) === 'sale'   // فاز ۲۳۰: مرجعِ واحد (اجارهٔ شبانه/ماهانه هرگز فروشی نیست)
 // قیمتِ فروشِ معتبر: زیر این کف یعنی قیمتِ آگهی درست پارس نشده («۱۹٫۶ میلیارد» متنی) — کاندیدِ بازی نشود.
 const MIN_SALE = 100_000_000
 const isPricedSale = (it: Item) => isSale(it) && priceOf(it) >= MIN_SALE

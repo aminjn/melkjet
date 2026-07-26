@@ -9,6 +9,7 @@ import LikeHeart, { useFav } from '@/app/components/home/LikeHeart'
 import ReosTwinCard from '@/app/components/ReosTwinCard'
 import { openAuth } from '@/app/components/AuthModal'
 import { listingAgeLabel, isFreshListing } from '@/app/lib/fa-time'
+import { dealOf } from '@/app/lib/listing-filter'
 
 interface Item {
   id: string; type: string; category?: string; title: string; price?: string
@@ -209,6 +210,10 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
   }, [lightbox, images.length])
 
   const dealStatus: 'sold' | 'rented' | '' = item?.meta?.['__dealStatus'] === 'sold' ? 'sold' : item?.meta?.['__dealStatus'] === 'rented' ? 'rented' : ''
+  // فاز ۲۳۰: مرجعِ واحدِ نوعِ معامله — اجارهٔ روزانه دیگر ماشین‌حسابِ وام/قیمتِ متری نمی‌گیرد.
+  const deal = item ? dealOf(item) : 'sale'
+  // قیمتِ بی‌رقم («تومانِ» خالی از دیتای قدیمی) صادقانه «توافقی» نمایش داده می‌شود.
+  const priceLabel = (() => { const s = String(item?.price || '').trim(); if (!s) return ''; return /[\d۰-۹]/.test(s) ? s : 'توافقی' })()
   const amenities = (() => {
     const text = (item?.excerpt || '') + ' ' + facts.map(f => f.label + ' ' + f.value).join(' ')
     const fromText = AMENITY_WORDS.filter(w => text.includes(w))
@@ -221,7 +226,7 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
   const specs = [...metaSpecs, ...facts.filter(f => !specLabels.has(f.label) && f.value)]
   // قیمت هر متر (فقط فروش) — مستقل از فرمتِ قیمت و ارقامِ فارسی.
   const perMeter = (() => {
-    if (item?.meta?.['نوع معامله'] === 'اجاره') return ''
+    if (deal !== 'sale') return ''
     const toLatin = (s: string) => (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
     const area = parseInt(toLatin(String(item?.meta?.['متراژ'] || facts.find(f => f.label === 'متراژ')?.value || '')).replace(/[^\d]/g, ''), 10)
     const price = parseInt(toLatin(item?.price || '').replace(/[^\d]/g, ''), 10)
@@ -347,7 +352,8 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
               <div>
                 <h1 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 800, lineHeight: 1.4, marginBottom: 12 }}>{item.title}</h1>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
-                  {item.price && <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)' }}>{item.price}</span>}
+                  {priceLabel && <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)' }}>{priceLabel}</span>}
+                  {deal === 'daily' && <span style={{ padding: '4px 12px', borderRadius: 999, background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 13, fontWeight: 700 }}>اجارهٔ روزانه</span>}
                   {perMeter && <span style={{ padding: '4px 12px', borderRadius: 999, background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 13, fontWeight: 700 }}>{perMeter}</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -507,8 +513,8 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
                 </div>
               )}
 
-              {/* loan calculator */}
-              {item.price && (
+              {/* loan calculator — فقط برای فروش معنا دارد (نه اجاره/روزانه) */}
+              {deal === 'sale' && item.price && (
                 <div style={card}>
                   <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>ماشین‌حساب وام</div>
                   <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 18 }}>نرخ سود ۱۸٪ سالانه · دورهٔ ۲۰ سال</div>
@@ -558,7 +564,7 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
             {/* RIGHT */}
             <div className="mjp-side" style={{ position: 'sticky', top: 90, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={card}>
-                {item.price && <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', marginBottom: 4 }}>{item.price}</div>}
+                {priceLabel && <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', marginBottom: 4 }}>{priceLabel}</div>}
                 {(item.owner) && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0', paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
                     <span style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{item.owner.slice(0, 1)}</span>

@@ -8,6 +8,7 @@ import { valuate } from './avm'
 import { getMarketIntel } from './market-intel'
 import { demandScore, parseFaNum, rentPartsOf, clamp01 } from './features'
 import { rentalYield } from './investor'
+import { dealOf } from '../listing-filter'
 import { config } from './reos-config'
 import type { PropertyEntity } from './types'
 
@@ -118,7 +119,8 @@ async function buildRentTwin(it: Item, p: PropertyEntity, demand: number): Promi
   const perM: number[] = []
   for (const x of items) {
     if (x.id === it.id) continue
-    if (!/اجاره|رهن|ودیعه/.test(x.price || '') && (x.meta || {})['نوع معامله'] !== 'اجاره') continue
+    // فاز ۲۳۰: فقط اجارهٔ «ماهانه» (dealOf==='rent') — قیمتِ شبیِ اجارهٔ روزانه میانهٔ اجارهٔ ماهانه را مسموم می‌کرد.
+    if (dealOf(x) !== 'rent') continue
     if (hood && hoodOfLoc(x.location) !== hood) continue
     const a = parseFaNum((x.meta || {})['متراژ']) || 0
     const r = rentPartsOf(x.price).monthly

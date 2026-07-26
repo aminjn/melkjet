@@ -51,7 +51,10 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   const rooms = num(it.meta?.['اتاق خواب'])
   const city = (it.meta?.['شهر'] || '').trim()
   const canonical = `https://melkjet.com/listing/${slug}`
-  const isRent = it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(`${it.price || ''} ${it.title || ''}`)
+  // فاز ۲۳۰: مرجعِ واحدِ dealOf (اجارهٔ روزانه دیگر «فروشی» حساب نمی‌شود — نه در بردکرامب نه در قیمتِ اسکیما)
+  const { dealOf } = await import('@/app/lib/listing-filter')
+  const deal = dealOf(it)
+  const isRent = deal !== 'sale'
   // قیمتِ فروش برای اسکیما — فقط اگر یک عددِ واقعی باشد (اجاره = ودیعه+اجاره، یک عدد نیست؛ «توافقی» = عدد ندارد).
   // schema.org کدِ «تومان» ندارد؛ عدد به ریال (×۱۰) با IRR می‌رود تا واقعی بماند.
   const priceToman = isRent ? undefined : num(it.price)
@@ -78,7 +81,7 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   const crumbs = [
     { name: 'خانه', item: 'https://melkjet.com/' },
     { name: 'آگهی‌ها', item: 'https://melkjet.com/listings' },
-    { name: isRent ? 'رهن و اجاره' : 'خرید و فروش', item: `https://melkjet.com/listings/${isRent ? 'rent' : 'sale'}` },
+    { name: deal === 'daily' ? 'اجارهٔ روزانه و کوتاه‌مدت' : deal === 'rent' ? 'رهن و اجاره' : 'خرید و فروش', item: `https://melkjet.com/listings/${deal === 'daily' ? 'daily' : deal === 'rent' ? 'rent' : 'sale'}` },
     { name: it.title, item: canonical },
   ]
   const breadcrumbLd = {

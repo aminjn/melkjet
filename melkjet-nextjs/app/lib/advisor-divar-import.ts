@@ -65,7 +65,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   const payload: Partial<Listing> = {
     title: realTitle,
     ptype: post.ptype || 'آپارتمان',
-    deal: post.deal === 'rent' ? 'rent' : 'sale',
+    deal: post.deal === 'rent' ? 'rent' : post.deal === 'daily' ? 'daily' : 'sale',
     price: post.price || 0,
     rentMonthly: post.rentMonthly || undefined,
     location: post.location || hint?.location || '',

@@ -7,14 +7,18 @@ import CardImg from '@/app/components/CardImg'
 import { listItems } from '@/app/lib/scraper-store'
 import { gradientFor } from '@/app/lib/content-display'
 import { listingHref } from '@/app/lib/listing-url'
+import { dealOf } from '@/app/lib/listing-filter'
 
 export const dynamic = 'force-dynamic'
 
 // فیلترهای نوع/معاملهٔ آگهی (هاب). صفحاتِ محله‌محور زیرِ /locations/** هستند.
+// فاز ۲۳۰ (فیدبک: «آگهیِ اجارهٔ شبی توی فروش می‌رود»): معامله با مرجعِ واحدِ dealOf — همان
+// ساختارِ دیوار: فروش / رهن‌واجاره / اجارهٔ روزانه (هابِ جدید) / پیش‌فروش.
 const FILTERS: Record<string, { fa: string; match: (it: any) => boolean }> = {
-  sale: { fa: 'خرید و فروش', match: it => !/اجاره|رهن|ودیعه/.test(hay(it)) },
-  rent: { fa: 'رهن و اجاره', match: it => /اجاره|رهن|ودیعه/.test(hay(it)) },
-  'pre-sale': { fa: 'پیش‌فروش', match: it => /پیش[‌\s]?فروش/.test(hay(it)) },
+  sale: { fa: 'خرید و فروش', match: it => dealOf(it) === 'sale' },
+  rent: { fa: 'رهن و اجاره', match: it => dealOf(it) === 'rent' },
+  daily: { fa: 'اجارهٔ روزانه و کوتاه‌مدت', match: it => dealOf(it) === 'daily' },
+  'pre-sale': { fa: 'پیش‌فروش', match: it => dealOf(it) === 'presale' || /پیش[‌\s]?فروش/.test(hay(it)) },
   villa: { fa: 'ویلا و خانه', match: it => /ویلا|خانه|کلنگی|باغ/.test(hay(it)) },
   office: { fa: 'اداری و دفتر', match: it => /اداری|دفتر|دفترکار/.test(hay(it)) },
   shop: { fa: 'مغازه و تجاری', match: it => /مغازه|تجاری|سرقفلی/.test(hay(it)) },

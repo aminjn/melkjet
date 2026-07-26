@@ -7,12 +7,15 @@ import { getAdvisor as getAdvisorProfile } from '../advisor-store'
 import { agencyAdvisorFiles } from '../agency-team'
 import { getFeatures, recentEvents, saveEmbeddings, getEmbedding, getEmbeddings, existingEmbeddingIds, nearestByVector } from './store'
 import { parseFaNum, rentPartsOf, tokenize, propertyVector, cosine } from './features'
+import { dealOf } from '../listing-filter'
 import type { PropertyEntity, UserEntity, AgentEntity, Intent } from './types'
 
 // ── Item (آگهیِ عمومی) → PropertyEntity ──
 export function itemToProperty(it: Item, stat?: { views: number; contacts: number }, saves = 0): PropertyEntity {
   const m = it.meta || {}
-  const deal = (m['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(it.price || '')) ? 'rent' : 'sale'
+  // فاز ۲۳۰: مرجعِ واحد dealOf — اجارهٔ روزانه در موتور «اجاره‌ای» است (تقاضامحور)، هرگز فروشی.
+  const dk = dealOf(it)
+  const deal = dk === 'sale' ? 'sale' : 'rent'
   const lat = Number(m['__lat']) || undefined, lng = Number(m['__lng']) || undefined
   const features = m['امکانات'] ? String(m['امکانات']).split(/[،,]/).map(s => s.trim()).filter(Boolean) : []
   const ptype = m['نوع ملک'] || it.category || 'آپارتمان'

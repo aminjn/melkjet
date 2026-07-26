@@ -1,6 +1,7 @@
 // هستهٔ خالصِ «تشخیصِ هم‌ملک‌بودن» — یادگیریِ ماشینیِ قطعیِ ویژگی‌محور (بدونِ LLM):
 // از متن (هم‌پوشانیِ توکن‌های عنوان)، مشخصات (متراژ/اتاق/قیمت) و لوکیشن (محله) امتیازِ شباهتِ ۰..۱ می‌سازد.
 // بدونِ وابستگی به استورها تا هم در ingest (scraper-store)، هم dedupe، هم واردکنندهٔ دیوار استفاده شود.
+import { dealOf } from './listing-filter'
 
 export function faToEn(s: string): string {
   return (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
@@ -13,7 +14,7 @@ function firstInt(s?: string): number { const m = faToEn(s || '').match(/\d[\d,]
 
 // فاز ۱۴۵ (فیدبک: «شهر، استان، موقعیت، نوع ملک و همهٔ جزئیات باید مورد توجه باشد»)
 export interface SimFields {
-  deal: 'sale' | 'rent'; title: string; hood: string; price: number; area: number; rooms: number; priceStr: string; floor: number
+  deal: 'sale' | 'rent' | 'daily' | 'presale'; title: string; hood: string; price: number; area: number; rooms: number; priceStr: string; floor: number
   city: string; province: string; ptype: string; yearBuilt: number; totalFloors: number; lat: number; lng: number
 }
 
@@ -41,8 +42,8 @@ export function geoDistanceM(lat1: number, lng1: number, lat2: number, lng2: num
 // از شکلِ آیتمِ اسکرپ‌شده ({title, price, location, meta}) بردارِ ویژگی می‌سازد.
 export function fieldsOf(it: { title?: string; price?: string; location?: string; meta?: Record<string, string> }): SimFields {
   const priceTxt = faToEn(it.price || '')
-  const dealTxt = `${it.meta?.['نوع معامله'] || ''} ${it.price || ''} ${it.title || ''}`
-  const deal: 'sale' | 'rent' = (it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(dealTxt)) ? 'rent' : 'sale'
+  // فاز ۲۳۰: یک مرجعِ واحدِ طبقه‌بندی (dealOf) — اجارهٔ روزانه فقط با اجارهٔ روزانه مقایسه می‌شود.
+  const deal = dealOf(it)
   const nums = (priceTxt.match(/\d[\d,]*/g) || []).map(n => parseInt(n.replace(/,/g, ''), 10)).filter(n => n > 0)
   const price = nums.length ? Math.max(...nums) : 0
   const segs = (it.location || '').split(/[،,]/).map(s => s.trim()).filter(Boolean)
@@ -63,9 +64,9 @@ export function fieldsOf(it: { title?: string; price?: string; location?: string
 }
 
 // ساختِ مستقیمِ بردارِ ویژگی از مقادیرِ عددی (برای فایل‌های مشاور که ساختارِ متفاوتی دارند).
-export function fieldsFromParts(p: { deal?: 'sale' | 'rent'; title?: string; hood?: string; price?: number; area?: number; rooms?: number; floor?: number; city?: string; province?: string; ptype?: string; yearBuilt?: number; totalFloors?: number; lat?: number; lng?: number }): SimFields {
+export function fieldsFromParts(p: { deal?: 'sale' | 'rent' | 'daily'; title?: string; hood?: string; price?: number; area?: number; rooms?: number; floor?: number; city?: string; province?: string; ptype?: string; yearBuilt?: number; totalFloors?: number; lat?: number; lng?: number }): SimFields {
   return {
-    deal: p.deal === 'rent' ? 'rent' : 'sale', title: p.title || '', hood: norm(p.hood), price: p.price || 0, area: p.area || 0, rooms: p.rooms || 0, priceStr: p.price ? String(p.price) : '', floor: p.floor || 0,
+    deal: p.deal === 'rent' ? 'rent' : p.deal === 'daily' ? 'daily' : 'sale', title: p.title || '', hood: norm(p.hood), price: p.price || 0, area: p.area || 0, rooms: p.rooms || 0, priceStr: p.price ? String(p.price) : '', floor: p.floor || 0,
     city: norm(p.city), province: norm(p.province), ptype: ptypeClassOf(p.ptype || p.title), yearBuilt: p.yearBuilt || 0, totalFloors: p.totalFloors || 0, lat: p.lat || 0, lng: p.lng || 0,
   }
 }

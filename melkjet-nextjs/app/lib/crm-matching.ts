@@ -1,5 +1,6 @@
 import type { Lead } from './leads-store'
 import type { Item } from './scraper-store'
+import { dealOf } from './listing-filter'
 
 // ── موتورِ تطبیق (Matching Engine) — پیشنهادِ ملک به لید و لید به ملک ──
 // معیارها: بودجه (نزدیکی)، نوعِ معامله (خرید/اجاره)، منطقه/محله، متراژ.
@@ -19,11 +20,10 @@ export function parseToman(s?: string): number {
 function listingPrice(it: Item): number {
   return parseToman(it.price) || parseToman(it.meta?.['قیمت']) || parseToman(it.meta?.__price) || 0
 }
-function listingDeal(it: Item): 'sale' | 'rent' | '' {
-  const t = `${it.category || ''} ${it.meta?.['نوع آگهی'] || ''} ${it.price || ''} ${it.title || ''}`
-  if (/rent|اجاره|رهن|ودیعه/i.test(t)) return 'rent'
-  if (/sale|sell|فروش|خرید/i.test(t)) return 'sale'
-  return ''
+// فاز ۲۳۰: مرجعِ واحد dealOf — اجارهٔ روزانه به هیچ لیدِ خرید/اجارهٔ عادی پیشنهاد نمی‌شود
+// (dealType لیدها sale|rent است و «daily» با هیچ‌کدام برابر نمی‌شود → وتو).
+function listingDeal(it: Item): string {
+  return dealOf(it)
 }
 const norm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
 

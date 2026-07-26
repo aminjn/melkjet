@@ -10,6 +10,7 @@ import { locationTree } from './locations-store'
 import { allBlogCategories, categorySlugForNameDyn as categorySlugForName } from './blog-taxonomy-server'
 import { slugify } from './slugify'
 import { listingHref } from './listing-url'
+import { dealOf as sharedDealOf } from './listing-filter'
 import { getAdminData, saveAdminData } from './admin-store'
 
 export const BASE = 'https://melkjet.com'
@@ -35,8 +36,8 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out
 }
 const iso = (ts?: number) => (ts ? new Date(ts).toISOString() : undefined)
-const dealOf = (it: Item): 'sale' | 'rent' =>
-  (it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(`${it.price || ''} ${it.title || ''}`)) ? 'rent' : 'sale'
+// فاز ۲۳۰: مرجعِ واحدِ طبقه‌بندی — اجارهٔ روزانه شاردِ خودش را می‌گیرد ({city}-daily)، نه شاردِ فروش.
+const dealOf = (it: Item): string => sharedDealOf(it)
 // فاز ۹۰ (فیدبک: «خودِ آگهی شارد شده!»): تکهٔ اولِ location گاهی متنِ زمانِ اسکرپ است
 // («۱۸ ساعت پیش در مرواریدشهر») — کلیدِ شهر باید صادقانه فیلتر شود؛ نامعتبر → شاردِ other.
 const BAD_CITY_RE = /(ساعت|دقیقه|روز|هفته|ماه|لحظه|پیش|قبل|امروز|دیروز|فوری)/
