@@ -15,6 +15,9 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://melkjet.com'),
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
   description: 'بزرگ‌ترین اکوسیستم هوشمند صنعت املاک و ساختمان ایران',
+  // فاز ۲۲۷: پیش‌فرض‌های اشتراک‌گذاری — صفحه‌ای که og خودش را ندارد، برندِ درست را نشان می‌دهد
+  openGraph: { siteName: 'ملک‌جت', locale: 'fa_IR', type: 'website', images: ['/icon-512.png'] },
+  twitter: { card: 'summary_large_image' },
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -47,9 +50,22 @@ export default function RootLayout({
   // ذخیرهٔ رشتهٔ خالی در ادمین = خاموش. (صفحه‌های استاتیک مقدارِ لحظهٔ build را دارند — تغییرِ شناسه دیپلوی می‌خواهد.)
   let ga4 = 'G-E7HCXKSREJ'
   try { const v = getAdminData().ga4Id; if (v !== undefined) ga4 = v } catch {}
+  // فاز ۲۲۷ (سئوی ساختاری): هویتِ سایت برای گوگل — WebSite با SearchAction (جعبهٔ جستجوی sitelinks)
+  // و Organization با لوگو (پنلِ برند/نالج‌گراف). سراسری، یک‌بار در ریشه.
+  const siteLd = {
+    '@context': 'https://schema.org', '@type': 'WebSite', name: 'ملک‌جت', alternateName: 'MelkJet',
+    url: 'https://melkjet.com/', inLanguage: 'fa-IR',
+    potentialAction: { '@type': 'SearchAction', target: { '@type': 'EntryPoint', urlTemplate: 'https://melkjet.com/search?q={search_term_string}' }, 'query-input': 'required name=search_term_string' },
+  }
+  const orgLd = {
+    '@context': 'https://schema.org', '@type': 'Organization', name: 'ملک‌جت', url: 'https://melkjet.com/',
+    logo: 'https://melkjet.com/icon-512.png',
+  }
   return (
     <html lang="fa" dir="rtl">
       <head>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(siteLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }} />
         {ga4 && <>
           <script async src={`https://www.googletagmanager.com/gtag/js?id=${ga4}`} />
           <script dangerouslySetInnerHTML={{ __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${ga4}');` }} />

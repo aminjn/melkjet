@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { listItems, type Item } from '@/app/lib/scraper-store'
 import { swrValue } from '@/app/lib/swr-cache'
 import BlogClient, { type BlogIndexData, type BlogIndexArticle } from './BlogClient'
+import { categorySlugForName } from '@/app/lib/blog-taxonomy'
 
 // فاز ۱۵۴ — ایندکسِ بلاگ سرور-ساید شد (شکایتِ کاربر: «مقالات خیلی طول می‌کشه لود بشه»).
 // قبلاً صفحه کاملاً کلاینتی بود: HTML خالی → هیدریت → واکشیِ ۱۰۰ مقالهٔ «کامل» (با بدنه) →
@@ -43,5 +44,15 @@ export default async function BlogPage() {
   try {
     initial = await indexPool.get()
   } catch { /* دیتابیس لحظه‌ای در دسترس نبود → کلاینت خودش واکشی می‌کند (فالبکِ BlogClient) */ }
-  return <BlogClient initial={initial} />
+  // فاز ۲۲۷: اسکیمای ایندکسِ مجله — Blog با فهرستِ آخرین مقاله‌ها
+  const blogLd = {
+    '@context': 'https://schema.org', '@type': 'Blog', name: 'مجلهٔ ملک‌جت', url: 'https://melkjet.com/blog', inLanguage: 'fa-IR',
+    blogPost: initial.articles.slice(0, 20).map(a => ({ '@type': 'BlogPosting', headline: a.title, url: `https://melkjet.com/blog/${categorySlugForName(a.category)}/${a.meta?.slug || a.id}`, datePublished: a.scrapedAt ? new Date(a.scrapedAt).toISOString() : undefined })),
+  }
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(blogLd) }} />
+      <BlogClient initial={initial} />
+    </>
+  )
 }

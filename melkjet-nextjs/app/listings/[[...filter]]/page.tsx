@@ -59,8 +59,23 @@ export default async function Listings({ params, searchParams }: { params: Promi
   // پنجرهٔ شماره‌ها: اول، آخر، و اطرافِ صفحهٔ فعلی
   const nums = Array.from(new Set([1, totalPages, p - 2, p - 1, p, p + 1, p + 2].filter(n => n >= 1 && n <= totalPages))).sort((a, b) => a - b)
 
+  // فاز ۲۲۷: اسکیمای هاب — ItemListِ آگهی‌های همین صفحه + Breadcrumb (کمک به فهمِ ساختار و ایندکسِ سریع‌تر)
+  const itemListLd = {
+    '@context': 'https://schema.org', '@type': 'ItemList',
+    itemListElement: pageItems.map((it, i) => ({ '@type': 'ListItem', position: (p - 1) * PER_PAGE + i + 1, name: it.title, url: `https://melkjet.com${listingHref(it.id, it.title, it.location)}` })),
+  }
+  const crumbLd = {
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'خانه', item: 'https://melkjet.com/' },
+      { '@type': 'ListItem', position: 2, name: 'آگهی‌ها', item: 'https://melkjet.com/listings' },
+      ...(f ? [{ '@type': 'ListItem', position: 3, name: f.fa }] : []),
+    ],
+  }
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(crumbLd) }} />
       <Nav />
       <div style={{ maxWidth: 1120, margin: '0 auto', padding: '26px 22px 70px' }}>
         <nav aria-label="مسیر" style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>

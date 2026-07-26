@@ -97,10 +97,16 @@ export default async function BlogArticle({ params }: { params: Promise<{ catego
   const share = encodeURIComponent(url)
   const shareTitle = encodeURIComponent(a.title)
 
+  // فاز ۲۲۷: اسکیمای کاملِ مقاله — توضیح، تاریخِ به‌روزرسانی، لوگویِ ناشر و زبان (شرایطِ نتیجهٔ غنیِ Article)
   const ld = {
     '@context': 'https://schema.org', '@type': 'Article',
-    headline: a.title, image: a.image ? [a.image] : undefined, datePublished: a.scrapedAt ? new Date(a.scrapedAt).toISOString() : undefined,
-    author: { '@type': 'Organization', name: 'ملک‌جت' }, publisher: { '@type': 'Organization', name: 'ملک‌جت' },
+    headline: a.title, image: a.image ? [a.image] : undefined,
+    description: (a.meta?.metaDescription || a.excerpt || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) || undefined,
+    datePublished: a.scrapedAt ? new Date(a.scrapedAt).toISOString() : undefined,
+    dateModified: a.scrapedAt ? new Date(a.scrapedAt).toISOString() : undefined,
+    inLanguage: 'fa-IR',
+    author: { '@type': 'Organization', name: a.meta?.author || 'تحریریهٔ ملک‌جت', url: 'https://melkjet.com/blog' },
+    publisher: { '@type': 'Organization', name: 'ملک‌جت', logo: { '@type': 'ImageObject', url: 'https://melkjet.com/icon-512.png' } },
     mainEntityOfPage: url,
   }
   const crumbLd = {

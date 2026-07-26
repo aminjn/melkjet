@@ -99,6 +99,11 @@ export default async function LocationPage({ params }: { params: Promise<{ path?
     itemListElement: [{ '@type': 'ListItem', position: 1, name: 'خانه', item: 'https://melkjet.com/' }, { '@type': 'ListItem', position: 2, name: 'مناطق', item: 'https://melkjet.com/locations' },
       ...r.trail.map((t, i) => ({ '@type': 'ListItem', position: 3 + i, name: t.nameFa, item: `https://melkjet.com/locations/${t.path.join('/')}` }))],
   }
+  // فاز ۲۲۷: ItemListِ آگهی‌های واقعیِ همین مکان — گوگل ساختارِ «محله → آگهی‌ها» را ساختاریافته می‌فهمد
+  const itemListLd = listings.length ? {
+    '@context': 'https://schema.org', '@type': 'ItemList', name: `آگهی‌های ${node.nameFa}`,
+    itemListElement: listings.slice(0, 24).map((it: any, i: number) => ({ '@type': 'ListItem', position: i + 1, name: it.title, url: `https://melkjet.com${listingHref(it.id, it.title, it.location)}` })),
+  } : null
 
   const title = act ? `${act.fa} در ${node.nameFa}` : `املاک ${node.nameFa}`
   const intro = act
@@ -107,6 +112,7 @@ export default async function LocationPage({ params }: { params: Promise<{ path?
 
   return (
     <Shell trail={r.trail} title={title} intro={intro} crumbLd={crumbLd}>
+      {itemListLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }} />}
       {/* تب‌های اکشن */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 22 }}>
         <ActionTab href={base} label="نمای کلی" on={!action} />
@@ -125,7 +131,7 @@ export default async function LocationPage({ params }: { params: Promise<{ path?
         {listings.length === 0 ? <Empty text="هنوز آگهیِ فعالی در این محدوده ثبت نشده است." />
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
             {listings.slice(0, 24).map(it => (
-              <Link key={it.id} href={it.url || listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
+              <Link key={it.id} href={listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
                 <div style={{ height: 150, background: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.title) }} />
                 <div style={{ padding: '13px 15px' }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gold)' }}>{money(it.price) || '—'}</div>
