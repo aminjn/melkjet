@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listAccounts, dashForRole } from '@/app/lib/account-store'
 import { getAdvisor } from '@/app/lib/advisor-store'
 import { getAdvisorMembership } from '@/app/lib/agency-link-store'
+import { matchesLocationName } from '@/app/lib/location-match'
 
 // مشاورانی که محله/منطقهٔ موردنظر در «مناطق فعالیت»‌شان است (برای صفحهٔ محلهٔ عمومی).
 function norm(s: string) { return (s || '').replace(/\s+/g, ' ').replace(/‌/g, '').trim() }
@@ -17,7 +18,8 @@ export async function GET(req: NextRequest) {
         const p = (await getAdvisor(a.phone)).profile
         const areas = (p.areas || '').split('،').map(x => norm(x)).filter(Boolean)
         if (!(p.name || '').trim()) return null
-        if (!areas.some(x => x === area || x.includes(area) || area.includes(x))) return null
+        // فاز ۲۲۵: زیررشتهٔ دوطرفه «ونک» را واردِ «پونک» می‌کرد — مرزِ واژه‌ای، دوطرفه
+        if (!areas.some(x => x === area || matchesLocationName(x, area) || matchesLocationName(area, x))) return null
         const m = await getAdvisorMembership(a.phone)
         return { phone: a.phone, name: p.name, title: p.title || 'مشاور املاک', photo: p.photo || '', agency: m?.agencyName || '', areas: p.areas || '' }
       })

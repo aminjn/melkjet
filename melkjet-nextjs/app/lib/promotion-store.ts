@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto'
 import { getItemById } from './scraper-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { promoPricing, type PromoPricing } from './promo-pricing-store'
+import { matchesLocationName } from './location-match'
 
 const FILE = join(process.cwd(), '.promotion-data.json')
 const KV_KEY = 'promotions'
@@ -256,7 +257,8 @@ export async function promotedInArea(areaName: string): Promise<{ profilePhones:
   for (const p of await load()) {
     if (!p.active || (p.expiresAt && p.expiresAt <= now)) continue
     if (!p.areas || p.areas.length === 0) continue
-    const hit = p.areas.some(a => normArea(a) === want || normArea(a).includes(want) || want.includes(normArea(a)))
+    // فاز ۲۲۵: زیررشتهٔ دوطرفه «ونک» را واردِ «پونک» می‌کرد — تطبیقِ مرزِ واژه‌ای، دوطرفه
+    const hit = p.areas.some(a => { const an = normArea(a); return an === want || matchesLocationName(an, want) || matchesLocationName(want, an) })
     if (!hit) continue
     const s = slotOf(p.slot); if (!s) continue
     if (s.target === 'directory') { const k = normPhone(p.targetId); profilePhones.add(k); if (!profileKinds.has(k)) profileKinds.set(k, { kind: p.kind, title: p.title }) }

@@ -6,6 +6,7 @@ import { pushSystemMessage } from './message-store'
 import { getAdminData } from './admin-store'
 import { shecanRequest } from './shecan-https'
 import { PROPERTY_KINDS } from './taxonomy'
+import { matchesLocationName } from './location-match'
 import { listForPhone, removeByEndpoint } from './push-store'
 import { sendPush } from './web-push'
 
@@ -31,9 +32,10 @@ function itemKind(it: any): string {
 
 function matches(s: SavedSearch, it: any): boolean {
   if (itemDeal(it) !== s.deal) return false
-  const loc = norm(it.location || '')
-  if (s.city && !loc.includes(norm(s.city))) return false
-  if (s.area && !loc.includes(norm(s.area))) return false
+  // فاز ۲۲۵: زیررشته «ونک» را به «پونک» و «ری» را به «شهریار» می‌رساند — هشدارِ پیامکیِ غلط؛ مرزِ واژه‌ای
+  const rawLoc = it.location || ''
+  if (s.city && !matchesLocationName(s.city, rawLoc)) return false
+  if (s.area && !matchesLocationName(s.area, rawLoc)) return false
   if (s.kind) { const k = itemKind(it); if (k && k !== s.kind) return false }
   if (s.priceMax) { const p = priceB(it); if (p > 0 && p > s.priceMax) return false }
   return true
