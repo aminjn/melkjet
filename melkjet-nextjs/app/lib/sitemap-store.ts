@@ -101,7 +101,8 @@ export async function buildShards(force = false): Promise<Shard[]> {
 
   // ── مکان‌ها: شهر همیشه؛ منطقه/محله فقط اگر آگهی داشته باشد ──
   if (enabled(sections, 'locations')) {
-    const hay = listings.map(it => `${it.location || ''} ${it.title || ''}`)
+    // فاز ۲۲۴: مکان فقط از فیلدِ location — عنوان‌خوانی محلهٔ نامرتبط را واردِ سایت‌مپ/صفحه می‌کرد
+    const hay = listings.map(it => it.location || '')
     // فاز ۲۲۲: includes(نامِ کامل) نامِ مرکب/نیم‌فاصله را نمی‌گرفت و محله‌های پرآگهی از سایت‌مپ می‌افتادند
     const { makeLocationMatcher } = await import('./location-match')
     const has = makeLocationMatcher(hay)

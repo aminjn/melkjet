@@ -47,7 +47,10 @@ async function listingsIn(node: LocationNode | null, cityName?: string): Promise
   const names: string[] = []
   const collect = (n: LocationNode) => { if (n.nameFa) names.push(n.nameFa); for (const c of (n.children || [])) collect(c) }
   collect(node)
-  return inCity.filter(it => { const hay = `${it.location || ''} ${it.title || ''}`; return names.some(nm => matchesLocationName(nm, hay)) })
+  // فاز ۲۲۴ (فیدبک+اسکرین‌شات: «عباس‌آباد داخلِ منطقه ۵» — عنوانش «اندیشه/سهروردی» داشت): مکانِ
+  // آگهی «فقط» از فیلدِ ساختاریافتهٔ location («شهر، محله») تعیین می‌شود، هرگز از عنوان — عنوان‌ها
+  // پر از نامِ محله‌های نامرتبط‌اند و این کلاسِ خطا با عنوان‌خوانی تمام‌شدنی نیست.
+  return inCity.filter(it => { const hay = it.location || ''; return names.some(nm => matchesLocationName(nm, hay)) })
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ path?: string[] }> }): Promise<Metadata> {
