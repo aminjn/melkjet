@@ -61,7 +61,7 @@ function ScoreRing({ value, label }: { value: number; label: string }) {
 
 // فاز ۱۳۷ (سئو): آیتم سرورساید از page.tsx می‌آید (initial) تا HTML اولیه برای گوگل
 // محتوای کامل داشته باشد — نه پوستهٔ خالی که بعد از هیدریشن از API پر می‌شود.
-export default function PropertyClient({ id, initial }: { id: string; initial?: Item | null }) {
+export default function PropertyClient({ id, initial, originality }: { id: string; initial?: Item | null; originality?: { score: number; level: 'high' | 'medium' | 'low' | 'insufficient'; reasons: string[]; checked: number } | null }) {
   const [item, setItem] = useState<Item | null>(initial || null)
   const [saved, toggleSave] = useFav(item?.id)   // ذخیرهٔ واقعی (favorites + رویدادِ REOS برای کوئست)
   const [loading, setLoading] = useState(!initial)
@@ -634,16 +634,29 @@ export default function PropertyClient({ id, initial }: { id: string; initial?: 
                 <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8, textAlign: 'center' }}>این گفتگو در پنل خریدار شما هم ذخیره می‌شود · <a href="/buyer" style={{ color: 'var(--gold)' }}>مشاهده</a></div>
               </div>
 
-              {/* originality badge */}
-              {analysis?.originality && (
-                <div style={{ ...card, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(95,217,138,0.3)' }}>
-                  <span style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✓</span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>این آگهی توسط ملک‌جت بررسی و <span style={{ color: '#5fd98a' }}>{analysis.originality.verdict}</span> تشخیص داده شد</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>احتمال جعلی بودن: {analysis.originality.fakeProbability}</div>
+              {/* فاز ۲۲۶ — نشانِ اصالتِ «واقعی»: امتیازِ قطعی از سیگنال‌های ثبت‌شده (ممیزی/عکس/قیمت نسبت به
+                  محله/مختصات/سابقهٔ ثبت‌کننده)، با دلایلِ شفاف — نه ادعای AI با درصدِ ساختگی */}
+              {originality && originality.level !== 'insufficient' && (() => {
+                const c = originality.level === 'high' ? '#5fd98a' : originality.level === 'medium' ? '#e7a14a' : '#e74c3c'
+                const bg = originality.level === 'high' ? 'rgba(95,217,138,0.15)' : originality.level === 'medium' ? 'rgba(231,161,74,0.15)' : 'rgba(231,74,74,0.15)'
+                const head = originality.level === 'high' ? 'نشانه‌های اصالتِ این آگهی قوی است' : originality.level === 'medium' ? 'نشانه‌های اصالت متوسط است — پیش از پرداخت حضوری بازدید کنید' : 'نشانه‌های اصالت ضعیف است — با احتیاطِ کامل پیش بروید'
+                return (
+                  <div style={{ ...card, padding: 16, border: `1px solid ${c}55` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ width: 34, height: 34, borderRadius: '50%', background: bg, color: c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 900, flexShrink: 0 }}>{toFa(originality.score)}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{head}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>بررسیِ خودکارِ ملک‌جت از {toFa(originality.checked)} سیگنالِ واقعی · امتیاز {toFa(originality.score)} از ۱۰۰</div>
+                      </div>
+                    </div>
+                    {originality.reasons.length > 0 && (
+                      <ul style={{ margin: '10px 0 0', paddingInlineStart: 18, display: 'grid', gap: 4 }}>
+                        {originality.reasons.map(r => <li key={r} style={{ fontSize: 11.5, color: 'var(--muted)' }}>{r}</li>)}
+                      </ul>
+                    )}
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* ask about this property */}
               <div style={{ ...card, border: '1px solid var(--gold)' }}>

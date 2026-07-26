@@ -2269,6 +2269,19 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('مختصاتِ صفر/نامعتبر هرگز ثبت نمی‌شود', (await getItemById(it201.id)).meta['__lat'] === '35.7')
       await deleteItem(it201.id)
     }
+    // فاز ۲۲۶ — امتیازِ اصالتِ واقعی (فیدبک: «جعلی بودن واقعاً کار می‌کنه؟» — درصدِ AIساخته حذف شد)
+    {
+      const { originalityOf } = await import('../app/lib/originality.ts')
+      const good = originalityOf({ moderationApproved: true, moderationScore: 85, priceVsMarketPct: -3, hasGeo: true, imageCount: 6, factsCount: 3, hasPhone: true, ownerAccount: { exists: true, ageDays: 120 } })
+      ok('همهٔ سیگنال‌ها مثبت → سطحِ بالا با دلایلِ شفاف', good.level === 'high' && good.score >= 75 && good.reasons.some(r => r.includes('ممیزی')))
+      const cheap = originalityOf({ moderationApproved: true, priceVsMarketPct: -40, hasGeo: true, imageCount: 4, factsCount: 3, hasPhone: true, ownerAccount: { exists: true, ageDays: 100 } })
+      ok('قیمتِ غیرعادی پایین جریمه و هشدارِ صریح می‌گیرد', cheap.score < good.score && cheap.level !== 'high' && cheap.reasons.some(r => r.includes('غیرعادی')))
+      const weakOnly = originalityOf({ hasGeo: true, imageCount: 5, factsCount: 3, hasPhone: true })
+      ok('بدونِ هیچ سیگنالِ قوی (ممیزی/قیمت/حساب) → «بررسیِ کافی ممکن نیست» نه حکمِ الکی', weakOnly.level === 'insufficient')
+      const rejected = originalityOf({ moderationApproved: false, priceVsMarketPct: 0, hasGeo: false, imageCount: 0, factsCount: 0, hasPhone: false, ownerAccount: { exists: false, ageDays: 0 } })
+      ok('ردشدهٔ بی‌عکسِ بی‌تماس → سطحِ پایین و امتیاز در بازهٔ ۰..۱۰۰', rejected.level === 'low' && rejected.score >= 0 && rejected.score <= 100)
+      ok('قطعی است (همان ورودی = همان خروجی)', JSON.stringify(good) === JSON.stringify(originalityOf({ moderationApproved: true, moderationScore: 85, priceVsMarketPct: -3, hasGeo: true, imageCount: 6, factsCount: 3, hasPhone: true, ownerAccount: { exists: true, ageDays: 120 } })))
+    }
     // فاز ۲۲۲ — تطبیقِ نامِ مکان (کشفِ GSC: گیشا با کلی آگهی noindex خورده بود چون «گیشا (کوی نصر)» عیناً match نمی‌شد)
     {
       const { matchesLocationName, locationNameParts, makeLocationMatcher } = await import('../app/lib/location-match.ts')

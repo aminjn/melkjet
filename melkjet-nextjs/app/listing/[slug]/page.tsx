@@ -87,11 +87,59 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   let promoKind: string | undefined
   try { const { promotedListingKinds } = await import('@/app/lib/promotion-store'); promoKind = (await promotedListingKinds()).get(String(it.id))?.kind } catch {}
 
+  // فاز ۲۲۶ — امتیازِ اصالتِ واقعی: هر سیگنال از دادهٔ ثبت‌شده؛ سیگنالِ نامعلوم شمرده نمی‌شود (هیچ ادعای بی‌سند).
+  let originality: import('@/app/lib/originality').OriginalityVerdict | null = null
+  try {
+    const { originalityOf } = await import('@/app/lib/originality')
+    const { getEnrichment } = await import('@/app/lib/enrich-store')
+    const gallery = getEnrichment(id)?.gallery?.length || 0
+    // انحرافِ قیمتِ متری از میانهٔ هم‌محله‌ها (فقط هم‌نوعِ معامله؛ حداقل ۵ نمونه وگرنه نامعلوم)
+    let priceVsMarketPct: number | null = null
+    try {
+      const { listItems } = await import('@/app/lib/scraper-store')
+      const { matchesLocationName } = await import('@/app/lib/location-match')
+      const { deriveListing } = await import('@/app/lib/listing-search')
+      const me = deriveListing(it as any)
+      if (me.priceNum > 0 && me.areaNum > 0 && it.location) {
+        const hood = (it.location.split(/[،,]/)[1] || '').trim()
+        if (hood) {
+          const peers = (await listItems('listing', { publicOnly: true }))
+            .filter(x => x.id !== it.id && matchesLocationName(hood, x.location || ''))
+            .map(x => deriveListing(x as any)).filter(d => d.deal === me.deal && d.priceNum > 0 && d.areaNum > 0)
+            .map(d => d.priceNum / d.areaNum).sort((a, b) => a - b)
+          if (peers.length >= 5) {
+            const median = peers[Math.floor(peers.length / 2)]
+            priceVsMarketPct = Math.round(((me.priceNum / me.areaNum - median) / median) * 100)
+          }
+        }
+      }
+    } catch { /* نامعلوم */ }
+    let ownerAccount: { exists: boolean; ageDays: number } | null = null
+    try {
+      const phone = String((it.meta as Record<string, string> | undefined)?.['__ownerPhone'] || it.phone || '').replace(/\D/g, '')
+      if (phone) {
+        const { getAccount } = await import('@/app/lib/account-store')
+        const a = getAccount(phone)
+        ownerAccount = a ? { exists: true, ageDays: Math.floor((Date.now() - (a.createdAt || Date.now())) / 864e5) } : { exists: false, ageDays: 0 }
+      }
+    } catch { /* نامعلوم */ }
+    originality = originalityOf({
+      moderationApproved: it.moderatedAt ? it.status === 'approved' : undefined,
+      moderationScore: (it as { aiScore?: number }).aiScore,
+      priceVsMarketPct,
+      hasGeo: !!(Number(it.meta?.['__lat']) && Number(it.meta?.['__lng'])),
+      imageCount: gallery || (it.image ? 1 : 0),
+      factsCount: ['متراژ', 'طبقه', 'سال ساخت', 'اتاق خواب'].filter(k => it.meta?.[k]).length,
+      hasPhone: !!(it.phone || it.meta?.['__ownerPhone']),
+      ownerAccount,
+    })
+  } catch { originality = null }
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
-      <PropertyClient id={id} initial={promoKind ? { ...it, promoted: true, promoKind } as any : (it as any)} />
+      <PropertyClient id={id} initial={promoKind ? { ...it, promoted: true, promoKind } as any : (it as any)} originality={originality} />
     </>
   )
 }
