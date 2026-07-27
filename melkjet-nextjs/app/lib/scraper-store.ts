@@ -132,10 +132,15 @@ function fileSave(db: DB) {
 // بدونِ این کش هر رندر یک SELECT + دی‌سریالایزِ ~۱مگابایتی روی CPUِ تک‌هسته می‌شد.
 // نوشتن (mutate) کش را باطل می‌کند تا همان اینستنس نوشتهٔ خودش را فوری ببیند. کهنگیِ
 // چند-ثانیه‌ایِ فیدِ آگهی بینِ اینستنس‌ها بی‌ضرر است (نوشتن‌ها اتمیک روی PG می‌مانند).
-let pgCache: { at: number; data: DB; rev: number } | null = null
-// کش ۱۵ ثانیه‌ای رویِ مسیرِ PG: صفحاتِ عمومی در هر رندر listItems را صدا می‌زنند. کش بارِ
-// خواندنِ دیتابیس را شدیداً کم می‌کند؛ نوشتن کش را باطل می‌کند.
-const PG_TTL = 15_000
+let pgCache: { loadedAt: number; checkedAt: number; data: DB; rev: number } | null = null
+// فاز ۲۳۲ (فیدبک: «سرعت فاجعه شده؛ آگهی و اسکرپ زیاد شده») — دو ریشهٔ سنگین در همین کش بود:
+// (۱) چکِ rev «در هر فراخوان» انجام می‌شد = یک رفت‌وبرگشتِ DB به‌ازای هر درخواستِ صفحه.
+// (۲) در اوجِ اسکرپ، هر ایمپورت rev را عوض می‌کند → هر چند ثانیه کلِ جدول (۱۲هزار+ ردیف)
+//     بازخوانی/دی‌سریالایز و همهٔ کش‌های مشتق (derive/فیلتر) باطل می‌شدند — thrashِ دائمی.
+// حالا: چکِ rev حداکثر هر REV_CHECK_MS؛ بازخوانیِ کامل حداکثر هر RELOAD_FLOOR_MS (سِروِ stale
+// در این پنجره عمدی و بی‌ضرر است). نوشتنِ همین instance همچنان فوری کش را باطل می‌کند (read-your-writes).
+const REV_CHECK_MS = 5_000
+const RELOAD_FLOOR_MS = 15_000
 
 // ── معماریِ دائمی: آگهی‌ها در جدولِ نرمالِ `listings` (هر ردیف یک آگهی)، متادیتای کوچک
 // (sources/categories/owners) در kv['scraper']. خواندن از جدول (کش‌شده)، نوشتن فقط روی
@@ -180,14 +185,15 @@ async function ensureMigrated(): Promise<void> {
 async function load(): Promise<DB> {
   if (!pgEnabled()) return fileLoad()
   const now = Date.now()
-  if (pgCache && now - pgCache.at < PG_TTL) {
-    // فاز ۱۵۶ (B1 — «تأیید می‌زنم، رفرش که می‌کنم برمی‌گردد»): کش per-instance است و mutate فقط
-    // کشِ همان instance را باطل می‌کرد؛ رفرشِ ادمین که به instance دیگر می‌رسید تا ۱۵ ثانیه
-    // وضعیتِ قبل از تأیید را می‌دید. حالا اعتبارِ کش با revِ سراسری (یک کوئریِ ریزِ pk روی
-    // ردیفِ کوچکِ متادیتا) چک می‌شود: هر نوشتنی در هر instance، کشِ همه را نامعتبر می‌کند.
+  if (pgCache) {
+    if (now - pgCache.checkedAt < REV_CHECK_MS) return pgCache.data
+    if (now - pgCache.loadedAt < RELOAD_FLOOR_MS) { pgCache.checkedAt = now; return pgCache.data }
+    // فاز ۱۵۶ (B1): اعتبار با revِ سراسری — هر نوشتنی در هر instance کشِ همه را نامعتبر می‌کند
+    // (حالا با آهنگِ محدودِ فاز ۲۳۲، نه در هر فراخوان).
     try {
       const m = await kvGet<{ __rev?: number }>(KV_META, {})
-      if ((m.__rev || 0) === pgCache.rev) { pgCache.at = now; return pgCache.data }
+      pgCache.checkedAt = now
+      if ((m.__rev || 0) === pgCache.rev) { pgCache.loadedAt = now; return pgCache.data }
     } catch { return pgCache.data }
   }
   try {
@@ -201,7 +207,7 @@ async function load(): Promise<DB> {
       categories: m.categories,
       owners: m.owners || [],
     }
-    pgCache = { at: now, data, rev: meta.__rev || 0 }
+    pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), data, rev: meta.__rev || 0 }
     return data
   } catch (e) {
     // تاب‌آوری: اگر دیتابیس لحظه‌ای کند/اشباع بود، کشِ کهنه را سِرو کن (نه ۵۰۰/۵۰۴).
@@ -302,13 +308,35 @@ export async function deleteSource(sid: string) {
   })
 }
 
-export async function listItems(type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Promise<Item[]> {
-  const db = await load()
-  // کپی (نه ارجاع به آرایهٔ کش‌شده) تا sortِ درجا کشِ مشترک را جابه‌جا نکند.
+function buildList(db: DB, type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Item[] {
   let items = type ? db.items.filter(i => i.type === type) : [...db.items]
   if (opts?.category) items = items.filter(i => i.category === opts.category)
   if (opts?.publicOnly) { const now = Date.now(); items = items.filter(i => i.status !== 'rejected' && i.status !== 'duplicate' && !isExpired(i, now)) }
   return items.sort((a, b) => b.scrapedAt - a.scrapedAt)
+}
+
+export async function listItems(type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Promise<Item[]> {
+  const db = await load()
+  // کپی (نه ارجاع به آرایهٔ کش‌شده) تا sortِ درجا کشِ مشترک را جابه‌جا نکند.
+  return buildList(db, type, opts)
+}
+
+// فاز ۲۳۲ — نسخهٔ «مرجع-پایدار»: در یک نسلِ کش (تا نوشتنِ بعدی) همیشه «همان» آرایه را برمی‌گرداند،
+// پس کش‌های مشتق (derive/فیلترِ صفحات) با مقایسهٔ مرجع واقعاً hit می‌شوند — قبلاً listItems هر بار
+// آرایهٔ نو می‌ساخت و مثلاً کشِ deriveِ نقشه «هرگز» hit نمی‌شد (۱۲هزار regex در هر درخواست).
+// قرارداد: خروجی فقط-خواندنی است؛ mutate نکن. در حالتِ فایل (تست/دِو) همان listItems است.
+const listMemo = new WeakMap<object, Map<string, Item[]>>()
+export async function listItemsStable(type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Promise<Item[]> {
+  if (!pgEnabled()) return listItems(type, opts)
+  const db = await load()
+  const key = `${type || '*'}|${opts?.category || ''}|${opts?.publicOnly ? 1 : 0}`
+  let m = listMemo.get(db)
+  if (!m) { m = new Map(); listMemo.set(db, m) }
+  const hit = m.get(key)
+  if (hit) return hit
+  const items = buildList(db, type, opts)
+  m.set(key, items)
+  return items
 }
 
 // Candidate generation (معادلِ Elasticsearch/جستجوی توزیع‌شده در همین استک):

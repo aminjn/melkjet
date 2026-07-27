@@ -1893,6 +1893,18 @@ async function main() {
     const CU2 = '09120001752'
     await addStaffAct(CU2, { by: 'ادمین', byPhone: STF, kind: 'note', text: '⚙️ ارجاع به سارا' })
     ok('رویدادِ سیستمی وضعیت را به «پیگیری» نمی‌بَرد', (await staffCrmAll())[CU2].status === 'new')
+
+    // فاز ۲۳۲ — لیستِ مرجع-پایدار روی PG: در یک نسلِ داده «همان» آرایه (کش‌های مشتق hit می‌شوند)؛
+    // نوشتنِ همین instance فوراً نسلِ تازه می‌سازد (read-your-writes حفظ است).
+    {
+      const { listItemsStable, addItemManual } = await import('../app/lib/scraper-store.ts')
+      const s1 = await listItemsStable('listing', { publicOnly: true })
+      const s2 = await listItemsStable('listing', { publicOnly: true })
+      ok('دو خواندنِ پیاپی همان مرجع را می‌دهد (کشِ derive واقعاً hit می‌شود)', s1 === s2)
+      await addItemManual({ type: 'listing', title: 'تستِ نسلِ کش ۲۳۲', price: '۱,۰۰۰,۰۰۰,۰۰۰ تومان', location: 'تهران، تست' })
+      const s3 = await listItemsStable('listing', { publicOnly: true })
+      ok('بعدِ نوشتن: نسلِ تازه (مرجعِ نو) و آیتمِ جدید فوراً دیده می‌شود', s3 !== s1 && s3.some(x => x.title === 'تستِ نسلِ کش ۲۳۲'))
+    }
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

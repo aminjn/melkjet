@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import { locationTree, resolveLocationPath, type LocationNode } from '@/app/lib/locations-store'
-import { listItems } from '@/app/lib/scraper-store'
+import { listItemsStable } from '@/app/lib/scraper-store'
+import { derivedFrom } from '@/app/lib/derived-cache'
 import { gradientFor, initialsFor } from '@/app/lib/content-display'
 import { providersInArea } from '@/app/lib/provider-public'
 import { listingHref } from '@/app/lib/listing-url'
@@ -36,22 +37,26 @@ function parse(path?: string[]): { locSlugs: string[]; action?: string } {
 const money = (s?: string) => (s || '').trim()
 async function listingsIn(node: LocationNode | null, cityName?: string): Promise<any[]> {
   if (!node) return []
-  const all = await listItems('listing', { publicOnly: true })
+  const all = await listItemsStable('listing', { publicOnly: true })
   const { matchesLocationName } = await import('@/app/lib/location-match')
-  // فاز ۲۲۳ (فیدبک: «منطقه ۷ کرج نشان می‌دهد»): شهر «قطعی و فقط از فیلدِ location» چک می‌شود —
-  // آگهیِ شهرِ دیگر که در عنوانش «(منطقه ۷) در تهران» دارد دیگر نشت نمی‌کند.
-  const inCity = cityName ? all.filter(it => matchesLocationName(cityName, it.location || '')) : all
-  if (!node.path || node.path.length <= 1) return inCity   // سطحِ شهر = همهٔ آگهی‌های شهر
-  // فاز ۲۲۳ (فیدبک: «آگهی‌های منطقه ۲ خیلی بیشتر از این است»): آگهی‌ها با نامِ «محله» ثبت می‌شوند نه
-  // «منطقه N» — پس نامِ خودِ گره + همهٔ زیرمجموعه‌هایش می‌شمارند. تطبیقِ مرزِ واژه‌ایِ فاز ۲۲۲ هم
-  // «منطقه ۲» را از «منطقه ۲۲» جدا نگه می‌دارد.
-  const names: string[] = []
-  const collect = (n: LocationNode) => { if (n.nameFa) names.push(n.nameFa); for (const c of (n.children || [])) collect(c) }
-  collect(node)
-  // فاز ۲۲۴ (فیدبک+اسکرین‌شات: «عباس‌آباد داخلِ منطقه ۵» — عنوانش «اندیشه/سهروردی» داشت): مکانِ
-  // آگهی «فقط» از فیلدِ ساختاریافتهٔ location («شهر، محله») تعیین می‌شود، هرگز از عنوان — عنوان‌ها
-  // پر از نامِ محله‌های نامرتبط‌اند و این کلاسِ خطا با عنوان‌خوانی تمام‌شدنی نیست.
-  return inCity.filter(it => { const hay = it.location || ''; return names.some(nm => matchesLocationName(nm, hay)) })
+  // فاز ۲۳۲: تطبیقِ مکان روی ۱۲هزار آیتم برای هر صفحهٔ مکان گران است و گوگل هزاران صفحهٔ مکان را
+  // می‌خزد — نتیجهٔ هر گره یک‌بار در هر نسلِ داده کش می‌شود (منطقِ تطبیق بدونِ هیچ تغییری).
+  return derivedFrom(all, `locIn:${(node.path || []).join('/')}|${cityName || ''}`, () => {
+    // فاز ۲۲۳ (فیدبک: «منطقه ۷ کرج نشان می‌دهد»): شهر «قطعی و فقط از فیلدِ location» چک می‌شود —
+    // آگهیِ شهرِ دیگر که در عنوانش «(منطقه ۷) در تهران» دارد دیگر نشت نمی‌کند.
+    const inCity = cityName ? all.filter(it => matchesLocationName(cityName, it.location || '')) : all
+    if (!node.path || node.path.length <= 1) return inCity   // سطحِ شهر = همهٔ آگهی‌های شهر
+    // فاز ۲۲۳ (فیدبک: «آگهی‌های منطقه ۲ خیلی بیشتر از این است»): آگهی‌ها با نامِ «محله» ثبت می‌شوند نه
+    // «منطقه N» — پس نامِ خودِ گره + همهٔ زیرمجموعه‌هایش می‌شمارند. تطبیقِ مرزِ واژه‌ایِ فاز ۲۲۲ هم
+    // «منطقه ۲» را از «منطقه ۲۲» جدا نگه می‌دارد.
+    const names: string[] = []
+    const collect = (n: LocationNode) => { if (n.nameFa) names.push(n.nameFa); for (const c of (n.children || [])) collect(c) }
+    collect(node)
+    // فاز ۲۲۴ (فیدبک+اسکرین‌شات: «عباس‌آباد داخلِ منطقه ۵» — عنوانش «اندیشه/سهروردی» داشت): مکانِ
+    // آگهی «فقط» از فیلدِ ساختاریافتهٔ location («شهر، محله») تعیین می‌شود، هرگز از عنوان — عنوان‌ها
+    // پر از نامِ محله‌های نامرتبط‌اند و این کلاسِ خطا با عنوان‌خوانی تمام‌شدنی نیست.
+    return inCity.filter(it => { const hay = it.location || ''; return names.some(nm => matchesLocationName(nm, hay)) })
+  })
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ path?: string[] }> }): Promise<Metadata> {

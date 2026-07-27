@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listItems } from '@/app/lib/scraper-store'
+import { listItemsStable } from '@/app/lib/scraper-store'
 import { deriveListing, effectiveFiltersOf, matchesListing, cityMatch, type DerivedListing } from '@/app/lib/listing-search'
 import { hoodCentroidsOf, resolveMapPoints, clusterMapPoints, parseBBox } from '@/app/lib/map-cluster'
 import { pinBoundsView } from '@/app/lib/map-pins'
@@ -30,7 +30,9 @@ export async function GET(req: NextRequest) {
     amenities: (sp.get('amen') || '').split('،').filter(Boolean),
   })
 
-  const items = await listItems('listing', { publicOnly: true })
+  // فاز ۲۳۲: listItems هر بار آرایهٔ نو می‌ساخت → این کشِ ref هرگز hit نمی‌شد (۱۲هزار regex در هر
+  // درخواستِ نقشه). نسخهٔ مرجع-پایدار در هر نسلِ داده همان آرایه را می‌دهد → derive یک‌بار در نسل.
+  const items = await listItemsStable('listing', { publicOnly: true })
   if (deriveCache?.src !== items) deriveCache = { src: items, derived: items.map(deriveListing) }
   const derived = deriveCache.derived
 

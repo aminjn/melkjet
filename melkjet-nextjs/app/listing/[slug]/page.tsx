@@ -102,21 +102,25 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
     // انحرافِ قیمتِ متری از میانهٔ هم‌محله‌ها (فقط هم‌نوعِ معامله؛ حداقل ۵ نمونه وگرنه نامعلوم)
     let priceVsMarketPct: number | null = null
     try {
-      const { listItems } = await import('@/app/lib/scraper-store')
+      const { listItemsStable } = await import('@/app/lib/scraper-store')
+      const { derivedFrom } = await import('@/app/lib/derived-cache')
       const { matchesLocationName } = await import('@/app/lib/location-match')
       const { deriveListing } = await import('@/app/lib/listing-search')
       const me = deriveListing(it as any)
       if (me.priceNum > 0 && me.areaNum > 0 && it.location) {
         const hood = (it.location.split(/[،,]/)[1] || '').trim()
         if (hood) {
-          const peers = (await listItems('listing', { publicOnly: true }))
-            .filter(x => x.id !== it.id && matchesLocationName(hood, x.location || ''))
-            .map(x => deriveListing(x as any)).filter(d => d.deal === me.deal && d.priceNum > 0 && d.areaNum > 0)
-            .map(d => d.priceNum / d.areaNum).sort((a, b) => a - b)
-          if (peers.length >= 5) {
-            const median = peers[Math.floor(peers.length / 2)]
-            priceVsMarketPct = Math.round(((me.priceNum / me.areaNum - median) / median) * 100)
-          }
+          // فاز ۲۳۲: این اسکنِ ۱۲هزارتایی «در هر بازدیدِ صفحهٔ آگهی» اجرا می‌شد و گوگل ۱۲هزار صفحهٔ
+          // آگهی را می‌خزد — میانهٔ متریِ هر (محله،معامله) حالا یک‌بار در هر نسلِ داده حساب می‌شود.
+          const all = await listItemsStable('listing', { publicOnly: true })
+          const median = derivedFrom(all, `ppmMed:${me.deal}:${hood}`, () => {
+            const peers = all
+              .filter(x => matchesLocationName(hood, x.location || ''))
+              .map(x => deriveListing(x as any)).filter(d => d.deal === me.deal && d.priceNum > 0 && d.areaNum > 0)
+              .map(d => d.priceNum / d.areaNum).sort((a, b) => a - b)
+            return peers.length >= 5 ? peers[Math.floor(peers.length / 2)] : 0
+          })
+          if (median > 0) priceVsMarketPct = Math.round(((me.priceNum / me.areaNum - median) / median) * 100)
         }
       }
     } catch { /* نامعلوم */ }

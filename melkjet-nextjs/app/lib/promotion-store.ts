@@ -307,12 +307,17 @@ export async function hasActivePromoInSlot(phone: string, slot: string): Promise
 }
 
 // نگاشتِ شناسهٔ آیتمِ آگهیِ پروموت‌شده → {slot, kind} برای نمایشِ نشانِ نوعِ پروموت روی کارتِ آگهی.
+// فاز ۲۳۲: این تابع در «هر بازدیدِ صفحهٔ آگهی» صدا می‌شود (۱۲هزار صفحهٔ خزیدنی) و هر بار یک
+// رفت‌وبرگشتِ DB داشت — کشِ ۱۵ثانیه‌ای کافی و بی‌ضرر است (تغییرِ پروموت نادر است).
+let promoKindsCache: { at: number; m: Map<string, { slot: string; kind?: string }> } | null = null
 export async function promotedListingKinds(): Promise<Map<string, { slot: string; kind?: string }>> {
   const now = Date.now()
+  if (promoKindsCache && now - promoKindsCache.at < 15_000) return promoKindsCache.m
   const listSlots = PROMO_SLOTS.filter(s => s.target === 'listing').map(s => s.id)
   const m = new Map<string, { slot: string; kind?: string }>()
   for (const p of await load()) if (listSlots.includes(p.slot) && p.active && (!p.expiresAt || p.expiresAt > now)) {
     if (!m.has(String(p.targetId))) m.set(String(p.targetId), { slot: p.slot, kind: p.kind })
   }
+  promoKindsCache = { at: now, m }
   return m
 }

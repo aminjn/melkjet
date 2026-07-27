@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import CardImg from '@/app/components/CardImg'
-import { listItems } from '@/app/lib/scraper-store'
+import { listItemsStable } from '@/app/lib/scraper-store'
+import { derivedFrom } from '@/app/lib/derived-cache'
 import { gradientFor } from '@/app/lib/content-display'
 import { listingHref } from '@/app/lib/listing-url'
 import { dealOf } from '@/app/lib/listing-filter'
@@ -49,8 +50,10 @@ export default async function Listings({ params, searchParams }: { params: Promi
   const f = key ? FILTERS[key] : null
   if (key && !f) notFound()
 
-  let items = await listItems('listing', { publicOnly: true })
-  if (f) items = items.filter(f.match)
+  // فاز ۲۳۲: فیلترِ هر هاب (dealOf روی ۱۲هزار آیتم، regexسنگین) یک‌بار در هر نسلِ داده — نه در هر
+  // درخواست (گوگل صدها صفحهٔ این هاب را می‌خزد).
+  const all = await listItemsStable('listing', { publicOnly: true })
+  const items = f ? derivedFrom(all, `hub:${key}`, () => all.filter(f.match)) : all
 
   // فاز ۲۱۷ (سئو — «چرا گوگل آگهی‌ها را نمی‌گیرد؟»): صفحه‌بندیِ SSR — قبلاً فقط ۴۸ آگهیِ اول لینکِ
   // داخلی داشت و ~۱۲هزار آگهیِ دیگر فقط به سایت‌مپ تکیه داشتند؛ برای دامنهٔ جوان، گوگل URLِ

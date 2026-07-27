@@ -2269,6 +2269,19 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('مختصاتِ صفر/نامعتبر هرگز ثبت نمی‌شود', (await getItemById(it201.id)).meta['__lat'] === '35.7')
       await deleteItem(it201.id)
     }
+    // فاز ۲۳۲ — کشِ مشتقِ قفل به نسلِ داده (فیدبک: «سرعت فاجعه شده»): محاسبهٔ گران یک‌بار در هر نسل.
+    {
+      const { derivedFrom } = await import('../app/lib/derived-cache.ts')
+      const anchorA = [1, 2, 3], anchorB = [1, 2, 3]
+      let builds = 0
+      const v1 = derivedFrom(anchorA, 'sum', () => { builds++; return anchorA.reduce((a, b) => a + b, 0) })
+      const v2 = derivedFrom(anchorA, 'sum', () => { builds++; return -1 })
+      ok('یک کلید روی یک لنگر فقط یک‌بار ساخته می‌شود', v1 === 6 && v2 === 6 && builds === 1)
+      const v3 = derivedFrom(anchorA, 'sum2', () => { builds++; return 10 })
+      const v4 = derivedFrom(anchorB, 'sum', () => { builds++; return 99 })
+      ok('کلیدِ دیگر یا لنگرِ دیگر (نسلِ تازه) دوباره می‌سازد', v3 === 10 && v4 === 99 && builds === 3)
+      ok('نتیجهٔ کش‌شده عینِ محاسبهٔ مستقیم است (فیلترِ هاب)', JSON.stringify(derivedFrom(anchorA, 'f', () => anchorA.filter(x => x > 1))) === JSON.stringify(anchorA.filter(x => x > 1)))
+    }
     // فاز ۲۳۱ — جدولِ اجارهٔ روزانهٔ دیوار سرِ جای خودش (فیدبک: «دیتا رو دقیق بذار، نه تومانِ خالی»):
     // ایمپورتِ کامل با پستِ استابِ دیوار → آیتمِ عمومی باید قیمتِ شبی + ردیف‌های جدول + مهرِ درست داشته باشد.
     {
