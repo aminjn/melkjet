@@ -2269,6 +2269,17 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('مختصاتِ صفر/نامعتبر هرگز ثبت نمی‌شود', (await getItemById(it201.id)).meta['__lat'] === '35.7')
       await deleteItem(it201.id)
     }
+    // فاز ۲۳۳ — شکستِ گذرای شبکه «ردشده» نیست (فیدبک+اسکرین‌شات: «کاربرِ جدید، جدید ۰ و ۲۰ ردشده؟!»)
+    {
+      const { settleBatch } = await import('../app/lib/advisor-divar-import.ts')
+      const mk = (t) => ({ token: t })
+      const s1 = settleBatch([mk('a'), mk('b'), mk('c')], [{ ok: false }, { ok: false }, { ok: false }])
+      ok('قطعیِ دیوار: هیچ آگهی‌ای ردشده نمی‌شود — هر سه دوباره در صف', s1.skipped === 0 && s1.requeue.length === 3 && s1.fails === 3 && s1.requeue[0].fails === 1)
+      const s2 = settleBatch([{ token: 'x', fails: 2 }], [{ ok: false }])
+      ok('فقط شکستِ سومِ قطعی «ردشده» است (با گزارشِ توکن)', s2.skipped === 1 && s2.failedFinal[0] === 'x' && s2.requeue.length === 0)
+      const s3 = settleBatch([mk('n'), mk('u'), mk('s')], [{ ok: true }, { ok: true, updated: true }, { ok: true, skipped: true }])
+      ok('حسابداریِ سالم: جدید/به‌روز/ردِ واقعی (skipFresh) دست نمی‌خورد', s3.imported === 1 && s3.updated === 1 && s3.skipped === 1 && s3.fails === 0)
+    }
     // فاز ۲۳۲ — کشِ مشتقِ قفل به نسلِ داده (فیدبک: «سرعت فاجعه شده»): محاسبهٔ گران یک‌بار در هر نسل.
     {
       const { derivedFrom } = await import('../app/lib/derived-cache.ts')

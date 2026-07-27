@@ -151,6 +151,7 @@ export interface SyncResult { ok: boolean; reason?: string; scanned: number; imp
 async function importTokens(o: string, items: BrandPost[], sourceId?: string, onProgress?: (done: number, total: number) => void): Promise<{ imported: number; updated: number; skipped: number; tokens: string[] }> {
   let imported = 0, updated = 0, skipped = 0
   const done: string[] = []
+  const failed: BrandPost[] = []
   const total = items.length
   let i = 0
   let consecutiveFail = 0   // مدارشکن: اگر پروکسی/دیوار قطع است، زود بیرون بیا (نه گرفتنِ همهٔ آگهی‌ها).
@@ -178,7 +179,8 @@ async function importTokens(o: string, items: BrandPost[], sourceId?: string, on
       const okThis = !!(res && res.ok)
       if (res && res.ok && res.updated) updated++
       else if (res && res.ok && !res.skipped) { imported++; done.push(token) }
-      else skipped++
+      else if (res && res.ok) skipped++
+      else failed.push(it)   // فاز ۲۳۳: شکستِ گذرا ≠ ردشده — بعدِ پایانِ دور یک تلاشِ دیگر
       consecutiveFail = okThis ? 0 : consecutiveFail + 1
       if (consecutiveFail >= 8) aborted = true   // ۸ شکستِ پیاپی = اتصال قطع
       i++; try { onProgress?.(i, total) } catch {}
@@ -186,6 +188,13 @@ async function importTokens(o: string, items: BrandPost[], sourceId?: string, on
   }
   await Promise.all(Array.from({ length: Math.min(CONC, items.length) }, () => worker()))
   if (aborted) throw new Error('اتصال به دیوار برقرار نشد (چند آگهیِ پیاپی خوانده نشد) — پروکسیِ دیوار را در ادمین بررسی کنید.')
+  // فاز ۲۳۳ — پاسِ تلاشِ مجدد برای شکست‌های گذرا (قطعیِ لحظه‌ایِ پروکسی/دیوار)
+  for (const it of failed) {
+    const r2 = await importOneSafe(o, it, sourceId)
+    if (r2.ok && r2.updated) updated++
+    else if (r2.ok && !r2.skipped) { imported++; done.push(it.token) }
+    else skipped++
+  }
   return { imported, updated, skipped, tokens: done }
 }
 
@@ -357,6 +366,32 @@ async function importOneSafe(o: string, it: BrandPost, sourceId?: string): Promi
   return { ok: !!res.ok, updated: !!res.updated, skipped: !!res.skipped }
 }
 
+// فاز ۲۳۳ (فیدبک+اسکرین‌شات: «کاربرِ جدید، جدید ۰ و ۲۰ ردشده؟!») — شکستِ گذرای شبکه «ردشده» نیست:
+// قبلاً هر آگهی که در لحظهٔ قطعیِ دیوار خوانده نمی‌شد از صف حذف و skipped++ می‌شد — یعنی از دست
+// می‌رفت تا سینکِ بعد. حالا ناموفق تا MAX_TOKEN_TRIES بار به تهِ صف برمی‌گردد (بعدِ هولد دوباره
+// تلاش می‌شود)؛ فقط شکستِ قطعیِ سوم «ردشده» می‌شود. حسابداری خالص است تا تست شود.
+const MAX_TOKEN_TRIES = 3
+export function settleBatch<T extends { token: string; fails?: number }>(
+  batch: T[], results: { ok: boolean; updated?: boolean; skipped?: boolean }[], maxTries = MAX_TOKEN_TRIES,
+): { imported: number; updated: number; skipped: number; requeue: T[]; failedFinal: string[]; fails: number } {
+  let imported = 0, updated = 0, skipped = 0, fails = 0
+  const requeue: T[] = []
+  const failedFinal: string[] = []
+  results.forEach((r, k) => {
+    const it = batch[k]
+    if (r.ok && r.updated) updated++
+    else if (r.ok && !r.skipped) imported++
+    else if (r.ok) skipped++
+    else {
+      fails++
+      it.fails = (it.fails || 0) + 1
+      if (it.fails < maxTries) requeue.push(it)
+      else { skipped++; failedFinal.push(it.token) }
+    }
+  })
+  return { imported, updated, skipped, requeue, failedFinal, fails }
+}
+
 // یک دورِ زمان‌دار: pending را تا پایانِ بودجه پردازش می‌کند؛ اگر ماند → هولد، وگرنه → پایان.
 export async function runBatch(o: string): Promise<void> {
   const budgetEnd = Date.now() + BATCH_BUDGET
@@ -364,25 +399,24 @@ export async function runBatch(o: string): Promise<void> {
   let imported = j0.imported || 0, updated = j0.updated || 0, skipped = j0.skipped || 0
   const sourceId = j0.sourceId
   const total = j0.total || 0
-  let pending: BrandPost[] = Array.isArray(j0.pending) ? j0.pending.slice() : []
+  let pending: (BrandPost & { fails?: number })[] = Array.isArray(j0.pending) ? j0.pending.slice() : []
   let consecutiveFail = 0
 
   while (pending.length && Date.now() < budgetEnd) {
     const batch = pending.slice(0, BATCH_CONC)
     pending = pending.slice(batch.length)
     const results = await Promise.all(batch.map(it => importOneSafe(o, it, sourceId)))
-    for (const r of results) {
-      if (r.ok && r.updated) updated++
-      else if (r.ok && !r.skipped) imported++
-      else skipped++
-      consecutiveFail = r.ok ? 0 : consecutiveFail + 1
-    }
+    const s = settleBatch(batch, results)
+    imported += s.imported; updated += s.updated; skipped += s.skipped
+    if (s.requeue.length) pending = pending.concat(s.requeue)   // بعدِ وصل‌شدنِ دوباره تلاش می‌شود
+    for (const tk of s.failedFinal) appendJobLog(o, `⛔ آگهی ${tk} بعد از ${MAX_TOKEN_TRIES.toLocaleString('fa-IR')} تلاش خوانده نشد — ردشده`)
+    consecutiveFail = s.fails ? consecutiveFail + s.fails : 0
     setJob(o, { pending, imported, updated, skipped, done: total - pending.length, lastProgressAt: Date.now() })
     const done131 = total - pending.length
     if (done131 % 20 < BATCH_CONC || !pending.length) appendJobLog(o, `📦 ${done131.toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')} — جدید ${imported.toLocaleString('fa-IR')} · به‌روز ${updated.toLocaleString('fa-IR')} · ردشده ${skipped.toLocaleString('fa-IR')}`)
     if (consecutiveFail >= 12) {   // ~۳ دستهٔ کاملاً ناموفق = اتصال قطع → هولد و ادامهٔ بعدی
-      appendJobLog(o, '⚠️ چند دستهٔ پیاپی ناموفق — اتصالِ دیوار موقتاً قطع شد؛ کار «هولد» شد و چند دقیقهٔ دیگر خودکار ادامه می‌یابد')
-      setJob(o, { running: false, paused: true, pausedAt: Date.now(), note: 'اتصالِ دیوار موقتاً قطع شد — چند دقیقهٔ دیگر خودکار ادامه می‌یابد.', lastProgressAt: Date.now() })
+      appendJobLog(o, '⚠️ چند دستهٔ پیاپی ناموفق — اتصالِ دیوار موقتاً قطع شد؛ کار «هولد» شد و ناموفق‌ها بعد از وصل‌شدن دوباره تلاش می‌شوند')
+      setJob(o, { running: false, paused: true, pausedAt: Date.now(), pending, imported, updated, skipped, done: total - pending.length, note: 'اتصالِ دیوار موقتاً قطع شد — چند دقیقهٔ دیگر خودکار ادامه می‌یابد.', lastProgressAt: Date.now() })
       return
     }
   }
