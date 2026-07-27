@@ -19,8 +19,14 @@ export interface DivarPost {
   location?: string
   deal?: 'sale' | 'rent' | 'daily'
   ptype?: string
-  price?: number          // قیمت کل (فروش) یا ودیعه (اجاره) — تومان
+  price?: number          // قیمت کل (فروش) یا ودیعه (اجاره) یا اجارهٔ هر شبِ روزهای عادی (روزانه) — تومان
   rentMonthly?: number    // اجارهٔ ماهانه — تومان
+  // فاز ۲۳۱ — جدولِ ساختاریافتهٔ اجارهٔ روزانهٔ دیوار (همه تومان/شب مگر ظرفیت‌ها که نفرند)
+  nightlyWeekend?: number
+  nightlyHoliday?: number
+  extraPersonFee?: number
+  capacityStd?: number
+  capacityExtra?: number
   area?: number
   rooms?: number
   floor?: number
@@ -233,6 +239,8 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
     // قیمت‌ها را جدا و با «شامل‌بودنِ» برچسب می‌گیریم، چون دیوار پسوندِ «(تومان)» و همزه
     // («اجارهٔ ماهانه») دارد و با تطبیقِ دقیقِ برچسب گم می‌شدند.
     const priceHit: { deposit: string; monthly: string; total: string } = { deposit: '', monthly: '', total: '' }
+    // فاز ۲۳۱ — ردیف‌های جدولِ اجارهٔ روزانهٔ دیوار («روزهای عادی (شنبه تا سه‌شنبه)»، «آخر هفته»…)
+    const dailyHit: { normal: string; weekend: string; holiday: string; extra: string; capStd: string; capExtra: string } = { normal: '', weekend: '', holiday: '', extra: '', capStd: '', capExtra: '' }
     const amenitySet = new Set<string>()
     let lat: number | undefined, lng: number | undefined
     let description: string | undefined
@@ -266,7 +274,15 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
             // مقدار باید رقم داشته باشد تا «قابل تبدیل» و متن‌های دیگر نگیرد.
             if (/[\d۰-۹]/.test(b) && !/تبدیل/.test(a)) {
               const la = a.replace(/ٔ/g, 'ه')   // «اجارهٔ» → «اجاره»
-              if (!priceHit.deposit && /(ودیعه|رهن)/.test(la)) priceHit.deposit = b
+              // فاز ۲۳۱: ردیف‌های اجارهٔ روزانه قبل از قیمت‌های عمومی — وگرنه «اجارهٔ روزهای عادی»
+              // اشتباهی به‌عنوانِ اجارهٔ ماهانه گرفته می‌شد.
+              if (!dailyHit.normal && /روزهای عادی/.test(la)) dailyHit.normal = b
+              else if (!dailyHit.weekend && /آخر هفته/.test(la)) dailyHit.weekend = b
+              else if (!dailyHit.holiday && /تعطیلات/.test(la)) dailyHit.holiday = b
+              else if (!dailyHit.extra && /نفر اضافه/.test(la)) dailyHit.extra = b
+              else if (!dailyHit.capStd && /ظرفیت استاندارد/.test(la)) dailyHit.capStd = b
+              else if (!dailyHit.capExtra && /ظرفیت اضافه/.test(la)) dailyHit.capExtra = b
+              else if (!priceHit.deposit && /(ودیعه|رهن)/.test(la)) priceHit.deposit = b
               else if (!priceHit.monthly && /اجاره/.test(la)) priceHit.monthly = b
               else if (!priceHit.total && /قیمت/.test(la) && !/هر\s*متر/.test(la)) priceHit.total = b
             }
@@ -381,13 +397,31 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
       if (!total) total = afterLabel(/قیمت کل|قیمت فروش|مبلغ کل/) || rawNum(/total_?price|sale_?price|price/, 8)
     }
 
+    // فاز ۲۳۱ (فیدبک: «دیتای دیوار را بگیر و بشان سرِ جاش، نه تومانِ خالی») — جدولِ کاملِ اجارهٔ روزانه:
+    // روزهای عادی/آخر هفته/تعطیلات (تومان/شب)، هزینهٔ نفرِ اضافه، ظرفیتِ استاندارد/اضافه.
+    // اول از ویجت‌های ساخت‌یافته (dailyHit)، بعد از بدنهٔ خام؛ صفر = در دیوار ثبت نشده (هیچ عددِ ساختگی).
+    let nightly = 0, nightlyWeekend = 0, nightlyHoliday = 0, extraPersonFee = 0, capacityStd = 0, capacityExtra = 0
+    if (deal === 'daily') {
+      nightly = parseToman(dailyHit.normal) || parseToman(afterLabel(/روزهای عادی/))
+      nightlyWeekend = parseToman(dailyHit.weekend) || parseToman(afterLabel(/آخر هفته/))
+      nightlyHoliday = parseToman(dailyHit.holiday) || parseToman(afterLabel(/تعطیلات و مناسبت/))
+      extraPersonFee = parseToman(dailyHit.extra) || parseToman(afterLabel(/نفر اضافه/))
+      const capFromBody = (re: RegExp): number => { const m = body.match(new RegExp('(?:' + re.source + ')[^\\d۰-۹]{0,30}([\\d۰-۹]{1,2})')); return m ? faToNum(m[1]) : 0 }
+      capacityStd = faToNum(dailyHit.capStd) || capFromBody(/ظرفیت استاندارد/)
+      capacityExtra = faToNum(dailyHit.capExtra) || capFromBody(/ظرفیت اضافه/)
+    }
+
     return {
       images, description, facts, amenities, lat, lng,
       title, city, district, neighborhood, ptype,
       location: [city, neighborhood].filter(Boolean).join('، '),
       deal,
-      price: deal === 'rent' ? parseToman(deposit) : deal === 'daily' ? 0 : parseToman(total),
+      price: deal === 'rent' ? parseToman(deposit) : deal === 'daily' ? nightly : parseToman(total),
       rentMonthly: deal === 'rent' ? parseToman(monthly) : 0,
+      ...(deal === 'daily' ? {
+        nightlyWeekend: nightlyWeekend || undefined, nightlyHoliday: nightlyHoliday || undefined,
+        extraPersonFee: extraPersonFee || undefined, capacityStd: capacityStd || undefined, capacityExtra: capacityExtra || undefined,
+      } : {}),
       area, rooms, floor, yearBuilt,
     }
   } catch (e: any) {

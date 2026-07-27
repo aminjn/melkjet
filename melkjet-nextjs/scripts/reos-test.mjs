@@ -2269,6 +2269,25 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('مختصاتِ صفر/نامعتبر هرگز ثبت نمی‌شود', (await getItemById(it201.id)).meta['__lat'] === '35.7')
       await deleteItem(it201.id)
     }
+    // فاز ۲۳۱ — جدولِ اجارهٔ روزانهٔ دیوار سرِ جای خودش (فیدبک: «دیتا رو دقیق بذار، نه تومانِ خالی»):
+    // ایمپورتِ کامل با پستِ استابِ دیوار → آیتمِ عمومی باید قیمتِ شبی + ردیف‌های جدول + مهرِ درست داشته باشد.
+    {
+      const { importDivarToken } = await import('../app/lib/advisor-divar-import.ts')
+      const { getAdvisor } = await import('../app/lib/advisor-store.ts')
+      const { getItemById } = await import('../app/lib/scraper-store.ts')
+      const { dealOf } = await import('../app/lib/listing-filter.ts')
+      const fetchPost = async () => ({
+        title: 'واحد مبله تست ۲۳۱', description: '*روزانه-هفتگی-ماهانه*', images: [], facts: [], amenities: [],
+        deal: 'daily', price: 6_500_000, nightlyWeekend: 6_500_000, capacityStd: 2, capacityExtra: 1,
+        city: 'تهران', neighborhood: 'فرمانیه', location: 'تهران، فرمانیه',
+      })
+      const r231 = await importDivarToken('09121230231', 'tok231daily', undefined, undefined, { publish: true, fetchPost })
+      const l231 = (await getAdvisor('09121230231')).listings.find(x => x.id === r231.listing.id)
+      const pub231 = l231?.publicId ? await getItemById(l231.publicId) : null
+      ok('ایمپورتِ روزانه منتشر شد و قیمتِ شبی سرِ جایش است (نه «تومانِ» خالی)', r231.ok === true && !!pub231 && pub231.price === `شبی ${(6_500_000).toLocaleString('fa-IR')} تومان`)
+      ok('جدولِ دیوار در متا: فقط ردیف‌های واقعاً ثبت‌شده (تعطیلات/نفرِ اضافه ثبت نشده → غایب)', !!pub231 && (pub231.meta['اجارهٔ روزهای عادی'] || '').includes('تومان/شب') && (pub231.meta['اجارهٔ آخر هفته'] || '').includes('تومان/شب') && pub231.meta['ظرفیت استاندارد'] === `${(2).toLocaleString('fa-IR')} نفر` && pub231.meta['ظرفیت اضافه'] === `${(1).toLocaleString('fa-IR')} نفر` && !pub231.meta['اجارهٔ تعطیلات و مناسبت‌ها'] && !pub231.meta['هزینهٔ هر نفرِ اضافه'])
+      ok('مهرِ صریحِ «اجارهٔ کوتاه‌مدت» و طبقه‌بندیِ daily', !!pub231 && pub231.meta['نوع معامله'] === 'اجارهٔ کوتاه‌مدت' && dealOf(pub231) === 'daily')
+    }
     // فاز ۲۳۰ — اجارهٔ روزانه/شبی هرگز «فروشی» نیست (فیدبک+اسکرین‌شات: «آگهی‌های اجارهٔ شبی تو فروش می‌رود»):
     // ریشه: ایمپورتِ قدیمیِ دیوار daily نداشت و صریحاً «نوع معامله: فروش» مهر می‌زد + نشانه‌ها فقط در توضیحات بود.
     {

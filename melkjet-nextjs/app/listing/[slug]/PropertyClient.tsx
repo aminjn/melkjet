@@ -527,6 +527,29 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
                 </div>
               )}
 
+              {/* فاز ۲۳۱ — جدولِ اجارهٔ روزانه (عینِ دیوار): فقط ردیف‌هایی که واقعاً از دیوار آمده‌اند */}
+              {deal === 'daily' && (() => {
+                const rows = [
+                  ['روزهای عادی', 'اجارهٔ روزهای عادی'], ['آخر هفته', 'اجارهٔ آخر هفته'],
+                  ['تعطیلات و مناسبت‌ها', 'اجارهٔ تعطیلات و مناسبت‌ها'], ['هزینهٔ هر نفرِ اضافه', 'هزینهٔ هر نفرِ اضافه'],
+                  ['ظرفیت استاندارد', 'ظرفیت استاندارد'], ['ظرفیت اضافه', 'ظرفیت اضافه'],
+                ].map(([label, key]) => ({ label, value: String(item.meta?.[key] || '') })).filter(r => r.value)
+                if (!rows.length) return null
+                return (
+                  <div style={card}>
+                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>🌙 اجارهٔ روزانه</div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {rows.map((r, i) => (
+                        <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 2px', borderTop: i ? '1px solid var(--line)' : 'none' }}>
+                          <span style={{ fontSize: 13.5, color: 'var(--muted)' }}>{r.label}</span>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{r.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+
               {item.excerpt && (
                 <div style={card}>
                   <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>توضیحات</div>

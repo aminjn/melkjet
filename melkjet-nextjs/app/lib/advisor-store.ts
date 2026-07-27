@@ -30,6 +30,8 @@ export interface Listing {
   city?: string; neighborhood?: string; facing?: string
   province?: string; district?: string; lat?: number; lng?: number
   rentMonthly?: number; area?: number; rooms?: number; floor?: number; totalFloors?: number; yearBuilt?: number
+  // فاز ۲۳۱ — اجارهٔ روزانه (price = تومان/شبِ روزهای عادی): بقیهٔ جدولِ دیوار
+  nightlyWeekend?: number; nightlyHoliday?: number; extraPersonFee?: number; capacityStd?: number; capacityExtra?: number
   parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
   amenities?: string[]
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
@@ -240,6 +242,11 @@ export async function addListing(o: string, input: Partial<Listing>): Promise<Li
       lng: typeof input.lng === 'number' ? input.lng : undefined,
       facing: input.facing ? String(input.facing) : undefined,
       rentMonthly: input.rentMonthly ? Number(input.rentMonthly) : undefined,
+      nightlyWeekend: input.nightlyWeekend ? Number(input.nightlyWeekend) : undefined,
+      nightlyHoliday: input.nightlyHoliday ? Number(input.nightlyHoliday) : undefined,
+      extraPersonFee: input.extraPersonFee ? Number(input.extraPersonFee) : undefined,
+      capacityStd: input.capacityStd ? Number(input.capacityStd) : undefined,
+      capacityExtra: input.capacityExtra ? Number(input.capacityExtra) : undefined,
       area: input.area ? Number(input.area) : undefined,
       rooms: input.rooms !== undefined ? Number(input.rooms) : undefined,
       floor: input.floor ? Number(input.floor) : undefined,
@@ -261,7 +268,7 @@ export async function updateListing(o: string, fid: string, patch: Partial<Listi
   let res: Listing | null = null
   await mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
-    const allow: (keyof Listing)[] = ['title', 'ptype', 'location', 'price', 'deal', 'city', 'neighborhood', 'province', 'district', 'lat', 'lng', 'facing', 'rentMonthly', 'area', 'rooms', 'floor', 'totalFloors', 'yearBuilt', 'parking', 'elevator', 'storage', 'balcony', 'furnished', 'amenities', 'docType', 'address', 'phone', 'description', 'images', 'sellerLeadId', 'buyerLeadIds']
+    const allow: (keyof Listing)[] = ['title', 'ptype', 'location', 'price', 'deal', 'city', 'neighborhood', 'province', 'district', 'lat', 'lng', 'facing', 'rentMonthly', 'area', 'rooms', 'floor', 'totalFloors', 'yearBuilt', 'nightlyWeekend', 'nightlyHoliday', 'extraPersonFee', 'capacityStd', 'capacityExtra', 'parking', 'elevator', 'storage', 'balcony', 'furnished', 'amenities', 'docType', 'address', 'phone', 'description', 'images', 'sellerLeadId', 'buyerLeadIds']
     for (const k of allow) if (k in patch) (l as unknown as Record<string, unknown>)[k] = (patch as Record<string, unknown>)[k]
     res = l
   })
@@ -296,6 +303,15 @@ function publicPayload(l: Listing, advisorName: string, ownerPhone?: string) {
   put('نوع ملک', l.ptype); put('متراژ', l.area ? `${faNum(l.area)} متر` : ''); put('اتاق خواب', faNum(l.rooms))
   put('طبقه', faNum(l.floor)); put('تعداد طبقات', faNum(l.totalFloors)); put('سال ساخت', faNum(l.yearBuilt))
   put('جهت', l.facing); put('سند', l.docType)
+  // فاز ۲۳۱ — جدولِ اجارهٔ روزانه در متایِ آگهیِ عمومی (عینِ ساختارِ دیوار؛ فقط ردیف‌های واقعاً ثبت‌شده)
+  if (l.deal === 'daily') {
+    put('اجارهٔ روزهای عادی', l.price ? `${faNum(l.price)} تومان/شب` : '')
+    put('اجارهٔ آخر هفته', l.nightlyWeekend ? `${faNum(l.nightlyWeekend)} تومان/شب` : '')
+    put('اجارهٔ تعطیلات و مناسبت‌ها', l.nightlyHoliday ? `${faNum(l.nightlyHoliday)} تومان/شب` : '')
+    put('هزینهٔ هر نفرِ اضافه', l.extraPersonFee ? `${faNum(l.extraPersonFee)} تومان/شب` : '')
+    put('ظرفیت استاندارد', l.capacityStd ? `${faNum(l.capacityStd)} نفر` : '')
+    put('ظرفیت اضافه', l.capacityExtra ? `${faNum(l.capacityExtra)} نفر` : '')
+  }
   if (l.amenities && l.amenities.length) meta['امکانات'] = l.amenities.join('، ')
   if (l.status === 'sold') meta['__dealStatus'] = 'sold'; else if (l.status === 'rented') meta['__dealStatus'] = 'rented'
   if (l.images && l.images.length) meta['__gallery'] = l.images.join('\n')
