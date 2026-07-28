@@ -847,11 +847,11 @@ function NeshanConfig() {
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>🗺 سامانهٔ نقشهٔ اختصاصی</div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>
         نقشه، جستجوی مکان، تشخیصِ محله، دسترسی‌های اطراف و نقشهٔ ثابتِ کلِ سایت از این سرویس می‌آید.
-        آدرسِ پایه (مثل <span style={{ direction: 'ltr', display: 'inline-block' }}>https://map.example.com</span>) و کلیدِ API ساخته‌شده در پنلِ خودِ سامانه را وارد کن، بعد «تستِ زنده» بزن.
+        <b>آدرسِ پایه = همان دامنهٔ سامانه است</b> (مثلاً <span style={{ direction: 'ltr', display: 'inline-block' }}>nexamap.ir</span> — با یا بدونِ https فرقی ندارد، خودمان درستش می‌کنیم). کلیدِ API را هم از «کلیدهای API» پنلِ سامانه بساز و همین‌جا بگذار، بعد «تستِ زنده» بزن.
       </div>
       <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>آدرسِ پایهٔ سرویس {savedUrl && <span style={{ color: '#5fd98a', fontWeight: 400, direction: 'ltr', display: 'inline-block' }}>— {savedUrl}</span>}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="https://map.example.com" style={inp} />
+        <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="nexamap.ir" style={inp} />
       </div>
       <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>کلیدِ API {keyMasked && <span style={{ color: '#5fd98a', fontWeight: 400 }}>— تنظیم‌شده ({keyMasked})</span>}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

@@ -38,7 +38,12 @@ export async function POST(req: NextRequest) {
 
   const data = getAdminData()
   const cur = data.geoApi || {}
-  const baseUrl = body.baseUrl !== undefined ? String(body.baseUrl).trim().replace(/\/+$/, '') : (cur.baseUrl || '')
+  // آسان‌گیر: «nexamap.ir» یا «nexamap.ir/v1» هم قبول است — خودمان https:// و حذفِ /v1 و / انتهایی را درست می‌کنیم.
+  let baseUrl = body.baseUrl !== undefined ? String(body.baseUrl).trim() : (cur.baseUrl || '')
+  if (baseUrl) {
+    if (!/^https?:\/\//i.test(baseUrl)) baseUrl = 'https://' + baseUrl
+    baseUrl = baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
+  }
   const apiKey = body.apiKey !== undefined ? String(body.apiKey).trim() : (cur.apiKey || '')
   data.geoApi = { baseUrl, apiKey }
   saveAdminData(data)
