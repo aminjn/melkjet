@@ -45,6 +45,19 @@ async function call(path: string, opts?: { method?: string; body?: unknown; time
 
 export interface GeoPoint { lat: number; lng: number }
 
+/** پروبِ دیباگ: وضعیتِ HTTP و تکهٔ پاسخِ هر سرویس — تا «چرا»ی خطا دیده شود، نه فقط ✗. */
+export async function geoDebugProbe(): Promise<{ name: string; status: number; snippet: string }[]> {
+  const probes: [string, string][] = [
+    ['geocode', `/v1/geocode?address=${encodeURIComponent('تهران ونک')}`],
+    ['reverse', '/v1/reverse?lat=35.7575&lng=51.41'],
+    ['search', `/v1/search?lat=35.7575&lng=51.41&radius=1000&limit=2`],
+  ]
+  return Promise.all(probes.map(async ([name, path]) => {
+    const { status, json } = await call(path, { timeoutMs: 8000 })
+    return { name, status, snippet: JSON.stringify(json)?.slice(0, 140) || '' }
+  }))
+}
+
 /** آدرسِ آزادِ فارسی → مختصات (v1/geocode). null = پیدا نشد/سرویس در دسترس نیست. */
 export async function geoGeocode(address: string, timeoutMs = 6000): Promise<(GeoPoint & { formatted?: string; confidence?: number }) | null> {
   const q = (address || '').trim()

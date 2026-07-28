@@ -20,20 +20,13 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({} as any))
 
   if (body.action === 'test') {
-    // تستِ زنده: geocode و reverse و search — خروجی سند است، نه ادعا.
-    const { geoGeocode, geoReverse, geoSearch, geoApiEnabled } = await import('@/app/lib/geo-api')
+    // تستِ زنده با «کدِ وضعیتِ» هر سرویس — تا ریشهٔ خطا دیده شود (۴۰۱=کلید، ۴۰۴=مسیر، ۰=شبکه/تایم‌اوت).
+    const { geoDebugProbe, geoApiEnabled, geoApiCfg } = await import('@/app/lib/geo-api')
     if (!geoApiEnabled()) return NextResponse.json({ ok: false, error: 'اول baseUrl را ذخیره کنید' })
-    const [g, r, sr] = await Promise.all([
-      geoGeocode('تهران ونک').catch(() => null),
-      geoReverse(35.7575, 51.41).catch(() => null),
-      geoSearch('', { lat: 35.7575, lng: 51.41, radius: 1000, limit: 3 }).catch(() => [] as unknown[]),
-    ])
-    return NextResponse.json({
-      ok: !!(g || r),
-      geocode: g ? `✓ (${g.lat.toFixed(3)},${g.lng.toFixed(3)})` : '✗',
-      reverse: r ? `✓ ${r.city || r.address || ''}` : '✗',
-      search: Array.isArray(sr) ? `✓ ${sr.length} نتیجه` : '✗',
-    })
+    const probes = await geoDebugProbe()
+    const ok = probes.some(p => p.status === 200)
+    const line = probes.map(p => `${p.name}: ${p.status === 200 ? '✓' : `✗ (${p.status || 'شبکه'})`}`).join(' · ')
+    return NextResponse.json({ ok, line, baseUrl: geoApiCfg().baseUrl, probes })
   }
 
   const data = getAdminData()

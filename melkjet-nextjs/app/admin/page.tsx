@@ -838,7 +838,7 @@ function NeshanConfig() {
     try {
       const r = await fetch('/api/admin/geo-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'test' }) })
       const d = await r.json()
-      setMsg(d.ok ? `✓ geocode ${d.geocode} · reverse ${d.reverse} · search ${d.search}` : `✗ ${d.error || `geocode ${d.geocode} · reverse ${d.reverse}`}`)
+      setMsg(d.line ? `${d.ok ? '✓' : '✗'} ${d.line}${d.ok ? '' : ' — ۴۰۱=کلید غلط، ۴۰۴=مسیر، «شبکه»=دسترسی'}` : `✗ ${d.error || 'خطا'}`)
     } catch { setMsg('✗ خطا در تست') } finally { setTesting(false) }
   }
   const inp: React.CSSProperties = { flex: 1, minWidth: 220, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
