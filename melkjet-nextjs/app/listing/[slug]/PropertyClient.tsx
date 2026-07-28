@@ -360,7 +360,7 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
                   {item.location && <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: 'var(--muted)' }}>📍 {item.location}</div>}
                   {/* فاز ۲۰۸ (فیدبک: «آگهی‌ها معلوم نیست برای کی هست — خیلی مهمه») — سنِ آگهی، برجسته کنارِ موقعیت */}
                   {item.scrapedAt > 0 && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 13px', borderRadius: 999, fontSize: 12.5, fontWeight: 800, ...(isFreshListing(item.scrapedAt) ? { background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', boxShadow: '0 3px 14px -4px rgba(201,168,76,0.6)' } : { background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--goldText)' }) }}>
+                    <span suppressHydrationWarning style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 13px', borderRadius: 999, fontSize: 12.5, fontWeight: 800, ...(isFreshListing(item.scrapedAt) ? { background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', boxShadow: '0 3px 14px -4px rgba(201,168,76,0.6)' } : { background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--goldText)' }) }}>
                       <span aria-hidden="true">{isFreshListing(item.scrapedAt) ? '⚡' : '🕐'}</span>
                       {isFreshListing(item.scrapedAt) ? `آگهیِ جدید · ${listingAgeLabel(item.scrapedAt)}` : `ثبت‌شده ${listingAgeLabel(item.scrapedAt)}`}
                     </span>

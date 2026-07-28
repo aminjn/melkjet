@@ -13,9 +13,11 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ z: string;
   try {
     const ctl = new AbortController()
     const timer = setTimeout(() => ctl.abort(), 8000)
+    // فاز ۲۳۷: no-store — کشِ دادهٔ Next نباید کاشیِ placeholderِ قدیمی را بعد از واقعی‌شدنِ کاشی‌ها سرو کند.
     const r = await fetch(`${baseUrl}/v1/tiles/${zi}/${xi}/${yi}.png?style=day${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`, {
       headers: apiKey ? { 'X-API-Key': apiKey, 'Api-Key': apiKey } : undefined,
       signal: ctl.signal,
+      cache: 'no-store',
     })
     clearTimeout(timer)
     if (r.status === 204) return new Response(null, { status: 204 })

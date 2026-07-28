@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     const timer = setTimeout(() => ctl.abort(), 10000)
     // فاز ۲۳۵: کلید در هدر هم می‌رود — پنلِ سامانه احراز با X-API-Key را خواسته.
     const { apiKey } = geoApiCfg()
-    const r = await fetch(url, { signal: ctl.signal, headers: apiKey ? { 'X-API-Key': apiKey, 'Api-Key': apiKey } : undefined })
+    const r = await fetch(url, { signal: ctl.signal, headers: apiKey ? { 'X-API-Key': apiKey, 'Api-Key': apiKey } : undefined, cache: 'no-store' })
     clearTimeout(timer)
     if (!r.ok) return new Response('upstream ' + r.status, { status: 502 })
     const buf = Buffer.from(await r.arrayBuffer())
