@@ -38,6 +38,11 @@ export interface AdminData {
     serviceKey: string   // Neshan web-service key (search / reverse / distance-matrix) — «service.…»
     mapKey?: string      // Neshan map key (static map / map display) — «web.…»
   }
+  // فاز ۲۳۴ — سامانهٔ نقشهٔ اختصاصی (جایگزینِ کاملِ نشان به دستورِ کاربر)
+  geoApi?: {
+    baseUrl?: string     // مثل https://map.example.com (بدونِ / انتهایی)
+    apiKey?: string      // کلیدِ API ساخته‌شده در پنلِ خودِ سامانه
+  }
   divar?: {
     proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server
   }

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAdminData } from '@/app/lib/admin-store'
-import { shecanRequest } from '@/app/lib/shecan-https'
+import { geoReverse, geoApiEnabled } from '@/app/lib/geo-api'
 
-// Reverse geocoding: lat/lng → neighbourhood/city/address.
-// Uses Neshan when a service key is configured, otherwise OSM Nominatim.
+// Reverse geocoding: lat/lng → استان/شهر/منطقه/محله/آدرس — از سامانهٔ نقشهٔ اختصاصی (فاز ۲۳۴).
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
   const lat = parseFloat(sp.get('lat') || '')
@@ -11,26 +9,9 @@ export async function GET(req: NextRequest) {
   if (Number.isNaN(lat) || Number.isNaN(lng)) {
     return NextResponse.json({ error: 'مختصات نامعتبر' }, { status: 400 })
   }
-
-  // هر دو کلید نشان را امتحان کن (سرور بین‌الملل ندارد، پس فقط نشان از طریق DNS شکن)
-  const nz = getAdminData().neshan
-  const keys = Array.from(new Set([nz?.serviceKey, nz?.mapKey].filter(Boolean) as string[]))
-  for (const key of keys) {
-    try {
-      const r = await shecanRequest(`https://api.neshan.org/v5/reverse?lat=${lat}&lng=${lng}`, { method: 'GET', headers: { 'Api-Key': key, accept: 'application/json' }, timeout: 8000 })
-      if (r.status === 200) {
-        const d = JSON.parse(r.body)
-        return NextResponse.json({
-          province: d.state || undefined,                          // استان
-          city: d.city || d.county || undefined,                    // شهر
-          district: d.municipality_zone || d.district || undefined, // منطقهٔ شهرداری
-          neighbourhood: d.neighbourhood || undefined,              // محله
-          address: d.formatted_address || undefined,                // آدرسِ کامل
-          source: 'neshan',
-        })
-      }
-    } catch { /* try next key */ }
+  if (geoApiEnabled()) {
+    const r = await geoReverse(lat, lng)
+    if (r) return NextResponse.json({ ...r, source: 'geoapi' })
   }
-
   return NextResponse.json({ neighbourhood: undefined, city: undefined, address: undefined, source: 'none' })
 }

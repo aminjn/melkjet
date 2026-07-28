@@ -811,45 +811,53 @@ function GeoCol({ title, items, selId, onSelect, onAdd, onRename, onDelete, addP
   )
 }
 
+// فاز ۲۳۴ — سامانهٔ نقشهٔ اختصاصی (جایگزینِ کاملِ نشان به دستورِ کاربر): آدرسِ سرویس + کلیدِ API + تستِ زنده.
 function NeshanConfig() {
-  const [masked, setMasked] = useState('')
-  const [mapMasked, setMapMasked] = useState('')
-  const [key, setKey] = useState('')
-  const [mapKey, setMapKey] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [savedUrl, setSavedUrl] = useState('')
+  const [keyMasked, setKeyMasked] = useState('')
+  const [apiKey, setApiKey] = useState('')
   const [msg, setMsg] = useState('')
-  useEffect(() => { fetch('/api/admin/neshan-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.masked); setMapMasked(d.mapMasked) } }) }, [])
+  const [testing, setTesting] = useState(false)
+  useEffect(() => { fetch('/api/admin/geo-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setSavedUrl(d.baseUrl || ''); setKeyMasked(d.keyMasked || '') } }) }, [])
   const save = async () => {
     setMsg('')
     const body: any = {}
-    if (key.trim()) body.serviceKey = key.trim()
-    if (mapKey.trim()) body.mapKey = mapKey.trim()
+    if (baseUrl.trim()) body.baseUrl = baseUrl.trim()
+    if (apiKey.trim()) body.apiKey = apiKey.trim()
     if (!Object.keys(body).length) { setMsg('چیزی برای ذخیره نیست'); return }
-    const r = await fetch('/api/admin/neshan-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const r = await fetch('/api/admin/geo-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (r.ok) {
       setMsg('✓ ذخیره شد')
-      if (key.trim()) { setMasked('***' + key.trim().slice(-4)); setKey('') }
-      if (mapKey.trim()) { setMapMasked('***' + mapKey.trim().slice(-4)); setMapKey('') }
+      if (baseUrl.trim()) { setSavedUrl(baseUrl.trim()); setBaseUrl('') }
+      if (apiKey.trim()) { setKeyMasked('***' + apiKey.trim().slice(-4)); setApiKey('') }
     } else setMsg('خطا در ذخیره')
+  }
+  const test = async () => {
+    setTesting(true); setMsg('')
+    try {
+      const r = await fetch('/api/admin/geo-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'test' }) })
+      const d = await r.json()
+      setMsg(d.ok ? `✓ geocode ${d.geocode} · reverse ${d.reverse} · search ${d.search}` : `✗ ${d.error || `geocode ${d.geocode} · reverse ${d.reverse}`}`)
+    } catch { setMsg('✗ خطا در تست') } finally { setTesting(false) }
   }
   const inp: React.CSSProperties = { flex: 1, minWidth: 220, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   return (
     <Card style={{ marginBottom: 14 }}>
-      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>کلیدهای نشان (Neshan)</div>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>🗺 سامانهٔ نقشهٔ اختصاصی</div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>
-        نشان دو نوع کلید دارد و هرکدام جداست:
-        <br />• <b>کلید سرویس</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>service.…</span>) برای جستجو، تشخیص محله و دسترسی‌های اطراف (زمان/فاصلهٔ واقعی).
-        <br />• <b>کلید نقشه</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>web.…</span>) برای نمایش نقشه روی صفحهٔ آگهی. نقشه با کلید سرویس کار نمی‌کند.
+        نقشه، جستجوی مکان، تشخیصِ محله، دسترسی‌های اطراف و نقشهٔ ثابتِ کلِ سایت از این سرویس می‌آید.
+        آدرسِ پایه (مثل <span style={{ direction: 'ltr', display: 'inline-block' }}>https://map.example.com</span>) و کلیدِ API ساخته‌شده در پنلِ خودِ سامانه را وارد کن، بعد «تستِ زنده» بزن.
       </div>
-
-      <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>کلید سرویس (Web-Service) {masked && <span style={{ color: '#5fd98a', fontWeight: 400 }}>— تنظیم‌شده ({masked})</span>}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>آدرسِ پایهٔ سرویس {savedUrl && <span style={{ color: '#5fd98a', fontWeight: 400, direction: 'ltr', display: 'inline-block' }}>— {savedUrl}</span>}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <input value={key} onChange={e => setKey(e.target.value)} placeholder="service.xxxxxxxx" style={inp} />
+        <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="https://map.example.com" style={inp} />
       </div>
-
-      <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>کلید نقشه (Map) {mapMasked && <span style={{ color: '#5fd98a', fontWeight: 400 }}>— تنظیم‌شده ({mapMasked})</span>}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>کلیدِ API {keyMasked && <span style={{ color: '#5fd98a', fontWeight: 400 }}>— تنظیم‌شده ({keyMasked})</span>}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <input value={mapKey} onChange={e => setMapKey(e.target.value)} placeholder="web.xxxxxxxx" style={inp} />
-        <GoldButton onClick={save}>ذخیره کلیدها</GoldButton>
+        <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="کلید از پنل سامانه" style={inp} />
+        <GoldButton onClick={save}>ذخیره</GoldButton>
+        <GoldButton onClick={test} disabled={testing}>{testing ? 'در حال تست…' : '🔌 تستِ زنده'}</GoldButton>
       </div>
       {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
     </Card>

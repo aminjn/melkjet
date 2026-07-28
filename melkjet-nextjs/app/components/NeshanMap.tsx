@@ -1,18 +1,18 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 
-// نقشهٔ تعاملیِ نشان (داخلی) — مشترک در همهٔ صفحات. از Web SDK نشان استفاده می‌کند.
+// فاز ۲۳۴ — نقشهٔ تعاملیِ مشترکِ همهٔ صفحات، حالا روی «سامانهٔ نقشهٔ اختصاصی» (نشان حذف شد، به
+// دستورِ کاربر): Leaflet خالص + کاشی از /api/geo/mapkey (v1/tiles سامانه). نامِ فایل/کامپوننت و
+// propها عمداً دست‌نخورده ماند تا ۵ مصرف‌کننده (ملک/سازنده‌ها/امپراتوری/پروژه) هیچ تغییری نخواهند.
 // نقاط (آگهی‌ها) را با مارکر روی نقشه می‌گذارد و با کلیک به صفحهٔ ملک می‌رود.
 
 // icon/color: پینِ سفارشی (divIcon) — مثلاً 🏛 طلایی برای دارایی خودِ کاربر، 🔥 نارنجی برای فرصتِ روز، 🏞 سبز برای زمین.
 export interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string; icon?: string; color?: string }
 
-// ⚠️ قانونِ کامپوننتِ مشترک: این نقشه در صفحهٔ ملک/سازنده‌ها/امپراتوری استفاده می‌شود — رفتارِ پیش‌فرضش
-// قفل است و هرگز عوض نمی‌شود؛ قابلیتِ جدید فقط با propِ جدید (opt-in). مسیرِ SDK همان مسیرِ اثبات‌شدهٔ
-// قدیمی است (تغییرش یک‌بار همهٔ نقشه‌های سایت را خاکستری کرد — فاز ۳۰)؛ v1.9.4 فقط نامزدِ پشتیبان است.
+// ⚠️ قانونِ کامپوننتِ مشترک: رفتارِ پیش‌فرض قفل است؛ قابلیتِ جدید فقط با propِ جدید (opt-in).
 const SDK_SOURCES = [
-  { css: 'https://static.neshan.org/sdk/leaflet/1.4.0/neshan-sdk-v1.0.8/dist/index.css', js: 'https://static.neshan.org/sdk/leaflet/1.4.0/neshan-sdk-v1.0.8/dist/index.js' },
-  { css: 'https://static.neshan.org/sdk/leaflet/v1.9.4/neshan-sdk/v1.0.8/index.css', js: 'https://static.neshan.org/sdk/leaflet/v1.9.4/neshan-sdk/v1.0.8/index.js' },
+  { css: 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css', js: 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js' },
+  { css: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', js: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js' },
 ]
 const TEHRAN: [number, number] = [35.7559, 51.4105]
 
@@ -76,7 +76,6 @@ export default function NeshanMap({
   const [err, setErr] = useState<string>('')
   const [tick, setTick] = useState(0)   // برای تلاشِ مجددِ خودکار در صورتِ شکستِ گذرا
   const [ready, setReady] = useState(0) // نقشه ساخته شد → مارکرها سوار شوند (بدونِ اتکا به تغییرِ props)
-  const [tileHint, setTileHint] = useState(false)   // کاشی‌ها لود نشدند → راهنمای مجوزِ کلید (فاز ۲۸)
   const fitKeyRef = useRef('')          // امضای دادهٔ فعلیِ پین‌ها — رندرِ والد (هر ثانیه) دیگر نقشه را دست نمی‌زند
   const idsKeyRef = useRef('')          // مجموعهٔ idهای فعلی — تشخیصِ «دادهٔ اساساً جدید» (مثلاً محلهٔ دیگر در جستجو)
   const userMovedRef = useRef(false)    // بعد از زوم/جابه‌جاییِ کاربر، روی «همان داده» auto-fit نکن (زوم نپَرد)
@@ -91,45 +90,37 @@ export default function NeshanMap({
       else setErr(code)
     }
     fetch('/api/geo/mapkey').then(r => r.ok ? r.json() : null).then(async (d) => {
-      const key = d?.key
-      if (!key) { if (!dead) setErr('no-key'); return }   // کلید نیست = مشکلِ تنظیمات، تلاشِ مجدد بی‌فایده
-      // تشخیصِ قطعیِ نوعِ کلید: SDK نشان فقط با کلیدِ «وب» (web.…) کاشی می‌دهد؛ کلیدِ سرویس هرگز.
-      // (ریشهٔ نقشه‌های خاکستری: کلیدِ service در فیلدِ کلیدِ نقشه — فاز ۳۰)
-      if (!/^web\./i.test(String(key)) && !dead) setTileHint(true)
+      const tiles = d?.tiles
+      if (!tiles) { if (!dead) setErr('no-key'); return }   // سامانهٔ نقشه تنظیم نشده — تلاشِ مجدد بی‌فایده
       let L: any
       try { L = await loadSdk() } catch { failSoft('sdk'); return }
       if (dead || !ref.current || mapRef.current) return
-      const isLight = theme ? theme === 'day' : (typeof document !== 'undefined' && document.documentElement.classList.contains('light'))
       // اگر همان container قبلاً توسط Leaflet مقداردهی شده (ری‌مانت/ناوبریِ مرحله) پاک کن تا خطای «already initialized» ندهد.
       try { if ((ref.current as any)._leaflet_id) { (ref.current as any)._leaflet_id = null; ref.current.innerHTML = '' } } catch {}
       try {
         mapRef.current = new L.Map(ref.current, {
-          key, maptype: isLight ? 'standard-day' : 'standard-night',
-          poi: true, traffic: false,
           center: center ? [center.lat, center.lng] : TEHRAN,
           zoom,
         })
+        L.tileLayer(tiles, { maxZoom: 19 }).addTo(mapRef.current)
       } catch { failSoft('init'); return }
       // اندازهٔ نقشه را بعد از چیدمان درست کن (کانتینرهایی که هنگام init هنوز اندازه نداشته‌اند).
       setTimeout(() => { try { mapRef.current?.invalidateSize?.() } catch {} }, 250)
       // حرکتِ خودِ کاربر (نه fit برنامه‌ای) → از این به بعد زوم/مرکزِ او محترم است و auto-fit خاموش می‌شود.
       try { mapRef.current.on('movestart zoomstart', () => { if (!programmaticRef.current) userMovedRef.current = true }) } catch {}
-      // برچسبِ پیش‌فرضِ «Leaflet» حذف می‌شود — اعتبارِ «نشان» سرِ جای خودش می‌ماند.
+      // برچسبِ پیش‌فرضِ «Leaflet» حذف می‌شود.
       try { mapRef.current.attributionControl?.setPrefix?.('') } catch {}
       setReady(r => r + 1)
-      // نگهبانِ تایل (فاز ۳۰ — «یک‌بار برای همیشه»): SDK لود می‌شود اما اگر کلیدِ نقشه مجوزِ
-      // «نقشهٔ پویا (Web SDK)» نداشته باشد، کاشیِ نشان هرگز نمی‌آید. نقشه دیگر تحتِ هیچ شرایطی
-      // خاکستری نمی‌ماند: آخرین سنگر = کاشی‌های OpenStreetMap روی همان نقشهٔ تعاملی (پین‌ها/زوم سالم).
-      // به‌محضِ فعال‌شدنِ مجوزِ کلید در پنلِ نشان، استایلِ نشان خودکار برمی‌گردد و این مسیر اجرا نمی‌شود.
+      // نگهبانِ تایل (فاز ۳۰ → ۲۳۴): اگر کاشیِ سامانه به هر دلیل نیامد، نقشه هرگز خاکستری نمی‌ماند —
+      // آخرین سنگر = کاشیِ OpenStreetMap روی همان نقشهٔ تعاملی (پین‌ها/زوم سالم).
       setTimeout(() => {
         if (dead || !ref.current || !mapRef.current) return
         if (ref.current.querySelectorAll('.leaflet-tile-loaded').length > 0) return
         try {
           L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapRef.current)
-          console.warn('NeshanMap: کاشیِ نشان نیامد (مجوزِ Web SDK روی کلید؟) — موقتاً OSM')
+          console.warn('GeoMap: کاشیِ سامانهٔ نقشه نیامد — موقتاً OSM')
         } catch {
           if (fallback) { try { mapRef.current.remove() } catch {} ; mapRef.current = null; setErr('tiles') }
-          else setTileHint(true)
         }
       }, 8000)
       // انتخابِ موقعیت با کلیک — جدا و غیرِمخرب: اگر بایندِ کلیک شکست بخورد، خودِ نقشه نباید خطا شود.
@@ -202,16 +193,13 @@ export default function NeshanMap({
     if (fallback) return <>{fallback}</>
     return (
       <div style={{ width: '100%', height, borderRadius: 16, border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>
-        {err === 'no-key' ? 'نقشه به «کلیدِ نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : `بارگذاریِ نقشه ناموفق بود. (${err})`}
+        {err === 'no-key' ? 'سامانهٔ نقشه تنظیم نشده است — پنل سوپرادمین → اتصال‌ها → سامانهٔ نقشه (آدرس + کلید)' : `بارگذاریِ نقشه ناموفق بود. (${err})`}
       </div>
     )
   }
   return (
     <div style={{ position: 'relative', width: '100%', height }}>
       <div ref={ref} style={{ position: 'absolute', inset: 0, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }} />
-      {tileHint && <div style={{ position: 'absolute', bottom: 10, right: 10, left: 10, zIndex: 500, pointerEvents: 'none', background: 'rgba(20,16,4,.9)', border: '1px solid var(--gold)', borderRadius: 10, padding: '8px 12px', fontSize: 11.5, color: '#f3d98a', textAlign: 'center' }}>
-        کلیدِ ثبت‌شده در «کلیدِ نقشه» از نوعِ سرویس (service.…) است — نقشهٔ تعاملی فقط با کلیدِ «وب» کار می‌کند. در پنلِ نشان یک کلیدِ جدید از نوعِ «وب» (دامنهٔ melkjet.com) بساز و در ادمین → اتصال‌ها → نشان → کلیدِ نقشه بگذار. تا آن موقع نقشه با کاشیِ جایگزین بالا می‌آید.
-      </div>}
     </div>
   )
 }
