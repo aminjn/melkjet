@@ -12,9 +12,11 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ z: string;
   if (!baseUrl) return new Response('no-geoapi', { status: 404 })
   try {
     const ctl = new AbortController()
-    const timer = setTimeout(() => ctl.abort(), 8000)
+    // فاز ۲۳۸: تایم‌اوت ۸→۱۲ث (رندرِ سردِ z15 روی سرورِ سامانه کند است — همان پاسخِ «۱۴ بایتی»)
+    const timer = setTimeout(() => ctl.abort(), 12000)
     // فاز ۲۳۷: no-store — کشِ دادهٔ Next نباید کاشیِ placeholderِ قدیمی را بعد از واقعی‌شدنِ کاشی‌ها سرو کند.
-    const r = await fetch(`${baseUrl}/v1/tiles/${zi}/${xi}/${yi}.png?style=day${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`, {
+    // فاز ۲۳۸: mv=2 کش‌شکنِ nginxِ خودِ سامانه — کلیدِ کشِ placeholderهای قدیمی دیگر هرگز hit نمی‌شود.
+    const r = await fetch(`${baseUrl}/v1/tiles/${zi}/${xi}/${yi}.png?style=day&mv=2${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`, {
       headers: apiKey ? { 'X-API-Key': apiKey, 'Api-Key': apiKey } : undefined,
       signal: ctl.signal,
       cache: 'no-store',

@@ -9,6 +9,7 @@ import BannerSlot from '@/app/components/BannerSlot'
 import CompareButton from '@/app/components/CompareButton'
 import CardImg from '@/app/components/CardImg'
 import LikeHeart from '@/app/components/home/LikeHeart'
+import TileBase from '@/app/components/TileBase'
 import NeighborhoodPicker from '@/app/components/NeighborhoodPicker'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 import { readLoc } from '@/app/components/LocationDetector'
@@ -776,11 +777,8 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
   useEffect(() => { setErr(false) }, [iv?.center.lat, iv?.center.lng, iv?.zoom, size.w, size.h])
 
   const ready = iv && size.w > 0 && size.h > 0
-  const src = ready ? `/api/geo/static-map?lat=${iv!.center.lat.toFixed(5)}&lng=${iv!.center.lng.toFixed(5)}&w=${size.w}&h=${size.h}&zoom=${iv!.zoom}` : ''
-  // فاز ۱۷۹ («زوم می‌کنم آگهی‌ها می‌رن توی کوه و دشت»): تا تصویرِ نمای جدید «لود نشده»، پین‌ها با نمای
-  // تصویرِ فعلی می‌مانند — تصویر و پین همیشه اتمیک با هم عوض می‌شوند؛ هیچ لحظه‌ای ناهم‌خوان نیستند.
-  const [shown, setShown] = useState<{ view: MapView; src: string } | null>(null)
-  const loading179 = !!src && shown?.src !== src
+  // فاز ۲۳۸ — زمینه دیگر تصویرِ staticmap نیست، کاشی‌به‌کاشی از پروکسیِ خودِ سایت است (TileBase):
+  // کاشی و پین هر دو از «همان iv» محاسبه می‌شوند → به‌طورِ ساختاری اتمیک‌اند (نگهبانیِ فاز ۱۷۹ لازم نیست).
 
   // فاز ۲۰۴ — دادهٔ نقشه از سرور: خوشه‌ها/پین‌های «همین قاب با همین زوم و فیلترها» (روی کلِ استخر).
   const [data, setData] = useState<MapData | null>(null)
@@ -813,9 +811,9 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
     return () => clearTimeout(t)
   }, [iv?.center.lat, iv?.center.lng, iv?.zoom, size.w, size.h, query])
 
-  // تصویرکردنِ دادهٔ سرور روی قابِ نمایش (پین‌ها همیشه با نمای تصویرِ روی صفحه — اتمیک، فاز ۱۷۹)
+  // تصویرکردنِ دادهٔ سرور روی قابِ نمایش (کاشی و پین هر دو از همان iv — اتمیک)
   const clusters = useMemo(() => {
-    const pv = shown?.view || iv
+    const pv = iv
     if (!pv || !ready || err || !data) return [] as { x: number; y: number; count: number; id: string; label: string; lat: number; lng: number }[]
     const pc = project(pv.center.lat, pv.center.lng, pv.zoom)
     const xy = (lat: number, lng: number) => { const pp = project(lat, lng, pv.zoom); return { x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y) } }
@@ -839,7 +837,7 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
       p.y = Math.min(y, size.h - 6)
     }
     return [...out, ...singles]
-  }, [data, iv, shown, size, err, ready])
+  }, [data, iv, size, err, ready])
   const zoomToCluster = (lat: number, lng: number) => { touched.current = true; setIv(v => v ? { center: { lat, lng }, zoom: clampZoom(v.zoom + 2) } : v) }
 
   const pt = (e: React.MouseEvent | React.TouchEvent) => {
@@ -869,16 +867,8 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
     <div ref={ref} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
       style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)', cursor: drag.current ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none' }}>
       <div style={{ position: 'absolute', inset: 0, transform: `translate(${off.x}px,${off.y}px)` }}>
-        {src && !err ? (
-          <>
-            {shown && <img src={shown.src} alt="نقشهٔ منطقه" draggable={false} decoding="async" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />}
-            {shown?.src !== src && iv && (
-              <img key={src} src={src} alt="" draggable={false} decoding="async" onError={() => setErr(true)}
-                onLoad={() => setShown({ view: { center: { ...iv.center }, zoom: iv.zoom }, src })}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none', opacity: shown ? 0 : 1 }} />
-            )}
-            {loading179 && shown && <div style={{ position: 'absolute', top: 10, insetInlineEnd: 10, zIndex: 40, background: 'rgba(10,9,8,.8)', color: '#f0ede6', borderRadius: 999, padding: '4px 12px', fontSize: 11 }}>در حالِ به‌روزرسانیِ نقشه…</div>}
-          </>
+        {ready && !err ? (
+          <TileBase lat={iv!.center.lat} lng={iv!.center.lng} zoom={iv!.zoom} w={size.w} h={size.h} />
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 24, lineHeight: 1.9 }}>
             {err ? 'نقشه در دسترس نیست — «سامانهٔ نقشه» در ادمین → اتصال‌ها را بررسی کن.' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import TileBase from './TileBase'
 
 // نقشهٔ استاتیکِ نشان (سمتِ سرور، مطمئن از داخلِ ایران) + پین‌های روی‌هم‌چیده که خودمان
 // با تصویرِ مرکاتور دقیقاً روی مختصاتِ هر نقطه می‌گذاریم. پین‌ها همیشه دیده می‌شوند و دقیقاً
@@ -27,11 +27,10 @@ function fitZoom(pts: SMPoint[], W: number, H: number, center: { lat: number; ln
 export default function StaticMap({
   points, aspect = 1.7, link = true, onSelect,
 }: { points: SMPoint[]; aspect?: number; link?: boolean; onSelect?: (id: string) => void }) {
-  const [err, setErr] = useState(false)
   const valid = (points || []).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && Math.abs(p.lat) > 0.1).slice(0, 60)
   const W = 1000, H = Math.round(W / aspect)
 
-  if (!valid.length || err) {
+  if (!valid.length) {
     return (
       <div style={{ width: '100%', aspectRatio: `${W} / ${H}`, borderRadius: 14, border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 12.5, textAlign: 'center', padding: 16 }}>
         {!valid.length ? 'موقعیتِ مکانی ثبت نشده است.' : 'نقشه در دسترس نیست — «سامانهٔ نقشه» در ادمین → اتصال‌ها را بررسی کن.'}
@@ -42,7 +41,6 @@ export default function StaticMap({
   const lats = valid.map(p => p.lat), lngs = valid.map(p => p.lng)
   const center = { lat: (Math.min(...lats) + Math.max(...lats)) / 2, lng: (Math.min(...lngs) + Math.max(...lngs)) / 2 }
   const zoom = fitZoom(valid, W, H, center)
-  const src = `/api/geo/static-map?center=${center.lat},${center.lng}&zoom=${zoom}&w=${W}&h=${H}`
   const c0 = project(center.lat, center.lng, zoom)
 
   const pins = valid.map((p, i) => {
@@ -55,7 +53,8 @@ export default function StaticMap({
 
   return (
     <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)', width: '100%', aspectRatio: `${W} / ${H}`, background: 'var(--bg2)' }}>
-      <img src={src} alt="نقشه" onError={() => setErr(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      {/* فاز ۲۳۸: زمینه کاشی‌به‌کاشی از پروکسیِ خودِ سایت — وابستگی به staticmapِ سامانه حذف شد */}
+      <TileBase lat={center.lat} lng={center.lng} zoom={zoom} w={W} h={H} />
       {pins.map((p) => {
         const pin = <div style={{ fontSize: valid.length > 1 ? 22 : 30, lineHeight: 1, filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.6))', cursor: onSelect || link ? 'pointer' : 'default' }}>📍</div>
         const style: React.CSSProperties = { position: 'absolute', left: `${p.left}%`, top: `${p.top}%`, transform: 'translate(-50%,-100%)', zIndex: 2 }
