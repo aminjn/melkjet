@@ -34,7 +34,7 @@ export default function StaticMap({
   if (!valid.length || err) {
     return (
       <div style={{ width: '100%', aspectRatio: `${W} / ${H}`, borderRadius: 14, border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 12.5, textAlign: 'center', padding: 16 }}>
-        {!valid.length ? 'موقعیتِ مکانی ثبت نشده است.' : 'نقشه به «کلید نقشهٔ نشان» نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان.'}
+        {!valid.length ? 'موقعیتِ مکانی ثبت نشده است.' : 'نقشه در دسترس نیست — «سامانهٔ نقشه» در ادمین → اتصال‌ها را بررسی کن.'}
       </div>
     )
   }
@@ -62,9 +62,6 @@ export default function StaticMap({
         if (onSelect && p.id) return <div key={p.i} style={style} onClick={() => onSelect(p.id!)} title="مشاهدهٔ پروژه">{pin}</div>
         return <div key={p.i} style={{ ...style, pointerEvents: 'none' }}>{pin}</div>
       })}
-      {link && valid.length === 1 && (
-        <a href={`https://neshan.org/maps/@${valid[0].lat},${valid[0].lng},16z`} target="_blank" rel="noreferrer" style={{ position: 'absolute', inset: 0, zIndex: 1 }} aria-label="باز کردن در نشان" />
-      )}
     </div>
   )
 }

@@ -118,6 +118,7 @@ export function geoTileTemplate(): string | null {
   return `${baseUrl}/v1/tiles/{z}/{x}/{y}.png?style=day${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`
 }
 
+
 /** URLِ نقشهٔ ثابت (v1/staticmap) — سمتِ سرور صدا زده و پروکسی می‌شود تا کلید نشت نکند. */
 export function geoStaticMapUrl(q: { center: string; zoom: number; w: number; h: number; markers: [number, number][] }): string | null {
   const { baseUrl, apiKey } = geoApiCfg()

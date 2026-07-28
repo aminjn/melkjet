@@ -881,7 +881,7 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
           </>
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 24, lineHeight: 1.9 }}>
-            {err ? 'نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}
+            {err ? 'نقشه در دسترس نیست — «سامانهٔ نقشه» در ادمین → اتصال‌ها را بررسی کن.' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}
           </div>
         )}
         {/* حباب‌های شمارش (خوشه) و پین‌های قیمت */}
