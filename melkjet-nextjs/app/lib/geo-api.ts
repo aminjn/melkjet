@@ -8,7 +8,12 @@ import { getAdminData } from './admin-store'
 
 export function geoApiCfg(): { baseUrl: string; apiKey: string } {
   const g = (getAdminData() as { geoApi?: { baseUrl?: string; apiKey?: string } }).geoApi || {}
-  return { baseUrl: String(g.baseUrl || '').trim().replace(/\/+$/, ''), apiKey: String(g.apiKey || '').trim() }
+  // مقاوم در برابرِ هر شکلی از ورودیِ ذخیره‌شده: بدونِ https → اضافه؛ «/v1» یا «/» انتهایی → حذف
+  // (مسیرها خودشان /v1/… دارند؛ آدرسِ ذخیره‌شدهٔ «nexamap.ir/v1» درخواست را به /v1/v1 می‌برد).
+  let baseUrl = String(g.baseUrl || '').trim()
+  if (baseUrl && !/^https?:\/\//i.test(baseUrl)) baseUrl = 'https://' + baseUrl
+  baseUrl = baseUrl.replace(/\/+$/, '').replace(/\/v1$/i, '')
+  return { baseUrl, apiKey: String(g.apiKey || '').trim() }
 }
 export function geoApiEnabled(): boolean { return !!geoApiCfg().baseUrl }
 
