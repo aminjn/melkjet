@@ -10,9 +10,11 @@ import { useEffect, useRef, useState } from 'react'
 export interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string; icon?: string; color?: string }
 
 // ⚠️ قانونِ کامپوننتِ مشترک: رفتارِ پیش‌فرض قفل است؛ قابلیتِ جدید فقط با propِ جدید (opt-in).
+// فاز ۲۳۵: Leaflet «از خودِ سایت» لود می‌شود (public/vendor/leaflet) — CDNهای خارجی از ایران
+// اغلب فیلتر/کندند و نقشه بالا نمی‌آمد؛ CDN فقط پشتیبانِ آخر است.
 const SDK_SOURCES = [
+  { css: '/vendor/leaflet/leaflet.css', js: '/vendor/leaflet/leaflet.js' },
   { css: 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css', js: 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js' },
-  { css: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', js: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js' },
 ]
 const TEHRAN: [number, number] = [35.7559, 51.4105]
 

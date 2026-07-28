@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { geoStaticMapUrl, geoApiEnabled } from '@/app/lib/geo-api'
+import { geoStaticMapUrl, geoApiEnabled, geoApiCfg } from '@/app/lib/geo-api'
 
 // تصویرِ نقشهٔ استاتیک — از سامانهٔ نقشهٔ اختصاصی (فاز ۲۳۴). کلید سمتِ سرور می‌ماند.
 //   ?lat=&lng=                 → یک نقطه با مارکر
@@ -39,7 +39,9 @@ export async function GET(req: NextRequest) {
   try {
     const ctl = new AbortController()
     const timer = setTimeout(() => ctl.abort(), 10000)
-    const r = await fetch(url, { signal: ctl.signal })
+    // فاز ۲۳۵: کلید در هدر هم می‌رود — پنلِ سامانه احراز با X-API-Key را خواسته.
+    const { apiKey } = geoApiCfg()
+    const r = await fetch(url, { signal: ctl.signal, headers: apiKey ? { 'X-API-Key': apiKey, 'Api-Key': apiKey } : undefined })
     clearTimeout(timer)
     if (!r.ok) return new Response('upstream ' + r.status, { status: 502 })
     const buf = Buffer.from(await r.arrayBuffer())

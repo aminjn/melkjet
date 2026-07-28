@@ -5,6 +5,8 @@ import { geoTileTemplate } from '@/app/lib/geo-api'
 // خروجی: الگوی URLِ کاشی برای Leaflet. کلیدِ کاشی مثلِ «کلیدِ وبِ» سابق عمومی است
 // (محدودسازی سمتِ خودِ سامانه انجام می‌شود).
 export async function GET() {
-  const tiles = geoTileTemplate()
-  return NextResponse.json({ tiles: tiles || '' }, { headers: { 'Cache-Control': 'public, max-age=60' } })
+  // فاز ۲۳۵: کاشی از پروکسیِ خودِ سایت — مرورگر برای <img> نمی‌تواند هدرِ X-API-Key بفرستد؛
+  // پروکسی کلید را سمتِ سرور نگه می‌دارد و کشِ عمومی دارد.
+  const configured = !!geoTileTemplate()
+  return NextResponse.json({ tiles: configured ? '/api/geo/tile/{z}/{x}/{y}' : '' }, { headers: { 'Cache-Control': 'public, max-age=60' } })
 }
