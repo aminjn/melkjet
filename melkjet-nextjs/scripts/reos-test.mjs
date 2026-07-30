@@ -2274,6 +2274,20 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('مختصاتِ صفر/نامعتبر هرگز ثبت نمی‌شود', (await getItemById(it201.id)).meta['__lat'] === '35.7')
       await deleteItem(it201.id)
     }
+    // فاز ۲۴۲ — پلِ پروفایلِ سازنده: حسابِ خودکارِ پرشین‌سازه → صفحهٔ غنیِ /builders (نه کارتِ خالی)
+    {
+      const { writeFileSync } = await import('fs')
+      const { join } = await import('path')
+      writeFileSync(join(process.cwd(), '.persiansaze-profiles.json'), JSON.stringify({
+        c242: { id: 'c242', name: 'سازندهٔ تست ۲۴۲', phones: ['09120002420'], projectCount: 3, projects: [] },
+      }))
+      const { ensureProviderSlug } = await import('../app/lib/provider-slug-store.ts')
+      const pslug = await ensureProviderSlug('09120002420', 'سازندهٔ تست ۲۴۲')
+      const { richBuilderHrefForProviderSlug } = await import('../app/lib/builder-bridge.ts')
+      const href242 = await richBuilderHrefForProviderSlug(pslug)
+      ok('حسابِ سازنده با پروفایلِ واقعیِ بانک → مسیرِ صفحهٔ غنی', typeof href242 === 'string' && href242.startsWith('/builders/'))
+      ok('سازندهٔ بدونِ پروفایلِ بانک (ثبت‌نامِ خودش) → صفحهٔ حسابِ خودش می‌ماند', (await richBuilderHrefForProviderSlug('slug-ghost-242')) === null)
+    }
     // فاز ۲۴۱ — «رفعِ تعلیقِ ماندگار می‌زنم، دوباره معلق می‌شود» (بازتولیدِ دقیقِ باگ + فیکسِ اتمیک)
     {
       const { createAccount, getAccount, adminSetSuspension, gateSuspendIfEligible, setProfileWarn } = await import('../app/lib/account-store.ts')
