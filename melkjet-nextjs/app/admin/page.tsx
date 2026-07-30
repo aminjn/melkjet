@@ -4966,6 +4966,16 @@ function UsersView() {
     await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones, patch }) })
     load()
   }
+  // فاز ۲۴۱ — تعلیق/رفعِ تعلیقِ گروهی: سرور هر شماره را در یک نوشتنِ اتمیک (suspend + معافیتِ ماندگار) ثبت می‌کند.
+  const bulkSuspend = async (suspend: boolean) => {
+    if (!sel.size) return
+    if (!confirm(suspend ? `${sel.size} کاربرِ انتخاب‌شده معلق شوند؟` : `رفعِ تعلیقِ ماندگار برای ${sel.size} کاربرِ انتخاب‌شده؟ (دیگر هرگز تعلیقِ خودکار نمی‌شوند)`)) return
+    const phones = [...sel]
+    setUsers(us => us.map(u => sel.has(u.phone) ? { ...u, suspended: suspend, gateExempt: !suspend } : u))
+    const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones, suspend }) })
+    if (!r.ok) { const d = await r.json().catch(() => ({} as any)); alert(d.error || 'ذخیره نشد — خطای سرور') }
+    load()
+  }
   const bulkDel = async () => {
     if (!sel.size || !confirm(`${sel.size} کاربر حذف شود؟`)) return
     const phones = [...sel]
@@ -5008,6 +5018,9 @@ function UsersView() {
             <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{sel.size.toLocaleString('fa-IR')} انتخاب‌شده:</span>
             <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ role: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ نقش…</option><option value="__none">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
             <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ plan: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ پلن…</option><option value="__none">— بدون پلن</option>{planOptions(plans)}</select>
+            {/* فاز ۲۴۱ — تعلیق/رفعِ تعلیقِ گروهی (رفعِ تعلیق = معافیتِ ماندگار از تعلیقِ خودکار، اتمیک) */}
+            <button onClick={() => bulkSuspend(false)} style={{ background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.45)', color: '#5fd98a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700 }}>✓ رفعِ تعلیق (ماندگار)</button>
+            <button onClick={() => bulkSuspend(true)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>⛔ تعلیق</button>
             <button onClick={bulkDel} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>حذف</button>
             {/* فاز ۱۴۲ (فیدبک: «یک نفر دو شماره دارد — امکانِ مرج لازم است»): دقیقاً ۲ انتخاب → ادغام */}
             {sel.size === 2 && !meStaff && (() => {

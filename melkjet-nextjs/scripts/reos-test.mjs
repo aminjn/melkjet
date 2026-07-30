@@ -2274,6 +2274,34 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('مختصاتِ صفر/نامعتبر هرگز ثبت نمی‌شود', (await getItemById(it201.id)).meta['__lat'] === '35.7')
       await deleteItem(it201.id)
     }
+    // فاز ۲۴۱ — «رفعِ تعلیقِ ماندگار می‌زنم، دوباره معلق می‌شود» (بازتولیدِ دقیقِ باگ + فیکسِ اتمیک)
+    {
+      const { createAccount, getAccount, adminSetSuspension, gateSuspendIfEligible, setProfileWarn } = await import('../app/lib/account-store.ts')
+      const ph241 = '09120002410'
+      createAccount(ph241, { name: 'تستِ تعلیق ۲۴۱', role: 'advisor' })
+      // سناریوی باگ: هشدارِ قدیمی (مهلت گذشته) + ادمین رفعِ تعلیقِ ماندگار می‌زند + کرانِ گیت می‌رسد
+      setProfileWarn(ph241, Date.now() - 10 * 864e5)
+      adminSetSuspension(ph241, true, 'تست')
+      adminSetSuspension(ph241, false)
+      const a241 = getAccount(ph241)
+      ok('رفعِ تعلیق اتمیک است: suspended پاک + gateExempt ست + profileWarn پاک — همه در یک نوشتن', !a241.suspended && a241.gateExempt === true && a241.profileWarnAt === undefined)
+      setProfileWarn(ph241, Date.now() - 10 * 864e5)   // حتی با هشدارِ منقضی…
+      const did241 = gateSuspendIfEligible(ph241, 3 * 864e5)
+      ok('کرانِ گیت زیرِ قفل دوباره چک می‌کند: کاربرِ معافِ ماندگار «هرگز» تعلیقِ خودکار نمی‌شود', did241 === false && !getAccount(ph241).suspended)
+      // ضدتست: کاربرِ غیرمعاف با مهلتِ گذشته باید تعلیق شود
+      const ph241b = '09120002411'
+      createAccount(ph241b, { name: 'غیرمعاف ۲۴۱', role: 'advisor' })
+      setProfileWarn(ph241b, Date.now() - 10 * 864e5)
+      ok('غیرمعاف با مهلتِ گذشته تعلیق می‌شود (موتور سالم است)', gateSuspendIfEligible(ph241b, 3 * 864e5) === true && getAccount(ph241b).suspended === true)
+      // قفلِ یتیم (کرشِ وسطِ نوشتن) سرویس را قفل نمی‌کند — بعدِ ~۵۰۰ms شکسته می‌شود
+      const { writeFileSync, existsSync } = await import('fs')
+      const { join } = await import('path')
+      const lockPath241 = join(process.cwd(), '.account-data.json.lock')
+      writeFileSync(lockPath241, 'x')
+      const t241 = Date.now()
+      adminSetSuspension(ph241b, false)
+      ok('قفلِ یتیم خودکار شکسته می‌شود و نوشتن انجام می‌شود', !getAccount(ph241b).suspended && Date.now() - t241 < 2000 && !existsSync(lockPath241))
+    }
     // فاز ۲۳۳ — شکستِ گذرای شبکه «ردشده» نیست (فیدبک+اسکرین‌شات: «کاربرِ جدید، جدید ۰ و ۲۰ ردشده؟!»)
     {
       const { settleBatch } = await import('../app/lib/advisor-divar-import.ts')

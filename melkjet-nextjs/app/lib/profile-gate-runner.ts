@@ -1,4 +1,4 @@
-import { listAccounts, setSuspended, setProfileWarn, SUPER_ADMIN_PHONE } from './account-store'
+import { listAccounts, setSuspended, setProfileWarn, gateSuspendIfEligible, SUPER_ADMIN_PHONE } from './account-store'
 import { getProfile, completeness } from './profile-store'
 import { getAdminData } from './admin-store'
 import { dashForRoleId } from './role-store'
@@ -44,9 +44,12 @@ export async function processProfileGate(now = Date.now()): Promise<{ checked: n
       await sendGateSms(a.phone, `کاربرِ گرامیِ ملک‌جت، پروفایلِ کسب‌وکارِ شما ناقص است (${Math.round(pct)}٪). لطفاً ظرفِ ${cfg.graceDays ?? 3} روز آن را کامل کنید، در غیرِ این صورت پنلِ شما معلق می‌شود.`, `ناقص ${Math.round(pct)} درصد`, cfg)
       warned++
     } else if (!a.suspended && now - a.profileWarnAt > graceMs) {
-      setSuspended(a.phone, true)
-      await sendGateSms(a.phone, 'پنلِ شما به‌دلیلِ تکمیل‌نشدنِ پروفایل معلق شد. برای رفعِ تعلیق، وارد پنل شوید و پروفایلِ کسب‌وکار را کامل کنید.', 'معلق به‌دلیلِ نقصِ پروفایل', cfg)
-      suspended++
+      // فاز ۲۴۱: شرط‌ها زیرِ قفلِ نوشتن «دوباره» چک می‌شوند — اگر ادمین همین لحظه رفعِ تعلیقِ ماندگار
+      // زده باشد (gateExempt)، تعلیق انجام نمی‌شود؛ اسنپ‌شاتِ کهنهٔ حلقه دیگر حرفِ آخر را نمی‌زند.
+      if (gateSuspendIfEligible(a.phone, graceMs, now)) {
+        await sendGateSms(a.phone, 'پنلِ شما به‌دلیلِ تکمیل‌نشدنِ پروفایل معلق شد. برای رفعِ تعلیق، وارد پنل شوید و پروفایلِ کسب‌وکار را کامل کنید.', 'معلق به‌دلیلِ نقصِ پروفایل', cfg)
+        suspended++
+      }
     }
   }
   return { checked, warned, suspended }

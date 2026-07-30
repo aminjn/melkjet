@@ -115,13 +115,21 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, granted: phones.length, expiresAt: Date.now() + days * 864e5 })
   }
   // عملیات دسته‌جمعی
+  // فاز ۲۴۱ — تعلیق/رفعِ تعلیقِ «گروهی» (خواستهٔ کاربر: هر کاری که می‌شود گروهی باشد):
+  // هر شماره یک نوشتنِ اتمیک (suspend+معافیتِ ماندگار با هم).
+  if (Array.isArray(b.phones) && b.suspend !== undefined) {
+    const { adminSetSuspension } = await import('@/app/lib/account-store')
+    let done = 0
+    for (const ph of b.phones) { if (isProtectedAccount(String(ph)) && s.role !== 'super_admin') continue; if (adminSetSuspension(String(ph), !!b.suspend)) done++ }
+    logAudit(s.phone, b.suspend ? 'تعلیقِ گروهیِ کاربران' : 'رفعِ تعلیقِ گروهیِ کاربران (معافِ ماندگار)', `${done} از ${b.phones.length} حساب`)
+    return NextResponse.json({ ok: true, done })
+  }
   if (Array.isArray(b.phones)) { bulkUpdate(b.phones, b.patch || {}); logAudit(s.phone, 'ویرایشِ گروهیِ کاربران', `${b.phones.length} حساب`); return NextResponse.json({ ok: true }) }
   if (!b.phone) return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })
   if (b.suspend !== undefined) {
-    setSuspended(String(b.phone), !!b.suspend)
-    // فاز ۱۲۷ — رفعِ تعلیقِ دستی باید بماند: معافیت از موتورِ تعلیقِ خودکار (و تعلیقِ دستی معافیت را برمی‌دارد)
-    const { setGateExempt } = await import('@/app/lib/account-store')
-    setGateExempt(String(b.phone), !b.suspend)
+    // فاز ۲۴۱ — یک نوشتنِ اتمیک به‌جای دو نوشتنِ جدا (پنجرهٔ مسابقه با کرانِ گیت بسته شد)
+    const { adminSetSuspension } = await import('@/app/lib/account-store')
+    adminSetSuspension(String(b.phone), !!b.suspend)
     logAudit(s.phone, b.suspend ? 'تعلیقِ کاربر' : 'رفعِ تعلیقِ کاربر (معاف از تعلیقِ خودکار)', String(b.phone))
     return NextResponse.json({ ok: true })
   }
