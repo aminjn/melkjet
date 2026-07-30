@@ -50,7 +50,8 @@ export async function GET(req: NextRequest) {
   const type = sp.get('type') as SourceType | null
   const category = sp.get('category') || undefined
   const valid = type && ['listing', 'directory', 'product', 'article', 'price'].includes(type)
-  let items = await listItems(valid ? type : undefined, { category })
+  // فاز ۲۳۹: پنلِ ممیزی همیشه تازه می‌خواند — تأییدِ روی اینستنسِ دیگر نباید «برگردد» به لیست.
+  let items = await listItems(valid ? type : undefined, { category, fresh: true })
   // شمارشِ وضعیت‌ها (قبل از فیلتر) — برای چیپ‌های سوپرادمین
   const byStatus: Record<string, number> = { pending: 0, approved: 0, rejected: 0, duplicate: 0 }
   for (const i of items) byStatus[i.status] = (byStatus[i.status] || 0) + 1

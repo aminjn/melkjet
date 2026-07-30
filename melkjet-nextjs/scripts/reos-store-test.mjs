@@ -1904,6 +1904,17 @@ async function main() {
       await addItemManual({ type: 'listing', title: 'تستِ نسلِ کش ۲۳۲', price: '۱,۰۰۰,۰۰۰,۰۰۰ تومان', location: 'تهران، تست' })
       const s3 = await listItemsStable('listing', { publicOnly: true })
       ok('بعدِ نوشتن: نسلِ تازه (مرجعِ نو) و آیتمِ جدید فوراً دیده می‌شود', s3 !== s1 && s3.some(x => x.title === 'تستِ نسلِ کش ۲۳۲'))
+
+      // فاز ۲۳۹ — شبیه‌سازیِ «نوشتهٔ اینستنسِ دیگر» (فیدبک: «تأیید می‌کنم دوباره برمی‌گردد به لیست»):
+      // درجِ مستقیم در جدول + bump کردنِ rev (همان کاری که mutateِ اینستنسِ دیگر می‌کند) — خواندنِ
+      // عادی زیرِ کفِ فاز ۲۳۲ عمداً stale می‌ماند ولی خواندنِ ادمین (fresh) باید فوری ببیند.
+      const { listItems } = await import('../app/lib/scraper-store.ts')
+      const ext = { id: 'ext239', sourceId: 'manual', sourceName: 'x', type: 'listing', title: 'نوشتهٔ اینستنسِ دیگر ۲۳۹', scrapedAt: Date.now(), status: 'approved' }
+      await pool.query(`INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,'listing','approved',$3) ON CONFLICT(id) DO NOTHING`, [ext.id, ext.scrapedAt, JSON.stringify(ext)])
+      await pool.query(`UPDATE kv SET data = jsonb_set(data, '{__rev}', to_jsonb(COALESCE((data->>'__rev')::int,0)+1)) WHERE key='scraper_meta'`)
+      const stale239 = await listItems('listing')
+      const fresh239 = await listItems('listing', { fresh: true })
+      ok('فاز ۲۳۹: خواندنِ عادی زیرِ کف stale است ولی خواندنِ ادمین (fresh) نوشتهٔ اینستنسِ دیگر را فوری می‌بیند', !stale239.some(x => x.id === 'ext239') && fresh239.some(x => x.id === 'ext239'))
     }
   }
 

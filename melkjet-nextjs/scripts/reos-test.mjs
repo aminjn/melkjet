@@ -862,7 +862,12 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
   const rep3 = loanTermsFor(700, 1_000_000_000, bcfg16, { stars: 3, cutPctPerStar: 3 })
   ok('⭐۳ → نرخ ۶٪ کمتر (۱۸→۱۶٫۹)', rep3.ratePctYear < base16.ratePctYear && rep3.repCutPct === 6)
   const rep5 = loanTermsFor(700, 1_000_000_000, bcfg16, { stars: 5, cutPctPerStar: 30 })
-  ok('کفِ نرخ: نصفِ نرخِ باند', rep5.ratePctYear === Math.round(20 * 0.9 * 0.5 * 10) / 10)
+  // فاز ۲۳۹ (فیکسِ تستِ تقویم‌وابسته): نرخِ نهایی «مصوبهٔ هفتگیِ دولت» (فاز ۷۰) را هم دارد — هفته‌ای که
+  // دلتای مصوبه غیرصفر شود، مقدارِ خام دیگر برابر نیست. انتظار باید مصوبه‌آگاه باشد، نه حذفِ مکانیک.
+  const { govDecreeOf } = await import('../app/lib/empire-world.ts')
+  const { dayNumberOf } = await import('../app/lib/empire-store.ts')
+  const delta16 = govDecreeOf(Math.floor(dayNumberOf(Date.now()) / 7)).loanDelta
+  ok('کفِ نرخ: نصفِ نرخِ باند (+ مصوبهٔ هفته)', rep5.ratePctYear === Math.round(Math.max(0.5, 20 * 0.9 * 0.5 + delta16) * 10) / 10)
   ok('⭐۱ اثری ندارد', loanTermsFor(700, 1_000_000_000, bcfg16, { stars: 1, cutPctPerStar: 3 }).ratePctYear === base16.ratePctYear)
 }
 

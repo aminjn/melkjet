@@ -181,13 +181,15 @@ async function ensureMigrated(): Promise<void> {
   if (done) pgMigrated = true
 }
 
-/** خواندنِ سندِ کاملِ اسکرپر (دو-حالته: PG یا فایل). */
-async function load(): Promise<DB> {
+/** خواندنِ سندِ کاملِ اسکرپر (دو-حالته: PG یا فایل).
+ * فاز ۲۳۹ — fresh: مسیرهای ادمین/ممیزی از کفِ بازخوانیِ فاز ۲۳۲ معاف‌اند (چکِ revِ همیشگی)؛
+ * وگرنه تأییدِ ادمین روی یک اینستنس تا ~۲۰ث در اینستنسِ دیگر دیده نمی‌شد و آگهی «برمی‌گشت» به لیست. */
+async function load(fresh = false): Promise<DB> {
   if (!pgEnabled()) return fileLoad()
   const now = Date.now()
   if (pgCache) {
-    if (now - pgCache.checkedAt < REV_CHECK_MS) return pgCache.data
-    if (now - pgCache.loadedAt < RELOAD_FLOOR_MS) { pgCache.checkedAt = now; return pgCache.data }
+    if (!fresh && now - pgCache.checkedAt < REV_CHECK_MS) return pgCache.data
+    if (!fresh && now - pgCache.loadedAt < RELOAD_FLOOR_MS) { pgCache.checkedAt = now; return pgCache.data }
     // فاز ۱۵۶ (B1): اعتبار با revِ سراسری — هر نوشتنی در هر instance کشِ همه را نامعتبر می‌کند
     // (حالا با آهنگِ محدودِ فاز ۲۳۲، نه در هر فراخوان).
     try {
@@ -315,8 +317,8 @@ function buildList(db: DB, type?: SourceType, opts?: { category?: string; public
   return items.sort((a, b) => b.scrapedAt - a.scrapedAt)
 }
 
-export async function listItems(type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Promise<Item[]> {
-  const db = await load()
+export async function listItems(type?: SourceType, opts?: { category?: string; publicOnly?: boolean; fresh?: boolean }): Promise<Item[]> {
+  const db = await load(opts?.fresh)
   // کپی (نه ارجاع به آرایهٔ کش‌شده) تا sortِ درجا کشِ مشترک را جابه‌جا نکند.
   return buildList(db, type, opts)
 }
