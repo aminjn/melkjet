@@ -1898,6 +1898,14 @@ async function main() {
     // نوشتنِ همین instance فوراً نسلِ تازه می‌سازد (read-your-writes حفظ است).
     {
       const { listItemsStable, addItemManual } = await import('../app/lib/scraper-store.ts')
+      // پاک‌سازیِ ردیفِ شبیه‌سازِ رانِ قبلی (ON CONFLICT DO NOTHING آن را نگه می‌دارد) + همگام‌سازیِ rev
+      await pool.query(`DELETE FROM listings WHERE id='ext239'`)
+      await pool.query(`UPDATE kv SET data = jsonb_set(data, '{__rev}', to_jsonb(COALESCE((data->>'__rev')::int,0)+1)) WHERE key='scraper_meta'`)
+      try {
+        const { redisEnabled: re240, rSet: rs240 } = await import('../app/lib/redis.ts')
+        if (re240()) { const rv = await pool.query(`SELECT (data->>'__rev')::int AS r FROM kv WHERE key='scraper_meta'`); await rs240('scraper_rev', String(rv.rows[0]?.r || 0)) }
+      } catch {}
+      { const { listItems: li0 } = await import('../app/lib/scraper-store.ts'); await li0('listing', { fresh: true }) }   // بازخوانیِ اجباری بعدِ پاک‌سازی
       const s1 = await listItemsStable('listing', { publicOnly: true })
       const s2 = await listItemsStable('listing', { publicOnly: true })
       ok('دو خواندنِ پیاپی همان مرجع را می‌دهد (کشِ derive واقعاً hit می‌شود)', s1 === s2)
@@ -1909,12 +1917,51 @@ async function main() {
       // درجِ مستقیم در جدول + bump کردنِ rev (همان کاری که mutateِ اینستنسِ دیگر می‌کند) — خواندنِ
       // عادی زیرِ کفِ فاز ۲۳۲ عمداً stale می‌ماند ولی خواندنِ ادمین (fresh) باید فوری ببیند.
       const { listItems } = await import('../app/lib/scraper-store.ts')
+      const tWarm239 = Date.now()   // زیرِ بار، اگر از پنجرهٔ revچک رد شویم، staleبودن دیگر انتظارِ درستی نیست
       const ext = { id: 'ext239', sourceId: 'manual', sourceName: 'x', type: 'listing', title: 'نوشتهٔ اینستنسِ دیگر ۲۳۹', scrapedAt: Date.now(), status: 'approved' }
       await pool.query(`INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,'listing','approved',$3) ON CONFLICT(id) DO NOTHING`, [ext.id, ext.scrapedAt, JSON.stringify(ext)])
       await pool.query(`UPDATE kv SET data = jsonb_set(data, '{__rev}', to_jsonb(COALESCE((data->>'__rev')::int,0)+1)) WHERE key='scraper_meta'`)
+      // فاز ۲۴۰: mutateِ «اینستنسِ دیگر» rev را در Redis هم منتشر می‌کند — شبیه‌ساز هم باید بکند.
+      try {
+        const { redisEnabled, rSet } = await import('../app/lib/redis.ts')
+        if (redisEnabled()) {
+          const rv = await pool.query(`SELECT (data->>'__rev')::int AS r FROM kv WHERE key='scraper_meta'`)
+          await rSet('scraper_rev', String(rv.rows[0]?.r || 0))
+        }
+      } catch {}
       const stale239 = await listItems('listing')
+      const inWindow239 = Date.now() - tWarm239 < 4000   // هنوز داخلِ پنجرهٔ REV_CHECK هستیم؟
       const fresh239 = await listItems('listing', { fresh: true })
-      ok('فاز ۲۳۹: خواندنِ عادی زیرِ کف stale است ولی خواندنِ ادمین (fresh) نوشتهٔ اینستنسِ دیگر را فوری می‌بیند', !stale239.some(x => x.id === 'ext239') && fresh239.some(x => x.id === 'ext239'))
+      const staleOk239 = inWindow239 ? !stale239.some(x => x.id === 'ext239') : true
+      ok('فاز ۲۳۹: خواندنِ عادی زیرِ کف stale است ولی خواندنِ ادمین (fresh) نوشتهٔ اینستنسِ دیگر را فوری می‌بیند', staleOk239 && fresh239.some(x => x.id === 'ext239'))
+    }
+
+    // فاز ۲۴۰ — Redis (زیرساختِ میلیونی): کلاینتِ RESPِ بدونِ وابستگی روی Redisِ واقعی.
+    {
+      const { redisEnabled, rPing, rGet, rGetBuf, rSet, rSetEx, rDel } = await import('../app/lib/redis.ts')
+      if (!redisEnabled()) {
+        console.log('  (Redis غیرفعال — REDIS_URL تنظیم نشده؛ بلوکِ ۲۴۰ رد شد)')
+      } else {
+        ok('PING → PONG', (await rPing()) === true)
+        await rSet('t240:utf8', 'سلام ملک‌جت ۲۴۰')
+        ok('رفت‌وبرگشتِ UTF-8 فارسی', (await rGet('t240:utf8')) === 'سلام ملک‌جت ۲۴۰')
+        // باینریِ خالص با \r\n و بایتِ صفر — سختی‌گاهِ پارسرِ RESP (کاشیِ PNG همین است)
+        const bin = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x00, 0x0d, 0x0a]), Buffer.alloc(1000, 7)])
+        await rSet('t240:bin', bin)
+        const back = await rGetBuf('t240:bin')
+        ok('رفت‌وبرگشتِ باینری (PNG با \\r\\n و بایتِ صفر) بدونِ خرابی', !!back && back.length === bin.length && back.equals(bin))
+        await rSetEx('t240:ttl', 1, 'زودگذر')
+        const before = await rGet('t240:ttl')
+        await new Promise(r => setTimeout(r, 1300))
+        ok('TTL واقعاً منقضی می‌شود', before === 'زودگذر' && (await rGet('t240:ttl')) === null)
+        // هم‌زمانی: ترتیبِ پاسخ‌ها با صفِ FIFO سالم می‌ماند
+        await Promise.all(Array.from({ length: 10 }, (_, i) => rSet(`t240:c${i}`, `v${i}`)))
+        const vals = await Promise.all(Array.from({ length: 10 }, (_, i) => rGet(`t240:c${i}`)))
+        ok('۱۰ فرمانِ هم‌زمان: هر پاسخ سرِ جای خودش', vals.every((v, i) => v === `v${i}`))
+        ok('کلیدِ ناموجود → null (نه خطا)', (await rGet('t240:ghost')) === null)
+        await rDel('t240:utf8'); await rDel('t240:bin')
+        ok('DEL کار می‌کند', (await rGet('t240:utf8')) === null)
+      }
     }
   }
 

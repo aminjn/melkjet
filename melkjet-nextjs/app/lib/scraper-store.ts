@@ -192,10 +192,16 @@ async function load(fresh = false): Promise<DB> {
     if (!fresh && now - pgCache.loadedAt < RELOAD_FLOOR_MS) { pgCache.checkedAt = now; return pgCache.data }
     // فاز ۱۵۶ (B1): اعتبار با revِ سراسری — هر نوشتنی در هر instance کشِ همه را نامعتبر می‌کند
     // (حالا با آهنگِ محدودِ فاز ۲۳۲، نه در هر فراخوان).
+    // فاز ۲۴۰: با Redis، چکِ rev یک خواندنِ حافظه‌ایِ ~۰.۲ms است نه کوئریِ PG — مقیاس‌پذیر برای میلیونی.
     try {
-      const m = await kvGet<{ __rev?: number }>(KV_META, {})
+      let rev: number | null = null
+      try {
+        const { redisEnabled, rGet } = await import('./redis')
+        if (redisEnabled()) { const s = await rGet('scraper_rev'); if (s !== null) rev = parseInt(s, 10) || 0 }
+      } catch { /* fallback به kv */ }
+      if (rev === null) { const m = await kvGet<{ __rev?: number }>(KV_META, {}); rev = m.__rev || 0 }
       pgCache.checkedAt = now
-      if ((m.__rev || 0) === pgCache.rev) { pgCache.loadedAt = now; return pgCache.data }
+      if (rev === pgCache.rev) { pgCache.loadedAt = now; return pgCache.data }
     } catch { return pgCache.data }
   }
   try {
@@ -210,6 +216,8 @@ async function load(fresh = false): Promise<DB> {
       owners: m.owners || [],
     }
     pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), data, rev: meta.__rev || 0 }
+    // فاز ۲۴۰ (خودترمیم): بعدِ هر بازخوانیِ کامل، revِ Redis با kv همگام می‌شود (اگر Redis تازه روشن/کهنه بود).
+    try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled()) void rSetMax('scraper_rev', meta.__rev || 0) } catch {}
     return data
   } catch (e) {
     // تاب‌آوری: اگر دیتابیس لحظه‌ای کند/اشباع بود، کشِ کهنه را سِرو کن (نه ۵۰۰/۵۰۴).
@@ -222,6 +230,7 @@ async function load(fresh = false): Promise<DB> {
 async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   if (!pgEnabled()) { const d = fileLoad(); const r = fn(d); fileSave(d); return r }
   await ensureMigrated()
+  let revOut = 0   // فاز ۲۴۰: revِ جدید برای انتشار در Redis (چکِ ارزانِ بین‌اینستنسی)
   const r = await pgTx(async (c) => {
     // سریالایزِ نویسنده‌ها روی ردیفِ کوچکِ متادیتا (KV_META، نه بلابِ بزرگ).
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
@@ -240,6 +249,7 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
     // متادیتای زنده (کوچک) را در KV_META بنویس؛ بلابِ قدیمیِ KV_KEY دست‌نخورده می‌ماند.
     // فاز ۱۵۶ (B1): rev سراسری با هر نوشتن بالا می‌رود تا کشِ خواندنِ همهٔ instanceها نامعتبر شود.
     const rev156 = ((meta as { __rev?: number }).__rev || 0) + 1
+    revOut = rev156
     await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...metaOf(db), __rev: rev156 })])
     // فقط ردیف‌های اضافه‌شده/تغییرکرده را upsert کن
     const afterIds = new Set<string>()
@@ -260,6 +270,8 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
     return result
   })
   pgCache = null
+  // فاز ۲۴۰: انتشارِ revِ جدید در Redis (best-effort) — چکِ اعتبارِ کشِ بقیهٔ اینستنس‌ها حافظه‌ای می‌شود.
+  try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled() && revOut) void rSetMax('scraper_rev', revOut) } catch {}
   return r
 }
 

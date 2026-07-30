@@ -34,11 +34,23 @@ export async function computeNearby(lat: number, lng: number): Promise<NearbyRes
   const ck = `${lat.toFixed(3)},${lng.toFixed(3)}`
   const hit = nearbyCache.get(ck)
   if (hit && Date.now() - hit.at < NEARBY_TTL) return hit.data
+  // فاز ۲۴۰ — کشِ مشترکِ Redis: در ۴+ اینستنس، هر نقطه یک‌بار محاسبه می‌شود نه یک‌بار per اینستنس.
+  const { redisEnabled, rGet, rSetEx } = await import('./redis')
+  if (redisEnabled()) {
+    try {
+      const cached = await rGet(`nearby:v2:${ck}`)
+      if (cached) {
+        const data = JSON.parse(cached) as NearbyResult
+        if (data.nearby?.length) { nearbyCache.set(ck, { at: Date.now(), data }); return data }
+      }
+    } catch { /* miss */ }
+  }
   const data = await computeNearbyUncached(lat, lng)
   // فقط نتیجهٔ واقعی را کش کن (نه خطا/خالی) تا دفعهٔ بعد دوباره تلاش شود.
   if (data.nearby && data.nearby.length) {
     if (nearbyCache.size > 2000) nearbyCache.clear()
     nearbyCache.set(ck, { at: Date.now(), data })
+    if (redisEnabled()) rSetEx(`nearby:v2:${ck}`, NEARBY_TTL / 1000, JSON.stringify(data)).catch(() => {})
   }
   return data
 }
