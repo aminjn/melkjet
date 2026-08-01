@@ -17,7 +17,7 @@ import { readCity } from '@/app/components/CitySelector'
 import { openAuth } from '@/app/components/AuthModal'
 import { PROPERTY_KINDS } from '@/app/lib/taxonomy'
 import { listingHref } from '@/app/lib/listing-url'
-import { hoodPartOf } from '@/app/lib/map-pins'
+import { hoodPartOf, trustedMapCenter } from '@/app/lib/map-pins'
 // فاز ۲۰۴: استخراج/فیلترِ آگهی حالا در کتابخانهٔ مشترکِ listing-search است —
 // همان منطقی که /api/map/clusters روی کلِ استخر اجرا می‌کند (نقشه و کارت‌ها هم‌زبان).
 import { parseQuery, deriveListing, effectiveFiltersOf, matchesListing } from '@/app/lib/listing-search'
@@ -372,14 +372,27 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   // مرکزِ نقشهٔ شهر/محله (geocode، با کش) — برای حالتی که آگهی مختصات ندارد
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null)
   useEffect(() => {
-    const q = [mapArea, selectedCity].filter(Boolean).join(' ').trim()
-    if (!q) { setMapCenter(null); return }
-    const cached = GEO_CACHE.get(q)
-    if (cached) { setMapCenter(cached); return }
+    const hoodQ = [mapArea, selectedCity].filter(Boolean).join(' ').trim()
+    if (!hoodQ) { setMapCenter(null); return }
     let alive = true
-    fetch(`/api/geo/geocode?q=${encodeURIComponent(q)}`).then(r => r.ok ? r.json() : null).then(d => {
-      if (alive && d?.lat) { const c = { lat: d.lat, lng: d.lng }; GEO_CACHE.set(q, c); setMapCenter(c) }
-    }).catch(() => {})
+    const geo = async (q: string): Promise<{ lat: number; lng: number } | null> => {
+      const cached = GEO_CACHE.get(q)
+      if (cached) return cached
+      try {
+        const d = await fetch(`/api/geo/geocode?q=${encodeURIComponent(q)}`).then(r => r.ok ? r.json() : null)
+        if (d?.lat) { const c = { lat: d.lat, lng: d.lng }; GEO_CACHE.set(q, c); return c }
+      } catch { /* بدونِ مرکز */ }
+      return null
+    }
+    // فاز ۲۴۷: geocodeِ «محله + شهر» گاهی به شهرِ دیگری می‌پرد («نیلوفر تهران» → کرج!) —
+    // مرکزِ خودِ شهر سنجه است؛ نقطهٔ دورتر از ~۳۰کیلومتر بی‌اعتبار و مرکزِ شهر ملاک می‌شود.
+    ;(async () => {
+      const hood = await geo(hoodQ)
+      const cityQ = (selectedCity || '').trim()
+      const cityC = cityQ && cityQ !== hoodQ ? await geo(cityQ) : null
+      const pick = trustedMapCenter(hood, cityC)
+      if (alive && pick) setMapCenter(pick)
+    })()
     return () => { alive = false }
   }, [mapArea, selectedCity])
 
@@ -772,8 +785,12 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
   // با تغییرِ جستجو/شهر، نمای داخلی را به نمای جدید برگردان
   // فاز ۱۷۹: بعد از اولین تعاملِ کاربر، بازنشانیِ خودکارِ نما (از تغییرِ فیلترها) دیگر نقشه را نمی‌پراند
   const touched = useRef(false)
-  useEffect(() => { if (view && !touched.current) setIv(view) }, [view?.center.lat, view?.center.lng, view?.zoom])
-  useEffect(() => { touched.current = false }, [cityKey])   // فقط «شهرِ واقعاً انتخابی» نما را آزاد می‌کند — نه مشتقِ فیلترها
+  // فاز ۲۴۷ («رو تهران هستم نقشه دری‌وری نشون میده»): نمای «سرورِ خوشه‌ها» (گسترهٔ آگهی‌های واقعی)
+  // همیشه بر geocodeِ کلاینت مقدم است — geocode دیرتر می‌رسید و نمای درست را با نقطهٔ غلطِ
+  // «نیلوفر تهران»→کرج بازنویسی می‌کرد. geocode فقط fallbackِ «سرور هیچ نقطه‌ای نداشت» است.
+  const serverView = useRef(false)
+  useEffect(() => { if (view && !touched.current && !serverView.current) setIv(view) }, [view?.center.lat, view?.center.lng, view?.zoom])
+  useEffect(() => { touched.current = false; serverView.current = false }, [cityKey])   // فقط «شهرِ واقعاً انتخابی» نما را آزاد می‌کند — نه مشتقِ فیلترها
   useEffect(() => { setErr(false) }, [iv?.center.lat, iv?.center.lng, iv?.zoom, size.w, size.h])
 
   const ready = iv && size.w > 0 && size.h > 0
@@ -787,7 +804,7 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
     let alive = true
     fetch(`/api/map/clusters?${query}`).then(r => r.ok ? r.json() : null).then(d => {
       if (!alive || !d?.ok) return
-      if (!touched.current && d.view) setIv(d.view)
+      if (d.view) { serverView.current = true; if (!touched.current) setIv(d.view) }
       setData({ clusters: d.clusters || [], singles: d.singles || [], total: d.total || 0 })
     }).catch(() => {})
     return () => { alive = false }

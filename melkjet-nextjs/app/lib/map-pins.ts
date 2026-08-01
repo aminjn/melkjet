@@ -24,6 +24,23 @@ export function pinBoundsView(pins: PinPoint[]): PinView | null {
   return { center, zoom }
 }
 
+/** فاصلهٔ دو نقطه به کیلومتر (haversine) — برای سنجشِ اعتبارِ geocode. */
+export function distKm(a: PinPoint, b: PinPoint): number {
+  const R = 6371, toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+/** فاز ۲۴۷ (فیدبک+اسکرین‌شات: «رو تهران هستم نقشه داره دری‌وری نشون میده» — قاب وسطِ کرج بود) —
+ * geocodeِ «محله + شهر» گاهی به شهرِ دیگری می‌پرد («نیلوفر تهران» → کرج!). مرکزِ خودِ شهر سنجه است:
+ * نقطهٔ محلهٔ دورتر از maxKm از مرکزِ شهر بی‌اعتبار است و مرکزِ شهر ملاک می‌شود. خالص و تست‌پذیر. */
+export function trustedMapCenter(hood: PinPoint | null, cityCenter: PinPoint | null, maxKm = 30): PinPoint | null {
+  if (!hood) return cityCenter
+  if (!cityCenter) return hood
+  return distKm(hood, cityCenter) > maxKm ? cityCenter : hood
+}
+
 const normFa = (s: string) => (s || '').replace(/[‌\s]/g, '')
 
 /** نامِ محله از رشتهٔ موقعیت — تکهٔ اولی که «خودِ نامِ شهر» نباشد. («تهران، جنت‌آباد جنوبی» → جنت‌آباد جنوبی)

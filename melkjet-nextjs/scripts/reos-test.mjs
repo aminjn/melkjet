@@ -2500,6 +2500,14 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('چند مختصاتِ پرت (شهرِ دیگر) قاب را نمی‌دزدد (کرانهٔ صدکی)', Math.abs(withOutliers.center.lng - cityView.center.lng) < 0.2 && withOutliers.zoom >= 10)
       const { hoodPartOf, geoKeyOf } = await import('../app/lib/map-pins.ts')
       ok('«تهران، جنت‌آباد جنوبی» → محله، نه نامِ شهر (باگِ قدیمی: شهرِ geocodeشده وسطِ شهر تلنبار می‌شد)', hoodPartOf('تهران، جنت‌آباد جنوبی', 'تهران') === 'جنت‌آباد جنوبی' && geoKeyOf('تهران، جنت‌آباد جنوبی', 'تهران') === 'جنت‌آباد جنوبی تهران')
+      // فاز ۲۴۷ (فیدبک+اسکرین‌شات: «رو تهران هستم نقشه دری‌وری نشون میده» — geocodeِ «نیلوفر تهران»
+      // به کرج پریده بود و قاب را دزدید) — مرکزِ قابل‌اعتماد: محلهٔ دورتر از ۳۰کیلومتر از شهر بی‌اعتبار
+      const { trustedMapCenter, distKm } = await import('../app/lib/map-pins.ts')
+      const TEHRAN = { lat: 35.6892, lng: 51.389 }, KARAJ = { lat: 35.8355, lng: 50.9915 }, TPARS = { lat: 35.735, lng: 51.55 }
+      ok('فاصلهٔ haversine واقعی است (تهران↔کرج ~۴۰کیلومتر، تهران↔تهرانپارس <۲۰)', distKm(TEHRAN, KARAJ) > 30 && distKm(TEHRAN, KARAJ) < 50 && distKm(TEHRAN, TPARS) < 20)
+      ok('بازتولیدِ دقیقِ باگ: «محله»ی geocodeشده در کرج + شهرِ تهران → مرکزِ شهر ملاک، نه کرج', trustedMapCenter(KARAJ, TEHRAN) === TEHRAN)
+      ok('ضدتست: محلهٔ واقعیِ داخلِ شهر (تهرانپارس) همان ملاک می‌ماند', trustedMapCenter(TPARS, TEHRAN) === TPARS)
+      ok('حالت‌های ناقص: بی‌محله → شهر؛ بی‌شهر → محله؛ هر دو هیچ → null', trustedMapCenter(null, TEHRAN) === TEHRAN && trustedMapCenter(KARAJ, null) === KARAJ && trustedMapCenter(null, null) === null)
       ok('موقعیتِ فقط-شهر به خودِ شهر برمی‌گردد و «نامشخص» هیچ است', hoodPartOf('تهران', 'تهران') === 'تهران' && hoodPartOf('نامشخص', 'تهران') === '' && hoodPartOf('', 'تهران') === '')
       const items202 = [
         { lat: 35.7, lng: 51.4, location: 'تهران، ونک' },            // مختصات دارد → geocode لازم ندارد
