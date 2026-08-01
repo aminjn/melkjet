@@ -67,7 +67,8 @@ export async function geoGeocode(address: string, timeoutMs = 6000): Promise<(Ge
   const q = (address || '').trim()
   if (q.length < 2) return null
   const { status, json } = await call(`/v1/geocode?address=${encodeURIComponent(q)}`, { timeoutMs })
-  const r0 = json?.results?.[0]
+  // فاز ۲۴۵ — نکسامپ پاسخ را در پاکتِ {status:"OK", data:{results:[…]}} می‌پیچد؛ هر دو شکل پذیرفته می‌شود.
+  const r0 = (json?.data?.results || json?.results)?.[0]
   const lat = Number(r0?.location?.lat), lng = Number(r0?.location?.lng)
   if (status !== 200 || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) < 0.1) return null
   return { lat, lng, formatted: r0?.formatted_address || undefined, confidence: typeof r0?.confidence === 'number' ? r0.confidence : undefined }
@@ -76,7 +77,7 @@ export async function geoGeocode(address: string, timeoutMs = 6000): Promise<(Ge
 /** نقطه → آدرس (v1/reverse). اجزای آدرس با نام‌های آشنای سایت برمی‌گردد. */
 export async function geoReverse(lat: number, lng: number, timeoutMs = 6000): Promise<{ province?: string; city?: string; district?: string; neighbourhood?: string; address?: string } | null> {
   const { status, json } = await call(`/v1/reverse?lat=${lat}&lng=${lng}`, { timeoutMs })
-  const r0 = json?.results?.[0]
+  const r0 = (json?.data?.results || json?.results)?.[0]
   if (status !== 200 || !r0) return null
   const c = r0.components || {}
   return {
@@ -96,8 +97,9 @@ export async function geoSearch(q: string, opts?: { lat?: number; lng?: number; 
   if (opts?.radius) p.set('radius', String(opts.radius))
   p.set('limit', String(opts?.limit || 15))
   const { status, json } = await call(`/v1/search?${p}`, { timeoutMs: opts?.timeoutMs || 6000 })
-  if (status !== 200 || !Array.isArray(json?.results)) return []
-  return json.results
+  const arr = json?.data?.results || json?.results
+  if (status !== 200 || !Array.isArray(arr)) return []
+  return arr
     .map((r: any) => ({
       name: String(r.name || '').trim(),
       type: String(r.category?.title || (Array.isArray(r.category?.path) ? r.category.path[r.category.path.length - 1] : r.category?.id) || '').trim(),
@@ -111,8 +113,9 @@ export async function geoSearch(q: string, opts?: { lat?: number; lng?: number; 
 export async function geoMatrix(sources: GeoPoint[], destinations: GeoPoint[], mode = 'pedestrian', timeoutMs = 8000): Promise<{ durations: number[][]; distances: number[][] } | null> {
   if (!sources.length || !destinations.length) return null
   const { status, json } = await call('/v1/matrix', { method: 'POST', body: { sources, destinations, mode }, timeoutMs })
-  if (status !== 200 || !Array.isArray(json?.durations)) return null
-  return { durations: json.durations, distances: Array.isArray(json?.distances) ? json.distances : [] }
+  const d = json?.data || json
+  if (status !== 200 || !Array.isArray(d?.durations)) return null
+  return { durations: d.durations, distances: Array.isArray(d?.distances) ? d.distances : [] }
 }
 
 /** الگوی URLِ کاشی برای نقشهٔ تعاملی (Leaflet). null = پیکربندی نشده. */
