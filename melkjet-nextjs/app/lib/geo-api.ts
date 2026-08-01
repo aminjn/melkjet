@@ -52,10 +52,14 @@ export async function geoDebugProbe(): Promise<{ name: string; status: number; s
     ['reverse', '/v1/reverse?lat=35.7575&lng=51.41'],
     ['search', `/v1/search?lat=35.7575&lng=51.41&radius=1000&limit=2`],
   ]
-  return Promise.all(probes.map(async ([name, path]) => {
+  const out = await Promise.all(probes.map(async ([name, path]) => {
     const { status, json } = await call(path, { timeoutMs: 8000 })
     return { name, status, snippet: JSON.stringify(json)?.slice(0, 140) || '' }
   }))
+  // فاز ۲۴۴: matrix هم با status — تا سندِ debug کامل باشد (0 = تایم‌اوت/شبکه)
+  const m = await call('/v1/matrix', { method: 'POST', body: { sources: [{ lat: 35.7575, lng: 51.41 }], destinations: [{ lat: 35.76, lng: 51.42 }], mode: 'pedestrian' }, timeoutMs: 8000 })
+  out.push({ name: 'matrix', status: m.status, snippet: JSON.stringify(m.json)?.slice(0, 140) || '' })
+  return out
 }
 
 /** آدرسِ آزادِ فارسی → مختصات (v1/geocode). null = پیدا نشد/سرویس در دسترس نیست. */
