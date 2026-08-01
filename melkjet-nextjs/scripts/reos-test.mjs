@@ -290,6 +290,25 @@ console.log('\n── REOS v4: Property Digital Twin ──')
   const { isAllFarNearby } = await import('../app/lib/nearby.ts')
   ok('فهرستِ همه-دور (میراثِ شعاعِ شل) شناسایی می‌شود', isAllFarNearby([{ meters: 9000 }, { meters: 12000 }]) === true && isAllFarNearby([{ meters: 9000 }, { meters: 800 }]) === false)
   ok('خالی/بی‌متر خراب حساب نمی‌شود', isAllFarNearby([]) === false && isAllFarNearby(undefined) === false && isAllFarNearby([{}]) === false)
+  // فاز ۲۴۶ (فیدبک+اسکرین‌شات: ««استان تهران · ۴۴ دقیقه پیاده»! چرا چرت‌وپرت میگه») — جستجوی
+  // شعاعیِ نکسامپ واحدهای اداری را هم برمی‌گرداند؛ فیلترِ ادمین + دستهٔ فارسیِ نمایشی
+  const { isAdminPlace, faPlaceType } = await import('../app/lib/nearby.ts')
+  ok('واحدهای اداری (دقیقاً موارد اسکرین‌شات) فیلتر می‌شوند',
+    isAdminPlace({ name: 'استان تهران', type: 'province' }) === true &&
+    isAdminPlace({ name: 'شهر تهران', type: 'شهر' }) === true &&
+    isAdminPlace({ name: 'شهرستان تهران', categoryId: 'county' }) === true &&
+    isAdminPlace({ name: 'بخش مرکزی شهرستان تهران', type: 'district' }) === true &&
+    isAdminPlace({ name: 'منطقه ۴ شهر تهران', type: 'محله' }) === true &&
+    isAdminPlace({ name: 'تهرانپارس غربی', type: 'محله' }) === true)
+  ok('ضدتست: POIهای واقعی هرگز فیلتر نمی‌شوند (حتی با «شهر/استان» در وسطِ نام)',
+    isAdminPlace({ name: 'سوپر قائم', type: 'سوپرمارکت' }) === false &&
+    isAdminPlace({ name: 'داروخانه شهر', type: 'pharmacy' }) === false &&
+    isAdminPlace({ name: 'رستوران استانبول', type: 'restaurant' }) === false &&
+    isAdminPlace({ name: 'لبنیات لواسون', type: 'dairy' }) === false)
+  ok('دستهٔ انگلیسیِ خام → فارسیِ نمایشی؛ فارسیِ سامانه دست‌نخورده؛ ناشناس → «مکان»',
+    faPlaceType('dairy') === 'لبنیات‌فروشی' && faPlaceType('optician') === 'عینک‌سازی' &&
+    faPlaceType('health_food') === 'مواد غذایی' && faPlaceType('', 'fast_food') === 'فست‌فود' &&
+    faPlaceType('سوپرمارکت') === 'سوپرمارکت' && faPlaceType('weird_unknown_cat') === 'مکان' && faPlaceType('') === 'مکان')
   // فاز ۲۰۸ — برچسبِ سنِ آگهی (فیدبک: «آگهی‌ها معلوم نیست برای کی هست») — از مهرِ واقعیِ ثبت
   const { listingAgeLabel, isFreshListing } = await import('../app/lib/fa-time.ts')
   const NOW = 1_800_000_000_000, H = 3600_000, D = 24 * H
@@ -2256,10 +2275,15 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('علتِ شکستِ تحلیل ثبت می‌شود', getEnrichment('e201c').analysisNote === 'مدلی به ایجنت تخصیص داده نشده')
       patchEnrichment('e201c', { analysisOk: true, analysisErr: false, analysisNote: '' })
       ok('موفقیت علت را پاک می‌کند', getEnrichment('e201c').analysisNote === '')
-      // فاز ۲۱۳ — مهرِ نسخهٔ nearby: کشِ بدونِ nearbyV=2 (منطقِ قدیمی) بازنشسته حساب می‌شود
-      patchEnrichment('e201c', { nearby: [{ name: 'داروخانه', time: '۵ دقیقه پیاده', meters: 400 }], nearbyV: 2 })
+      // فاز ۲۱۳→۲۴۶ — مهرِ نسخهٔ nearby از NEARBY_V می‌آید: کشِ نسخهٔ قدیمی (ازجمله v2ِ آلوده به
+      // «استان/شهر/محله») بازنشسته حساب می‌شود؛ کشِ نسخهٔ جاری معتبر است.
+      const { NEARBY_V } = await import('../app/lib/nearby.ts')
+      patchEnrichment('e201c', { nearby: [{ name: 'داروخانه', time: '۵ دقیقه پیاده', meters: 400 }], nearbyV: NEARBY_V })
       const c213 = getEnrichment('e201c')
-      ok('مهرِ نسخهٔ nearby ذخیره می‌شود و منطقِ بازنشستگی درست است', c213.nearbyV === 2 && !((c213.nearby?.length || 0) > 0 && c213.nearbyV !== 2) && (([{ name: 'x' }].length > 0) && undefined !== 2) === true)
+      const staleOf = (c) => (c.nearby?.length || 0) > 0 && c.nearbyV !== NEARBY_V
+      ok('مهرِ نسخهٔ جاریِ nearby ذخیره می‌شود و بازنشسته نیست', c213.nearbyV === NEARBY_V && staleOf(c213) === false)
+      patchEnrichment('e201c', { nearbyV: 2 })
+      ok('کشِ v2 (پیش از فیلترِ واحدهای اداری) بازنشسته حساب می‌شود', staleOf(getEnrichment('e201c')) === true)
       for (const k of ['e201a', 'e201b', 'e201c']) clearEnrichment(k)
       // ۳) مختصاتِ به‌دست‌آمده از غنی‌سازی روی خودِ آگهی می‌نشیند؛ مختصاتِ موجود هرگز بازنویسی نمی‌شود
       const { addItemManual, setItemCoords, getItemById, deleteItem } = await import('../app/lib/scraper-store.ts')

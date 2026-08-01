@@ -90,7 +90,7 @@ export async function geoReverse(lat: number, lng: number, timeoutMs = 6000): Pr
 }
 
 /** جستجوی POI — متنی و/یا شعاعی (v1/search). q خالی = همهٔ مکان‌های داخلِ شعاع. */
-export async function geoSearch(q: string, opts?: { lat?: number; lng?: number; radius?: number; limit?: number; timeoutMs?: number }): Promise<{ name: string; type: string; lat: number; lng: number; distanceM?: number }[]> {
+export async function geoSearch(q: string, opts?: { lat?: number; lng?: number; radius?: number; limit?: number; timeoutMs?: number }): Promise<{ name: string; type: string; categoryId?: string; lat: number; lng: number; distanceM?: number }[]> {
   const p = new URLSearchParams()
   if (q) p.set('q', q)
   if (opts?.lat !== undefined && opts?.lng !== undefined) { p.set('lat', String(opts.lat)); p.set('lng', String(opts.lng)) }
@@ -103,6 +103,7 @@ export async function geoSearch(q: string, opts?: { lat?: number; lng?: number; 
     .map((r: any) => ({
       name: String(r.name || '').trim(),
       type: String(r.category?.title || (Array.isArray(r.category?.path) ? r.category.path[r.category.path.length - 1] : r.category?.id) || '').trim(),
+      categoryId: String(r.category?.id || r.type || r.layer || '').trim() || undefined,
       lat: Number(r.location?.lat), lng: Number(r.location?.lng),
       distanceM: typeof r.distance_m === 'number' ? r.distance_m : undefined,
     }))

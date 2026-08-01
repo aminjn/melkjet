@@ -26,6 +26,53 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number): numb
 
 export interface NearbyResult { nearby: { type?: string; name?: string; time: string; meters?: number }[]; source: string; note?: string }
 
+// نسخهٔ منطقِ nearby — هر تغییرِ معنادار (فاز ۲۱۳: شعاعِ سفت؛ فاز ۲۴۶: فیلترِ واحدهای اداری +
+// دستهٔ فارسی) این عدد را بالا می‌برد تا کش‌های enrichِ قدیمی خودکار بازنشسته و بازسازی شوند.
+export const NEARBY_V = 3
+
+// فاز ۲۴۶ — جستجوی شعاعیِ سامانه «مرزهای اداری» (استان/شهرستان/بخش/شهر/منطقه/محله) را هم به‌عنوانِ
+// «مکان» برمی‌گرداند («استان تهران · ۴۴ دقیقه پیاده»!) و دستهٔ بعضی POIها برچسبِ خامِ انگلیسی دارد
+// (health_food, optician, county…). این دو خالص و تست‌پذیرند:
+const ADMIN_CAT_RE = /^(country|province|state|county|city|town|village|hamlet|district|region|municipality|suburb|neighbou?rhood|quarter|borough|locality|place|administrative|postcode)$/i
+const ADMIN_FA = new Set(['کشور', 'استان', 'شهرستان', 'بخش', 'شهر', 'منطقه', 'ناحیه', 'محله', 'روستا', 'دهستان', 'آبادی'])
+const ADMIN_NAME_RE = /^(استان|شهرستان|بخش|دهستان|ناحیه)\s|^منطقه\s*[\d۰-۹]|^شهر\s/
+/** آیا این نتیجه یک «واحدِ اداری» است نه یک مکانِ واقعیِ قابلِ رفتن؟ */
+export function isAdminPlace(p: { name?: string; type?: string; categoryId?: string }): boolean {
+  const t = (p.type || '').trim(), cid = (p.categoryId || '').trim()
+  if (ADMIN_CAT_RE.test(t) || ADMIN_CAT_RE.test(cid) || ADMIN_FA.has(t)) return true
+  return ADMIN_NAME_RE.test((p.name || '').trim())
+}
+
+// دسته‌های رایجِ OSM → فارسی؛ برچسبِ فارسیِ خودِ سامانه دست‌نخورده می‌ماند؛ ناشناسِ انگلیسی → «مکان».
+const CAT_FA: Record<string, string> = {
+  supermarket: 'سوپرمارکت', convenience: 'سوپرمارکت', kiosk: 'دکه', marketplace: 'بازار', mall: 'مرکز خرید',
+  dairy: 'لبنیات‌فروشی', health_food: 'مواد غذایی', greengrocer: 'میوه‌فروشی', butcher: 'قصابی', bakery: 'نانوایی',
+  confectionery: 'شیرینی‌فروشی', ice_cream: 'بستنی‌فروشی', seafood: 'ماهی‌فروشی', deli: 'اغذیه', beverages: 'نوشیدنی',
+  pharmacy: 'داروخانه', chemist: 'بهداشتی', optician: 'عینک‌سازی', hospital: 'بیمارستان', clinic: 'کلینیک',
+  doctors: 'مطب', dentist: 'دندان‌پزشکی', veterinary: 'دامپزشکی',
+  school: 'مدرسه', kindergarten: 'مهدکودک', university: 'دانشگاه', college: 'آموزشگاه', library: 'کتابخانه',
+  mosque: 'مسجد', place_of_worship: 'مکانِ مذهبی', church: 'کلیسا',
+  park: 'پارک', playground: 'زمینِ بازی', garden: 'بوستان', sports_centre: 'مجموعهٔ ورزشی', fitness_centre: 'باشگاه',
+  gym: 'باشگاه', swimming_pool: 'استخر', stadium: 'ورزشگاه',
+  bank: 'بانک', atm: 'خودپرداز', post_office: 'دفترِ پستی', police: 'کلانتری', fire_station: 'آتش‌نشانی',
+  fuel: 'پمپ بنزین', car_wash: 'کارواش', car_repair: 'تعمیرگاه', parking: 'پارکینگ',
+  restaurant: 'رستوران', fast_food: 'فست‌فود', cafe: 'کافه', tea: 'چایخانه',
+  bus_station: 'پایانهٔ اتوبوس', bus_stop: 'ایستگاه اتوبوس', station: 'ایستگاه مترو', subway: 'ایستگاه مترو',
+  subway_entrance: 'ورودی مترو', taxi: 'ایستگاه تاکسی',
+  hairdresser: 'آرایشگاه', beauty: 'سالنِ زیبایی', laundry: 'خشکشویی', dry_cleaning: 'خشکشویی', tailor: 'خیاطی',
+  florist: 'گل‌فروشی', stationery: 'نوشت‌افزار', books: 'کتاب‌فروشی', toys: 'اسباب‌بازی‌فروشی',
+  clothes: 'پوشاک', shoes: 'کفش‌فروشی', jewelry: 'طلا و جواهر', mobile_phone: 'موبایل‌فروشی', computer: 'کامپیوتر',
+  electronics: 'لوازمِ الکترونیکی', hardware: 'ابزارفروشی', doityourself: 'ابزارفروشی', furniture: 'مبلمان',
+  hotel: 'هتل', guest_house: 'مهمان‌پذیر', cinema: 'سینما', theatre: 'تئاتر', museum: 'موزه',
+}
+/** برچسبِ دسته → فارسیِ نمایشی. فارسیِ موجود می‌ماند؛ انگلیسیِ شناخته ترجمه؛ ناشناس «مکان». */
+export function faPlaceType(type?: string, categoryId?: string): string {
+  const t = (type || '').trim()
+  if (t && /[؀-ۿ]/.test(t)) return t
+  const k = (categoryId || t).trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return CAT_FA[k] || CAT_FA[t.toLowerCase().replace(/[\s-]+/g, '_')] || 'مکان'
+}
+
 // کشِ «دسترسی‌های اطراف»: POIهای اطرافِ یک نقطه تغییر نمی‌کنند (کلید: مختصاتِ گردشده ~۱۰۰م، TTL ۶ ساعت).
 const nearbyCache = new Map<string, { at: number; data: NearbyResult }>()
 const NEARBY_TTL = 6 * 3600 * 1000
@@ -38,7 +85,8 @@ export async function computeNearby(lat: number, lng: number): Promise<NearbyRes
   const { redisEnabled, rGet, rSetEx } = await import('./redis')
   if (redisEnabled()) {
     try {
-      const cached = await rGet(`nearby:v2:${ck}`)
+      // فاز ۲۴۶: v2→v3 — کش‌های آلوده به «استان/شهر/محله» بازنشسته می‌شوند (بدونِ flushِ دستی)
+      const cached = await rGet(`nearby:v3:${ck}`)
       if (cached) {
         const data = JSON.parse(cached) as NearbyResult
         if (data.nearby?.length) { nearbyCache.set(ck, { at: Date.now(), data }); return data }
@@ -50,7 +98,7 @@ export async function computeNearby(lat: number, lng: number): Promise<NearbyRes
   if (data.nearby && data.nearby.length) {
     if (nearbyCache.size > 2000) nearbyCache.clear()
     nearbyCache.set(ck, { at: Date.now(), data })
-    if (redisEnabled()) rSetEx(`nearby:v2:${ck}`, NEARBY_TTL / 1000, JSON.stringify(data)).catch(() => {})
+    if (redisEnabled()) rSetEx(`nearby:v3:${ck}`, NEARBY_TTL / 1000, JSON.stringify(data)).catch(() => {})
   }
   return data
 }
@@ -61,8 +109,9 @@ async function computeNearbyUncached(lat: number, lng: number): Promise<NearbyRe
   // مسیرِ اصلی: جستجوی شعاعیِ واقعی — همهٔ مکان‌های داخلِ ۱ کیلومتر
   try {
     const found = await geoSearch('', { lat, lng, radius: 1000, limit: 24 })
-    const places: Located[] = found.map(f => ({
-      type: f.type || 'مکان', name: f.name, lat: f.lat, lng: f.lng,
+    // فاز ۲۴۶: واحدهای اداری (استان/شهر/محله…) مکانِ «قابلِ رفتن» نیستند؛ دسته‌ها فارسیِ نمایشی.
+    const places: Located[] = found.filter(f => !isAdminPlace(f)).map(f => ({
+      type: faPlaceType(f.type, f.categoryId), name: f.name, lat: f.lat, lng: f.lng,
       km: typeof f.distanceM === 'number' ? f.distanceM / 1000 : haversine(lat, lng, f.lat, f.lng),
     }))
     const kept = keepVerifiedNearby(dedupByName(places), 1, 2).slice(0, 10)

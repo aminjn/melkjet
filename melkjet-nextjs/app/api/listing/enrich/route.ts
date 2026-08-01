@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getEnrichment, patchEnrichment } from '@/app/lib/enrich-store'
 import { ENRICH_V, warmEnrichment } from '@/app/lib/enrich-warm'
+import { NEARBY_V } from '@/app/lib/nearby'
 
 
 // کشِ غنی‌سازیِ هر آگهی: دادهٔ دیوار + تحلیلِ AI فقط یک‌بار (هنگامِ اسکرپ) محاسبه و ذخیره می‌شود.
@@ -22,7 +23,8 @@ export async function GET(req: NextRequest) {
   // فاز ۲۱۳ (فیدبک: «بیمارستانِ ۱۴کیلومتری را "۳ دقیقه پیاده" نشان می‌داد — اعتماد را می‌بَرد»):
   // هر nearbyِ کش‌شده با نسخهٔ قدیمیِ منطق (بدونِ مهرِ nearbyV=2 — اعتبارسنجیِ دوریِ محله‌ای/شعاعِ شل/
   // متنِ AIِ بی‌سند) بازنشسته است: هرگز به کاربر نمی‌رسد و در پس‌زمینه با منطقِ جدید بازسازی می‌شود.
-  const staleNearby = (cached?.nearby?.length || 0) > 0 && cached?.nearbyV !== 2
+  // فاز ۲۴۶: نسخه از nearby.ts می‌آید (v3 = فیلترِ «استان/شهر/محله» + دستهٔ فارسی) — v2های آلوده بازنشسته.
+  const staleNearby = (cached?.nearby?.length || 0) > 0 && cached?.nearbyV !== NEARBY_V
   const retryMs = staleNearby ? 10 * 60 * 1000 : NEARBY_RETRY_MS
   if (cached?.baseDone && (!cached.nearby?.length || staleNearby) && Date.now() - (cached.nearbyTriedAt || 0) > retryMs) {
     const cachedGeo = cached.geo
@@ -39,8 +41,8 @@ export async function GET(req: NextRequest) {
         if (!g) return
         const { computeNearby } = await import('@/app/lib/nearby')
         const n = (await computeNearby(g.lat, g.lng)).nearby
-        if (n?.length) patchEnrichment(id, { nearby: n, geo: g, nearbyV: 2 })
-        else if (staleNearby) patchEnrichment(id, { nearby: [], nearbyV: 2 })   // فهرستِ بی‌اعتمادِ قدیمی پاک شود
+        if (n?.length) patchEnrichment(id, { nearby: n, geo: g, nearbyV: NEARBY_V })
+        else if (staleNearby) patchEnrichment(id, { nearby: [], nearbyV: NEARBY_V })   // فهرستِ بی‌اعتمادِ قدیمی پاک شود
       } catch { /* تلاشِ بعدی بعدِ کول‌داون */ }
     })()
   }
