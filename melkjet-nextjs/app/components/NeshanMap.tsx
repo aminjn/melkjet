@@ -204,8 +204,10 @@ export default function NeshanMap({
       </div>
     )
   }
+  // فاز ۲۴۸: zIndex:0 + isolation — panes داخلیِ Leaflet (z تا ۱۰۰۰) بدونِ این از قابِ نقشه نشت
+  // می‌کنند و روی UI صفحه (منوی انتخابِ شهرِ ناوبری با z=100) می‌افتند.
   return (
-    <div style={{ position: 'relative', width: '100%', height }}>
+    <div style={{ position: 'relative', width: '100%', height, zIndex: 0, isolation: 'isolate' }}>
       <div ref={ref} style={{ position: 'absolute', inset: 0, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }} />
     </div>
   )
