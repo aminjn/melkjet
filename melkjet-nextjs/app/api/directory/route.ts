@@ -169,6 +169,24 @@ export async function GET(req: NextRequest) {
       scrapedAt: a.createdAt || 0, status: 'approved', registered: true,
     })
   }
+  // فاز ۲۵۰ — آیتم‌های دایرکتوریِ اسکرپ‌شده (مثلِ وکلای ملکیِ بنیاد وکلا) — میزبانی در ملک‌جت با
+  // لینکِ بیرونی به منبع برای پروفایلِ کامل (کاربر انتخابِ «فهرست + لینک به منبع» را کرد).
+  try {
+    const { listItems } = await import('@/app/lib/scraper-store')
+    for (const it of await listItems('directory', { publicOnly: true })) {
+      const cat = it.category || 'حقوقی'
+      if (category && category !== cat) continue
+      items.push({
+        id: it.id, sourceName: it.sourceName || 'منبعِ بیرونی', type: 'directory', category: cat,
+        title: it.title, location: it.location || '', image: it.image || '',
+        excerpt: it.excerpt || '', tags: (it.tags || []).slice(0, 4),
+        hasPhone: false, url: it.url || '', external: !!(it.url && /^https?:\/\//.test(it.url)),
+        stats: it.rating ? { rating: Number(it.rating) } : undefined,
+        scrapedAt: it.scrapedAt || 0, status: 'approved', registered: false,
+      })
+    }
+  } catch { /* اسکرپر در دسترس نبود */ }
+
   // نشان‌گذاریِ «ویژه» برای پروفایل‌های دارای پروموتِ فعال (خودسرویس).
   try {
     const { promotedProfileInfo } = await import('@/app/lib/promotion-store')

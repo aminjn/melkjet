@@ -309,6 +309,43 @@ console.log('\n── REOS v4: Property Digital Twin ──')
     faPlaceType('dairy') === 'لبنیات‌فروشی' && faPlaceType('optician') === 'عینک‌سازی' &&
     faPlaceType('health_food') === 'مواد غذایی' && faPlaceType('', 'fast_food') === 'فست‌فود' &&
     faPlaceType('سوپرمارکت') === 'سوپرمارکت' && faPlaceType('weird_unknown_cat') === 'مکان' && faPlaceType('') === 'مکان')
+  // فاز ۲۵۰ — پارسِ کارت‌های وکیلِ بنیاد وکلا (روی HTMLِ واقعیِ گرفته‌شده از سرور)
+  {
+    const { parseLawyerCards } = await import('../app/lib/bonyad-lawyers.ts')
+    const realCard = `
+    <a href="https://www.bonyadvokala.com/lawyers/behnamrafieisaran?acc_zone=lawyers_index&amp;acc_slot=8&amp;acc_user_id=50681"
+   title="پروفایل حقوقی بهنام رفیعی ساران"
+   class="lwv-card lwv-card--ad">
+    <div class="lwv-card__flags"><span class="lwv-flag lwv-flag--ad">پیشنهاد بنیاد وکلا</span></div>
+    <div class="lwv-card__chan">
+        <span class="lwv-chan lwv-chan--off" title="مشاورهٔ تلفنی">تلفنی</span>
+        <span class="lwv-chan lwv-chan--off" title="مشاورهٔ آنلاین (چت)">چت</span>
+    </div>
+    <div class="lwv-card__id">
+        <img src="https://www.bonyadvokala.com/file/image/avatar_thumbnail/wgxZmGN2.jpg" alt="بهنام رفیعی ساران" width="58" height="58">
+        <span class="lwv-card__name"><strong>بهنام رفیعی ساران<svg class="lwv-verified" width="16"><use href="#li-verified" /></svg></strong>
+            <span class="lwv-card__role">وکیل پایه یک کانون وکلای دادگستری</span>
+        </span>
+    </div>
+    <div class="lwv-card__meta">
+        <span class="lwv-card__rate"><b>۴.۷</b><span class="star-rating"><i></i></span><small>(۴۵۹ نظر)</small></span>
+        <span class="lwv-card__line"><svg><use href="#li-orders" /></svg>۵۰۲۲ خدمت ارائه‌شده</span>
+        <span class="lwv-card__line"><svg><use href="#li-mappin" /></svg>تهران، میدان کاج</span>
+    </div>
+    <div class="lwv-card__topics"><span>بانکی و مطالبات</span><span>خانواده</span><span>ملکی و املاک</span><span>قرارداد و تعهدات</span></div>
+    <div class="lwv-card__foot"><span class="lwv-card__cta">مشاهدهٔ پروفایل و مشاوره</span></div>
+</a>`
+    const cards = parseLawyerCards(realCard)
+    ok('پارسِ کارتِ وکیل: دقیقاً یک کارت', cards.length === 1)
+    const c = cards[0]
+    ok('نام/slug/extId/شهر درست استخراج می‌شوند', c.name === 'بهنام رفیعی ساران' && c.slug === 'behnamrafieisaran' && c.extId === '50681' && c.city === 'تهران، میدان کاج')
+    ok('امتیاز/نظر/خدمت (فارسی→لاتین) و URLِ تمیزِ بی‌ردیابی', c.rating === '4.7' && c.reviews === 459 && c.services === 5022 && c.url === 'https://www.bonyadvokala.com/lawyers/behnamrafieisaran')
+    ok('تخصص‌ها و کانال‌ها و آواتار', c.specialties.includes('ملکی و املاک') && c.specialties.length === 4 && c.channels.includes('تلفنی') && c.channels.includes('چت') && /avatar_thumbnail/.test(c.avatar))
+    // خودِ صفحهٔ تخصص (slug فارسیِ «وکیل-…») یک وکیل نیست → نادیده
+    const specialtyLink = `<a href="https://www.bonyadvokala.com/lawyers/وکیل-ملکی-و-املاک" class="lwv-card"><span class="lwv-card__name"><strong>x</strong></span></a>`
+    ok('لینکِ خودِ صفحهٔ تخصص به‌عنوان وکیل شمرده نمی‌شود', parseLawyerCards(specialtyLink).length === 0)
+    ok('HTMLِ بی‌کارت → آرایهٔ خالی (نه کرش)', parseLawyerCards('<div>سلام</div>').length === 0 && parseLawyerCards('').length === 0)
+  }
   // فاز ۲۰۸ — برچسبِ سنِ آگهی (فیدبک: «آگهی‌ها معلوم نیست برای کی هست») — از مهرِ واقعیِ ثبت
   const { listingAgeLabel, isFreshListing } = await import('../app/lib/fa-time.ts')
   const NOW = 1_800_000_000_000, H = 3600_000, D = 24 * H

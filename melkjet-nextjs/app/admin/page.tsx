@@ -880,6 +880,49 @@ function NeshanConfig() {
   )
 }
 
+// فاز ۲۵۰ — اسکرپِ وکلای ملکیِ بنیاد وکلا برای دایرکتوریِ متخصصان (دستهٔ «حقوقی»).
+function BonyadLawyersConfig() {
+  const [count, setCount] = useState<number | null>(null)
+  const [busy, setBusy] = useState<'' | 'scrape' | 'debug'>('')
+  const [msg, setMsg] = useState<React.ReactNode>(null)
+  useEffect(() => { fetch('/api/admin/bonyad-lawyers').then(r => r.ok ? r.json() : null).then(d => { if (d) setCount(d.count ?? 0) }) }, [])
+  const run = async (action: 'scrape' | 'debug') => {
+    setBusy(action); setMsg(null)
+    try {
+      const r = await fetch('/api/admin/bonyad-lawyers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) })
+      const d = await r.json()
+      if (action === 'debug') {
+        setMsg(d.ok
+          ? `✓ اتصال سالم — ${Number(d.count).toLocaleString('fa-IR')} کارت در صفحهٔ نمونه. نمونه: ${(d.sample || []).map((s: any) => s.name).join('، ')}`
+          : `✗ ${d.note || 'ناموفق'} (HTTP ${d.status})`)
+      } else {
+        if (d.ok) {
+          setCount(prev => (prev || 0))
+          const cities = Object.entries(d.byCity || {}).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5).map(([c, n]: any) => `${c} (${Number(n).toLocaleString('fa-IR')})`).join('، ')
+          setMsg(`✓ ${Number(d.found).toLocaleString('fa-IR')} وکیلِ ملکی — نو: ${Number(d.added).toLocaleString('fa-IR')}، به‌روز: ${Number(d.updated).toLocaleString('fa-IR')} (${Number(d.pages).toLocaleString('fa-IR')} صفحه). شهرها: ${cities}`)
+          fetch('/api/admin/bonyad-lawyers').then(r => r.ok ? r.json() : null).then(x => { if (x) setCount(x.count ?? 0) })
+        } else setMsg(`✗ ${d.note || 'اسکرپ ناموفق'}`)
+      }
+    } catch { setMsg('✗ خطا در اجرا') } finally { setBusy('') }
+  }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>⚖️ وکلای حقوقیِ ملکی (بنیاد وکلا)</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>
+        وکلای <b>تخصص‌های ملکی</b> (ملکی و املاک، ثبت اسناد، قرارداد و تعهدات، ارث و وصیت) از bonyadvokala.com اسکرپ و در
+        دستهٔ «حقوقی» دایرکتوری نمایش داده می‌شوند؛ دکمهٔ «مشاهده» به پروفایلِ همان وکیل در منبع می‌رود.
+        اسکرپِ مجدد، همان‌ها را <b>به‌روز می‌کند</b> (نه تکراری). «تستِ اتصال» یک صفحه می‌گیرد و نمونه را نشان می‌دهد — سند، نه ادعا.
+        {count !== null && <> در حال حاضر <b style={{ color: '#5fd98a' }}>{count.toLocaleString('fa-IR')}</b> وکیل در دایرکتوری.</>}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <GoldButton onClick={() => run('scrape')} disabled={!!busy}>{busy === 'scrape' ? 'در حال اسکرپ…' : '⬇️ اسکرپِ وکلای ملکی'}</GoldButton>
+        <GoldButton onClick={() => run('debug')} disabled={!!busy}>{busy === 'debug' ? 'در حال تست…' : '🔌 تستِ اتصال'}</GoldButton>
+      </div>
+      {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: String(msg).startsWith('✓') ? '#5fd98a' : '#e7674a', lineHeight: 1.8 }}>{msg}</div>}
+    </Card>
+  )
+}
+
 function GeoView() {
   const [provinces, setProvinces] = useState<GeoProvince[]>([])
   const [pid, setPid] = useState<string | null>(null)
@@ -3982,6 +4025,7 @@ function ConnectionsView() {
       </Card>
       <PodiumConfig />
       <NeshanConfig />
+      <BonyadLawyersConfig />
       <SmtpConfig />
       <ZarinpalConfig />
       <ImgbbConfig />
