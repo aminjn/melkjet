@@ -112,6 +112,9 @@ export default function NeshanMap({
       try { mapRef.current.on('movestart zoomstart', () => { if (!programmaticRef.current) userMovedRef.current = true }) } catch {}
       // برچسبِ پیش‌فرضِ «Leaflet» حذف می‌شود.
       try { mapRef.current.attributionControl?.setPrefix?.('') } catch {}
+      // فاز ۲۴۳: مسیرِ صریحِ آیکن‌های تصویریِ Leaflet (مارکرِ pick و هر مصرفِ آینده) — تشخیصِ خودکار
+      // گاهی مسیرِ نسبیِ صفحه را می‌گرفت و آیکنِ شکسته («arker») می‌آمد.
+      try { L.Icon.Default.imagePath = '/vendor/leaflet/images/' } catch {}
       setReady(r => r + 1)
       // نگهبانِ تایل (فاز ۳۰ → ۲۳۴): اگر کاشیِ سامانه به هر دلیل نیامد، نقشه هرگز خاکستری نمی‌ماند —
       // آخرین سنگر = کاشیِ OpenStreetMap روی همان نقشهٔ تعاملی (پین‌ها/زوم سالم).
@@ -165,13 +168,15 @@ export default function NeshanMap({
     for (const p of valid) {
       try {
         // پینِ سفارشی: دارایی‌ِ خودِ کاربر/کارگاه/فرصت/زمین هر کدام شکل و رنگِ خودشان را دارند (فصل ۹ City Screen)
-        const opts = (p.icon || p.color) ? {
+        // فاز ۲۴۳: پینِ پیش‌فرض هم divIconِ طلاییِ خودمان است — پینِ تصویریِ Leaflet به فایلِ عکس
+        // وابسته بود و با تشخیصِ غلطِ مسیر، آیکنِ شکسته («arker») نشان می‌داد.
+        const opts = {
           icon: L.divIcon({
             className: 'mj-pin',
-            html: `<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50% 50% 50% 6px;background:${p.color || '#c9a84c'};border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.5);font-size:16px;line-height:1">${p.icon || '📍'}</div>`,
+            html: `<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50% 50% 50% 6px;background:${p.color || '#c9a84c'};border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.5);font-size:16px;line-height:1;transform:rotate(0deg)">${p.icon || '📍'}</div>`,
             iconSize: [32, 32], iconAnchor: [16, 30], popupAnchor: [0, -28],
           }),
-        } : undefined
+        }
         const m = L.marker([p.lat, p.lng], opts).addTo(map)
         if (p.title || p.price) m.bindPopup(`<div style="font-family:Vazirmatn,sans-serif;direction:rtl;font-size:12px"><b>${(p.title || '').slice(0, 60)}</b>${p.price ? `<br><span style="color:#c9a84c">${p.price}</span>` : ''}</div>`)
         if (onSelect) m.on('click', () => onSelect(p.id))
