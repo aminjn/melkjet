@@ -2508,6 +2508,17 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('بازتولیدِ دقیقِ باگ: «محله»ی geocodeشده در کرج + شهرِ تهران → مرکزِ شهر ملاک، نه کرج', trustedMapCenter(KARAJ, TEHRAN) === TEHRAN)
       ok('ضدتست: محلهٔ واقعیِ داخلِ شهر (تهرانپارس) همان ملاک می‌ماند', trustedMapCenter(TPARS, TEHRAN) === TPARS)
       ok('حالت‌های ناقص: بی‌محله → شهر؛ بی‌شهر → محله؛ هر دو هیچ → null', trustedMapCenter(null, TEHRAN) === TEHRAN && trustedMapCenter(KARAJ, null) === KARAJ && trustedMapCenter(null, null) === null)
+      // فاز ۲۴۹ («گرافیک رو تو نکسامپ عوض کردم، جاهایی تغییر نمی‌کنه») — نسخهٔ کاشی knob زندهٔ ادمین
+      const { geoTileVersion } = await import('../app/lib/geo-api.ts')
+      const { getAdminData: gad249, saveAdminData: sad249 } = await import('../app/lib/admin-store.ts')
+      const d249a = gad249(); const keep249 = d249a.geoApi
+      d249a.geoApi = { baseUrl: 'https://x.ir', apiKey: 'k' }; sad249(d249a)
+      ok('بدونِ tileV، نسخهٔ پیش‌فرض ۳ است (کش‌شکنیِ همین دیپلوی نسبت به mv=2 قدیمی)', geoTileVersion() === 3)
+      const d249b = gad249(); d249b.geoApi = { ...d249b.geoApi, tileV: geoTileVersion() + 1 }; sad249(d249b)
+      ok('بامپ، نسخه را یک واحد بالا می‌برد و ذخیرهٔ آدرس/کلید آن را نمی‌بلعد', geoTileVersion() === 4 && (() => { const d = gad249(); d.geoApi = { ...(d.geoApi || {}), baseUrl: 'https://x.ir', apiKey: 'k2' }; sad249(d); return geoTileVersion() === 4 })())
+      const d249c = gad249(); d249c.geoApi = { ...d249c.geoApi, tileV: 'خراب' }; sad249(d249c)
+      ok('مقدارِ خراب/کوچک‌تر از ۳ → کفِ امنِ ۳ (نه NaN در URL کاشی)', geoTileVersion() === 3)
+      const d249d = gad249(); d249d.geoApi = keep249; sad249(d249d)
       ok('موقعیتِ فقط-شهر به خودِ شهر برمی‌گردد و «نامشخص» هیچ است', hoodPartOf('تهران', 'تهران') === 'تهران' && hoodPartOf('نامشخص', 'تهران') === '' && hoodPartOf('', 'تهران') === '')
       const items202 = [
         { lat: 35.7, lng: 51.4, location: 'تهران، ونک' },            // مختصات دارد → geocode لازم ندارد

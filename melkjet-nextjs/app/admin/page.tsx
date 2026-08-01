@@ -819,7 +819,8 @@ function NeshanConfig() {
   const [apiKey, setApiKey] = useState('')
   const [msg, setMsg] = useState('')
   const [testing, setTesting] = useState(false)
-  useEffect(() => { fetch('/api/admin/geo-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setSavedUrl(d.baseUrl || ''); setKeyMasked(d.keyMasked || '') } }) }, [])
+  const [tileV, setTileV] = useState(0)
+  useEffect(() => { fetch('/api/admin/geo-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setSavedUrl(d.baseUrl || ''); setKeyMasked(d.keyMasked || ''); setTileV(d.tileV || 0) } }) }, [])
   const save = async () => {
     setMsg('')
     const body: any = {}
@@ -858,6 +859,21 @@ function NeshanConfig() {
         <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="کلید از پنل سامانه" style={inp} />
         <GoldButton onClick={save}>ذخیره</GoldButton>
         <GoldButton onClick={test} disabled={testing}>{testing ? 'در حال تست…' : '🔌 تستِ زنده'}</GoldButton>
+      </div>
+      {/* فاز ۲۴۹ — بعدِ هر تغییرِ گرافیک در خودِ سامانهٔ نقشه، این دکمه همهٔ کش‌ها را یک‌جا تازه می‌کند */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+        <GoldButton onClick={async () => {
+          setMsg('')
+          try {
+            const r = await fetch('/api/admin/geo-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'bump-tiles' }) })
+            const d = await r.json()
+            if (d?.ok) { setTileV(d.tileV); setMsg(`✓ نسخهٔ گرافیکِ کاشی‌ها شد ${Number(d.tileV).toLocaleString('fa-IR')} — با یک رفرش، نقشه سراسر با استایلِ جدید می‌آید`) }
+            else setMsg('✗ خطا در تازه‌سازی')
+          } catch { setMsg('✗ خطا در تازه‌سازی') }
+        }}>🔄 تازه‌سازی گرافیکِ نقشه</GoldButton>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+          {tileV ? `نسخهٔ فعلی: ${tileV.toLocaleString('fa-IR')} · ` : ''}بعد از هر تغییرِ استایل در خودِ سامانهٔ نقشه بزن تا کاشی‌های کش‌شدهٔ قدیمی (سرور، Redis، مرورگرِ کاربران) یک‌جا کنار بروند.
+        </span>
       </div>
       {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
     </Card>

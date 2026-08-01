@@ -17,6 +17,15 @@ export function geoApiCfg(): { baseUrl: string; apiKey: string } {
 }
 export function geoApiEnabled(): boolean { return !!geoApiCfg().baseUrl }
 
+/** فاز ۲۴۹ — نسخهٔ گرافیکِ کاشی‌ها: knob زندهٔ سوپرادمین. بامپِ آن هم‌زمان کشِ nginxِ سامانه
+ * (پارامترِ mv)، کشِ Redisِ ما (کلید) و کشِ مرورگرِ کاربران (?v= در URL کاشی) را تازه می‌کند —
+ * تا تغییرِ استایلِ نقشه بدونِ دیپلوی و بدونِ کاشی‌های «لکه‌لکه»ی قدیمی بنشیند. */
+export function geoTileVersion(): number {
+  const g = (getAdminData() as { geoApi?: { tileV?: unknown } }).geoApi || {}
+  const v = Math.floor(Number(g.tileV))
+  return Number.isFinite(v) && v >= 3 ? v : 3
+}
+
 async function call(path: string, opts?: { method?: string; body?: unknown; timeoutMs?: number }): Promise<{ status: number; json: any }> {
   const { baseUrl, apiKey } = geoApiCfg()
   if (!baseUrl) return { status: 0, json: null }

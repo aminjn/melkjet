@@ -42,6 +42,7 @@ export interface AdminData {
   geoApi?: {
     baseUrl?: string     // مثل https://map.example.com (بدونِ / انتهایی)
     apiKey?: string      // کلیدِ API ساخته‌شده در پنلِ خودِ سامانه
+    tileV?: number       // فاز ۲۴۹: نسخهٔ گرافیکِ کاشی‌ها — بامپ = تازه‌سازیِ همهٔ کش‌ها (knob زنده)
   }
   divar?: {
     proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server

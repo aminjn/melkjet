@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+
 // فاز ۲۳۸ — زمینهٔ نقشه، کاشی‌به‌کاشی از پروکسیِ خودِ سایت (/api/geo/tile).
 // چرا: staticmapِ سامانه هنوز زمینهٔ خالی رندر می‌دهد و کشِ nginxاش placeholderهای قدیمی را نگه
 // داشته بود؛ کاشی‌ها اما واقعی‌اند (سند: کاشیِ تازهٔ ۱۹.۶KB با جاده). این کامپوننت همان ریاضیِ
@@ -13,7 +15,20 @@ function project(lat: number, lng: number, z: number) {
   return { x, y }
 }
 
+// فاز ۲۴۹ — قالبِ URL کاشی (با ?v= نسخهٔ گرافیک) از mapkey می‌آید تا بامپِ نسخه در ادمین، کشِ
+// مرورگر را هم بشکند. یک fetch کوچک برای کلِ عمرِ صفحه (کشِ سطحِ ماژول).
+let tmplPromise: Promise<string> | null = null
+function tileTemplate(): Promise<string> {
+  if (!tmplPromise) tmplPromise = fetch('/api/geo/mapkey')
+    .then(r => r.ok ? r.json() : null)
+    .then(d => d?.tiles || '/api/geo/tile/{z}/{x}/{y}')
+    .catch(() => '/api/geo/tile/{z}/{x}/{y}')
+  return tmplPromise
+}
+
 export default function TileBase({ lat, lng, zoom, w, h }: { lat: number; lng: number; zoom: number; w: number; h: number }) {
+  const [tmpl, setTmpl] = useState<string | null>(null)
+  useEffect(() => { let alive = true; tileTemplate().then(t => { if (alive) setTmpl(t) }); return () => { alive = false } }, [])
   const z = Math.max(0, Math.min(20, Math.round(zoom)))
   const c = project(lat, lng, z)
   const tl = { x: c.x - w / 2, y: c.y - h / 2 }
@@ -21,11 +36,11 @@ export default function TileBase({ lat, lng, zoom, w, h }: { lat: number; lng: n
   const x1 = Math.floor((tl.x + w) / TILE), y1 = Math.floor((tl.y + h) / TILE)
   const max = Math.pow(2, z)
   const tiles: { key: string; src: string; left: number; top: number }[] = []
-  for (let ty = y0; ty <= y1; ty++) {
+  if (tmpl) for (let ty = y0; ty <= y1; ty++) {
     if (ty < 0 || ty >= max) continue
     for (let tx = x0; tx <= x1; tx++) {
       const wx = ((tx % max) + max) % max
-      tiles.push({ key: `${z}/${tx}/${ty}`, src: `/api/geo/tile/${z}/${wx}/${ty}`, left: tx * TILE - tl.x, top: ty * TILE - tl.y })
+      tiles.push({ key: `${z}/${tx}/${ty}`, src: tmpl.replace('{z}', String(z)).replace('{x}', String(wx)).replace('{y}', String(ty)), left: tx * TILE - tl.x, top: ty * TILE - tl.y })
     }
   }
   return (

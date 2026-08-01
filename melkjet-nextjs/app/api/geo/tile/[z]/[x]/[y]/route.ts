@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { geoApiCfg } from '@/app/lib/geo-api'
+import { geoApiCfg, geoTileVersion } from '@/app/lib/geo-api'
 import { redisEnabled, rGetBuf, rSetEx } from '@/app/lib/redis'
 
 // فاز ۲۳۵ — پروکسیِ کاشیِ نقشه: مرورگر نمی‌تواند برای <img> هدرِ X-API-Key بفرستد، پس کاشی از
@@ -13,7 +13,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ z: string;
   if (!baseUrl) return new Response('no-geoapi', { status: 404 })
   // فاز ۲۴۰ — کشِ مشترکِ Redis (بین‌اینستنسی): با ۴+ اینستنس و کاربرِ میلیونی، هر کاشی یک‌بار از
   // سامانه می‌آید نه یک‌بار به‌ازای هر اینستنس/درخواست. نبودِ Redis = همان مسیرِ قبلی.
-  const rkey = `tile:2:${zi}/${xi}/${yi}`
+  // فاز ۲۴۹: نسخهٔ کاشی knob زندهٔ ادمین است — بامپ = کلیدِ Redis و mv بالادستی هر دو نو می‌شوند.
+  const tv = geoTileVersion()
+  const rkey = `tile:${tv}:${zi}/${xi}/${yi}`
   if (redisEnabled()) {
     const hit = await rGetBuf(rkey)
     if (hit && hit.length) return new Response(new Uint8Array(hit), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400', 'X-Cache': 'redis' } })
@@ -24,7 +26,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ z: string;
     const timer = setTimeout(() => ctl.abort(), 12000)
     // فاز ۲۳۷: no-store — کشِ دادهٔ Next نباید کاشیِ placeholderِ قدیمی را بعد از واقعی‌شدنِ کاشی‌ها سرو کند.
     // فاز ۲۳۸: mv=2 کش‌شکنِ nginxِ خودِ سامانه — کلیدِ کشِ placeholderهای قدیمی دیگر هرگز hit نمی‌شود.
-    const r = await fetch(`${baseUrl}/v1/tiles/${zi}/${xi}/${yi}.png?style=day&mv=2${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`, {
+    const r = await fetch(`${baseUrl}/v1/tiles/${zi}/${xi}/${yi}.png?style=day&mv=${tv}${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`, {
       headers: apiKey ? { 'X-API-Key': apiKey, 'Api-Key': apiKey } : undefined,
       signal: ctl.signal,
       cache: 'no-store',
