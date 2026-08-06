@@ -389,7 +389,8 @@ export async function setModeration(itemId: string, status: ItemStatus, reason: 
 // Persist many moderation verdicts in a single atomic write (avoids file races under concurrency).
 export async function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[], opts?: { onlyPending?: boolean }) {
   if (!verdicts.length) return
-  return mutate(db => {
+  const _tgNew: Item[] = []
+  const _r = await mutate(db => {
     const now = Date.now()
     const map = new Map(verdicts.map(v => [v.id, v]))
     for (const it of db.items) {
@@ -398,9 +399,13 @@ export async function setModerationBatch(verdicts: { id: string; status: ItemSta
       // فاز ۱۵۶ (B2): حکمِ «خودکار» فقط روی آیتمی می‌نشیند که هنوز pending است — اگر ادمین
       // بینِ خواندنِ صف و نوشتنِ دسته‌ای، خودش حکم داده باشد، حکمِ انسانی دست‌نخورده می‌ماند.
       if (opts?.onlyPending && it.status !== 'pending') continue
+      const _wasA = it.status === 'approved'
       it.status = v.status; it.aiReason = v.reason; it.aiScore = v.score; it.moderatedAt = now
+      if (!_wasA && v.status === 'approved' && it.type === 'listing') _tgNew.push(it)
     }
   })
+  if (_tgNew.length) import('./telegram-notify').then(m => m.notifyNewListings(_tgNew)).catch(() => {})
+  return _r
 }
 
 // فاز ۱۳۸ — بازممیزیِ ردشده‌های «خودکار»: آگهی‌هایی که ماشین/قاعدهٔ قدیمی رد کرده (نه ادمینِ انسانی)
@@ -602,7 +607,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
       else identMap.set(identKey(item), item)
       added++
     }
-    if (db.items.length > 1000) db.items = db.items.slice(0, 1000)
+    // no item cap
     const s = db.sources.find(x => x.id === source.id)
     if (s) { s.lastRun = Date.now(); s.lastCount = added; s.status = 'ok'; s.lastError = undefined }
     return { added, dup, updated }

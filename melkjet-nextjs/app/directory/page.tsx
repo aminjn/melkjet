@@ -46,7 +46,7 @@ function toProfessional(it: ContentItem) {
     promoKind: (it as any).promoKind as (string | undefined),
     badges: ((it as any).badges || []) as { id: string; label: string; icon: string; desc?: string }[],
     avatarGradient: gradientFor(it.title, 'avatar'),
-    url: it.url,
+    url: it.url && /bonyadvokala\.com\/lawyers\//.test(it.url) ? `/lawyers/${it.url.match(/\/lawyers\/([^/?#]+)/)?.[1] || ''}` : it.url,
     hasPhone: it.hasPhone,
     image: it.image,
     stats,
@@ -61,6 +61,7 @@ export default function DirectoryPage() {
   const [activeCategory, setActiveCategory] = useState('مشاور')
   const [searchQuery, setSearchQuery] = useState('')
   const [serviceTag, setServiceTag] = useState('')
+  const [city, setCity] = useState('')
   const [items, setItems] = useState<ContentItem[]>([])
   // فاز ۱۷۸ — جستجو/دسته/تگ در URL می‌ماند: برگشت از پروفایل چیزی را نمی‌پراند
   useEffect(() => { try { const sp = new URLSearchParams(window.location.search); const qq = sp.get('q'); if (qq) setSearchQuery(qq); const c = sp.get('cat'); if (c) setActiveCategory(c); const tg = sp.get('tag'); if (tg) setServiceTag(tg) } catch {} }, [])
@@ -93,7 +94,7 @@ export default function DirectoryPage() {
   useEffect(() => {
     let alive = true
     setLoading(true)
-    setServiceTag('')
+    setServiceTag(''); setCity('')
     // متخصصانِ ثبت‌شده در سایت (اکانت‌های نقش‌دار) + آیتم‌های اسکرپ‌شدهٔ دایرکتوری — یکجا.
     Promise.all([
       fetch(`/api/directory?category=${encodeURIComponent(activeCategory)}`, { cache: 'no-store' })
@@ -129,10 +130,18 @@ export default function DirectoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, promoted])
 
+  const cities = useMemo(() => {
+    const freq = new Map<string, number>()
+    for (const p of all) { const c = (p.area || '').split(/[،,]/)[0].trim(); if (c) freq.set(c, (freq.get(c) || 0) + 1) }
+    return [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, promoted])
+
   // مرتب‌سازی طبقِ اعلامِ صفحه: اول پروموت‌شده‌ها، بعد بالاترین امتیازِ واقعی، بعد پرنظرترین‌ها
   const filteredProfessionals = all
     .filter((p) => !searchQuery || p.name.includes(searchQuery) || (p.area || '').includes(searchQuery))
     .filter((p) => !serviceTag || p.tags.some(t => String(t).trim() === serviceTag))
+    .filter((p) => !city || (p.area || '').split(/[،,]/)[0].trim() === city)
     .sort((x, y) => (Number(y.promoted) - Number(x.promoted)) || ((y.rating || 0) - (x.rating || 0)) || ((y.stats.reviews || 0) - (x.stats.reviews || 0)))
 
   return (
@@ -197,6 +206,21 @@ export default function DirectoryPage() {
           </div>
 
           {/* چیپ‌های نوعِ خدمات — از تگ‌های واقعیِ همین فهرست */}
+          {cities.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>شهر:</span>
+              {['', ...cities].map(c => {
+                const active = city === c
+                return (
+                  <button key={c || 'all'} onClick={() => setCity(c)}
+                    style={{ padding: '7px 16px', borderRadius: 999, fontSize: 12.5, fontWeight: active ? 800 : 500, cursor: 'pointer', fontFamily: 'inherit', border: active ? '1px solid var(--gold)' : '1px solid var(--line2)', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--goldText)' : 'var(--muted)', transition: 'all .15s' }}>
+                    {c || 'همه'}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           {serviceTags.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
               <span style={{ fontSize: 12, color: 'var(--muted)' }}>نوع خدمات:</span>
