@@ -111,3 +111,11 @@ next-env.d.ts
 
 # فاز ۱۳۱ — ضربانِ کارگرِ صفِ اسکرپ (فایلِ حالتِ runtime، مثل .advisor-divar-jobs.json)
 .cron-heartbeat.json
+
+# phase 258b — ignore runtime state, backups, stray artifacts (prevent accidental secret commits)
+.persiansaze*
+.bonyad-*
+.*.bak*
+-H
+15
+INSTALLATION_COMPLETE
