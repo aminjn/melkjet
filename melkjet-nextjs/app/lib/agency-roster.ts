@@ -258,9 +258,18 @@ export async function buildAgencyRoster(
   const clusters = new Map<string, RosterAdvisor>()
   const unnamed: { tokens: string[]; posts: BrandPost[] } = { tokens: [], posts: [] }
   rows.forEach((r, idx) => {
-    const lex = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), name)
-    const ai = lex ? '' : validName(aiMap[idx] || '', name)
-    const chosen = lex || ai || validName(r.cand[0] || '', name)
+    // کاندیداهای «موضعِ امضا»یِ همین آگهی (heuristic) — تنها جایی که یک اسم واقعاً امضای مشاور است.
+    const cand = r.cand.map(c => validName(c, name)).filter(Boolean)
+    const candKeys = new Set(cand.map(c => keyOf(c)))
+    const lexRaw = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), name)
+    // lexicon فقط وقتی معتبر است که نامِ آموخته‌شده در موضعِ امضایِ همین آگهی باشد (جزوِ cand)،
+    // نه هر جای متن — وگرنه «ایران/ایرانی» در آدرس، آگهیِ مشاورِ دیگری («لشگری») را می‌دزدد.
+    const lex = lexRaw && candKeys.has(keyOf(lexRaw)) ? lexRaw : ''
+    // استثنا: نامِ کاملِ چندکلمه‌ای («علی رضایی») هرجای متن هم تقریباً حتماً امضاست (تصادفِ ناچیز).
+    const lexFull = (!lex && lexRaw && lexRaw.includes(' ')) ? lexRaw : ''
+    const ai = validName(aiMap[idx] || '', name)
+    // اولویت: AIِ متن‌آگاه → lexiconِ محدود به موضعِ امضا → اولین کاندیدای heuristic → نامِ کاملِ lexicon.
+    const chosen = ai || lex || cand[0] || lexFull
     if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); return }
     if (ai) toLearn.add(ai)                 // نامِ تأییدشدهٔ AI → یادگیری برای دفعهٔ بعد (مستقل از AI)
     const k = keyOf(chosen)
