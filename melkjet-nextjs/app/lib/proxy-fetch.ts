@@ -65,3 +65,46 @@ export function proxiedRequest(targetUrl: string, opts: Opts = {}): Promise<{ st
     connectReq.end()
   })
 }
+
+/**
+ * فاز ۲۵۷ — دانلودِ باینری (عکس/فایل) از راهِ همان پروکسیِ CONNECT. مثلِ proxiedRequest است ولی
+ * بایت‌ها را در Buffer جمع می‌کند (بدونِ setEncoding) تا داده خراب نشود. فقط GET.
+ */
+export function proxiedGetBinary(targetUrl: string, opts: { proxyUrl?: string; timeout?: number } = {}): Promise<{ status: number; buffer: Buffer }> {
+  const { proxyUrl, timeout = 20000 } = opts
+  const u = new URL(targetUrl)
+  const path = u.pathname + u.search
+  const baseHeaders: Record<string, string> = { Host: u.hostname }
+  return new Promise((resolve, reject) => {
+    const sendOverSocket = (socket: tls.TLSSocket | null) => {
+      const reqOpts: https.RequestOptions = socket
+        ? { method: 'GET', path, headers: baseHeaders, createConnection: () => socket as any, timeout }
+        : { host: u.hostname, port: 443, method: 'GET', path, headers: baseHeaders, servername: u.hostname, timeout }
+      const lib = socket ? http : https
+      const req = lib.request(reqOpts, (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c) => chunks.push(Buffer.from(c)))
+        res.on('end', () => resolve({ status: res.statusCode || 0, buffer: Buffer.concat(chunks) }))
+      })
+      req.on('error', reject)
+      req.setTimeout(timeout, () => req.destroy(new Error('request timeout')))
+      req.end()
+    }
+    if (!proxyUrl) { sendOverSocket(null); return }
+    const p = new URL(proxyUrl)
+    const connectHeaders: Record<string, string> = {}
+    if (p.username) {
+      const auth = Buffer.from(`${decodeURIComponent(p.username)}:${decodeURIComponent(p.password)}`).toString('base64')
+      connectHeaders['Proxy-Authorization'] = `Basic ${auth}`
+    }
+    const connectReq = http.request({ host: p.hostname, port: Number(p.port) || 80, method: 'CONNECT', path: `${u.hostname}:443`, headers: connectHeaders, timeout })
+    connectReq.on('connect', (res, rawSocket) => {
+      if (res.statusCode !== 200) { reject(new Error(`proxy CONNECT failed: ${res.statusCode}`)); return }
+      const tlsSocket = tls.connect({ socket: rawSocket, servername: u.hostname }, () => sendOverSocket(tlsSocket))
+      tlsSocket.on('error', reject)
+    })
+    connectReq.on('error', reject)
+    connectReq.setTimeout(timeout, () => connectReq.destroy(new Error('proxy timeout')))
+    connectReq.end()
+  })
+}

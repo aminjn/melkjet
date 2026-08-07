@@ -9,11 +9,18 @@ export interface Draft {
   step: 'deal' | 'city' | 'cityText' | 'region' | 'regionText' | 'hood'
   deal?: string; city?: string; region?: string; regions?: string[]; hoods?: string[]
 }
-interface DB { subs: Sub[]; drafts: Record<string, Draft> }
+// فاز ۲۵۷ — وصلِ حسابِ سایت به چتِ تلگرام (شمارهٔ تأییدشده با اشتراکِ مخاطب).
+export interface Link { chatId: number; phone: string; name?: string; role?: string; linkedAt: number }
+// فاز ۲۵۷ — پیش‌نویسِ ثبتِ آگهی از تلگرام.
+export interface LDraft {
+  step: 'deal' | 'city' | 'hood' | 'title' | 'price' | 'area' | 'photo' | 'confirm'
+  deal?: string; city?: string; hood?: string; title?: string; price?: string; area?: string; image?: string
+}
+interface DB { subs: Sub[]; drafts: Record<string, Draft>; links: Record<string, Link>; ldrafts: Record<string, LDraft> }
 
 async function load(): Promise<DB> {
-  try { const d = JSON.parse(await fs.readFile(FILE, 'utf8')); return { subs: d.subs || [], drafts: d.drafts || {} } }
-  catch { return { subs: [], drafts: {} } }
+  try { const d = JSON.parse(await fs.readFile(FILE, 'utf8')); return { subs: d.subs || [], drafts: d.drafts || {}, links: d.links || {}, ldrafts: d.ldrafts || {} } }
+  catch { return { subs: [], drafts: {}, links: {}, ldrafts: {} } }
 }
 async function save(db: DB) { await fs.writeFile(FILE, JSON.stringify(db), 'utf8') }
 const rid = () => Math.random().toString(36).slice(2, 10)
@@ -32,3 +39,13 @@ export async function removeSub(chatId: number, id: string): Promise<boolean> {
   db.subs = db.subs.filter(s => !(s.chatId === chatId && s.id === id)); await save(db); return db.subs.length < before
 }
 export async function allSubs(): Promise<Sub[]> { return (await load()).subs }
+
+// ── فاز ۲۵۷: وصلِ حساب ──────────────────────────────────────────────────────
+export async function getLink(chatId: number): Promise<Link | undefined> { return (await load()).links[String(chatId)] }
+export async function setLink(l: Link) { const db = await load(); db.links[String(l.chatId)] = l; await save(db) }
+export async function removeLink(chatId: number) { const db = await load(); delete db.links[String(chatId)]; await save(db) }
+
+// ── فاز ۲۵۷: پیش‌نویسِ آگهی ──────────────────────────────────────────────────
+export async function getLDraft(chatId: number): Promise<LDraft | undefined> { return (await load()).ldrafts[String(chatId)] }
+export async function setLDraft(chatId: number, d: LDraft) { const db = await load(); db.ldrafts[String(chatId)] = d; await save(db) }
+export async function clearLDraft(chatId: number) { const db = await load(); delete db.ldrafts[String(chatId)]; await save(db) }

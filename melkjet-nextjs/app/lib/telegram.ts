@@ -1,7 +1,7 @@
 // فاز ۲۵۲ — یکپارچه‌سازیِ تلگرام (ربات). چون api.telegram.org از داخلِ ایران فیلتر است،
 // همهٔ تماس‌ها از همان پروکسیِ سرور (proxyUrlِ کانفیگِ ادمین) و با proxiedRequest رد می‌شوند —
 // دقیقاً همان مکانیزمی که divar/web-push استفاده می‌کنند. هیچ راهِ موازی‌ای ساخته نمی‌شود.
-import { proxiedRequest } from './proxy-fetch'
+import { proxiedRequest, proxiedGetBinary } from './proxy-fetch'
 import { getAdminData } from './admin-store'
 
 const TOKEN = () => process.env.TELEGRAM_BOT_TOKEN || ''
@@ -40,6 +40,20 @@ export async function tgSend(chatId: number | string, text: string, extra: Recor
 }
 
 export function tgGetMe() { return tgApi('getMe') }
+
+/** فاز ۲۵۷ — دانلودِ عکس/فایلِ تلگرام (file_id) به‌صورتِ Buffer، از راهِ همان پروکسی. null در خطا. */
+export async function tgFileBuffer(fileId: string): Promise<{ buffer: Buffer; mime: string } | null> {
+  const token = TOKEN(); if (!token) return null
+  const f = await tgApi<{ file_path?: string }>('getFile', { file_id: fileId })
+  if (!f?.file_path) return null
+  try {
+    const r = await proxiedGetBinary(`https://api.telegram.org/file/bot${token}/${f.file_path}`, { proxyUrl: PROXY(), timeout: 25000 })
+    if (r.status !== 200 || !r.buffer.length) return null
+    const ext = (f.file_path.split('.').pop() || '').toLowerCase()
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+    return { buffer: r.buffer, mime }
+  } catch { return null }
+}
 
 /** ثبتِ وب‌هوک روی آدرسِ داده‌شده (با secretِ اختیاری). */
 export function tgSetWebhook(url: string, secret?: string) {
