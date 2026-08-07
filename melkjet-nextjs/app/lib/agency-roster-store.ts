@@ -231,35 +231,48 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
   const advPre = await getAdvisor(owner)
   const listingIdsPre = new Set((advPre.listings || []).map(l => l.id))
   const freshByToken = new Map(dvPre.imports.filter(i => i.at && Date.now() - i.at < FRESH_MS && listingIdsPre.has(i.listingId)).map(i => [i.token, i.listingId]))
-  let slowStreak193 = 0   // فاز ۱۹۷ب — سرعتِ تطبیقی در برابرِ rate-limit دیوار
-  for (const token of tokens) {
-    const freshId = freshByToken.get(token)
-    if (freshId) { liveIds.add(freshId); try { opts193?.onEach?.() } catch {}; continue }
-    // فاز ۱۹۳ — بودجهٔ زمانیِ ران: از سقف گذشت → توقفِ تمیز؛ «رفته/فروخته» حساب نمی‌کنیم (دادهٔ ناقص) و ادامه خودکار است
-    if (opts193?.deadline && Date.now() > opts193.deadline) return { live: liveIds.size, sold: 0, aborted: true }
-    if (opts193?.shouldStop && await opts193.shouldStop()) return { live: liveIds.size, sold: 0, aborted: true, stopped: true }
-    try {
-      // مالکِ موقتِ رُستر: آگهی وارد می‌شود ولی عمومی نمی‌شود تا کاربر ساخته شود (graduate).
-      // واردهٔ تازهٔ زیرِ ۲۰ ساعت دوباره از دیوار گرفته نمی‌شود (سرعتِ ازسرگیری/رانِ دوم).
-      const t0 = Date.now()
-      const res = await Promise.race([
-        importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: 20 * 3600_000, fetchPost: opts193?.fetchPost }),
-        new Promise<{ ok: false; reason: string }>(r => setTimeout(() => r({ ok: false, reason: 'timeout 2min — رد شد' }), 120_000)),   // فاز ۱۹۵: هیچ توکنی حلقه را نگه نمی‌دارد
-      ])
-      const ms = Date.now() - t0
-      // فاز ۱۹۷ — چشمِ حلقه: توکنِ کند/شکست‌خورده با علت لاگ می‌شود تا «گیر» دیگر نامرئی نباشد
-      if (ms > 30_000 || !res.ok) console.log(`[roster] token=${token} ms=${ms} ok=${res.ok}${!res.ok && 'reason' in res ? ' reason=' + String((res as any).reason).slice(0, 80) : ''}`)
-      // فاز ۱۹۷ب — سرعتِ تطبیقی (حدسِ درستِ کاربر: دیوار با درخواستِ زیاد rate-limit می‌کند):
-      // توکنِ کند/ناموفق = نشانهٔ محدودیت → فاصلهٔ بعدی پله‌پله زیاد می‌شود (تا ۳۰ث) تا محدودیت باز شود؛ موفقِ سریع = برگشت به ریتمِ عادی
-      if (!res.ok || ms > 20_000) slowStreak193 = Math.min(slowStreak193 + 1, 5)
-      else slowStreak193 = 0
-      const pace = slowStreak193 === 0 ? 300 : [2_000, 5_000, 10_000, 20_000, 30_000][slowStreak193 - 1]
-      if (slowStreak193 >= 2) console.log(`[roster] divar کند/محدود — فاصلهٔ درخواست‌ها ${Math.round(pace / 1000)}ث شد`)
-      if (res.ok && 'listing' in res && res.listing) { liveIds.add(res.listing.id); if (!('skipped' in res && res.skipped)) await sleep(pace) }
-      else await sleep(pace)
-    } catch (e) { console.log(`[roster] token=${token} threw: ${String((e as Error)?.message || e).slice(0, 80)}`); await sleep(2_000) }
-    try { opts193?.onEach?.() } catch {}
+  // فاز ۲۵۸ — واکشیِ موازی (استخرِ N کارگر) به‌جای تک‌تک. علتِ کندیِ فاجعه‌بار (~۲۸ث/آگهی):
+  // حلقه پشتِ‌سرِهم بود و backoffِ rate-limitِ دیوار تا ۳۰ث بالا می‌رفت. fetchDivarPost بیرونِ
+  // قفلِ store است (advisor-divar-import خط ۵۱)، پس چند واکشیِ هم‌زمان واقعاً موازی‌اند. backoffِ
+  // «مشترک» می‌ماند: اگر دیوار محدود کند همهٔ کارگرها پله‌پله کند می‌شوند؛ سالم که بود چند برابر سریع‌تر.
+  // ROSTER_CONCURRENCY (env) پیش‌فرض ۳ — اگر دیوار بلاک کرد کمش کن، اگر جا داشت زیادش کن.
+  const CONC = Math.max(1, Math.min(8, Number(process.env.ROSTER_CONCURRENCY) || 3))
+  let slowStreak193 = 0   // فاز ۱۹۷ب — سرعتِ تطبیقیِ مشترک در برابرِ rate-limit دیوار
+  let cursor = 0
+  let abortedAll = false, stoppedAll = false
+  const worker = async () => {
+    while (true) {
+      if (abortedAll) return
+      const myIdx = cursor++; if (myIdx >= tokens.length) return
+      const token = tokens[myIdx]
+      const freshId = freshByToken.get(token)
+      if (freshId) { liveIds.add(freshId); try { opts193?.onEach?.() } catch {}; continue }
+      // فاز ۱۹۳ — بودجهٔ زمانیِ ران: از سقف گذشت → توقفِ تمیز (دادهٔ ناقص، ادامهٔ خودکار)
+      if (opts193?.deadline && Date.now() > opts193.deadline) { abortedAll = true; return }
+      if (opts193?.shouldStop && await opts193.shouldStop()) { abortedAll = true; stoppedAll = true; return }
+      try {
+        // مالکِ موقتِ رُستر: آگهی وارد می‌شود ولی عمومی نمی‌شود تا کاربر ساخته شود (graduate).
+        const t0 = Date.now()
+        const res = await Promise.race([
+          importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: 20 * 3600_000, fetchPost: opts193?.fetchPost }),
+          new Promise<{ ok: false; reason: string }>(r => setTimeout(() => r({ ok: false, reason: 'timeout 2min — رد شد' }), 120_000)),   // فاز ۱۹۵
+        ])
+        const ms = Date.now() - t0
+        if (ms > 30_000 || !res.ok) console.log(`[roster] token=${token} ms=${ms} ok=${res.ok}${!res.ok && 'reason' in res ? ' reason=' + String((res as any).reason).slice(0, 80) : ''}`)
+        // موفقِ سریع → کاهشِ تدریجیِ استرِیک (نه صفرِ ناگهانی) تا نوسانِ backoff کم شود
+        if (!res.ok || ms > 20_000) slowStreak193 = Math.min(slowStreak193 + 1, 5)
+        else slowStreak193 = Math.max(0, slowStreak193 - 1)
+        // pace به‌ازای هر کارگر؛ چون CONC کارگر موازی داریم، فاصلهٔ مؤثر ~CONC برابر کمتر است.
+        const pace = slowStreak193 === 0 ? 250 : [1_500, 4_000, 8_000, 15_000, 25_000][slowStreak193 - 1]
+        if (slowStreak193 >= 2) console.log(`[roster] divar کند/محدود — فاصلهٔ درخواست‌ها ${Math.round(pace / 1000)}ث شد`)
+        if (res.ok && 'listing' in res && res.listing) liveIds.add(res.listing.id)
+        if (!(res.ok && 'skipped' in res && res.skipped)) await sleep(pace)
+      } catch (e) { console.log(`[roster] token=${token} threw: ${String((e as Error)?.message || e).slice(0, 80)}`); await sleep(2_000) }
+      try { opts193?.onEach?.() } catch {}
+    }
   }
+  await Promise.all(Array.from({ length: CONC }, () => worker()))
+  if (abortedAll) return { live: liveIds.size, sold: 0, aborted: true, stopped: stoppedAll }
   console.log(`[roster] finalize cluster owner=${owner}: live=${liveIds.size}`)
   // فایل‌هایی که این منبع قبلاً آورده بود ولی امسال لمس نشدند = فروخته/اجاره‌رفته.
   const priorIds = new Set(getDivar(owner).imports.filter(i => i.sourceId === sourceId).map(i => i.listingId))
