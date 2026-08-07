@@ -3,11 +3,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { tgApi, tgSend } from '@/app/lib/telegram'
 import { getDraft, setDraft, clearDraft, addSub, listSubs, removeSub } from '@/app/lib/telegram-store'
-import { sendTest, regionsForCity, hoodsForRegion } from '@/app/lib/telegram-notify'
+import { sendTest, regionsForCity, hoodsForRegion, seedChannel } from '@/app/lib/telegram-notify'
 
 export const dynamic = 'force-dynamic'
 
 const CITIES = ['تهران', 'مشهد', 'کرج', 'اصفهان', 'شیراز', 'تبریز']
+// فاز ۲۵۵ — چتِ ادمین برای دستورهای مدیریتی (chat id در env). خالی = هیچ ادمینی.
+const isAdmin = (chatId: number) => !!process.env.TELEGRAM_ADMIN_CHAT && String(chatId) === process.env.TELEGRAM_ADMIN_CHAT
 type Btn = { t: string; d: string }
 function kb(rows: Btn[][]) { return { inline_keyboard: rows.map(r => r.map(b => ({ text: b.t, callback_data: b.d }))) } }
 const menu = kb([[{ t: '➕ آلارمِ جدید', d: 'new' }], [{ t: '🔔 آلارم‌های من', d: 'mine' }]])
@@ -86,6 +88,11 @@ async function handle(u: any) {
   if (text === '/start') { await clearDraft(chatId); await tgSend(chatId, `سلام ${first} 👋\nبه رباتِ <b>ملک‌جت</b> خوش آمدی.\nآلارمِ آگهیِ ملک بساز تا به‌محضِ ثبتِ آگهیِ منطبق، همین‌جا خبرت کنم 🔔`, { reply_markup: menu }) }
   else if (text === '/ping') { await tgSend(chatId, '🏓 pong') }
   else if (text === '/testalert') { const ok = await sendTest(chatId); if (!ok) await tgSend(chatId, 'فعلاً آگهیِ منطبقی نیست — اول یک آلارم بساز.') }
+  else if (text === '/whoami') { await tgSend(chatId, `chat id شما: <code>${chatId}</code>`) }
+  else if (text.startsWith('/pushchannel')) {
+    if (!isAdmin(chatId)) { await tgSend(chatId, '⛔ فقط ادمین.') }
+    else { const n = parseInt(text.split(/\s+/)[1] || '5', 10) || 5; const c = await seedChannel(n); await tgSend(chatId, c ? `✅ ${c} آگهی به کانال پست شد.` : '⚠️ کانال تنظیم نشده (TELEGRAM_CHANNEL) یا آگهیِ عمومی‌ای نیست.') }
+  }
   else {
     const dr = await getDraft(chatId)
     if (dr?.step === 'cityText') { await tgSend(chatId, `شهر: ${text} ✅`); await presentRegions(chatId, dr.deal, text) }

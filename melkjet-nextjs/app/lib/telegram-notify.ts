@@ -46,10 +46,48 @@ async function sendCard(chatId: number, it: Item) {
   return tgApi('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: false, reply_markup })
 }
 
+// فاز ۲۵۵ — کانالِ آگهی‌ها. مقصد از env می‌آید (@username یا -100…). خالی = خاموش (no-op).
+const CHANNEL = () => process.env.TELEGRAM_CHANNEL || ''
+
+// هشتگِ دسته‌بندی از متادیتا: #اجاره #تهران #منطقه_۵ (فاصله‌ها → زیرخط، تلگرام هشتگِ فارسی را می‌پذیرد).
+function hashtags(it: Item): string {
+  const m = (it.meta || {}) as Record<string, string>
+  const tag = (s?: string) => (s && s.trim() ? '#' + s.trim().replace(/\s+/g, '_') : '')
+  return [tag(m['نوع معامله']), tag(m['شهر']), tag(m['منطقه'])].filter(Boolean).join(' ')
+}
+
+/** پستِ خودکارِ آگهی‌های تازه در کانال (اگر تنظیم شده باشد). مستقل از آلارم‌ها. */
+export async function postToChannel(items: Item[]) {
+  const ch = CHANNEL()
+  if (!ch) return
+  let n = 0
+  for (const it of items) {
+    const url = `https://melkjet.com/property/${it.id}`
+    const tags = hashtags(it)
+    const text = caption(it) + (tags ? `\n\n${tags}` : '')
+    const reply_markup = { inline_keyboard: [[{ text: '👁 مشاهده در ملک‌جت', url }]] }
+    if (it.image) await tgApi('sendPhoto', { chat_id: ch, photo: it.image, caption: text, parse_mode: 'HTML', reply_markup })
+    else await tgApi('sendMessage', { chat_id: ch, text, parse_mode: 'HTML', disable_web_page_preview: false, reply_markup })
+    n++
+    await new Promise(r => setTimeout(r, 60))
+    if (n >= 100) break
+  }
+}
+
+/** پستِ دستیِ آخرین آگهی‌ها در کانال (برای تست/سیدِ اولیه). تعدادِ پست‌شده را برمی‌گرداند. */
+export async function seedChannel(limit = 5): Promise<number> {
+  if (!CHANNEL()) return 0
+  const items = (await listItems('listing', { publicOnly: true })).slice(0, limit)
+  if (!items.length) return 0
+  await postToChannel(items)
+  return items.length
+}
+
 export async function notifyNewListings(items: Item[]) {
   const now = Date.now()
   const fresh = items.filter(it => it.type === 'listing' && (!it.scrapedAt || now - it.scrapedAt < 6 * 3600 * 1000))
   if (!fresh.length) return
+  await postToChannel(fresh)               // فاز ۲۵۵ — پستِ کانال (مستقل از آلارم‌ها)
   const subs = await allSubs()
   if (!subs.length) return
   let sent = 0
