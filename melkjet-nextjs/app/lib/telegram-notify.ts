@@ -11,19 +11,19 @@ const norm = (s: string) => (s || '')
   .replace(/[^؀-ۿ0-9a-zA-Z]/g, '')
   .trim()
 
-/** تطبیق: نوع‌معامله + شهر + منطقه(دقیق) + محله(جست‌وجو در محله/عنوان/موقعیت). */
+/** تطبیق: نوع‌معامله + شهر + منطقه/محله (به‌صورتِ کلیدواژه در همهٔ فیلدهای مکانی).
+ * فاز ۲۶۳ — قبلاً «منطقه» تطبیقِ دقیقِ meta['منطقه'] می‌خواست؛ ولی آگهیِ کاربر «منطقه» ندارد
+ * (فقط شهر/محله/عنوان/موقعیت) → هر آلارمِ منطقه‌دار هیچ‌وقت match نمی‌شد. حالا منطقه و محله هر دو
+ * به‌صورتِ جست‌وجو در منطقه+محله+عنوان+موقعیت بررسی می‌شوند (بخشنده و درست). */
 export function matchSub(sub: Sub, it: Item): boolean {
   const m = (it.meta || {}) as Record<string, string>
   const deal = String(m['نوع معامله'] || '')
   const city = String(m['شهر'] || '')
-  const region = String(m['منطقه'] || '')
   if (sub.deal && sub.deal !== 'همه' && deal && !deal.includes(sub.deal)) return false
   if (sub.city && norm(city) && !norm(city).includes(norm(sub.city)) && norm(city) !== norm(sub.city)) return false
-  if (sub.region && norm(region) !== norm(sub.region)) return false
-  if (sub.hood) {
-    const hay = norm(`${m['محله'] || ''} ${it.location || ''} ${it.title || ''}`)
-    if (!hay.includes(norm(sub.hood))) return false
-  }
+  const hay = norm(`${m['منطقه'] || ''} ${m['محله'] || ''} ${it.location || ''} ${it.title || ''}`)
+  if (sub.region && !hay.includes(norm(sub.region))) return false
+  if (sub.hood && !hay.includes(norm(sub.hood))) return false
   return true
 }
 
