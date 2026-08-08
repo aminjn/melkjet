@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { addUserListing } from '@/app/lib/scraper-store'
-import { moderateOne, moderationModel } from '@/app/lib/moderation'
+import { moderateOne, userSubmitModel } from '@/app/lib/moderation'
 
 // ثبت آگهی توسط کاربر → بلافاصله وارد صف تأیید AI می‌شود و تأیید/رد می‌گردد.
 export async function POST(req: NextRequest) {
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   // تأیید/رد فوری: مدلِ یادگیرنده اول، در صورتِ نبودِ اطمینان هوش مصنوعی (اگر تنظیم شده).
   let verdict: any = { status: 'pending', reason: 'در صف بررسی', score: 0 }
-  try { verdict = await moderateOne(item, moderationModel()) } catch { /* بماند در صف */ }
+  try { verdict = await moderateOne(item, userSubmitModel()) } catch { /* بماند در صف */ }
 
   return NextResponse.json({ ok: true, id: item.id, status: verdict.status, reason: verdict.reason, score: verdict.score })
 }

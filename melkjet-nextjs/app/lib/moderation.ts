@@ -75,6 +75,10 @@ function judge(text: string, cfg: ModConfig, hasPrice: boolean): { status: ItemS
 export function moderationModel(): string | null {
   return agentModel('moderation', 'text') || agentModel('chat', 'text') || agentModel('pricing', 'text') || null
 }
+// فاز ۲۶۶ — آگهیِ ثبت‌شدهٔ کاربر باید «واقعاً» توسطِ AI ممیزی شود (تأیید/رد)، نه اینکه چون مدلی
+// تخصیص داده نشده در صفِ pending گیر کند. اگر مدلی ست نشده، از مدلِ مطمئنِ پیش‌فرض استفاده می‌شود.
+// (برخلافِ ممیزیِ دسته‌ایِ آگهی‌های اسکرپ‌شده که برای صرفه‌جویی به AI تکیه نمی‌کند.)
+export function userSubmitModel(): string { return moderationModel() || 'gpt-4o-mini' }
 
 // AI verdict for one item (read-only — does NOT persist).
 async function getVerdict(it: Item, model: string, cfg: ModConfig) {

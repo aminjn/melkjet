@@ -9,7 +9,7 @@ import {
 } from '@/app/lib/telegram-store'
 import { sendTest, regionsForCity, hoodsForRegion, seedChannel, matchSub } from '@/app/lib/telegram-notify'
 import { addUserListing, listItems, type Item } from '@/app/lib/scraper-store'
-import { moderateOne, moderationModel } from '@/app/lib/moderation'
+import { moderateOne, userSubmitModel } from '@/app/lib/moderation'
 import { saveMedia } from '@/app/lib/media-store'
 import { getAccount } from '@/app/lib/account-store'
 import { generateListingCopy, type ListingFields } from '@/app/lib/listing-copy'
@@ -268,7 +268,7 @@ async function submitListing(chatId: number) {
   if (item.status === 'duplicate') { await tgSend(chatId, '⚠️ این آگهی قبلاً در ملک‌جت ثبت شده (ملکِ مشابه).', { reply_markup: menu }); return }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let verdict: any = { status: 'pending', reason: 'در صفِ بررسی' }
-  try { verdict = await moderateOne(item, moderationModel()) } catch { /* بماند در صف */ }
+  try { verdict = await moderateOne(item, userSubmitModel()) } catch { /* بماند در صف */ }
   if (verdict.status === 'approved') await tgSend(chatId, `✅ آگهی ثبت و تأیید شد و در سایت منتشر شد!\nhttps://melkjet.com/property/${item.id}`, { reply_markup: menu })
   else if (verdict.status === 'rejected') await tgSend(chatId, `❌ آگهی تأیید نشد: ${verdict.reason || 'مغایر با قوانین'}\nمی‌تونی اصلاحش کنی و دوباره ثبت کنی.`, { reply_markup: menu })
   else await tgSend(chatId, '🕒 آگهی ثبت شد و در صفِ بررسی است؛ پس از تأیید در سایت منتشر می‌شود.', { reply_markup: menu })
