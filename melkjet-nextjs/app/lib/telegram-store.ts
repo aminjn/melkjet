@@ -11,10 +11,15 @@ export interface Draft {
 }
 // فاز ۲۵۷ — وصلِ حسابِ سایت به چتِ تلگرام (شمارهٔ تأییدشده با اشتراکِ مخاطب).
 export interface Link { chatId: number; phone: string; name?: string; role?: string; linkedAt: number }
-// فاز ۲۵۷ — پیش‌نویسِ ثبتِ آگهی از تلگرام.
+// فاز ۲۵۷/۲۵۹ — پیش‌نویسِ ثبتِ آگهیِ هوشمند از تلگرام (پرسشِ گام‌به‌گامِ همه‌چیز با دکمه).
 export interface LDraft {
-  step: 'deal' | 'city' | 'hood' | 'title' | 'price' | 'area' | 'photo' | 'confirm'
-  deal?: string; city?: string; hood?: string; title?: string; price?: string; area?: string; image?: string
+  step: 'deal' | 'ptype' | 'city' | 'cityText' | 'hood' | 'hoodText' | 'area'
+    | 'rooms' | 'floor' | 'age' | 'parking' | 'elevator' | 'storage'
+    | 'price' | 'photo' | 'gen' | 'editdesc' | 'confirm'
+  deal?: string; ptype?: string; city?: string; hood?: string; hoods?: string[]
+  area?: string; rooms?: string; floor?: string; age?: string
+  parking?: boolean; elevator?: boolean; storage?: boolean
+  price?: string; image?: string; title?: string; description?: string
 }
 interface DB { subs: Sub[]; drafts: Record<string, Draft>; links: Record<string, Link>; ldrafts: Record<string, LDraft> }
 

@@ -90,9 +90,10 @@ export default function SubmitPage() {
     if (!form.title.trim()) { alert('لطفاً عنوان آگهی را وارد کنید.'); return; }
     setSubmitting(true); setSubmitResult(null);
     try {
+      const description = (aiDescription && aiDescription.trim()) ? aiDescription.trim() : fallbackDesc();   // فاز ۲۵۹: هرگز توضیحاتِ خالی/کوتاه نرود
       const r = await fetch('/api/submit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, description: aiDescription, images: undefined, floorPlan: undefined }),
+        body: JSON.stringify({ ...form, description, images: undefined, floorPlan: undefined }),
       });
       const d = await r.json();
       if (!r.ok) { alert(d.error || 'خطا در ثبت آگهی'); return; }
@@ -184,34 +185,30 @@ export default function SubmitPage() {
     set('images', updated);
   };
 
-  const fallbackDesc = () =>
-    `${form.propertyType || 'ملک'} ${form.area ? form.area + ' متری' : ''} در ${form.neighborhood || form.city || 'موقعیت مناسب'}${form.rooms ? '، دارای ' + form.rooms + ' اتاق خواب' : ''}${form.parking === 'yes' ? '، پارکینگ' : ''}${form.elevator === 'yes' ? '، آسانسور' : ''}${form.storage === 'yes' ? '، انباری' : ''}. موقعیت عالی با دسترسی آسان به امکانات شهری.${me?.name ? ` جهتِ هماهنگیِ بازدید با ${me.name} تماس بگیرید.` : ''}`;
+  // قالبِ محلیِ چندخطی و تعریف‌کننده (اگر AI در دسترس نبود)
+  const fallbackDesc = () => {
+    const feats = [form.parking === 'yes' && 'پارکینگِ اختصاصی', form.elevator === 'yes' && 'آسانسور', form.storage === 'yes' && 'انباری'].filter(Boolean);
+    const loc = form.neighborhood ? `محدودهٔ خوش‌نامِ ${form.neighborhood}` : (form.city || 'موقعیتی مناسب');
+    return [
+      `🏠 ${form.propertyType || 'ملکی'} ${form.dealType === 'rent' ? 'برای اجاره' : 'برای فروش'}${form.area ? ` با متراژِ ${form.area} متر` : ''} در ${loc}`,
+      `این ملکِ دلباز و خوش‌نقشه${form.rooms && Number(form.rooms) > 0 ? ` با ${form.rooms} اتاقِ خواب` : ''}${form.floor ? ` در طبقهٔ ${form.floor}` : ''}، در موقعیتی عالی و با دسترسیِ آسان به امکاناتِ شهری، مغازه‌ها و حمل‌ونقلِ عمومی قرار گرفته است. ✨`,
+      feats.length ? `از امکاناتِ این ملک می‌توان به ${feats.join('، ')} اشاره کرد. 🚗` : '',
+      form.buildingAge ? `سنِ بنا حدودِ ${form.buildingAge} سال و در وضعیتِ بسیار مطلوبی است.` : '',
+      `گزینه‌ای مطمئن و ارزشمند برای سکونت یا سرمایه‌گذاری. 🔑`,
+      me?.name ? `جهتِ هماهنگیِ بازدید با ${me.name} تماس بگیرید.` : `برای بازدید و اطلاعاتِ بیشتر همین حالا تماس بگیرید.`,
+    ].filter(Boolean).join('\n\n');
+  };
 
-  // توضیحاتِ واقعیِ هوش مصنوعی — کامل، حرفه‌ای، با ذکرِ نامِ مشاور. اگر AI در دسترس نبود، قالبِ محلی.
+  // فاز ۲۵۹ — توضیحاتِ حرفه‌ای/چندخطی از تولیدکنندهٔ مشترک (همان که تلگرام استفاده می‌کند).
   const handleGenerateDescription = async () => {
     setAiLoading(true);
     try {
-      const specs = [
-        form.propertyType && `نوعِ ملک: ${form.propertyType}`,
-        form.dealType && `نوعِ معامله: ${form.dealType === 'rent' ? 'اجاره' : 'فروش'}`,
-        form.area && `متراژ: ${form.area} متر`,
-        form.rooms && `اتاقِ خواب: ${form.rooms}`,
-        [form.city, form.district, form.neighborhood].filter(Boolean).length && `موقعیت: ${[form.city, form.district, form.neighborhood].filter(Boolean).join('، ')}`,
-        form.address && `آدرس: ${form.address}`,
-        form.floor && `طبقه: ${form.floor}${form.totalFloors ? ' از ' + form.totalFloors : ''}`,
-        form.buildingAge && `سنِ بنا: ${form.buildingAge} سال`,
-        form.parking === 'yes' && 'پارکینگ دارد',
-        form.elevator === 'yes' && 'آسانسور دارد',
-        form.storage === 'yes' && 'انباری دارد',
-        form.totalPrice && `قیمتِ کل: ${form.totalPrice} تومان`,
-        form.rent && `اجارهٔ ماهانه: ${form.rent} تومان`,
-        form.deposit && `ودیعه: ${form.deposit} تومان`,
-      ].filter(Boolean).join('\n');
-      const input = `برای این ملک یک «توضیحاتِ آگهیِ» حرفه‌ای، جذاب و کاملِ فارسی بنویس (حدودِ ۵ تا ۷ جمله، لحنِ مشاورِ املاکِ حرفه‌ای). ویژگی‌ها را روان و کامل توصیف کن، نقاطِ قوت و موقعیت و دسترسی‌ها را برجسته کن، و در پایان یک دعوت به تماس/بازدید بگذار.${me?.name ? ` حتماً در پایان نامِ «${me.name}» را به‌عنوانِ مشاورِ تنظیم‌کنندهٔ آگهی ذکر کن.` : ''} فقط متنِ توضیحات را بده — بدونِ تیتر، بدونِ علامتِ نقل‌قول، بدونِ فهرست.\n\nمشخصاتِ ملک:\n${specs}`;
-      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'content', input }) });
+      const r = await fetch('/api/listing/copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, advisorName: me?.name }) });
       const d = await r.json();
-      if (r.ok && d.text && String(d.text).trim()) setAiDescription(String(d.text).trim());
-      else setAiDescription(fallbackDesc());
+      if (r.ok && d.description && String(d.description).trim()) {
+        setAiDescription(String(d.description).trim());
+        if (d.title && String(d.title).trim() && !form.title.trim()) set('title', String(d.title).trim());
+      } else setAiDescription(fallbackDesc());
     } catch {
       setAiDescription(fallbackDesc());
     } finally {

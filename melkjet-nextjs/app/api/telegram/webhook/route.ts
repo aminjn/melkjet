@@ -4,13 +4,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { tgApi, tgSend, tgFileBuffer } from '@/app/lib/telegram'
 import {
   getDraft, setDraft, clearDraft, addSub, listSubs, removeSub,
-  getLink, setLink, getLDraft, setLDraft, clearLDraft,
+  getLink, setLink, getLDraft, setLDraft, clearLDraft, type LDraft,
 } from '@/app/lib/telegram-store'
 import { sendTest, regionsForCity, hoodsForRegion, seedChannel } from '@/app/lib/telegram-notify'
 import { addUserListing, listItems } from '@/app/lib/scraper-store'
 import { moderateOne, moderationModel } from '@/app/lib/moderation'
 import { saveMedia } from '@/app/lib/media-store'
 import { getAccount } from '@/app/lib/account-store'
+import { generateListingCopy, type ListingFields } from '@/app/lib/listing-copy'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,7 +78,15 @@ async function showMine(chatId: number) {
   for (const s of subs) await tgSend(chatId, `🔔 ${subLabel(s)}`, { reply_markup: kb([[{ t: '🗑 حذف', d: 'del:' + s.id }]]) })
 }
 
-// ── فاز ۲۵۷: ثبتِ آگهی از تلگرام ────────────────────────────────────────────
+// ── فاز ۲۵۷/۲۵۹: ثبتِ آگهیِ هوشمند از تلگرام (گام‌به‌گام با دکمه + تولیدِ متن) ──
+const PTYPES = ['آپارتمان', 'ویلا و خانه', 'زمین و کلنگی', 'مغازه و تجاری', 'دفتر و اداری']
+const AGES = ['نوساز', '۱ تا ۵ سال', '۵ تا ۱۰ سال', '۱۰ تا ۲۰ سال', 'بالای ۲۰ سال']
+const ynBtns = (cbYes: string, cbNo: string) => kb([[{ t: '✅ دارد', d: cbYes }, { t: '➖ ندارد', d: cbNo }]])
+const upd = async (chatId: number, patch: Partial<import('@/app/lib/telegram-store').LDraft>) => {
+  const ld = (await getLDraft(chatId)) || { step: 'deal' as const }
+  await setLDraft(chatId, { ...ld, ...patch }); return { ...ld, ...patch }
+}
+
 async function startListing(chatId: number) {
   await clearDraft(chatId)
   const link = await getLink(chatId)
@@ -92,36 +101,112 @@ async function startListing(chatId: number) {
 }
 async function askListingDeal(chatId: number) {
   await setLDraft(chatId, { step: 'deal' })
-  await tgSend(chatId, 'ثبتِ آگهیِ جدید 🏠\nنوعِ معامله؟', { reply_markup: kb([[{ t: '🏠 اجاره', d: 'ld:اجاره' }, { t: '🔑 فروش', d: 'ld:فروش' }]]) })
+  await tgSend(chatId, 'ثبتِ آگهیِ جدید 🏠\nمرحله‌به‌مرحله می‌پرسم؛ بیشترش فقط یک دکمه است. 👌\n\n۱) نوعِ معامله؟', { reply_markup: kb([[{ t: '🏠 اجاره', d: 'ld:اجاره' }, { t: '🔑 فروش', d: 'ld:فروش' }]]) })
 }
-async function askListingCity(chatId: number, deal: string) {
-  await setLDraft(chatId, { step: 'city', deal })
+async function askPtype(chatId: number) {
+  await upd(chatId, { step: 'ptype' })
+  const rows: Btn[][] = []
+  for (let i = 0; i < PTYPES.length; i += 2) rows.push(PTYPES.slice(i, i + 2).map((p, k) => ({ t: p, d: 'lp:' + (i + k) })))
+  await tgSend(chatId, '۲) نوعِ ملک؟', { reply_markup: kb(rows) })
+}
+async function askCityL(chatId: number) {
+  await upd(chatId, { step: 'city' })
   const rows: Btn[][] = []
   for (let i = 0; i < CITIES.length; i += 2) rows.push(CITIES.slice(i, i + 2).map(c => ({ t: c, d: 'lc:' + c })))
-  await tgSend(chatId, 'شهر؟ (یا نامش را بنویس)', { reply_markup: kb(rows) })
+  rows.push([{ t: 'شهرِ دیگر ✍️', d: 'lc:__other' }])
+  await tgSend(chatId, '۳) شهر؟', { reply_markup: kb(rows) })
+}
+async function askHoodL(chatId: number, city: string) {
+  const hoods = await hoodsForRegion(city, '', 12)
+  if (!hoods.length) { await upd(chatId, { step: 'hoodText' }); await tgSend(chatId, '۴) محله؟ (نامِ محله را بنویس، مثلاً: جنت‌آباد)'); return }
+  await upd(chatId, { step: 'hood', hoods })
+  const rows: Btn[][] = []
+  for (let i = 0; i < hoods.length; i += 2) rows.push(hoods.slice(i, i + 2).map((h, k) => ({ t: h, d: 'lh:' + (i + k) })))
+  rows.push([{ t: 'محلهٔ دیگر ✍️', d: 'lh:__text' }])
+  await tgSend(chatId, `۴) محله؟ (در ${city})`, { reply_markup: kb(rows) })
+}
+async function askArea(chatId: number) { await upd(chatId, { step: 'area' }); await tgSend(chatId, '۵) متراژ چند متر است؟ (فقط عدد)') }
+async function askRooms(chatId: number) {
+  await upd(chatId, { step: 'rooms' })
+  await tgSend(chatId, '۶) تعدادِ اتاقِ خواب؟', { reply_markup: kb([
+    [{ t: 'بدونِ خواب', d: 'lr:0' }, { t: '۱', d: 'lr:1' }, { t: '۲', d: 'lr:2' }],
+    [{ t: '۳', d: 'lr:3' }, { t: '۴', d: 'lr:4' }, { t: '۵+', d: 'lr:5+' }],
+  ]) })
+}
+async function askFloor(chatId: number) {
+  await upd(chatId, { step: 'floor' })
+  await tgSend(chatId, '۷) طبقه؟', { reply_markup: kb([
+    [{ t: 'همکف', d: 'lf:همکف' }, { t: '۱', d: 'lf:۱' }, { t: '۲', d: 'lf:۲' }, { t: '۳', d: 'lf:۳' }],
+    [{ t: '۴', d: 'lf:۴' }, { t: '۵', d: 'lf:۵' }, { t: '۶+', d: 'lf:۶+' }, { t: 'رد', d: 'lf:__skip' }],
+  ]) })
+}
+async function askAge(chatId: number) {
+  await upd(chatId, { step: 'age' })
+  const rows: Btn[][] = []
+  for (let i = 0; i < AGES.length; i += 2) rows.push(AGES.slice(i, i + 2).map((a, k) => ({ t: a, d: 'lag:' + (i + k) })))
+  await tgSend(chatId, '۸) سنِ بنا؟', { reply_markup: kb(rows) })
+}
+async function askParking(chatId: number) { await upd(chatId, { step: 'parking' }); await tgSend(chatId, '۹) پارکینگ؟', { reply_markup: ynBtns('lpk:1', 'lpk:0') }) }
+async function askElevator(chatId: number) { await upd(chatId, { step: 'elevator' }); await tgSend(chatId, '۱۰) آسانسور؟', { reply_markup: ynBtns('lev:1', 'lev:0') }) }
+async function askStorage(chatId: number) { await upd(chatId, { step: 'storage' }); await tgSend(chatId, '۱۱) انباری؟', { reply_markup: ynBtns('lstg:1', 'lstg:0') }) }
+async function askPriceL(chatId: number, deal?: string) {
+  await upd(chatId, { step: 'price' })
+  await tgSend(chatId, deal === 'اجاره' ? '۱۲) قیمت؟ (مثلاً: ودیعه ۵۰۰م، اجاره ۱۰م)' : '۱۲) قیمت؟ (مثلاً: ۵ میلیارد و ۲۰۰)')
 }
 async function askPhoto(chatId: number) {
-  await tgSend(chatId, 'یک عکس از ملک بفرست 📷 (یا «بدونِ عکس»)', { reply_markup: kb([[{ t: 'بدونِ عکس', d: 'lnophoto' }]]) })
+  await upd(chatId, { step: 'photo' })
+  await tgSend(chatId, '۱۳) یک عکس از ملک بفرست 📷 (یا «بدونِ عکس»)', { reply_markup: kb([[{ t: 'بدونِ عکس', d: 'lnophoto' }]]) })
+}
+function ldFields(ld: import('@/app/lib/telegram-store').LDraft, link: { name?: string } | undefined): ListingFields {
+  return {
+    deal: ld.deal, propertyType: ld.ptype, city: ld.city, hood: ld.hood, area: ld.area,
+    rooms: ld.rooms, floor: ld.floor, age: ld.age, parking: ld.parking, elevator: ld.elevator,
+    storage: ld.storage, price: ld.price, advisorName: link?.name,
+  }
+}
+// تولیدِ عنوان+توضیحاتِ حرفه‌ای، بعد صفحهٔ تأیید
+async function runGenerate(chatId: number) {
+  const ld = await getLDraft(chatId); const link = await getLink(chatId)
+  if (!ld) return
+  await tgSend(chatId, '✍️ در حالِ نوشتنِ عنوان و توضیحاتِ حرفه‌ای برای آگهی‌ات…')
+  const copy = await generateListingCopy(ldFields(ld, link || undefined))
+  await setLDraft(chatId, { ...ld, title: copy.title, description: copy.description, step: 'confirm' })
+  await confirmListing(chatId)
 }
 async function confirmListing(chatId: number) {
   const ld = await getLDraft(chatId); if (!ld) return
-  const summary = [
-    `🏠 <b>${ld.title || ''}</b>`, ld.price ? `💰 ${ld.price}` : '',
-    `📍 ${ld.city || ''}${ld.hood ? '، ' + ld.hood : ''}`, ld.area ? `📐 ${ld.area} متر` : '',
-    `🔖 ${ld.deal || ''}`, ld.image ? '🖼 عکس ✓' : '🖼 بدونِ عکس',
+  const facts = [
+    ld.price ? `💰 ${ld.price}` : '',
+    `📍 ${[ld.city, ld.hood].filter(Boolean).join('، ') || '—'}`,
+    ld.area ? `📐 ${ld.area} متر` : '', ld.rooms != null ? `🛏 ${ld.rooms === '0' ? 'بدونِ خواب' : ld.rooms + ' خواب'}` : '',
+    ld.floor ? `🏢 طبقهٔ ${ld.floor}` : '', ld.age ? `🗓 ${ld.age}` : '',
+    [ld.parking ? 'پارکینگ' : '', ld.elevator ? 'آسانسور' : '', ld.storage ? 'انباری' : ''].filter(Boolean).join(' · '),
+    ld.image ? '🖼 عکس ✓' : '🖼 بدونِ عکس',
   ].filter(Boolean).join('\n')
-  await tgSend(chatId, `این آگهی ثبت شود؟\n\n${summary}`, { reply_markup: kb([[{ t: '✅ ثبت', d: 'lok' }, { t: '✖️ لغو', d: 'lcancel' }]]) })
+  const body = `این آگهی ثبت شود؟\n\n🏠 <b>${ld.title || ''}</b>\n\n${ld.description || ''}\n\n────────\n${facts}`
+  await tgSend(chatId, body.slice(0, 3900), { reply_markup: kb([
+    [{ t: '✅ ثبت و انتشار', d: 'lok' }],
+    [{ t: '🔄 بازتولیدِ متن', d: 'lregen' }, { t: '✏️ ویرایشِ توضیحات', d: 'ledit' }],
+    [{ t: '✖️ لغو', d: 'lcancel' }],
+  ]) })
 }
 async function submitListing(chatId: number) {
   const ld = await getLDraft(chatId); const link = await getLink(chatId)
   if (!ld || !ld.title) { await tgSend(chatId, 'اطلاعات ناقص است — دوباره «🏠 ثبتِ آگهی» را بزن.', { reply_markup: menu }); await clearLDraft(chatId); return }
   const meta: Record<string, string> = {}
   if (ld.deal) meta['نوع معامله'] = ld.deal
+  if (ld.ptype) meta['نوع ملک'] = ld.ptype
   if (ld.city) meta['شهر'] = ld.city
   if (ld.hood) meta['محله'] = ld.hood
   if (ld.area) meta['متراژ'] = ld.area
+  if (ld.rooms != null && ld.rooms !== '') meta['اتاق'] = ld.rooms
+  if (ld.floor) meta['طبقه'] = ld.floor
+  if (ld.age) meta['سن بنا'] = ld.age
+  if (ld.parking != null) meta['پارکینگ'] = ld.parking ? 'دارد' : 'ندارد'
+  if (ld.elevator != null) meta['آسانسور'] = ld.elevator ? 'دارد' : 'ندارد'
+  if (ld.storage != null) meta['انباری'] = ld.storage ? 'دارد' : 'ندارد'
   const location = [ld.city, ld.hood].filter(Boolean).join('، ') || undefined
-  const item = await addUserListing({ title: ld.title, price: ld.price, location, image: ld.image, phone: link?.phone, owner: link?.name, meta })
+  const item = await addUserListing({ title: ld.title, price: ld.price, location, excerpt: ld.description, image: ld.image, phone: link?.phone, owner: link?.name, meta })
   await clearLDraft(chatId)
   if (item.status === 'duplicate') { await tgSend(chatId, '⚠️ این آگهی قبلاً در ملک‌جت ثبت شده (ملکِ مشابه).', { reply_markup: menu }); return }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -143,16 +228,15 @@ async function showMyAds(chatId: number) {
     await tgSend(chatId, `${st} — ${it.title}${link2}`)
   }
 }
-// متنِ کاربر در جریانِ ثبتِ آگهی (بسته به step)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleListingText(chatId: number, ld: any, text: string) {
-  if (ld.step === 'city') { await setLDraft(chatId, { ...ld, city: text, step: 'hood' }); await tgSend(chatId, 'محله؟ (مثلاً: جنت‌آباد)') }
-  else if (ld.step === 'hood') { await setLDraft(chatId, { ...ld, hood: text, step: 'title' }); await tgSend(chatId, 'عنوانِ آگهی؟ (مثلاً: آپارتمان ۹۰ متری جنت‌آباد شمالی)') }
-  else if (ld.step === 'title') { await setLDraft(chatId, { ...ld, title: text, step: 'price' }); await tgSend(chatId, ld.deal === 'اجاره' ? 'قیمت؟ (مثلاً: ودیعه ۵۰۰م، اجاره ۱۰م)' : 'قیمت؟ (مثلاً: ۵ میلیارد و ۲۰۰)') }
-  else if (ld.step === 'price') { await setLDraft(chatId, { ...ld, price: text, step: 'area' }); await tgSend(chatId, 'متراژ؟ (فقط عدد، یا بنویس «رد»)') }
-  else if (ld.step === 'area') { const area = /^(رد|بیخیال|بی‌خیال|skip|-)$/i.test(text.trim()) ? '' : text; await setLDraft(chatId, { ...ld, area, step: 'photo' }); await askPhoto(chatId) }
+// متنِ کاربر در جریانِ ثبتِ آگهی (فقط جایی که تایپ لازم است: شهر/محلهٔ دلخواه، متراژ، قیمت، ویرایشِ متن)
+async function handleListingText(chatId: number, ld: import('@/app/lib/telegram-store').LDraft, text: string) {
+  if (ld.step === 'cityText' || ld.step === 'city') { const d = await upd(chatId, { city: text.trim() }); await tgSend(chatId, `شهر: ${text.trim()} ✅`); await askHoodL(chatId, d.city!) }
+  else if (ld.step === 'hood' || ld.step === 'hoodText') { await upd(chatId, { hood: text.trim() }); await askArea(chatId) }
+  else if (ld.step === 'area') { const a = text.replace(/[^\d۰-۹]/g, '') || text.trim(); await upd(chatId, { area: a }); await askRooms(chatId) }
+  else if (ld.step === 'price') { const d = await upd(chatId, { price: text.trim() }); void d; await askPhoto(chatId) }
+  else if (ld.step === 'editdesc') { await upd(chatId, { description: text.trim(), step: 'confirm' }); await confirmListing(chatId) }
   else if (ld.step === 'photo') {
-    if (/بدون|رد|skip/i.test(text)) { await setLDraft(chatId, { ...ld, step: 'confirm' }); await confirmListing(chatId) }
+    if (/بدون|رد|skip/i.test(text)) await runGenerate(chatId)
     else await tgSend(chatId, 'یک عکس بفرست 📷 یا دکمهٔ «بدونِ عکس» را بزن.')
   }
   else await tgSend(chatId, 'برای شروع «🏠 ثبتِ آگهی» را بزن.', { reply_markup: menu })
@@ -182,12 +266,29 @@ async function handle(u: any) {
     else if (data === 'h:__text') { const dr = await getDraft(chatId); await setDraft(chatId, { step: 'hood', deal: dr?.deal, city: dr?.city, region: dr?.region }); await tgSend(chatId, 'نامِ محله را بنویس:') }
     else if (data.startsWith('h:')) { const dr = await getDraft(chatId); const i = parseInt(data.slice(2), 10); const h = (dr?.hoods && dr.hoods[i]) || ''; if (dr?.deal && dr.city) await saveSub(chatId, dr.deal, dr.city, dr.region || '', h) }
     else if (data.startsWith('del:')) { await removeSub(chatId, data.slice(4)); await tgApi('editMessageText', { chat_id: chatId, message_id: mid, text: '🗑 حذف شد.' }) }
-    // ثبتِ آگهی
+    // ثبتِ آگهیِ هوشمند (فاز ۲۵۹)
     else if (data === 'nl') await startListing(chatId)
     else if (data === 'myads') await showMyAds(chatId)
-    else if (data.startsWith('ld:')) { await askListingCity(chatId, data.slice(3)) }
-    else if (data.startsWith('lc:')) { const dr = await getLDraft(chatId); await setLDraft(chatId, { ...(dr || {}), city: data.slice(3), step: 'hood' }); await tgSend(chatId, `شهر: ${data.slice(3)} ✅\nمحله؟ (مثلاً: جنت‌آباد)`) }
-    else if (data === 'lnophoto') { const dr = await getLDraft(chatId); await setLDraft(chatId, { ...(dr || {}), step: 'confirm' }); await confirmListing(chatId) }
+    else if (data.startsWith('ld:')) { await upd(chatId, { deal: data.slice(3) }); await askPtype(chatId) }
+    else if (data.startsWith('lp:')) { const i = parseInt(data.slice(3), 10); await upd(chatId, { ptype: PTYPES[i] }); await askCityL(chatId) }
+    else if (data.startsWith('lc:')) {
+      const city = data.slice(3)
+      if (city === '__other') { await upd(chatId, { step: 'cityText' }); await tgSend(chatId, '۳) نامِ شهر را بنویس:') }
+      else { const d = await upd(chatId, { city }); await askHoodL(chatId, d.city!) }
+    }
+    else if (data.startsWith('lh:')) {
+      if (data.slice(3) === '__text') { await upd(chatId, { step: 'hoodText' }); await tgSend(chatId, '۴) نامِ محله را بنویس:') }
+      else { const dr = await getLDraft(chatId); const i = parseInt(data.slice(3), 10); const h = (dr?.hoods && dr.hoods[i]) || ''; await upd(chatId, { hood: h }); await askArea(chatId) }
+    }
+    else if (data.startsWith('lr:')) { await upd(chatId, { rooms: data.slice(3) }); await askFloor(chatId) }
+    else if (data.startsWith('lf:')) { const v = data.slice(3); await upd(chatId, { floor: v === '__skip' ? undefined : v }); await askAge(chatId) }
+    else if (data.startsWith('lag:')) { const i = parseInt(data.slice(4), 10); await upd(chatId, { age: AGES[i] }); await askParking(chatId) }
+    else if (data.startsWith('lpk:')) { await upd(chatId, { parking: data.slice(4) === '1' }); await askElevator(chatId) }
+    else if (data.startsWith('lev:')) { await upd(chatId, { elevator: data.slice(4) === '1' }); await askStorage(chatId) }
+    else if (data.startsWith('lstg:')) { const d = await upd(chatId, { storage: data.slice(5) === '1' }); await askPriceL(chatId, d.deal) }
+    else if (data === 'lnophoto') { await runGenerate(chatId) }
+    else if (data === 'lregen') { await runGenerate(chatId) }
+    else if (data === 'ledit') { await upd(chatId, { step: 'editdesc' }); await tgSend(chatId, '✏️ متنِ توضیحاتِ دلخواهت را بفرست:') }
     else if (data === 'lok') { await submitListing(chatId) }
     else if (data === 'lcancel') { await clearLDraft(chatId); await tgSend(chatId, 'ثبتِ آگهی لغو شد.', { reply_markup: menu }) }
     return
