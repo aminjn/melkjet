@@ -11,6 +11,7 @@ import SupportPanel from '@/app/components/SupportPanel'
 import ReosFeed from '@/app/components/ReosFeed'
 import ReosAgentChat from '@/app/components/ReosAgentChat'
 import EmpireCard from '@/app/components/EmpireCard'
+import IdentityVerify from '@/app/components/IdentityVerify'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -804,6 +805,9 @@ export default function BuyerPage() {
                 </div>
                 {vs !== 'verified' && <button disabled={busy || vs === 'pending'} onClick={requestVerify} style={{ padding: '10px 18px', borderRadius: 10, background: vs === 'pending' ? 'var(--bg2)' : 'linear-gradient(135deg,var(--gold2),var(--gold))', color: vs === 'pending' ? 'var(--muted)' : '#16140f', fontWeight: 700, fontSize: 13, border: vs === 'pending' ? '1px solid var(--line)' : 'none', cursor: vs === 'pending' ? 'default' : 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>{vs === 'pending' ? 'در حال بررسی…' : '✓ تأیید هویت'}</button>}
               </div>
+
+              {/* احرازِ هویتِ اختیاری با شاهکار + پاداش (فاز ۲۶۲) */}
+              <IdentityVerify />
 
               {/* personal info */}
               <div style={{ ...card, padding: 18 }}>
