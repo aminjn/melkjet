@@ -11,7 +11,7 @@ import { fetchDivarProfileTokens } from './divar-post'
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-const proxy = () => getAdminData().divar?.proxyUrl || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || 'http://127.0.0.1:1080'
+const proxy = () => getAdminData().divar?.proxyUrl || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || undefined  // فاز ۲۶۸ — خالی = مستقیم
 // لینکِ pro/کسب‌وکار در متن (چه ساده چه با \/ فرارگرفته در JSON).
 const PRO_RE = /divar\.ir\\?\/(?:pro|businesses|business)\\?\/([A-Za-z0-9_-]{2,40})/gi
 // توکنِ برند/کسب‌وکار به‌صورتِ فیلدِ JSON (پاسخِ آگهیِ آژانس‌ها این را دارد حتی اگر URLِ /pro/ نداشته باشد).

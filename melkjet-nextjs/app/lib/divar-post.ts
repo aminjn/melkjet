@@ -73,7 +73,7 @@ export function divarProfileSlug(url?: string): string | null {
 
 const PROXY = () => getAdminData().divar?.proxyUrl
   || process.env.HTTPS_PROXY || process.env.https_proxy
-  || process.env.HTTP_PROXY || process.env.http_proxy || 'http://127.0.0.1:1080'
+  || process.env.HTTP_PROXY || process.env.http_proxy || undefined  // فاز ۲۶۸ — خالی = مستقیم
 
 // اولین مقدارِ یک کلید در عمقِ JSON (برای پیداکردنِ cursorِ صفحهٔ بعد).
 function deepFindKey(node: any, key: string): any {
