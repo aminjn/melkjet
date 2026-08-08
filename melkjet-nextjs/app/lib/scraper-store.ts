@@ -380,10 +380,19 @@ export async function pendingForModeration(limit = 25): Promise<Item[]> {
 }
 
 export async function setModeration(itemId: string, status: ItemStatus, reason: string, score: number) {
-  return mutate(db => {
+  // فاز ۲۶۰ — آلارمِ تلگرام باید در هر مسیرِ تأیید شلیک شود (نه فقط ممیزیِ دسته‌ای):
+  // ثبتِ آگهی از سایت/تلگرام → moderateOne → setModeration؛ قبلاً این مسیر آلارم نمی‌فرستاد.
+  let _tgNew: Item | null = null
+  const r = await mutate(db => {
     const it = db.items.find(i => i.id === itemId)
-    if (it) { it.status = status; it.aiReason = reason; it.aiScore = score; it.moderatedAt = Date.now() }
+    if (it) {
+      const wasApproved = it.status === 'approved'
+      it.status = status; it.aiReason = reason; it.aiScore = score; it.moderatedAt = Date.now()
+      if (!wasApproved && status === 'approved' && it.type === 'listing') _tgNew = it
+    }
   })
+  if (_tgNew) import('./telegram-notify').then(m => m.notifyNewListings([_tgNew as Item])).catch(() => {})
+  return r
 }
 
 // Persist many moderation verdicts in a single atomic write (avoids file races under concurrency).

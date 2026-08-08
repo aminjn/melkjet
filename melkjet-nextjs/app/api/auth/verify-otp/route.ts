@@ -5,7 +5,6 @@ import { ensureAccount, dashForRole, getAccount, createVerifiedAccount, applyIde
 import { linkPhone } from '@/app/lib/tracker-store'
 import { attachPhone } from '@/app/lib/push-store'
 import { getPending, deletePending } from '@/app/lib/pending-reg-store'
-import { podConfigured } from '@/app/lib/podium'
 
 export async function POST(req: NextRequest) {
   const { phone, code } = await req.json()
@@ -18,23 +17,18 @@ export async function POST(req: NextRequest) {
 
   const isSuper = phone === SUPER_ADMIN_PHONE
   const role = isSuper ? 'super_admin' : 'user'
-  const shahkarOn = podConfigured()
-  // ── تعیین/ساختِ حساب ──
+  // فاز ۲۶۰ — شاهکار از ثبت‌نام حذف شد: حساب همیشه فقط با OTP ساخته/وارد می‌شود.
+  // اگر کاربر قبلاً احرازِ اختیاری (شاهکار) را از پنل انجام داده باشد، همان pending اعمال می‌شود.
   let account; let isNew = false
   if (isSuper) { const r = ensureAccount(phone); account = r.account; isNew = r.isNew }
   else {
     const pending = getPending(phone)
     const existing = getAccount(phone)
     if (pending && pending.matched) {
-      // هویتِ تأییدشده: روی حسابِ موجود اعمال کن، یا حسابِ جدید بساز
       account = existing ? applyIdentity(phone, pending) : createVerifiedAccount(phone, pending)
       deletePending(phone); if (!existing) isNew = true
-    } else if (existing) {
-      // بدونِ pending: حسابِ تأییدشده یا (شاهکار خاموش) ⇒ ورود؛ وگرنه فعال نمی‌شود
-      if (existing.identityVerifiedAt || !shahkarOn) { account = existing; touchLogin(phone) }
-      else return NextResponse.json({ error: 'برای فعال‌سازیِ حساب، ابتدا هویتِ خود را با شاهکار تأیید کنید.' }, { status: 400 })
-    } else if (!shahkarOn) { const r = ensureAccount(phone); account = r.account; isNew = r.isNew }
-    else return NextResponse.json({ error: 'ابتدا هویتِ خود را با شاهکار تأیید کنید.' }, { status: 400 })
+    } else if (existing) { account = existing; touchLogin(phone) }
+    else { const r = ensureAccount(phone); account = r.account; isNew = r.isNew }
   }
   if (!account) return NextResponse.json({ error: 'خطا در ساختِ حساب؛ دوباره تلاش کنید.' }, { status: 500 })
   // تعلیقِ ضدتقلب/ادمین (با reason) → ورود مسدود. تعلیقِ پروفایلِ ناقص (بدونِ reason) ورود را نمی‌بندد.
