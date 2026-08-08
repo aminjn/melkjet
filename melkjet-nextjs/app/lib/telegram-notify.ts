@@ -22,8 +22,11 @@ export function matchSub(sub: Sub, it: Item): boolean {
   if (sub.deal && sub.deal !== 'همه' && deal && !deal.includes(sub.deal)) return false
   if (sub.city && norm(city) && !norm(city).includes(norm(sub.city)) && norm(city) !== norm(sub.city)) return false
   const hay = norm(`${m['منطقه'] || ''} ${m['محله'] || ''} ${it.location || ''} ${it.title || ''}`)
-  if (sub.region && !hay.includes(norm(sub.region))) return false
-  if (sub.hood && !hay.includes(norm(sub.hood))) return false
+  // فاز ۲۶۷ — «محله» دقیق‌ترین معیار است و ملاکِ اصلی: اگر آلارم محله دارد، فقط محله سنجیده می‌شود.
+  // «منطقه» را کاربر در ثبتِ آگهی وارد نمی‌کند (فقط شهر→محله)، پس نباید مانعِ تطبیق شود؛ منطقه
+  // فقط وقتی به کار می‌رود که آلارم اصلاً محله نداشته باشد (آلارمِ کلِ یک منطقه).
+  if (sub.hood) return hay.includes(norm(sub.hood))
+  if (sub.region) return hay.includes(norm(sub.region))
   return true
 }
 
