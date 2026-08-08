@@ -138,7 +138,7 @@ export async function startDiscovery(opts: { method: 'sitemap' | 'search'; searc
 // ── تشخیصِ اتصال به دیوار (همگام) — دقیقاً می‌گوید کجا می‌شکند ──
 export interface ProbeStep { name: string; url: string; ok: boolean; status: number; ms: number; note: string; sample?: string }
 export async function probeDivar(searchUrl?: string): Promise<{ proxyUrl: string; steps: ProbeStep[]; verdict: string }> {
-  const proxyUrl = proxy()
+  const proxyUrl = proxy() || '(مستقیم)'   // فاز ۲۶۹ — نمایشِ تشخیصی؛ خالی = اتصالِ مستقیم
   const steps: ProbeStep[] = []
   const run = async (name: string, url: string, fn: () => Promise<{ note: string; sample?: string; ok?: boolean }>): Promise<void> => {
     const t0 = Date.now()
