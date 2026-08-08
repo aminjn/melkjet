@@ -15,11 +15,11 @@ export interface Link { chatId: number; phone: string; name?: string; role?: str
 export interface LDraft {
   step: 'deal' | 'ptype' | 'city' | 'cityText' | 'hood' | 'hoodText' | 'area'
     | 'rooms' | 'floor' | 'age' | 'parking' | 'elevator' | 'storage'
-    | 'price' | 'photo' | 'gen' | 'editdesc' | 'confirm'
+    | 'price' | 'deposit' | 'rent' | 'photo' | 'gen' | 'editdesc' | 'confirm'
   deal?: string; ptype?: string; city?: string; hood?: string; hoods?: string[]
   area?: string; rooms?: string; floor?: string; age?: string
   parking?: boolean; elevator?: boolean; storage?: boolean
-  price?: string; image?: string; title?: string; description?: string
+  price?: string; deposit?: string; rent?: string; image?: string; title?: string; description?: string
 }
 interface DB { subs: Sub[]; drafts: Record<string, Draft>; links: Record<string, Link>; ldrafts: Record<string, LDraft> }
 

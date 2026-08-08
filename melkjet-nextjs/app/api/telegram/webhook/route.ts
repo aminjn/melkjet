@@ -80,8 +80,14 @@ async function showMine(chatId: number) {
 
 // ── فاز ۲۵۷/۲۵۹: ثبتِ آگهیِ هوشمند از تلگرام (گام‌به‌گام با دکمه + تولیدِ متن) ──
 const PTYPES = ['آپارتمان', 'ویلا و خانه', 'زمین و کلنگی', 'مغازه و تجاری', 'دفتر و اداری']
-const AGES = ['نوساز', '۱ تا ۵ سال', '۵ تا ۱۰ سال', '۱۰ تا ۲۰ سال', 'بالای ۲۰ سال']
 const ynBtns = (cbYes: string, cbNo: string) => kb([[{ t: '✅ دارد', d: cbYes }, { t: '➖ ندارد', d: cbNo }]])
+// عددِ تومانی را زیبا کن؛ اگر ورودی فقط رقم بود جداکنندهٔ هزارگان + «تومان»، وگرنه همان متن.
+function faMoney(raw: string): string {
+  const t = String(raw || '').trim()
+  const en = t.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString()).replace(/[,٬،\s]/g, '')
+  if (/^\d{4,}$/.test(en)) return Number(en).toLocaleString('fa-IR') + ' تومان'
+  return t
+}
 const upd = async (chatId: number, patch: Partial<import('@/app/lib/telegram-store').LDraft>) => {
   const ld = (await getLDraft(chatId)) || { step: 'deal' as const }
   await setLDraft(chatId, { ...ld, ...patch }); return { ...ld, ...patch }
@@ -140,19 +146,14 @@ async function askFloor(chatId: number) {
     [{ t: '۴', d: 'lf:۴' }, { t: '۵', d: 'lf:۵' }, { t: '۶+', d: 'lf:۶+' }, { t: 'رد', d: 'lf:__skip' }],
   ]) })
 }
-async function askAge(chatId: number) {
-  await upd(chatId, { step: 'age' })
-  const rows: Btn[][] = []
-  for (let i = 0; i < AGES.length; i += 2) rows.push(AGES.slice(i, i + 2).map((a, k) => ({ t: a, d: 'lag:' + (i + k) })))
-  await tgSend(chatId, '۸) سنِ بنا؟', { reply_markup: kb(rows) })
-}
+async function askAge(chatId: number) { await upd(chatId, { step: 'age' }); await tgSend(chatId, '۸) سالِ ساخت؟ (عدد بنویس، مثلاً ۱۴۰۰ — یا بنویس «نوساز»)') }
 async function askParking(chatId: number) { await upd(chatId, { step: 'parking' }); await tgSend(chatId, '۹) پارکینگ؟', { reply_markup: ynBtns('lpk:1', 'lpk:0') }) }
 async function askElevator(chatId: number) { await upd(chatId, { step: 'elevator' }); await tgSend(chatId, '۱۰) آسانسور؟', { reply_markup: ynBtns('lev:1', 'lev:0') }) }
 async function askStorage(chatId: number) { await upd(chatId, { step: 'storage' }); await tgSend(chatId, '۱۱) انباری؟', { reply_markup: ynBtns('lstg:1', 'lstg:0') }) }
-async function askPriceL(chatId: number, deal?: string) {
-  await upd(chatId, { step: 'price' })
-  await tgSend(chatId, deal === 'اجاره' ? '۱۲) قیمت؟ (مثلاً: ودیعه ۵۰۰م، اجاره ۱۰م)' : '۱۲) قیمت؟ (مثلاً: ۵ میلیارد و ۲۰۰)')
-}
+// فروش: قیمتِ کلِ عددی. اجاره: ودیعه و اجاره را جدا و عددی می‌پرسیم.
+async function askPriceL(chatId: number) { await upd(chatId, { step: 'price' }); await tgSend(chatId, '۱۲) قیمتِ کل چند تومان؟ (فقط عدد، مثلاً ۵۲۰۰۰۰۰۰۰۰)') }
+async function askDeposit(chatId: number) { await upd(chatId, { step: 'deposit' }); await tgSend(chatId, '۱۲) ودیعه چند تومان؟ (فقط عدد، مثلاً ۵۰۰۰۰۰۰۰۰)') }
+async function askRent(chatId: number) { await upd(chatId, { step: 'rent' }); await tgSend(chatId, '۱۳) اجارهٔ ماهانه چند تومان؟ (فقط عدد، مثلاً ۱۰۰۰۰۰۰۰)') }
 async function askPhoto(chatId: number) {
   await upd(chatId, { step: 'photo' })
   await tgSend(chatId, '۱۳) یک عکس از ملک بفرست 📷 (یا «بدونِ عکس»)', { reply_markup: kb([[{ t: 'بدونِ عکس', d: 'lnophoto' }]]) })
@@ -178,15 +179,18 @@ async function confirmListing(chatId: number) {
   const facts = [
     ld.price ? `💰 ${ld.price}` : '',
     `📍 ${[ld.city, ld.hood].filter(Boolean).join('، ') || '—'}`,
-    ld.area ? `📐 ${ld.area} متر` : '', ld.rooms != null ? `🛏 ${ld.rooms === '0' ? 'بدونِ خواب' : ld.rooms + ' خواب'}` : '',
-    ld.floor ? `🏢 طبقهٔ ${ld.floor}` : '', ld.age ? `🗓 ${ld.age}` : '',
+    ld.area ? `📐 ${ld.area} متر` : '',
+    ld.rooms != null && ld.rooms !== '' ? `🛏 ${ld.rooms === '0' ? 'بدونِ خواب' : ld.rooms + ' خواب'}` : '',
+    ld.floor ? `🏢 طبقهٔ ${ld.floor}` : '',
+    ld.age ? `🗓 سالِ ساخت: ${ld.age}` : '',
     [ld.parking ? 'پارکینگ' : '', ld.elevator ? 'آسانسور' : '', ld.storage ? 'انباری' : ''].filter(Boolean).join(' · '),
-    ld.image ? '🖼 عکس ✓' : '🖼 بدونِ عکس',
+    ld.image ? '🖼 عکس ✓' : '',
   ].filter(Boolean).join('\n')
   const body = `این آگهی ثبت شود؟\n\n🏠 <b>${ld.title || ''}</b>\n\n${ld.description || ''}\n\n────────\n${facts}`
   await tgSend(chatId, body.slice(0, 3900), { reply_markup: kb([
     [{ t: '✅ ثبت و انتشار', d: 'lok' }],
-    [{ t: '🔄 بازتولیدِ متن', d: 'lregen' }, { t: '✏️ ویرایشِ توضیحات', d: 'ledit' }],
+    [{ t: ld.image ? '📷 تغییرِ عکس' : '📷 افزودنِ عکس', d: 'lphoto' }, { t: '🔄 بازتولیدِ متن', d: 'lregen' }],
+    [{ t: '✏️ ویرایشِ توضیحات', d: 'ledit' }, { t: '♻️ شروعِ دوباره', d: 'lrestart' }],
     [{ t: '✖️ لغو', d: 'lcancel' }],
   ]) })
 }
@@ -233,10 +237,13 @@ async function handleListingText(chatId: number, ld: import('@/app/lib/telegram-
   if (ld.step === 'cityText' || ld.step === 'city') { const d = await upd(chatId, { city: text.trim() }); await tgSend(chatId, `شهر: ${text.trim()} ✅`); await askHoodL(chatId, d.city!) }
   else if (ld.step === 'hood' || ld.step === 'hoodText') { await upd(chatId, { hood: text.trim() }); await askArea(chatId) }
   else if (ld.step === 'area') { const a = text.replace(/[^\d۰-۹]/g, '') || text.trim(); await upd(chatId, { area: a }); await askRooms(chatId) }
-  else if (ld.step === 'price') { const d = await upd(chatId, { price: text.trim() }); void d; await askPhoto(chatId) }
+  else if (ld.step === 'age') { await upd(chatId, { age: text.trim() }); await askParking(chatId) }
+  else if (ld.step === 'price') { await upd(chatId, { price: faMoney(text) }); await askPhoto(chatId) }
+  else if (ld.step === 'deposit') { await upd(chatId, { deposit: faMoney(text) }); await askRent(chatId) }
+  else if (ld.step === 'rent') { const rent = faMoney(text); await upd(chatId, { rent, price: `ودیعه ${ld.deposit || '—'} · اجاره ${rent}` }); await askPhoto(chatId) }
   else if (ld.step === 'editdesc') { await upd(chatId, { description: text.trim(), step: 'confirm' }); await confirmListing(chatId) }
   else if (ld.step === 'photo') {
-    if (/بدون|رد|skip/i.test(text)) await runGenerate(chatId)
+    if (/بدون|رد|skip/i.test(text)) { const cur = await getLDraft(chatId); if (cur?.title) await confirmListing(chatId); else await runGenerate(chatId) }
     else await tgSend(chatId, 'یک عکس بفرست 📷 یا دکمهٔ «بدونِ عکس» را بزن.')
   }
   else await tgSend(chatId, 'برای شروع «🏠 ثبتِ آگهی» را بزن.', { reply_markup: menu })
@@ -282,11 +289,12 @@ async function handle(u: any) {
     }
     else if (data.startsWith('lr:')) { await upd(chatId, { rooms: data.slice(3) }); await askFloor(chatId) }
     else if (data.startsWith('lf:')) { const v = data.slice(3); await upd(chatId, { floor: v === '__skip' ? undefined : v }); await askAge(chatId) }
-    else if (data.startsWith('lag:')) { const i = parseInt(data.slice(4), 10); await upd(chatId, { age: AGES[i] }); await askParking(chatId) }
     else if (data.startsWith('lpk:')) { await upd(chatId, { parking: data.slice(4) === '1' }); await askElevator(chatId) }
     else if (data.startsWith('lev:')) { await upd(chatId, { elevator: data.slice(4) === '1' }); await askStorage(chatId) }
-    else if (data.startsWith('lstg:')) { const d = await upd(chatId, { storage: data.slice(5) === '1' }); await askPriceL(chatId, d.deal) }
-    else if (data === 'lnophoto') { await runGenerate(chatId) }
+    else if (data.startsWith('lstg:')) { const d = await upd(chatId, { storage: data.slice(5) === '1' }); if (d.deal === 'اجاره') await askDeposit(chatId); else await askPriceL(chatId) }
+    else if (data === 'lnophoto') { const ld = await getLDraft(chatId); if (ld?.title) await confirmListing(chatId); else await runGenerate(chatId) }
+    else if (data === 'lphoto') { await askPhoto(chatId) }
+    else if (data === 'lrestart') { await askListingDeal(chatId) }
     else if (data === 'lregen') { await runGenerate(chatId) }
     else if (data === 'ledit') { await upd(chatId, { step: 'editdesc' }); await tgSend(chatId, '✏️ متنِ توضیحاتِ دلخواهت را بفرست:') }
     else if (data === 'lok') { await submitListing(chatId) }
@@ -317,7 +325,12 @@ async function handle(u: any) {
       const fileId = msg.photo[msg.photo.length - 1].file_id
       await tgSend(chatId, '⏳ در حالِ دریافتِ عکس…')
       const f = await tgFileBuffer(fileId)
-      if (f) { const m = saveMedia(f.buffer, f.mime, 'tg-listing.jpg'); await setLDraft(chatId, { ...ld, image: `/api/media/${m.id}`, step: 'confirm' }); await confirmListing(chatId) }
+      if (f) {
+        const m = saveMedia(f.buffer, f.mime, 'tg-listing.jpg')
+        const nd = { ...ld, image: `/api/media/${m.id}` }
+        if (nd.title) { await setLDraft(chatId, { ...nd, step: 'confirm' }); await confirmListing(chatId) }   // افزودنِ عکس در مرحلهٔ تأیید → متن دست‌نخورده
+        else { await setLDraft(chatId, nd); await runGenerate(chatId) }                                       // اولین‌بار → تولیدِ متن
+      }
       else await tgSend(chatId, 'عکس دریافت نشد؛ دوباره بفرست یا «بدونِ عکس» را بزن.')
     }
     return
