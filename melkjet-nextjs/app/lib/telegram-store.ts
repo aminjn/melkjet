@@ -21,11 +21,13 @@ export interface LDraft {
   parking?: boolean; elevator?: boolean; storage?: boolean
   price?: string; deposit?: string; rent?: string; image?: string; title?: string; description?: string
 }
-interface DB { subs: Sub[]; drafts: Record<string, Draft>; links: Record<string, Link>; ldrafts: Record<string, LDraft> }
+// فاز ۲۶۴ — پیش‌نویسِ جستجوی درون‌ربات (معامله→شهر→محله → نمایشِ آگهی‌های منطبق).
+export interface SDraft { step: 'deal' | 'city' | 'cityText' | 'hood' | 'hoodText'; deal?: string; city?: string; hoods?: string[]; hood?: string }
+interface DB { subs: Sub[]; drafts: Record<string, Draft>; links: Record<string, Link>; ldrafts: Record<string, LDraft>; sdrafts: Record<string, SDraft> }
 
 async function load(): Promise<DB> {
-  try { const d = JSON.parse(await fs.readFile(FILE, 'utf8')); return { subs: d.subs || [], drafts: d.drafts || {}, links: d.links || {}, ldrafts: d.ldrafts || {} } }
-  catch { return { subs: [], drafts: {}, links: {}, ldrafts: {} } }
+  try { const d = JSON.parse(await fs.readFile(FILE, 'utf8')); return { subs: d.subs || [], drafts: d.drafts || {}, links: d.links || {}, ldrafts: d.ldrafts || {}, sdrafts: d.sdrafts || {} } }
+  catch { return { subs: [], drafts: {}, links: {}, ldrafts: {}, sdrafts: {} } }
 }
 async function save(db: DB) { await fs.writeFile(FILE, JSON.stringify(db), 'utf8') }
 const rid = () => Math.random().toString(36).slice(2, 10)
@@ -54,3 +56,7 @@ export async function removeLink(chatId: number) { const db = await load(); dele
 export async function getLDraft(chatId: number): Promise<LDraft | undefined> { return (await load()).ldrafts[String(chatId)] }
 export async function setLDraft(chatId: number, d: LDraft) { const db = await load(); db.ldrafts[String(chatId)] = d; await save(db) }
 export async function clearLDraft(chatId: number) { const db = await load(); delete db.ldrafts[String(chatId)]; await save(db) }
+
+export async function getSDraft(chatId: number): Promise<SDraft | undefined> { return (await load()).sdrafts[String(chatId)] }
+export async function setSDraft(chatId: number, d: SDraft) { const db = await load(); db.sdrafts[String(chatId)] = d; await save(db) }
+export async function clearSDraft(chatId: number) { const db = await load(); delete db.sdrafts[String(chatId)]; await save(db) }

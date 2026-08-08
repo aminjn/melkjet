@@ -5,9 +5,10 @@ import { tgApi, tgSend, tgFileBuffer } from '@/app/lib/telegram'
 import {
   getDraft, setDraft, clearDraft, addSub, listSubs, removeSub,
   getLink, setLink, getLDraft, setLDraft, clearLDraft, type LDraft,
+  getSDraft, setSDraft, clearSDraft, type SDraft,
 } from '@/app/lib/telegram-store'
-import { sendTest, regionsForCity, hoodsForRegion, seedChannel } from '@/app/lib/telegram-notify'
-import { addUserListing, listItems } from '@/app/lib/scraper-store'
+import { sendTest, regionsForCity, hoodsForRegion, seedChannel, matchSub } from '@/app/lib/telegram-notify'
+import { addUserListing, listItems, type Item } from '@/app/lib/scraper-store'
 import { moderateOne, moderationModel } from '@/app/lib/moderation'
 import { saveMedia } from '@/app/lib/media-store'
 import { getAccount } from '@/app/lib/account-store'
@@ -28,6 +29,7 @@ function normPhone(raw: string): string {
 type Btn = { t: string; d: string }
 function kb(rows: Btn[][]) { return { inline_keyboard: rows.map(r => r.map(b => ({ text: b.t, callback_data: b.d }))) } }
 const menu = kb([
+  [{ t: '🔎 جستجوی آگهی', d: 'srch' }],
   [{ t: '➕ آلارمِ جدید', d: 'new' }, { t: '🔔 آلارم‌های من', d: 'mine' }],
   [{ t: '🏠 ثبتِ آگهی', d: 'nl' }, { t: '📋 آگهی‌های من', d: 'myads' }],
 ])
@@ -37,7 +39,7 @@ const subLabel = (s: { deal: string; city: string; region: string; hood: string 
 
 // ── آلارم ──────────────────────────────────────────────────────────────────
 async function startFlow(chatId: number, mid?: number) {
-  await clearLDraft(chatId)
+  await clearLDraft(chatId); await clearSDraft(chatId)
   await setDraft(chatId, { step: 'deal' })
   const rm = kb([[{ t: '🏠 اجاره', d: 'd:اجاره' }, { t: '🔑 فروش', d: 'd:فروش' }], [{ t: 'همه', d: 'd:همه' }]])
   const text = 'یک آلارمِ جدید بسازیم 🔔\nنوعِ معامله؟'
@@ -78,6 +80,57 @@ async function showMine(chatId: number) {
   for (const s of subs) await tgSend(chatId, `🔔 ${subLabel(s)}`, { reply_markup: kb([[{ t: '🗑 حذف', d: 'del:' + s.id }]]) })
 }
 
+// ── فاز ۲۶۴: جستجوی درون‌ربات (معامله→شهر→محله → آگهی‌های تأییدشدهٔ منطبق) ──────
+async function askSearchDeal(chatId: number) {
+  await clearDraft(chatId); await clearLDraft(chatId)
+  await setSDraft(chatId, { step: 'deal' })
+  await tgSend(chatId, '🔎 جستجوی آگهی\nنوعِ معامله؟', { reply_markup: kb([[{ t: '🏠 اجاره', d: 'sd:اجاره' }, { t: '🔑 فروش', d: 'sd:فروش' }], [{ t: 'همه', d: 'sd:همه' }]]) })
+}
+async function askSearchCity(chatId: number) {
+  const dr = await getSDraft(chatId); await setSDraft(chatId, { ...(dr || {}), step: 'city' })
+  const rows: Btn[][] = []
+  for (let i = 0; i < CITIES.length; i += 2) rows.push(CITIES.slice(i, i + 2).map(c => ({ t: c, d: 'sc:' + c })))
+  rows.push([{ t: 'شهرِ دیگر ✍️', d: 'sc:__other' }])
+  await tgSend(chatId, 'شهر؟', { reply_markup: kb(rows) })
+}
+async function askSearchHood(chatId: number, city: string) {
+  const hoods = await hoodsForRegion(city, '', 12)
+  const dr = await getSDraft(chatId)
+  await setSDraft(chatId, { ...(dr || {}), city, hoods, step: 'hood' })
+  const rows: Btn[][] = []
+  for (let i = 0; i < hoods.length; i += 2) rows.push(hoods.slice(i, i + 2).map((h, k) => ({ t: h, d: 'sh:' + (i + k) })))
+  rows.push([{ t: '📋 همهٔ محله‌ها', d: 'sh:__all' }, { t: 'محلهٔ دیگر ✍️', d: 'sh:__text' }])
+  await tgSend(chatId, hoods.length ? `محله؟ (در ${city})` : 'محله را بنویس، یا «📋 همهٔ محله‌ها».', { reply_markup: kb(rows) })
+}
+async function sendListingCard(chatId: number, it: Item) {
+  const m = (it.meta || {}) as Record<string, string>
+  const cap = [`🏠 <b>${it.title || 'آگهی'}</b>`, it.price ? `💰 ${it.price}` : '', it.location ? `📍 ${it.location}` : '', m['متراژ'] ? `📐 ${m['متراژ']} متر` : ''].filter(Boolean).join('\n')
+  const reply_markup = { inline_keyboard: [[{ text: '👁 مشاهده در ملک‌جت', url: `https://melkjet.com/property/${it.id}` }]] }
+  const photo = it.image ? (it.image.startsWith('http') ? it.image : 'https://melkjet.com' + it.image) : ''
+  if (photo) { const r = await tgApi('sendPhoto', { chat_id: chatId, photo, caption: cap, parse_mode: 'HTML', reply_markup }); if (r) return }
+  return tgApi('sendMessage', { chat_id: chatId, text: cap, parse_mode: 'HTML', disable_web_page_preview: false, reply_markup })
+}
+const SEARCH_PAGE = 5
+async function runSearch(chatId: number, offset = 0) {
+  const sd = await getSDraft(chatId)
+  if (!sd) { await tgSend(chatId, 'برای جستجو «🔎 جستجوی آگهی» را بزن.', { reply_markup: menu }); return }
+  const items = await listItems('listing', { publicOnly: true })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pseudo: any = { deal: sd.deal || 'همه', city: sd.city || '', region: '', hood: sd.hood || '' }
+  const matches = items.filter(it => matchSub(pseudo, it))
+  if (!matches.length) { await tgSend(chatId, 'فعلاً آگهیِ منطبقی پیدا نشد 🤷‍♂️\nمی‌تونی 🔔 یک آلارم بسازی تا به‌محضِ ثبتِ آگهیِ منطبق خبرت کنم.', { reply_markup: menu }); return }
+  const slice = matches.slice(offset, offset + SEARCH_PAGE)
+  for (const it of slice) await sendListingCard(chatId, it)
+  const more = matches.length > offset + SEARCH_PAGE
+  await tgSend(chatId, `— ${offset + 1} تا ${offset + slice.length} از ${matches.length} آگهی —`, {
+    reply_markup: more ? kb([[{ t: `➡️ ${SEARCH_PAGE} تای بعدی`, d: 'sn:' + (offset + SEARCH_PAGE) }], [{ t: '🏠 منو', d: 'smenu' }]]) : menu,
+  })
+}
+async function handleSearchText(chatId: number, sd: SDraft, text: string) {
+  if (sd.step === 'cityText') { await setSDraft(chatId, { ...sd, city: text.trim() }); await askSearchHood(chatId, text.trim()) }
+  else if (sd.step === 'hoodText') { await setSDraft(chatId, { ...sd, hood: text.trim() }); await runSearch(chatId, 0) }
+}
+
 // ── فاز ۲۵۷/۲۵۹: ثبتِ آگهیِ هوشمند از تلگرام (گام‌به‌گام با دکمه + تولیدِ متن) ──
 const PTYPES = ['آپارتمان', 'ویلا و خانه', 'زمین و کلنگی', 'مغازه و تجاری', 'دفتر و اداری']
 const ynBtns = (cbYes: string, cbNo: string) => kb([[{ t: '✅ دارد', d: cbYes }, { t: '➖ ندارد', d: cbNo }]])
@@ -94,7 +147,7 @@ const upd = async (chatId: number, patch: Partial<import('@/app/lib/telegram-sto
 }
 
 async function startListing(chatId: number) {
-  await clearDraft(chatId)
+  await clearDraft(chatId); await clearSDraft(chatId)
   const link = await getLink(chatId)
   if (!link) {
     await setLDraft(chatId, { step: 'deal' })   // منتظرِ اشتراکِ شماره؛ بعدش ادامه
@@ -273,6 +326,22 @@ async function handle(u: any) {
     else if (data === 'h:__text') { const dr = await getDraft(chatId); await setDraft(chatId, { step: 'hood', deal: dr?.deal, city: dr?.city, region: dr?.region }); await tgSend(chatId, 'نامِ محله را بنویس:') }
     else if (data.startsWith('h:')) { const dr = await getDraft(chatId); const i = parseInt(data.slice(2), 10); const h = (dr?.hoods && dr.hoods[i]) || ''; if (dr?.deal && dr.city) await saveSub(chatId, dr.deal, dr.city, dr.region || '', h) }
     else if (data.startsWith('del:')) { await removeSub(chatId, data.slice(4)); await tgApi('editMessageText', { chat_id: chatId, message_id: mid, text: '🗑 حذف شد.' }) }
+    // جستجوی درون‌ربات (فاز ۲۶۴)
+    else if (data === 'srch') await askSearchDeal(chatId)
+    else if (data === 'smenu') await tgSend(chatId, 'منوی اصلی:', { reply_markup: menu })
+    else if (data.startsWith('sd:')) { const dr = await getSDraft(chatId); await setSDraft(chatId, { ...(dr || { step: 'deal' }), deal: data.slice(3) }); await askSearchCity(chatId) }
+    else if (data.startsWith('sc:')) {
+      const city = data.slice(3)
+      if (city === '__other') { const dr = await getSDraft(chatId); await setSDraft(chatId, { ...(dr || { step: 'city' }), step: 'cityText' }); await tgSend(chatId, 'نامِ شهر را بنویس:') }
+      else await askSearchHood(chatId, city)
+    }
+    else if (data.startsWith('sh:')) {
+      const dr = await getSDraft(chatId); const v = data.slice(3)
+      if (v === '__all') { await setSDraft(chatId, { ...(dr || { step: 'hood' }), hood: '' }); await runSearch(chatId, 0) }
+      else if (v === '__text') { await setSDraft(chatId, { ...(dr || { step: 'hood' }), step: 'hoodText' }); await tgSend(chatId, 'نامِ محله را بنویس:') }
+      else { const i = parseInt(v, 10); const h = (dr?.hoods && dr.hoods[i]) || ''; await setSDraft(chatId, { ...(dr || { step: 'hood' }), hood: h }); await runSearch(chatId, 0) }
+    }
+    else if (data.startsWith('sn:')) { await runSearch(chatId, parseInt(data.slice(3), 10) || 0) }
     // ثبتِ آگهیِ هوشمند (فاز ۲۵۹)
     else if (data === 'nl') await startListing(chatId)
     else if (data === 'myads') await showMyAds(chatId)
@@ -339,7 +408,7 @@ async function handle(u: any) {
   const text = String(msg.text || '').trim()
   const first = (msg.from?.first_name || 'دوست').toString()
   if (!text) return
-  if (text === '/start') { await clearDraft(chatId); await clearLDraft(chatId); await tgSend(chatId, `سلام ${first} 👋\nبه رباتِ <b>ملک‌جت</b> خوش آمدی.\n\n🔔 <b>آلارم</b> بساز تا آگهیِ منطبق را همان لحظه برایت بفرستم.\n🏠 یا از همین‌جا <b>آگهی ثبت کن</b> تا در سایت منتشر شود.`, { reply_markup: menu }) }
+  if (text === '/start') { await clearDraft(chatId); await clearLDraft(chatId); await clearSDraft(chatId); await tgSend(chatId, `سلام ${first} 👋\nبه رباتِ <b>ملک‌جت</b> خوش آمدی.\n\n🔔 <b>آلارم</b> بساز تا آگهیِ منطبق را همان لحظه برایت بفرستم.\n🏠 یا از همین‌جا <b>آگهی ثبت کن</b> تا در سایت منتشر شود.`, { reply_markup: menu }) }
   else if (text === '/ping') { await tgSend(chatId, '🏓 pong') }
   else if (text === '/newlisting') { await startListing(chatId) }
   else if (text === '/myads') { await showMyAds(chatId) }
@@ -350,9 +419,11 @@ async function handle(u: any) {
     else { const n = parseInt(text.split(/\s+/)[1] || '5', 10) || 5; const c = await seedChannel(n); await tgSend(chatId, c ? `✅ ${c} آگهی به کانال پست شد.` : '⚠️ کانال تنظیم نشده (TELEGRAM_CHANNEL) یا آگهیِ عمومی‌ای نیست.') }
   }
   else {
-    // اول جریانِ ثبتِ آگهی (اگر فعال است)، بعد آلارم
+    // اول جریانِ ثبتِ آگهی، بعد جستجو (ورودیِ متنی)، بعد آلارم
     const ld = await getLDraft(chatId)
     if (ld) { await handleListingText(chatId, ld, text); return }
+    const sd = await getSDraft(chatId)
+    if (sd && (sd.step === 'cityText' || sd.step === 'hoodText')) { await handleSearchText(chatId, sd, text); return }
     const dr = await getDraft(chatId)
     if (dr?.step === 'cityText') { await tgSend(chatId, `شهر: ${text} ✅`); await presentRegions(chatId, dr.deal, text) }
     else if (dr?.step === 'regionText') { await tgSend(chatId, `منطقه: ${text} ✅`); await presentHoods(chatId, dr.deal, dr.city || '', text) }
