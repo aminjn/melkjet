@@ -63,7 +63,6 @@ const sections: NavSection[] = [
       { id: 'products',    icon: '◰',  label: 'محصولات فروشگاه' },
       { id: 'articles',    icon: '✎',  label: 'مقالات' },
       { id: 'categories',  icon: '☰',  label: 'دسته‌بندی‌ها' },
-      { id: 'site',        icon: '🌐', label: 'تنظیماتِ سایت و صفحه‌ها' },
       { id: 'studio',      icon: '◳',  label: 'استودیو پلان و ۳بعدی' },
     ],
   },
@@ -106,6 +105,7 @@ const sections: NavSection[] = [
   {
     title: 'سیستم و پیکربندی',
     items: [
+      { id: 'site',        icon: '🎨', label: 'هویت و تنظیماتِ سایت (لوگو/نام/فوتر)' },
       { id: 'api',         icon: '◈', label: 'API و مدل‌های AI' },
       { id: 'connections', icon: '⚯', label: 'اتصال‌ها و سرویس‌ها' },
       { id: 'geo',         icon: '🗺', label: 'مناطق و محله‌ها' },
