@@ -61,7 +61,6 @@ const sections: NavSection[] = [
       { id: 'listings',    icon: '▤',  label: 'آگهی‌ها' },
       { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی', badge: 'AI', badgeColor: '#c9a84c' },
       { id: 'products',    icon: '◰',  label: 'محصولات فروشگاه' },
-      { id: 'catalog',     icon: '🧱', label: 'کاتالوگِ مصالح' },
       { id: 'articles',    icon: '✎',  label: 'مقالات' },
       { id: 'categories',  icon: '☰',  label: 'دسته‌بندی‌ها' },
       { id: 'site',        icon: '🌐', label: 'تنظیماتِ سایت و صفحه‌ها' },
@@ -69,9 +68,12 @@ const sections: NavSection[] = [
     ],
   },
   {
-    title: 'منابعِ داده',
+    // فاز ۲۷۱ — همهٔ اسکرپرها/منابعِ داده یک‌جا (قبلاً پخش بودند: هوشِ آژانس در کاربران، کاتالوگ در آگهی).
+    title: 'منابعِ داده و اسکرپرها',
     items: [
-      { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی', badge: 'زنده', badgeColor: '#5fd98a' },
+      { id: 'scraper',     icon: '⛏',  label: 'اسکرپرِ دیوار (آگهی‌ها)', badge: 'زنده', badgeColor: '#5fd98a' },
+      { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس (دیوار)' },
+      { id: 'catalog',     icon: '🧱', label: 'کاتالوگِ مصالح (اسکرپ)' },
       { id: 'persiansaze', icon: '🏗', label: 'سازنده‌ها (پرشین‌سازه)' },
     ],
   },
@@ -80,7 +82,6 @@ const sections: NavSection[] = [
     items: [
       { id: 'users',       icon: '◍',  label: 'کاربران' },
       { id: 'profiles',    icon: '👁', label: 'پروفایل‌ها' },
-      { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس' },
       { id: 'staffCrm',    icon: '📞', label: 'CRM مرکزی (مشتریان)', accent: true },
       { id: 'crm',         icon: '👁',  label: 'نظارت بر CRM کاربران' },
       { id: 'roles',       icon: '🛡', label: 'نقش‌ها و دسترسی' },
@@ -109,7 +110,6 @@ const sections: NavSection[] = [
       { id: 'connections', icon: '⚯', label: 'اتصال‌ها و سرویس‌ها' },
       { id: 'geo',         icon: '🗺', label: 'مناطق و محله‌ها' },
       { id: 'sitemap',     icon: '🧭', label: 'سایت‌مپ و SEO' },
-      { id: 'settings',    icon: '⚙', label: 'تنظیماتِ کامل' },
       { id: 'health',      icon: '◉', label: 'سلامتِ سیستم' },
       { id: 'servers',     icon: '▤', label: 'سرورها' },
       { id: 'queue',       icon: '◳', label: 'صفِ پردازش' },
