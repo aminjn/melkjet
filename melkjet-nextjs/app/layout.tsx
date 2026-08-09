@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { getAdminData } from './lib/admin-store'
+import { siteConfig } from './lib/site-store'
 import BottomNav from './components/BottomNav'
 import SessionKeeper from './components/SessionKeeper'
 import LocationDetector from './components/LocationDetector'
@@ -57,6 +58,7 @@ export default function RootLayout({
     url: 'https://melkjet.com/', inLanguage: 'fa-IR',
     potentialAction: { '@type': 'SearchAction', target: { '@type': 'EntryPoint', urlTemplate: 'https://melkjet.com/search?q={search_term_string}' }, 'query-input': 'required name=search_term_string' },
   }
+  const fav = siteConfig().brand?.favicon || ''   // فاز ۲۷۰ — فاوآیکونِ سفارشیِ برند (اگر تنظیم شده)
   const orgLd = {
     '@context': 'https://schema.org', '@type': 'Organization', name: 'ملک‌جت', url: 'https://melkjet.com/',
     logo: 'https://melkjet.com/icon-512.png',
@@ -77,6 +79,7 @@ export default function RootLayout({
         <link rel="preload" href="/fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/fonts/Vazirmatn-Bold.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/fonts/Vazirmatn-ExtraBold.woff2" as="font" type="font/woff2" crossOrigin="" />
+        {fav && <link rel="icon" href={fav} />}
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>

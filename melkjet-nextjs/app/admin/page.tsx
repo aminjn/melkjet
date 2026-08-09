@@ -6674,6 +6674,36 @@ function SiteView() {
     <div style={{ maxWidth: 900 }}>
       {(saved || err) && <div style={{ position: 'sticky', top: 0, zIndex: 5, marginBottom: 12, padding: '9px 14px', borderRadius: 10, fontSize: 13, background: err ? 'rgba(231,74,74,.12)' : 'rgba(95,217,138,.12)', border: `1px solid ${err ? 'rgba(231,74,74,.4)' : 'rgba(95,217,138,.4)'}`, color: err ? '#e7674a' : '#5fd98a' }}>{err || saved}</div>}
 
+      {/* ── فاز ۲۷۰: هویتِ سایت (برند) ── */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>🎨 هویتِ سایت (برند)</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>نام، لوگو (روشن/تیره)، فاوآیکون و رنگِ برند. لوگو خالی = نمایشِ نام و نشانِ پیش‌فرض.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ gridColumn: '1 / -1' }}><span style={lbl}>نامِ سایت</span><input style={inp} value={cfg.brand?.name || ''} onChange={e => setCfg({ ...cfg, brand: { ...cfg.brand, name: e.target.value } })} placeholder="ملک‌جت" /></div>
+          {(([['logoLight', 'لوگوی روشن (روی پس‌زمینهٔ روشن)'], ['logoDark', 'لوگوی تیره (روی پس‌زمینهٔ تیره)'], ['favicon', 'فاوآیکون (آیکونِ تبِ مرورگر)']]) as [string, string][]).map(([key, label]) => (
+            <div key={key}>
+              <span style={lbl}>{label}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <label style={{ ...ghost, cursor: 'pointer' }}>آپلود
+                  <input type="file" accept="image/*,.ico,.svg" style={{ display: 'none' }} onChange={async e => {
+                    const file = e.target.files?.[0]; if (!file) return
+                    const fd = new FormData(); fd.append('file', file)
+                    const r = await fetch('/api/media', { method: 'POST', body: fd }); const d = await r.json().catch(() => ({}))
+                    if (r.ok && d.url) setCfg(c => c ? { ...c, brand: { ...c.brand, [key]: d.url } } : c)
+                    else setErr(d.error || 'آپلودِ عکس ناموفق بود')
+                  }} />
+                </label>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {(cfg.brand as unknown as Record<string, string>)?.[key] ? <img src={(cfg.brand as unknown as Record<string, string>)[key]} alt="" style={{ height: 36, maxWidth: 130, objectFit: 'contain', borderRadius: 8, background: key === 'logoLight' ? '#fff' : 'var(--bg2)', padding: 4, border: '1px solid var(--line2)' }} /> : <span style={{ fontSize: 12, color: 'var(--faint)' }}>—</span>}
+                {(cfg.brand as unknown as Record<string, string>)?.[key] && <button style={ghost} onClick={() => setCfg(c => c ? { ...c, brand: { ...c.brand, [key]: '' } } : c)}>حذف</button>}
+              </div>
+            </div>
+          ))}
+          <div><span style={lbl}>رنگِ برند</span><input type="color" value={cfg.brand?.accent || '#c9a84c'} onChange={e => setCfg({ ...cfg, brand: { ...cfg.brand, accent: e.target.value } })} style={{ width: 60, height: 38, border: '1px solid var(--line2)', borderRadius: 8, background: 'var(--bg2)', cursor: 'pointer' }} /></div>
+        </div>
+        <button style={{ ...btn, marginTop: 14 }} onClick={() => post({ action: 'save', brand: cfg.brand }, '✓ هویتِ سایت ذخیره شد')}>ذخیرهٔ هویتِ سایت</button>
+      </div>
+
       {/* ── فاز ۱۵۰: بخش‌های صفحهٔ مقاله ── */}
       <div style={card}>
         <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>📰 صفحهٔ مقاله</div>

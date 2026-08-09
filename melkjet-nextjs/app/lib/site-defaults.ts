@@ -27,7 +27,16 @@ export interface SitePage {
   show: boolean
   system?: boolean    // صفحه‌های سیستمی حذف نمی‌شوند (مسیرِ خودشان را دارند)
 }
+// فاز ۲۷۰ — هویتِ سایت (برند): نام + لوگوی روشن/دارک + فاوآیکون + رنگِ برند. خالی = پیش‌فرضِ ملک‌جت.
+export interface SiteBrand {
+  name: string
+  logoLight?: string   // لوگو برای تمِ روشن (URL / /api/media/…)
+  logoDark?: string    // لوگو برای تمِ تاریک
+  favicon?: string
+  accent?: string      // رنگِ برند (hex)
+}
 export interface SiteConfig {
+  brand: SiteBrand
   footer: SiteFooter
   contact: SiteContact
   pages: SitePage[]
@@ -36,6 +45,7 @@ export interface SiteConfig {
 }
 
 export const DEFAULT_SITE: SiteConfig = {
+  brand: { name: 'ملک‌جت', accent: '#c9a84c' },
   blog: { tldr: true, market: true },
   footer: {
     blurb: 'بزرگ‌ترین اکوسیستم هوشمند صنعت املاک و ساختمان ایران. تصمیم بهتر، با داده‌ی بهتر.',
