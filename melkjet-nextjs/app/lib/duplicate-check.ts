@@ -1,6 +1,7 @@
 import { getAdvisor } from './advisor-store'
 import { getAdvisorMembership, listAgencyMembers } from './agency-link-store'
 import { aiFor, agentModel } from './gapgpt'
+import { mlFirst } from './ml-gateway'
 const { chatCompleteSafe } = aiFor('تشخیصِ آگهیِ تکراری')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // تشخیصِ «آگهیِ تکراری» — هنگامِ ثبت/ایمپورتِ آگهی توسط مشاور یا آژانس.
@@ -38,20 +39,30 @@ export async function checkDuplicate(scope: DupExisting[], cand: DupCand, exclud
   const top = ranked[0]
   if (top.score >= 0.85) return { isDuplicate: true, match: { id: top.e.id, title: top.e.title, ownerName: top.e.ownerName }, confidence: 'high' }
 
-  // شکِ متوسط → تأییدِ هوش مصنوعی
+  // شکِ متوسط → «اول ماشین‌لرنینگ»: امتیازِ شباهت خودش تصمیم می‌گیرد مگر در بازهٔ واقعاً مبهم
+  // (۰.۶۶ تا ۰.۸۰)؛ آن‌وقت AI. حکمِ همان جفت کش می‌شود تا جفتِ تکراری دوباره AI نخورد.
   const model = agentModel('chat', 'text') || agentModel('content', 'text')
-  if (model) {
-    try {
-      const out = await chatCompleteSafe(model, [
-        { role: 'system', content: 'تو کارشناسِ املاکی. تشخیص بده آیا دو آگهیِ زیر «یک ملکِ واحد» هستند (تکراری) یا دو ملکِ متفاوت. فقط با yes یا no پاسخ بده.' },
-        { role: 'user', content: `آگهی ۱: ${cand.title} | ${cand.neighborhood || cand.location || ''} | متراژ ${cand.area || '?'} | اتاق ${cand.rooms ?? '?'} | قیمت ${cand.price}\nآگهی ۲: ${top.e.title} | ${top.e.neighborhood || top.e.location || ''} | متراژ ${top.e.area || '?'} | اتاق ${top.e.rooms ?? '?'} | قیمت ${top.e.price}` },
-      ], { temperature: 0, max_tokens: 5 })
-      if (/yes|بله|تکرار/i.test(out || '')) return { isDuplicate: true, match: { id: top.e.id, title: top.e.title, ownerName: top.e.ownerName }, confidence: 'medium' }
-      return { isDuplicate: false }
-    } catch { /* fall through */ }
-  }
-  if (top.score >= 0.72) return { isDuplicate: true, match: { id: top.e.id, title: top.e.title, ownerName: top.e.ownerName }, confidence: 'medium' }
-  return { isDuplicate: false }
+  const mtch = { id: top.e.id, title: top.e.title, ownerName: top.e.ownerName }
+  const pairKey = [cand.deal, norm(cand.neighborhood || cand.location), cand.area, cand.price, cand.rooms, norm(cand.title),
+    top.e.deal, norm(top.e.neighborhood || top.e.location), top.e.area, top.e.price, top.e.rooms, norm(top.e.title)].join('|')
+  const { value: verdict } = await mlFirst<'yes' | 'no'>({
+    task: 'dup-check', key: pairKey,
+    validate: v => v === 'yes' || v === 'no',
+    predict: () => top.score >= 0.80 ? { value: 'yes' as const, confident: true } : top.score < 0.66 ? { value: 'no' as const, confident: true } : null,
+    ai: async () => {
+      if (model) {
+        try {
+          const out = await chatCompleteSafe(model, [
+            { role: 'system', content: 'تو کارشناسِ املاکی. تشخیص بده آیا دو آگهیِ زیر «یک ملکِ واحد» هستند (تکراری) یا دو ملکِ متفاوت. فقط با yes یا no پاسخ بده.' },
+            { role: 'user', content: `آگهی ۱: ${cand.title} | ${cand.neighborhood || cand.location || ''} | متراژ ${cand.area || '?'} | اتاق ${cand.rooms ?? '?'} | قیمت ${cand.price}\nآگهی ۲: ${top.e.title} | ${top.e.neighborhood || top.e.location || ''} | متراژ ${top.e.area || '?'} | اتاق ${top.e.rooms ?? '?'} | قیمت ${top.e.price}` },
+          ], { temperature: 0, max_tokens: 5 })
+          return /yes|بله|تکرار/i.test(out || '') ? 'yes' : 'no'
+        } catch { /* افتادن به fallbackِ امتیازی */ }
+      }
+      return top.score >= 0.72 ? 'yes' : 'no'
+    },
+  })
+  return verdict === 'yes' ? { isDuplicate: true, match: mtch, confidence: 'medium' } : { isDuplicate: false }
 }
 
 // آگهی‌های هم‌حوزه برای یک مشاور: خودش + هم‌آژانسی‌ها + آژانس (همگی از advisor-store).
