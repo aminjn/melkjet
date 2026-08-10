@@ -1,29 +1,62 @@
 // ── گزارش/بذرپاشی/سنجشِ دقتِ ماشین‌لرنینگِ رُسترِ آژانس (روی دادهٔ واقعیِ سرور) ──────────
 // سه زیرفرمان:
-//   (بدونِ آرگومان)   وضعیت: ماشین تا الان چند نام یاد گرفته؟ (admin/ai، وزن‌ها) — آفلاین
+//   (بدونِ آرگومان)   وضعیت: ماشین چند نام یاد گرفته + فهرستِ آژانس‌های موجود — آفلاین
 //   seed              بذرپاشی: از همهٔ مشاورانِ کشف‌شدهٔ انباشته، لِکسیکون را پر کن — آفلاین
 //   accuracy <slug>   دقت: یک آژانسِ واقعی را اسکرپ کن و «نظرِ ML» را با «نظرِ AI» بسنج — نیازمندِ دیوار
 // اجرا (روی سرور):  node --import ./scripts/reos-loader.mjs scripts/roster-ml-report.mjs [seed|accuracy <slug>]
-import { listScrapes } from '../app/lib/agency-roster-store.ts'
-import { buildAgencyRoster, validName } from '../app/lib/agency-roster.ts'
-import { knownNames, mlStats, learnName } from '../app/lib/agency-roster-ml.ts'
+import { readFileSync, existsSync } from 'fs'
+
+// مهم: اسکریپتِ مستقل (برخلافِ Next) خودش .env را لود نمی‌کند. بدونِ DATABASE_URL همه‌چیز روی
+// «فایل» می‌رود نه PostgreSQL — یعنی نه دادهٔ واقعیِ رُستر را می‌بیند و نه بذرپاشی روی اپِ زنده اثر دارد.
+// پس اینجا دستی .env.production.local (و .env) را می‌خوانیم تا اسکریپت به همان PGِ اپ وصل شود.
+function loadEnv(file) {
+  if (!existsSync(file)) return
+  for (const line of readFileSync(file, 'utf-8').split('\n')) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/)
+    if (!m) continue
+    let v = m[2]
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1)
+    if (process.env[m[1]] === undefined) process.env[m[1]] = v
+  }
+}
+loadEnv('.env.production.local'); loadEnv('.env')
+
+const { listScrapes } = await import('../app/lib/agency-roster-store.ts')
+const { buildAgencyRoster, validName } = await import('../app/lib/agency-roster.ts')
+const { knownNames, mlStats, learnName } = await import('../app/lib/agency-roster-ml.ts')
+const { pgEnabled } = await import('../app/lib/db.ts')
 
 const ZWNJ = /‌/g
 const keyOf = (s) => { const t = String(s || '').replace(ZWNJ, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim(); return /^[A-Za-z]+$/.test(t) ? t.toUpperCase() : t }
 const pct = (n, d) => d ? Math.round((n / d) * 100) : 0
+const store = () => pgEnabled() ? 'PostgreSQL (دادهٔ زندهٔ اپ)' : '⚠️ فایل (DATABASE_URL پیدا نشد — دادهٔ زنده دیده نمی‌شود!)'
+
+async function listAgencies() {
+  const scrapes = await listScrapes()
+  console.log(`  آژانس‌های ثبت‌شده: ${scrapes.length}   (منبع: ${store()})`)
+  for (const s of scrapes.slice(0, 40)) {
+    const grad = (s.advisors || []).filter(a => a.phone || a.graduatedAt).length
+    console.log(`    • ${s.slug}   «${s.agencyName || '؟'}»   مشاوران: ${(s.advisors || []).length} (فارغ‌التحصیل: ${grad})`)
+  }
+  return scrapes
+}
 
 async function showState() {
   const s = await mlStats()
   const trusted = (await knownNames(2)).length
   console.log('══════════ وضعیتِ فعلیِ ماشین‌لرنینگ ══════════')
+  console.log(`  منبعِ داده: ${store()}`)
   console.log(`  نام‌های یادگرفته‌شده : ${s.learned}   (ادمین‌تأیید: ${s.byAdmin} ، AI: ${s.byAi})`)
   console.log(`  «مورد اعتماد» (وزن≥۲، مجازِ short-circuitِ AI) : ${trusted}`)
   console.log(`  منفی‌ها (فراموش‌شده) : ${s.negatives}`)
   console.log(`  ۲۰ نامِ پروزن‌تر : ${s.top.map(t => `${t.name}[w${t.weight}${t.teacher === 'admin' ? '،ادمین' : ''}]`).join('  ،  ') || '(خالی)'}`)
+  console.log('')
+  await listAgencies()
   if (!s.learned) console.log('\n  ⚠️ لِکسیکون خالی است — «seed» را اجرا کن تا از دادهٔ انباشته پر شود.')
 }
 
 async function seed() {
+  if (!pgEnabled()) { console.log(`❌ ${store()}\n   بذرپاشی روی فایل بی‌فایده است چون اپ از PG می‌خواند. DATABASE_URL را چک کن.`); return }
   const scrapes = await listScrapes()
   let adminSeeded = 0, aiSeeded = 0, skipped = 0
   for (const sc of scrapes) {
@@ -37,6 +70,7 @@ async function seed() {
     }
   }
   console.log('══════════ بذرپاشی از دادهٔ انباشته ══════════')
+  console.log(`  منبع: ${store()}`)
   console.log(`  اسکرپ‌ها: ${scrapes.length}   |   ادمین‌تأیید: +${adminSeeded}   |   ≥۲فایل: +${aiSeeded}   |   ردشده(چرت/تک‌فایلی): ${skipped}`)
   console.log('')
   await showState()
@@ -45,7 +79,7 @@ async function seed() {
 // دقتِ واقعی: آژانس را یک‌بار اسکرپ می‌کنیم؛ «رانِ A» با AI (مرجع)، «رانِ B» فقط با ML+heuristic
 // روی همان متنِ کش‌شده (بدونِ دیوارِ دوباره، بدونِ AI). بعد نظرِ ML را با نظرِ AI مقایسه می‌کنیم.
 async function accuracy(slug) {
-  if (!slug) { console.log('استفاده: accuracy <slug-یا-لینکِ آژانس>'); return }
+  if (!slug) { console.log('باید slug/لینکِ آژانس بدهی. یکی از این‌ها:'); await listAgencies(); return }
   console.log(`══════════ سنجشِ دقت روی آژانسِ واقعی: ${slug} ══════════`)
   const cache = {}
   const onRow = (tok, r) => { if (r?.desc) cache[tok] = r }
@@ -79,9 +113,7 @@ async function accuracy(slug) {
 }
 
 const cmd = process.argv[2]
-const main = async () => {
-  if (cmd === 'seed') await seed()
-  else if (cmd === 'accuracy') await accuracy(process.argv[3])
-  else await showState()
-}
-main().catch(e => { console.error(e); process.exit(1) })
+if (cmd === 'seed') await seed()
+else if (cmd === 'accuracy') await accuracy(process.argv[3])
+else await showState()
+process.exit(0)
