@@ -7,20 +7,29 @@ import { listItems } from '@/app/lib/scraper-store'
 import { getAccount } from '@/app/lib/account-store'
 import { matchListingsForLead } from '@/app/lib/crm-matching'
 import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { mlFirst } from '@/app/lib/ml-gateway'
 const { chatCompleteSafe } = aiFor('هوشِ CRM')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // دستیارِ هوشمندِ فروش. همه چیز پایهٔ heuristic دارد (بدونِ AI هم کار می‌کند)؛
 // اگر مدلِ AI تنظیم باشد، یک توصیهٔ کوتاهِ طبیعی هم اضافه می‌شود.
+// از دروازهٔ ML رد می‌شود: حالتِ یکسانِ لیدها (همان prompt) → همان جمله از کش، بدونِ AI.
 async function aiText(prompt: string): Promise<string | null> {
   const model = agentModel('chat', 'text') || agentModel('content', 'text')
   if (!model) return null
-  try {
-    const r = await chatCompleteSafe(model, [
-      { role: 'system', content: 'تو دستیارِ فروشِ املاک هستی. کوتاه، فارسی، عملی و بدونِ حاشیه پاسخ بده.' },
-      { role: 'user', content: prompt },
-    ], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))
-    return (r || '').trim() || null
-  } catch { return null }
+  const { value } = await mlFirst<string | null>({
+    task: 'crm-advice', key: prompt,
+    validate: v => typeof v === 'string' && v.length > 0,
+    ai: async () => {
+      try {
+        const r = await chatCompleteSafe(model, [
+          { role: 'system', content: 'تو دستیارِ فروشِ املاک هستی. کوتاه، فارسی، عملی و بدونِ حاشیه پاسخ بده.' },
+          { role: 'user', content: prompt },
+        ], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))
+        return (r || '').trim() || null
+      } catch { return null }
+    },
+  })
+  return value
 }
 
 export async function POST(req: NextRequest) {
