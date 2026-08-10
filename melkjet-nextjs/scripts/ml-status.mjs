@@ -63,5 +63,16 @@ try {
   console.log(`  یادگرفته: ${s.learned} (ادمین ${s.byAdmin} / AI ${s.byAi}) ، مورد اعتماد(≥۲): ${trusted} ، منفی: ${s.negatives}`)
 } catch (e) { console.log('  agency-roster-ml:', e.message) }
 
+// ۶) دروازهٔ ML (اول‌ماشین‌لرنینگ) — سهمِ هر کار که بدونِ AI حل شده
+try {
+  const { gatewayStats, gatewayCacheSize } = await import('../app/lib/ml-gateway.ts')
+  const gs = await gatewayStats()
+  const tasks = Object.entries(gs)
+  console.log('\n── دروازهٔ «اول ماشین‌لرنینگ» (سهمِ بدونِ AI) ──')
+  if (!tasks.length) console.log('  (هنوز هیچ کاری از دروازه رد نشده)')
+  for (const [t, s] of tasks) console.log(`  • ${t}: ML ${s.mlPct}٪ (کش ${s.cache} / مدل ${s.model} / AI ${s.ai}) از ${s.total}`)
+  console.log(`  اندازهٔ کش: ${await gatewayCacheSize()} ورودی`)
+} catch (e) { console.log('  ml-gateway:', e.message) }
+
 console.log('\n════════════════════════════════════════════════════════════════')
 process.exit(0)
