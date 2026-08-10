@@ -222,6 +222,19 @@ export async function buildAgencyRoster(
     try { opts.onProgress?.(i + 1, maxDetails) } catch {}
   }
 
+  // ── ماشین‌لرنینگ (فلایویل): پیش از فازِ AI، نام‌های «مورد اعتماد» را همین‌جا نسبت بده ──
+  // فاز ۲۷۴ (فیدبک: «چرا ماشین‌لرنینگ AI را کم نمی‌کند؟») — ریشه: lexicon فقط بعد از فازِ AI
+  // مصرف می‌شد، پس هر آگهی حتی با نامِ آموخته باز به AI می‌رفت. حالا: نامِ تثبیت‌شده (وزن≥۲،
+  // یعنی حداقل دوبار دیده/تأییدشده) که در متنِ آگهی باشد، آن آگهی را قطعی نسبت می‌دهد و از AI
+  // حذف می‌کند. با هر اجرا مشاورهای پایدار تثبیت می‌شوند → فراخوانِ AI کم و کمتر می‌شود.
+  const learned = await knownNames(1)                 // برای تطبیقِ موضعِ امضا (گیت‌شده با candKeys)
+  const trusted = learned.filter(l => l.weight >= 2)  // فقط تثبیت‌شده‌ها مجازند AI را short-circuit کنند
+  const resolved: Record<number, string> = {}
+  rows.forEach((r, idx) => {
+    const m = validName(lexiconMatch(`${r.title}\n${r.desc}`, trusted), name)
+    if (m) resolved[idx] = m
+  })
+
   // پالایشِ AI (اختیاری) — نامِ کانونی جای بهترین کاندیدای heuristic را می‌گیرد.
   // فاز ۱۹۴ (فیدبک: «کلاً گیر کرده») — این فاز تا ۴۵ فراخوانِ AI دارد و قبلاً بی‌صدا بود؛ حالا:
   // پیشرفتِ per-chunk + اگر ۳ تکهٔ پیاپی هیچ نامی نداد (AI مرده/کلیدِ خراب) بقیه skip می‌شود
@@ -234,6 +247,7 @@ export async function buildAgencyRoster(
     rows.forEach((r, idx) => {
       const cachedName = opts.cached?.[r.post.token]?.name
       if (cachedName !== undefined) aiMap[idx] = cachedName
+      else if (resolved[idx]) { /* ML قطعاً نسبت داد → این آگهی به AI نمی‌رود (کم‌کردنِ AI) */ }
       else pending.push({ idx, row: r })
     })
     const chunksTotal = Math.ceil(pending.length / 12)
@@ -257,13 +271,11 @@ export async function buildAgencyRoster(
     }
   }
 
-  // نام‌های آموخته‌شدهٔ قبلی (مدلِ یادگیرنده) — برای تطبیقِ قطعیِ بدونِ AI.
-  const learned = await knownNames(1)
-  const toLearn = new Set<string>()   // نام‌های تأییدشدهٔ این دور → به مدل اضافه می‌شوند
-
-  // خوشه‌بندی — اولویت: (۱) نامِ آموخته‌شده در متن، (۲) AI، (۳) heuristic. همه از گیتِ validName.
+  // خوشه‌بندی — اولویت: (۱) AI، (۲) نامِ مورد اعتمادِ ML (short-circuit)، (۳) lexiconِ موضعِ امضا، (۴) heuristic.
   const clusters = new Map<string, RosterAdvisor>()
   const strongKeys = new Set<string>()   // خوشه‌هایی با «سیگنالِ قویِ نام» — نه حدسِ تنها
+  const freshKeys = new Set<string>()     // خوشه‌هایی که این اجرا واقعاً از متن استخراج شدند (نه پژواکِ lexicon)
+  const fileCount = new Map<string, number>()   // برای وزن‌دهیِ یادگیری بر اساسِ تعدادِ فایل
   const unnamed: { tokens: string[]; posts: BrandPost[] } = { tokens: [], posts: [] }
   rows.forEach((r, idx) => {
     // کاندیداهای «موضعِ امضا»یِ همین آگهی (heuristic) — تنها جایی که یک اسم واقعاً امضای مشاور است.
@@ -276,21 +288,20 @@ export async function buildAgencyRoster(
     // استثنا: نامِ کاملِ چندکلمه‌ای («علی رضایی») هرجای متن هم تقریباً حتماً امضاست (تصادفِ ناچیز).
     const lexFull = (!lex && lexRaw && lexRaw.includes(' ')) ? lexRaw : ''
     const ai = validName(aiMap[idx] || '', name)
-    // اولویت: AIِ متن‌آگاه → lexiconِ محدود به موضعِ امضا → اولین کاندیدای heuristic → نامِ کاملِ lexicon.
-    const chosen = ai || lex || cand[0] || lexFull
+    const res = resolved[idx] || ''   // نامِ مورد اعتمادِ ML که پیش از AI این آگهی را نسبت داد
+    // اولویت: AIِ متن‌آگاه (اگر پرسیده شد) → نامِ مورد اعتمادِ ML → lexiconِ موضعِ امضا → heuristic → نامِ کامل.
+    const chosen = ai || res || lex || cand[0] || lexFull
     if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); return }
-    if (ai) toLearn.add(ai)                 // نامِ تأییدشدهٔ AI → یادگیری برای دفعهٔ بعد (مستقل از AI)
     const k = keyOf(chosen)
-    // «سیگنالِ قوی» = نامِ آموخته‌شدهٔ قبلی (lex/lexFull)، یا توافقِ مستقلِ AI و heuristicِ همین آگهی
-    // (هر دو یک اسم دادند). حدسِ تنها (فقط AI، یا فقط یک regexِ دنبالهٔ متن) قوی نیست.
-    if (lex || lexFull || (ai && candKeys.has(keyOf(ai)))) strongKeys.add(k)
+    // «سیگنالِ قوی» = نامِ مورد اعتمادِ ML، یا نامِ آموخته در موضعِ امضا، یا توافقِ مستقلِ AI و heuristic.
+    if (res || lex || lexFull || (ai && candKeys.has(keyOf(ai)))) strongKeys.add(k)
+    // «تازه» = این اجرا از متن استخراج شد (AI یا heuristic)، نه صرفاً پژواکِ نامِ از قبل آموخته.
+    if (ai || cand.length) freshKeys.add(k)
+    fileCount.set(k, (fileCount.get(k) || 0) + 1)
     let c = clusters.get(k)
     if (!c) { c = { key: k, name: chosen, tokens: [], posts: [] }; clusters.set(k, c) }
     c.tokens.push(r.post.token); c.posts.push(r.post)
   })
-
-  // یادگیریِ تدریجی: نام‌هایی که AI این دور تأیید کرد را حفظ کن تا دفعهٔ بعد خودِ ماشین بشناسد.
-  for (const nm of toLearn) { try { await learnName(nm, 'ai') } catch {} }
 
   // ── چرت‌وپرت‌زدایی (فیدبک: «چرت و پرت زیاد میاره») ──
   // یک خوشه فقط وقتی «مشاورِ واقعی» است که یا ≥۲ آگهی امضا کرده باشد (مشاورِ واقعیِ آژانس چند
@@ -301,6 +312,15 @@ export async function buildAgencyRoster(
     if (c.tokens.length >= MIN_FILES || strongKeys.has(k)) continue
     unnamed.tokens.push(...c.tokens); unnamed.posts.push(...c.posts)
     clusters.delete(k)
+  }
+
+  // ── یادگیریِ تدریجی (موتورِ فلایویل) ──
+  // فقط از خوشه‌های «بازمانده و تازه‌استخراج‌شدهٔ این اجرا» یاد بگیر، با وزنِ برابرِ تعدادِ فایل:
+  // مشاورِ واقعی که چند آگهی امضا کرده سریع به آستانهٔ اعتماد (وزن≥۲) می‌رسد و دفعهٔ بعد بدونِ
+  // AI شناخته می‌شود؛ حدسِ تک‌فایلیِ فیلترشده اصلاً یاد گرفته نمی‌شود (نه آلودگی، نه خودتقویتیِ lexicon).
+  for (const c of clusters.values()) {
+    if (!freshKeys.has(c.key)) continue   // پژواکِ صرفِ lexicon وزن نمی‌گیرد (از خودتقویتی جلوگیری می‌کند)
+    try { await learnName(c.name, 'ai', fileCount.get(c.key) || 1) } catch {}
   }
 
   const advisors = [...clusters.values()].sort((a, b) => b.tokens.length - a.tokens.length)

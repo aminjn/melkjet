@@ -29,14 +29,16 @@ export function nameKey(name: string): string {
 }
 
 // یادگیریِ یک نام (افزودن/تقویتِ وزن). ادمین وزنِ بالاتری می‌دهد.
-export async function learnName(name: string, teacher: 'ai' | 'admin' = 'ai'): Promise<void> {
+// bump (اختیاری، فقط AI): وزن بر اساسِ تعدادِ آگهیِ تأییدشدهٔ همان مشاور در یک اجرا — مشاوری که
+// ۴ فایل امضا کرده مطمئن‌تر از حدسِ تک‌فایلی است، پس سریع‌تر به «آستانهٔ اعتماد» می‌رسد. سقفِ ۵.
+export async function learnName(name: string, teacher: 'ai' | 'admin' = 'ai', bump?: number): Promise<void> {
   const n = String(name || '').trim()
   if (!n || n.length < 2) return
   const k = nameKey(n)
   await mutate(db => {
     if (db.negatives[k]) delete db.negatives[k]   // اگر قبلاً منفی بود، تأییدِ جدید آزادش می‌کند
     const cur = db.names[k]
-    const add = teacher === 'admin' ? 5 : 1
+    const add = teacher === 'admin' ? 5 : Math.max(1, Math.min(Math.floor(bump ?? 1), 5))
     db.names[k] = { name: n, weight: (cur?.weight || 0) + add, at: Date.now(), teacher: teacher === 'admin' ? 'admin' : (cur?.teacher || 'ai') }
   })
 }

@@ -513,13 +513,22 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
 // ── حذفِ دستیِ یک مشاور از رُستر (برای اسم‌های خراب یا حسابِ حذف‌شده) ──
 // فقط رکوردِ رُستر را برمی‌دارد؛ حساب/فایل‌های واقعی (اگر graduate شده) دست‌نخورده می‌مانند.
 export async function removeAdvisor(id: string, key: string): Promise<{ ok: boolean; error?: string }> {
-  return mutate(db => {
+  // نامِ مشاور را پیش از حذف برمی‌داریم تا به ماشین «فراموشی» یاد بدهیم (بازخوردِ منفی).
+  const badName = await mutate(db => {
+    const s = db.scrapes[id]; if (!s) return null
+    return s.advisors.find(a => a.key === key)?.name || ''
+  })
+  const r = await mutate(db => {
     const s = db.scrapes[id]; if (!s) return { ok: false, error: 'اسکرپ یافت نشد' }
     const before = s.advisors.length
     s.advisors = s.advisors.filter(a => a.key !== key)
     if (db.graduateQueue) db.graduateQueue = db.graduateQueue.filter(j => !(j.id === id && j.key === key))
     return s.advisors.length < before ? { ok: true } : { ok: false, error: 'مشاور یافت نشد' }
   })
+  // یادگیریِ منفی: حذفِ دستیِ ادمین یعنی «این اسم خراب بود» → از واژه‌نامه پاک و «منفی» علامت می‌شود
+  // تا دیگر تشخیص داده نشود (فاز ۲۷۴ — بستنِ حلقهٔ بازخورد؛ forgetName قبلاً هرگز صدا زده نمی‌شد).
+  if (r.ok && badName) { try { const { forgetName } = await import('./agency-roster-ml'); await forgetName(badName) } catch {} }
+  return r
 }
 
 // ── صفِ «ساختِ حساب» (graduate) — سبک روی درخواستِ ادمین، سنگین روی اینستنسِ ۰ ──
