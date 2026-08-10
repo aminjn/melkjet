@@ -23,7 +23,7 @@ loadEnv('.env.production.local'); loadEnv('.env')
 
 const { listScrapes } = await import('../app/lib/agency-roster-store.ts')
 const { buildAgencyRoster, validName } = await import('../app/lib/agency-roster.ts')
-const { knownNames, mlStats, learnName } = await import('../app/lib/agency-roster-ml.ts')
+const { knownNames, mlStats, learnName, forgetName } = await import('../app/lib/agency-roster-ml.ts')
 const { pgEnabled } = await import('../app/lib/db.ts')
 
 const ZWNJ = /‌/g
@@ -83,14 +83,16 @@ async function accuracy(slug) {
   console.log(`══════════ سنجشِ دقت روی آژانسِ واقعی: ${slug} ══════════`)
   const cache = {}
   const onRow = (tok, r) => { if (r?.desc) cache[tok] = r }
-  console.log('  رانِ A (با AI — مرجع)…')
-  const A = await buildAgencyRoster(slug, { useAI: true, onRow })
+  // سقفِ ۴۰ آگهی — وگرنه یک آژانسِ بزرگ (صدها فایل × ۶۰۰ms) نیم‌ساعت طول می‌کشد. نمونهٔ ۴۰تایی کافی است.
+  const SAMPLE = Number(process.argv[4]) || 40
+  console.log(`  رانِ A (با AI — مرجع، نمونهٔ ${SAMPLE} آگهی)…`)
+  const A = await buildAgencyRoster(slug, { useAI: true, onRow, maxDetails: SAMPLE })
   if (!A.ok) { console.log(`  ❌ ${A.error}`); return }
   // متنِ خالص (بدونِ نامِ AI) برای رانِ B تا واقعاً «فقط ML» بسنجیم، نه پژواکِ AI.
   const textOnly = {}
   for (const [k, v] of Object.entries(cache)) textOnly[k] = { title: v.title, desc: v.desc }
   console.log('  رانِ B (فقط ML+heuristic، بدونِ AI، روی همان متن)…')
-  const B = await buildAgencyRoster(slug, { useAI: false, cached: textOnly })
+  const B = await buildAgencyRoster(slug, { useAI: false, cached: textOnly, maxDetails: SAMPLE })
 
   const refMap = new Map(), mlMap = new Map()
   for (const adv of A.advisors) for (const t of adv.tokens) refMap.set(t, adv.name)
@@ -112,8 +114,22 @@ async function accuracy(slug) {
   console.log('')
 }
 
+// پاک‌سازیِ لِکسیکون: هر نامِ آموخته‌ای که با فیلترِ فعلی دیگر «نامِ معتبر» نیست (مثلِ «خالی»)
+// را فراموش کن. بعد از تقویتِ STOPWORDS این‌طور آلودگیِ انباشته از مغزِ ماشین پاک می‌شود.
+async function clean() {
+  if (!pgEnabled()) { console.log(`❌ ${store()} — پاک‌سازی باید روی PG اجرا شود.`); return }
+  const all = await knownNames(1)
+  let purged = 0
+  for (const n of all) {
+    if (!validName(n.name, '')) { await forgetName(n.name); purged++; console.log(`  🗑 «${n.name}» [w${n.weight}]`) }
+  }
+  console.log(`\n══════════ پاک‌سازی ══════════\n  ${purged} نامِ نامعتبر فراموش شد.\n`)
+  await showState()
+}
+
 const cmd = process.argv[2]
 if (cmd === 'seed') await seed()
+else if (cmd === 'clean') await clean()
 else if (cmd === 'accuracy') await accuracy(process.argv[3])
 else await showState()
 process.exit(0)
