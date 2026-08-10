@@ -14,6 +14,7 @@ import { agencyAdvisorFiles } from '@/app/lib/agency-team'
 import { planDistribution, findConflicts } from '@/app/lib/agency-distribution'
 import { forecastIncome, advisorPerformance, teamInsights } from '@/app/lib/agency-ai'
 import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { mlFirst } from '@/app/lib/ml-gateway'
 const { chatCompleteSafe } = aiFor('پنلِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { getAdvisor, setListingStatus as advSetStatus, deleteListing as advDeleteListing, addLead as advAddLead, listLeads as advListLeads } from '@/app/lib/advisor-store'
 import { listAgencyMembers } from '@/app/lib/agency-link-store'
@@ -222,13 +223,12 @@ export async function POST(req: NextRequest) {
       let advice: string | null = null
       const model = agentModel('chat', 'text') || agentModel('content', 'text')
       if (model) {
-        try {
-          const weak = performance.rows.filter(r => r.weak).map(r => r.name).join('، ') || 'ندارد'
-          advice = (await chatCompleteSafe(model, [
-            { role: 'system', content: 'تو مشاورِ مدیریتِ فروشِ املاک هستی. کوتاه، فارسی و عملی پاسخ بده.' },
-            { role: 'user', content: `آژانس با ${agency.agents.filter(a => a.active).length} مشاورِ فعال، ${(agency.leads || []).length} لید، ${(agency.deals || []).length} معامله. مشاورِ ضعیف: ${weak}. برای بهبودِ درآمدِ ماهِ آینده چه کنم؟` },
-          ], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))).trim() || null
-        } catch {}
+        const weak = performance.rows.filter(r => r.weak).map(r => r.name).join('، ') || 'ندارد'
+        const q = `آژانس با ${agency.agents.filter(a => a.active).length} مشاورِ فعال، ${(agency.leads || []).length} لید، ${(agency.deals || []).length} معامله. مشاورِ ضعیف: ${weak}. برای بهبودِ درآمدِ ماهِ آینده چه کنم؟`
+        advice = (await mlFirst<string | null>({
+          task: 'agency-advice', key: q, validate: v => typeof v === 'string' && v.length > 0,
+          ai: async () => { try { return (await chatCompleteSafe(model, [{ role: 'system', content: 'تو مشاورِ مدیریتِ فروشِ املاک هستی. کوتاه، فارسی و عملی پاسخ بده.' }, { role: 'user', content: q }], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))).trim() || null } catch { return null } },
+        })).value
       }
       return NextResponse.json({ ok: true, forecast, performance, insights, advice })
     }

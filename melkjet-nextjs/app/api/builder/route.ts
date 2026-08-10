@@ -4,6 +4,7 @@ import { getSession } from '@/app/lib/session'
 import { listProjects, getProject, addProject, updateProject, addUnit, updateUnit, deleteUnit, addInvestor, deleteInvestor, updateMilestone, ensureImported, setProjectFinance, setUnitPlan, toggleUnitStage, projectStats } from '@/app/lib/builder-store'
 import { sellThroughForecast, suggestUnitPrice, projectInsights } from '@/app/lib/builder-ai'
 import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { mlFirst } from '@/app/lib/ml-gateway'
 const { chatCompleteSafe } = aiFor('پنلِ سازنده')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { builderIdForPhone, getProfile, regionLabel, phaseLabel } from '@/app/lib/persiansaze-store'
 import { getPublic, patchPublic, setProjMeta, addManual, updateManual, deleteManual } from '@/app/lib/builder-public-store'
@@ -88,12 +89,11 @@ export async function POST(req: NextRequest) {
       let advice: string | null = null
       const model = agentModel('chat', 'text') || agentModel('content', 'text')
       if (model) {
-        try {
-          advice = (await chatCompleteSafe(model, [
-            { role: 'system', content: 'تو مشاورِ فروش و مالیِ پروژه‌های ساختمانی هستی. کوتاه، فارسی و عملی پاسخ بده.' },
-            { role: 'user', content: `پروژه «${p.name}»: ${stats.sold} از ${stats.total} واحد فروخته، سرعتِ فروش ${forecast.velocity} واحد/ماه، ${forecast.remaining} واحد مانده، سود تخمینی ${stats.profit}. برای تسریعِ فروش و افزایشِ سود چه پیشنهادی داری؟` },
-          ], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))).trim() || null
-        } catch {}
+        const q = `پروژه «${p.name}»: ${stats.sold} از ${stats.total} واحد فروخته، سرعتِ فروش ${forecast.velocity} واحد/ماه، ${forecast.remaining} واحد مانده، سود تخمینی ${stats.profit}. برای تسریعِ فروش و افزایشِ سود چه پیشنهادی داری؟`
+        advice = (await mlFirst<string | null>({
+          task: 'builder-advice', key: q, validate: v => typeof v === 'string' && v.length > 0,
+          ai: async () => { try { return (await chatCompleteSafe(model, [{ role: 'system', content: 'تو مشاورِ فروش و مالیِ پروژه‌های ساختمانی هستی. کوتاه، فارسی و عملی پاسخ بده.' }, { role: 'user', content: q }], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))).trim() || null } catch { return null } },
+        })).value
       }
       return NextResponse.json({ ok: true, forecast, stats, insights, advice })
     }

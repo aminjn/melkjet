@@ -9,6 +9,7 @@ import {
 } from '@/app/lib/materials-store'
 import { demandForecast, priceInsights } from '@/app/lib/materials-ai'
 import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { mlFirst } from '@/app/lib/ml-gateway'
 const { chatCompleteSafe } = aiFor('پنلِ مصالح')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // همهٔ دادهٔ پنل بازار مصالح، مخصوص کاربرِ واردشده (per-profile).
@@ -91,12 +92,11 @@ export async function POST(req: NextRequest) {
       let advice: string | null = null
       const model = agentModel('chat', 'text') || agentModel('content', 'text')
       if (model) {
-        try {
-          advice = (await chatCompleteSafe(model, [
-            { role: 'system', content: 'تو مشاورِ فروشِ B2B مصالحِ ساختمانی هستی. کوتاه، فارسی و عملی پاسخ بده.' },
-            { role: 'user', content: `فروشگاه با ${shop.products.filter(p => p.active).length} محصولِ فعال، روندِ فروش ${forecast.trendPct}٪، ${forecast.restock.length} محصولِ نیازمندِ تأمین. برای افزایشِ فروش و مدیریتِ موجودی چه پیشنهادی داری؟` },
-          ], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))).trim() || null
-        } catch {}
+        const q = `فروشگاه با ${shop.products.filter(p => p.active).length} محصولِ فعال، روندِ فروش ${forecast.trendPct}٪، ${forecast.restock.length} محصولِ نیازمندِ تأمین. برای افزایشِ فروش و مدیریتِ موجودی چه پیشنهادی داری؟`
+        advice = (await mlFirst<string | null>({
+          task: 'materials-advice', key: q, validate: v => typeof v === 'string' && v.length > 0,
+          ai: async () => { try { return (await chatCompleteSafe(model, [{ role: 'system', content: 'تو مشاورِ فروشِ B2B مصالحِ ساختمانی هستی. کوتاه، فارسی و عملی پاسخ بده.' }, { role: 'user', content: q }], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))).trim() || null } catch { return null } },
+        })).value
       }
       return NextResponse.json({ ok: true, forecast, prices, advice })
     }

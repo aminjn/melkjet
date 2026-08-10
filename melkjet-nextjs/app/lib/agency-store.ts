@@ -5,6 +5,7 @@ import { getProfile, saveProfile } from './profile-store'
 import { getAccount } from './account-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { aiFor, agentModel, agentProvider } from './gapgpt'
+import { mlFirst } from './ml-gateway'
 const { chatCompleteSafe } = aiFor('پنلِ آژانس (تحلیل)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // استور پنل «آژانس املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
@@ -340,10 +341,11 @@ export async function agencyAiInsights(o: string): Promise<{ callNow: { id: stri
     if (model) {
       const provider = agentProvider('chat', 'text')
       const byStage = STAGES.map(s => `${STAGE_FA[s]}: ${a.leads.filter(l => l.stage === s).length}`).join('، ')
-      const txt = await chatCompleteSafe(model, [
-        { role: 'system', content: 'تو مدیرِ فروشِ آژانسِ املاک هستی. خیلی کوتاه (حداکثر ۲ جمله)، فارسی و عملی تحلیل کن. بدون مقدمه.' },
-        { role: 'user', content: `پایپ‌لاینِ آژانس: ${byStage}. نرخِ تبدیل ${conv}٪. ${unassigned} لیدِ تخصیص‌نیافته، ${stale} عقب‌افتاده. تحلیلِ کوتاه + یک توصیهٔ کلیدی.` },
-      ], { temperature: 0.4, max_tokens: 220 }, provider)
+      const uq = `پایپ‌لاینِ آژانس: ${byStage}. نرخِ تبدیل ${conv}٪. ${unassigned} لیدِ تخصیص‌نیافته، ${stale} عقب‌افتاده. تحلیلِ کوتاه + یک توصیهٔ کلیدی.`
+      const txt = (await mlFirst<string | null>({
+        task: 'agency-health', key: uq, validate: v => typeof v === 'string' && v.length > 0,
+        ai: async () => { try { return (await chatCompleteSafe(model, [{ role: 'system', content: 'تو مدیرِ فروشِ آژانسِ املاک هستی. خیلی کوتاه (حداکثر ۲ جمله)، فارسی و عملی تحلیل کن. بدون مقدمه.' }, { role: 'user', content: uq }], { temperature: 0.4, max_tokens: 220 }, provider)).trim() || null } catch { return null } },
+      })).value
       if (txt && txt.trim()) health = txt.trim()
     }
   } catch {}
@@ -365,10 +367,11 @@ export async function agencyLeadAdvice(o: string, lid: string): Promise<string> 
     const model = agentModel('chat', 'text')
     if (model) {
       const provider = agentProvider('chat', 'text')
-      const txt = await chatCompleteSafe(model, [
-        { role: 'system', content: 'تو مدیرِ فروشِ آژانسِ املاک هستی. فارسی، کوتاه و عملی. ۲ تا ۴ گامِ مشخصِ بعدی برای این لید بده (شماره‌دار). بدون مقدمه.' },
-        { role: 'user', content: `لید: ${l.name}. مرحله: ${STAGE_FA[l.stage]}. مشاورِ مسئول: ${l.assignedTo || 'تخصیص‌نیافته'}. نیاز: ${l.need || '—'}. بودجه: ${l.budget || '—'}. آخرین فعالیت‌ها: ${acts}. اقدامِ بعدی؟` },
-      ], { temperature: 0.5, max_tokens: 320 }, provider)
+      const uq = `لید: ${l.name}. مرحله: ${STAGE_FA[l.stage]}. مشاورِ مسئول: ${l.assignedTo || 'تخصیص‌نیافته'}. نیاز: ${l.need || '—'}. بودجه: ${l.budget || '—'}. آخرین فعالیت‌ها: ${acts}. اقدامِ بعدی؟`
+      const txt = (await mlFirst<string | null>({
+        task: 'agency-lead-advice', key: uq, validate: v => typeof v === 'string' && v.length > 0,
+        ai: async () => { try { return (await chatCompleteSafe(model, [{ role: 'system', content: 'تو مدیرِ فروشِ آژانسِ املاک هستی. فارسی، کوتاه و عملی. ۲ تا ۴ گامِ مشخصِ بعدی برای این لید بده (شماره‌دار). بدون مقدمه.' }, { role: 'user', content: uq }], { temperature: 0.5, max_tokens: 320 }, provider)).trim() || null } catch { return null } },
+      })).value
       if (txt && txt.trim()) return txt.trim() + matchLine
     }
   } catch {}
