@@ -1,3 +1,4 @@
+# DESIGN BY AMIN NAEINI
 # CODING AGENTS: READ THIS FIRST
 
 This is a **handoff bundle** from Claude Design (claude.ai/design).
