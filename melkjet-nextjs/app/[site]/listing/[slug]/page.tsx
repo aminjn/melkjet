@@ -6,7 +6,7 @@ import { idFromListingSlug, listingHref } from '@/app/lib/listing-url'
 import { SiteChrome } from '../../page'
 import ListingDetail, { type DetailItem } from '../../ListingDetail'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 300
 const MAIN = 'https://melkjet.com'
 
 async function load(siteSlug: string, slug: string) {

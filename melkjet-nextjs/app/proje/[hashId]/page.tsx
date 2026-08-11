@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { publicProject } from '@/app/lib/persiansaze-store'
 import { ensureProjectSlug } from '@/app/lib/project-slug-store'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
 
 // مسیرِ قدیمی → canonicalِ جدید /projects/{slug}
 export default async function LegacyProje({ params }: { params: Promise<{ hashId: string }> }) {

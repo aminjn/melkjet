@@ -11,7 +11,8 @@ import { providersInArea } from '@/app/lib/provider-public'
 import { listingHref } from '@/app/lib/listing-url'
 import { dealOf } from '@/app/lib/listing-filter'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
+export function generateStaticParams() { return [] }
 
 // اکشن‌های Programmatic زیرِ هر مکان (خرید/اجاره/متخصصان/…).
 const ACTIONS: Record<string, { fa: string; deal?: 'sale' | 'rent'; kind: 'listing' | 'provider' | 'info' | 'project'; types?: string[] }> = {

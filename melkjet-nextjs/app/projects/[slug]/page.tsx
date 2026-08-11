@@ -6,7 +6,8 @@ import { unitStatusesForHash } from '@/app/lib/builder-store'
 import { hashForProjectSlug, ensureProjectSlug } from '@/app/lib/project-slug-store'
 import ProjectView from '@/app/components/ProjectView'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
+export function generateStaticParams() { return [] }
 
 const LADDER = ['پی و اسکلت', 'سفت‌کاری', 'گچ و خاک', 'نازک‌کاری', 'تأسیسات', 'تحویل']
 function ladderIdx(label: string): number {

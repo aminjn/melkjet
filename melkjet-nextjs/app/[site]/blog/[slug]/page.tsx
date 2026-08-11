@@ -6,7 +6,7 @@ import { mdToHtml } from '@/app/lib/markdown'
 import { categorySlugForNameDyn as categorySlugForName } from '@/app/lib/blog-taxonomy-server'
 import { SiteChrome } from '../../page'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 1800
 const MAIN = 'https://melkjet.com'
 
 async function load(siteSlug: string, slug: string) {

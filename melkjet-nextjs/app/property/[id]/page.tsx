@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { getItemById } from '@/app/lib/scraper-store'
 import { listingHref } from '@/app/lib/listing-url'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 300
 
 // مسیرِ قدیمی → canonicalِ جدید /listing/{id}-{slug}
 export default async function LegacyProperty({ params }: { params: Promise<{ id: string }> }) {

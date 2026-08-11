@@ -6,7 +6,7 @@ import { publicQuery, regionLabel } from '@/app/lib/persiansaze-store'
 import { ensureProjectSlug } from '@/app/lib/project-slug-store'
 import { gradientFor } from '@/app/lib/content-display'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
 
 export const metadata: Metadata = {
   title: 'پروژه‌های ساختمانی و پیش‌فروش | ملک‌جت',

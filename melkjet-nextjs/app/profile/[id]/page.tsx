@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { getProviderPublic } from '@/app/lib/provider-public'
 import LegacyProfile from './LegacyProfile'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 1800
 
 // مسیرِ قدیمی: متخصص → ریدایرکت به canonicalِ جدید /{type}/{slug}؛ موارد لبه → نمای قدیمی.
 export default async function ProfileRoute({ params }: { params: Promise<{ id: string }> }) {

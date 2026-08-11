@@ -8,7 +8,7 @@ import { categorySlugForName } from '@/app/lib/blog-taxonomy'
 // قبلاً صفحه کاملاً کلاینتی بود: HTML خالی → هیدریت → واکشیِ ۱۰۰ مقالهٔ «کامل» (با بدنه) →
 // تازه رندر. حالا همان الگویِ SSR جستجو (فاز ۹۹/۱۵۲): فهرست روی سرور از استخرِ کش‌شدهٔ
 // stale-while-revalidate خوانده و «لاغر» می‌شود (بدونِ بدنهٔ مقاله) و کارت‌ها در HTML اولیه‌اند.
-export const dynamic = 'force-dynamic'
+export const revalidate = 1800   // فاز ۲۵۶ (سرعت): ISR — HTML کش می‌شود، هر 1800s تازه
 
 export const metadata: Metadata = {
   title: 'مجلهٔ ملک‌جت | مقالات و راهنمای املاک',
@@ -24,7 +24,11 @@ function slimArticle(a: Item): BlogIndexArticle {
   const meta: Record<string, string> = {}
   if (m.slug) meta.slug = m.slug
   if (m.author) meta.author = m.author
-  return { id: a.id, title: a.title, excerpt, image: a.image, category: a.category, scrapedAt: a.scrapedAt, url: a.url, meta }
+  // فاز ۲۵۶ (سرعت — بحرانی): عکسِ base64 (data:URI) هرگز در HTMLِ ایندکس نرود — یک کاورِ base64 تا
+  // ۲.۳MB بود و ۱۰۰ تا = ۷۷MB صفحه! کاورها با مهاجرت به URLِ مدیا تبدیل می‌شوند؛ این گارد از تکرارِ
+  // فاجعه با هر آپلودِ base64ِ آینده جلوگیری می‌کند (کارت بدونِ عکس، گرادیانت نشان می‌دهد).
+  const image = a.image && !a.image.startsWith('data:') ? a.image : undefined
+  return { id: a.id, title: a.title, excerpt, image, category: a.category, scrapedAt: a.scrapedAt, url: a.url, meta }
 }
 
 const indexPool = swrValue<BlogIndexData>(async () => {

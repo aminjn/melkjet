@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { flatNeighborhoods } from '@/app/lib/locations-store'
 import NeighborhoodClient from './NeighborhoodClient'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
 
 const normFa = (s: string) => String(s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
 

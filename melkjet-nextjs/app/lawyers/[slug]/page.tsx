@@ -6,7 +6,8 @@ import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import { getLawyerProfile } from '@/app/lib/bonyad-profiles'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 1800
+export function generateStaticParams() { return [] }
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 
 type Props = { params: Promise<{ slug: string }> }

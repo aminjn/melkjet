@@ -10,7 +10,7 @@ export const metadata = {
   description: 'پاسخِ پرسش‌های پرتکرار دربارهٔ خرید، فروش، اجاره، آگهی، پلن‌ها و خدماتِ ملک‌جت.',
   alternates: { canonical: 'https://melkjet.com/faq' },
 }
-export const dynamic = 'force-dynamic'
+export const revalidate = 86400
 
 // پارسِ محتاطانهٔ پرسش/پاسخ از متنِ آزادِ ادمین برای FAQPage JSON-LD: هر خطِ پایان‌یافته به «؟»
 // یک پرسش است و متنِ تا پرسشِ بعدی پاسخِ آن. اگر <۲ جفت پیدا شد، اسکیما ساخته نمی‌شود (بی‌خطر).

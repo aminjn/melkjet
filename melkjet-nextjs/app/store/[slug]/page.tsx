@@ -2,7 +2,8 @@ import { publicShop } from '@/app/lib/materials-store'
 import StorefrontView from './StorefrontView'
 import type { Metadata } from 'next'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
+export function generateStaticParams() { return [] }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params

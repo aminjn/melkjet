@@ -4,7 +4,7 @@ import ContactForm from './ContactForm'
 import { siteConfig } from '@/app/lib/site-store'
 
 export const metadata = { title: 'تماس با ما' }
-export const dynamic = 'force-dynamic'
+export const revalidate = 86400
 
 export default function ContactPage() {
   // فاز ۹۸: متن و اطلاعاتِ تماس از تنظیماتِ سوپرادمین (فوتر ↔ تماس یک منبع دارند)

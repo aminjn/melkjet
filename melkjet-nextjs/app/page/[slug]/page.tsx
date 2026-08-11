@@ -6,7 +6,7 @@ import { pageOf } from '@/app/lib/site-store'
 import { notFound } from 'next/navigation'
 
 // فاز ۹۸: صفحه‌های سفارشیِ ساخته‌شده در سوپرادمین (admin → تنظیماتِ سایت و صفحه‌ها)
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params

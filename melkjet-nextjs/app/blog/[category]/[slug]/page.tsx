@@ -10,7 +10,8 @@ import { blogCatBySlugDyn as blogCatBySlug, categorySlugForNameDyn as categorySl
 import { siteConfig } from '@/app/lib/site-store'
 import { marketOverview } from '@/app/lib/market-stats'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 1800
+export function generateStaticParams() { return [] }
 
 // فاز ۱۵۰ — بازطراحیِ مجله‌ایِ صفحهٔ مقاله. اصلِ آهنین: هیچ دادهٔ فیکی نیست —
 // خلاصه از متایِ خودِ مقاله، آمارِ بازار از دادهٔ واقعیِ سایت، تبلیغ فقط اگر ادمین بنر تعریف کرده باشد.

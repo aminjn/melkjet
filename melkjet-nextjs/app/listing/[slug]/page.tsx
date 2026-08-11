@@ -4,7 +4,8 @@ import { getItemById } from '@/app/lib/scraper-store'
 import { idFromListingSlug, listingHref } from '@/app/lib/listing-url'
 import PropertyClient from './PropertyClient'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 300
+export function generateStaticParams() { return [] }
 
 function faToEn(s: string): string { return (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))) }
 function num(s?: string): number | undefined { const m = faToEn(s || '').match(/\d[\d,]*/); return m ? parseInt(m[0].replace(/,/g, ''), 10) : undefined }

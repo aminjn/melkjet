@@ -5,7 +5,7 @@ import { pageOf } from '@/app/lib/site-store'
 import { notFound } from 'next/navigation'
 
 export const metadata = { title: 'قوانین و شرایط استفاده' }
-export const dynamic = 'force-dynamic'
+export const revalidate = 86400
 
 export default function TermsPage() {
   // فاز ۹۸: متن از تنظیماتِ سوپرادمین

@@ -4,7 +4,7 @@ import { getSite } from '@/app/lib/sites-store'
 import { shopProductsOf } from '@/app/lib/materials-store'
 import { SiteChrome } from '../page'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
 const MAIN = 'https://melkjet.com'
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 const money = (t: number) => t >= 1e9 ? `${fa(Math.round(t / 1e8) / 10)} میلیارد` : t >= 1e6 ? `${fa(Math.round(t / 1e5) / 10)} میلیون` : fa(t)

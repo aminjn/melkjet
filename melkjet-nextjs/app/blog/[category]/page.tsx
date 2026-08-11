@@ -7,7 +7,8 @@ import { listItems } from '@/app/lib/scraper-store'
 import { gradientFor } from '@/app/lib/content-display'
 import { blogCatBySlugDyn as blogCatBySlug, categorySlugForNameDyn as categorySlugForName, allBlogCategories } from '@/app/lib/blog-taxonomy-server'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 1800
+export function generateStaticParams() { return [] }
 
 export async function generateMetadata({ params }: { params: Promise<{ category: string }> }): Promise<Metadata> {
   const { category } = await params

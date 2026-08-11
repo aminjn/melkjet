@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { markSeen } from '@/app/lib/seen-store'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import PropertyMap from '@/app/components/PropertyMap'
@@ -134,6 +135,8 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
       if (!it) return
       // ثبتِ بازدید (باز شدنِ آگهی) — برای گزارشِ صاحبِ آگهی
       try { fetch('/api/listing-stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'view', id: it.id }) }).catch(() => {}) } catch {}
+      // فاز ۲۵۵ — علامتِ «دیده‌شده» (محلی): کارتِ این آگهی هرجای سایت نشانِ چشم می‌گیرد
+      try { markSeen(it.id) } catch {}
       // گالری و موقعیتِ آگهیِ ثبت‌شده توسط کاربر/مشاور (در meta ذخیره شده)
       const g = it.meta?.['__gallery']
       if (g) { const imgs = g.split(/[\n,]+/).map(s => s.trim()).filter(Boolean); if (imgs.length) setGallery(imgs) }

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { slugForBuilderId } from '@/app/lib/builder-slug-store'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
 
 // مسیرِ قدیمیِ فارسی → canonicalِ انگلیسیِ /builders/{slug}
 export default async function LegacySazande({ params }: { params: Promise<{ id: string }> }) {

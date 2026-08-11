@@ -5,7 +5,8 @@ import ProductPageView from './ProductPageView'
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
+export function generateStaticParams() { return [] }
 
 // slug → id (یا خودِ id برای سازگاریِ عقب‌رو)
 async function resolveId(slug: string): Promise<string | null> {

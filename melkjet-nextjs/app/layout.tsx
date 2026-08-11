@@ -8,6 +8,7 @@ import LocationDetector from './components/LocationDetector'
 import Tracker from './components/Tracker'
 import AuthModal from './components/AuthModal'
 import DeferredShell from './components/DeferredShell'
+import ScrollRestorer from './components/ScrollRestorer'
 import MissionChip from './components/MissionChip'
 import ThemeFab from './components/ThemeFab'
 
@@ -86,6 +87,7 @@ export default function RootLayout({
         <SessionKeeper />
         <LocationDetector />
         <Tracker />
+        <ScrollRestorer />{/* فاز ۲۵۵ — بازگشت به همان نقطهٔ اسکرول هنگامِ برگشت از آگهی */}
         {children}
         <AuthModal />
         <BottomNav />

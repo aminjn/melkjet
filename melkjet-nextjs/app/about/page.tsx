@@ -6,7 +6,7 @@ import { pageOf } from '@/app/lib/site-store'
 import { notFound } from 'next/navigation'
 
 export const metadata = { title: 'دربارهٔ ملک‌جت' }
-export const dynamic = 'force-dynamic'
+export const revalidate = 86400
 
 export default async function AboutPage() {
   // فاز ۹۸: متن از تنظیماتِ سوپرادمین (admin → تنظیماتِ سایت و صفحه‌ها)
