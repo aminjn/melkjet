@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { aiFor, agentModel } from '@/app/lib/gapgpt'
+import { mlFirst } from '@/app/lib/ml-gateway'
 const { generateImage } = aiFor('کاورِ مقاله (CMS)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // تولید تصویر شاخص مقاله با هوش مصنوعی.
@@ -14,7 +15,11 @@ export async function POST(req: NextRequest) {
   if (!model) return NextResponse.json({ error: 'به ایجنت ContentAgent یک مدل تصویر بده (پنل → API و مدل‌های AI).' }, { status: 400 })
   const prompt = `Professional editorial cover image for a Persian real-estate article titled "${title}". Modern, clean, realistic real-estate / architecture photography style, warm tones, high quality, no text.`
   try {
-    const url = await generateImage(model, prompt, '1024x1024')
+    // کش: همان عنوان → همان کاور، بدونِ تولیدِ دوبارهٔ تصویر (گران‌ترین فراخوان).
+    const url = (await mlFirst<string>({
+      task: 'cms-cover', key: title + '|' + model, validate: v => typeof v === 'string' && v.length > 0,
+      ai: async () => (await generateImage(model, prompt, '1024x1024')) || '',
+    })).value
     if (!url) return NextResponse.json({ error: 'تصویری ساخته نشد' }, { status: 200 })
     return NextResponse.json({ ok: true, url })
   } catch (e: any) {

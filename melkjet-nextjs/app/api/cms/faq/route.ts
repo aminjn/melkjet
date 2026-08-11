@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { aiFor, agentModel } from '@/app/lib/gapgpt'
+import { mlFirst } from '@/app/lib/ml-gateway'
 const { chatCompleteSafe } = aiFor('پرسش‌وپاسخِ مقاله (CMS)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // تولید سؤالات متداول (FAQ) برای یک مقاله — انسان‌نما و سئو، خروجی JSON.
@@ -17,10 +18,13 @@ export async function POST(req: NextRequest) {
   const model = agentModel('content', 'text') || agentModel('chat', 'text') || agentModel('pricing', 'text')
   if (!model) return NextResponse.json({ error: 'مدلی به ایجنت ContentAgent تخصیص داده نشده' }, { status: 400 })
   try {
-    let text = await chatCompleteSafe(model, [
-      { role: 'system', content: SYS },
-      { role: 'user', content: `موضوع: ${topic}${context ? `\nخلاصهٔ مقاله: ${context}` : ''}` },
-    ], { temperature: 0.7, max_tokens: 1400 })
+    let text = (await mlFirst<string>({
+      task: 'cms-faq', key: topic + '|' + context, validate: v => typeof v === 'string' && v.trim().length > 0,
+      ai: async () => await chatCompleteSafe(model, [
+        { role: 'system', content: SYS },
+        { role: 'user', content: `موضوع: ${topic}${context ? `\nخلاصهٔ مقاله: ${context}` : ''}` },
+      ], { temperature: 0.7, max_tokens: 1400 }),
+    })).value || ''
     const m = text.match(/\{[\s\S]*\}/); if (m) text = m[0]
     const d = JSON.parse(text)
     const faqs = Array.isArray(d.faqs) ? d.faqs.filter((x: any) => x.q && x.a).slice(0, 8) : []
