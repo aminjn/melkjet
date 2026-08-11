@@ -2,7 +2,7 @@ import { getItemById } from './scraper-store'
 import { getEnrichment, patchEnrichment, type Enrichment } from './enrich-store'
 import { fetchDivarPost, divarToken } from './divar-post'
 import { computeNearby, NEARBY_V } from './nearby'
-import { analyzeListing } from './analyze'
+import { analyzeListing, localAnalyzeOnly } from './analyze'
 
 // غنی‌سازیِ هر آگهی (دیوار + نزدیکی‌ها + تحلیل AI) فقط یک‌بار محاسبه و کش می‌شود.
 // این ماژول مشترک است: هم endpointِ خواندن از آن استفاده می‌کند، هم هنگامِ «افزودن/
@@ -95,6 +95,15 @@ async function generate(id: string): Promise<Enrichment> {
       }
     }
   }
+  // فاز ۲۵۲ — نزدیکیِ ذخیره‌شده خالی یا کهنه (نسخهٔ قدیم) ولی مختصات داریم → در پس‌زمینه یک‌بار
+  // بازساز و در enrich بنشان. هم نمایشِ سریع می‌دهد، هم پایهٔ «سئوِ محله‌ای» است (page.tsx نزدیکی را
+  // از همین کش می‌خواند). کاملاً بدونِ AI (computeNearby فقط NexaMap است) و فقط در صفِ پس‌زمینه.
+  if (cur.baseDone && cur.geo && (!(cur.nearby?.length) || cur.nearbyV !== NEARBY_V)) {
+    try {
+      const n = (await computeNearby(cur.geo.lat, cur.geo.lng)).nearby
+      if (n.length) cur = patchEnrichment(id, { v: ENRICH_V, nearby: n, nearbyV: NEARBY_V })
+    } catch { /* جاروی بعدی دوباره تلاش می‌کند */ }
+  }
   // فاز ۲۱۵ — گرم‌سازیِ کند دیگر بی‌صدا نیست: سهمِ هر مرحله لاگ می‌شود تا گلوگاه بدونِ حدس پیدا شود
   const total = Date.now() - t0
   if (total > 25_000) {
@@ -119,6 +128,27 @@ export function ensureEnrichment(id: string): Promise<Enrichment> {
   let p = inflight.get(id)
   if (!p) { p = generate(id).finally(() => inflight.delete(id)); inflight.set(id, p) }
   return p
+}
+
+/**
+ * تحلیلِ فوریِ «فقط ماشین‌لرنینگ» روی مسیرِ درخواستِ کاربر — تضمینِ قانونِ «آگهی بدونِ تحلیل نباید
+ * نمایش داده شود». برخلافِ generate: (۱) هیچ‌گاه AI صدا نمی‌زند (localAnalyzeOnly)، (۲) به واکشیِ
+ * دیوار/baseDone وابسته نیست — از خودِ دادهٔ آگهی (عنوان/قیمت/موقعیت/متا/توضیحات) می‌سازد، پس حتی
+ * وقتی گالری/نزدیکی هنوز در صف است، تحلیل آنی (~۶ms) آماده است. گالری/نزدیکی مثلِ قبل در پس‌زمینه.
+ */
+export async function ensureAnalysisNow(id: string): Promise<Enrichment | null> {
+  let cur = getEnrichment(id) || {}
+  if (cur.v !== ENRICH_V) cur = {}
+  if (cur.analysisOk) return cur
+  const it = await getItemById(id)
+  if (!it) return null
+  const r = localAnalyzeOnly({
+    title: it.title, price: it.price, location: it.location,
+    facts: cur.facts || [], description: cur.description || it.excerpt || '',
+    meta: it.meta, amenities: cur.amenities || [],
+  })
+  if (r.analysis) return patchEnrichment(id, { v: ENRICH_V, analysis: r.analysis, analysisOk: true, analysisErr: false, analysisNote: '', analysisTriedAt: Date.now() })
+  return cur   // ورودی واقعاً تهی بود (آگهیِ بی‌عنوان/بی‌متن) — نادر؛ warm پس‌زمینه بعداً تلاش می‌کند
 }
 
 // ── صفِ پیش‌گرمِ پس‌زمینه با محدودیتِ هم‌زمانی ─────────────────────────────

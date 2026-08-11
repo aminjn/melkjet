@@ -30,6 +30,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: `سازندهٔ ${title} | ملک‌جت`,
     description: `پروفایلِ سازندهٔ ${p.name}${region ? ` در ${region}` : ''}: پروژه‌های ساختمانی، سوابق و اطلاعاتِ تماس در ملک‌جت.`,
     alternates: { canonical: `https://melkjet.com/builders/${canonSlug}` },
+    openGraph: { title: `سازندهٔ ${title}`, url: `https://melkjet.com/builders/${canonSlug}`, type: 'website' },
   }
 }
 
@@ -47,5 +48,29 @@ export default async function BuilderProfile({ params }: { params: Promise<{ slu
   const s = await getSession()
   // شماره هرگز در payloadِ اولیه به مرورگر نمی‌رود؛ فقط با ورود از /api/contact-reveal می‌آید.
   const safe = { ...profile, hasPhone: !!profile.phone, phone: '' }
-  return <BuilderProfileView profile={safe} initialFollowing={s ? isFollowing(id!, s.phone) : false} loggedIn={!!s} />
+
+  // فاز ۲۵۴ (سئو): سازنده = GeneralContractor JSON-LD (محدودهٔ فعالیت/آدرس/امتیاز) + BreadcrumbList.
+  const url = `https://melkjet.com/builders/${canonSlug}`
+  const region = (profile as { regionsText?: string; city?: string }).regionsText || (profile as { city?: string }).city || ''
+  const ld: Record<string, unknown> = {
+    '@context': 'https://schema.org', '@type': 'GeneralContractor', name: profile.name, url,
+    areaServed: region || undefined,
+    address: profile.officeAddress ? { '@type': 'PostalAddress', streetAddress: profile.officeAddress, addressCountry: 'IR' } : undefined,
+    sameAs: profile.website || undefined,
+    aggregateRating: (profile.reviewsCount > 0 && profile.rating > 0) ? { '@type': 'AggregateRating', ratingValue: profile.rating, reviewCount: profile.reviewsCount, bestRating: 5 } : undefined,
+  }
+  Object.keys(ld).forEach(k => ld[k] === undefined && delete ld[k])
+  const crumbLd = {
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'خانه', item: 'https://melkjet.com/' },
+      { '@type': 'ListItem', position: 2, name: 'سازنده‌ها', item: 'https://melkjet.com/builders' },
+      { '@type': 'ListItem', position: 3, name: profile.name, item: url },
+    ],
+  }
+  return <>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(crumbLd) }} />
+    <BuilderProfileView profile={safe} initialFollowing={s ? isFollowing(id!, s.phone) : false} loggedIn={!!s} />
+  </>
 }

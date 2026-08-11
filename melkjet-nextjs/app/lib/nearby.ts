@@ -1,11 +1,9 @@
-import { aiFor, agentModel } from './gapgpt'
-import { geoApiEnabled, geoReverse as gaReverse, geoGeocode, geoSearch, geoMatrix } from './geo-api'
-const { chatCompleteSafe } = aiFor('دسترسی‌های اطراف')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
+import { geoApiEnabled, geoReverse as gaReverse, geoSearch } from './geo-api'
 
-// فاز ۲۳۴ — «دسترسی‌های اطراف» حالا کاملاً روی سامانهٔ نقشهٔ اختصاصی است (نشان حذف شد، به دستورِ
-// کاربر). مسیرِ اصلی: جستجوی «شعاعی» واقعی (v1/search با radius — چیزی که پلنِ نشان نداشت) →
-// مکان‌های واقعی داخلِ ۱ کیلومتر با فاصلهٔ واقعی. مسیرِ پشتیبان (دیتای POI هنوز کم بود):
-// reverse → نام‌ها از AI → اعتبارسنجی با geocode → همان قانونِ صادقانهٔ ۱کیلومتر/حدنصاب.
+// فاز ۲۵۱ — «دسترسی‌های اطراف» حالا کاملاً و فقط روی NexaMap و دادهٔ واقعی است؛ هیچ AIای در کار نیست
+// (به دستورِ صریحِ کاربر). روشِ درست: به‌جای «جستجوی شعاعیِ عبارتِ خالی» (که NexaMap برایش خالی
+// برمی‌گرداند)، برای هر دستهٔ کاربردی (مترو، بیمارستان، پارک، سوپرمارکت…) یک جستجوی واقعیِ NexaMap
+// می‌زنیم و نزدیک‌ترینِ هر دسته را با فاصله و زمانِ پیادهٔ واقعی نگه می‌داریم. مسیرِ AIِ قدیمی حذف شد.
 
 // مختصات → شهر/محله. برای تشخیصِ خودکارِ منطقهٔ کاربر.
 export async function reverseGeocode(lat: number, lng: number): Promise<{ city?: string; neighborhood?: string; address?: string } | null> {
@@ -27,8 +25,8 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number): numb
 export interface NearbyResult { nearby: { type?: string; name?: string; time: string; meters?: number }[]; source: string; note?: string }
 
 // نسخهٔ منطقِ nearby — هر تغییرِ معنادار (فاز ۲۱۳: شعاعِ سفت؛ فاز ۲۴۶: فیلترِ واحدهای اداری +
-// دستهٔ فارسی) این عدد را بالا می‌برد تا کش‌های enrichِ قدیمی خودکار بازنشسته و بازسازی شوند.
-export const NEARBY_V = 3
+// دستهٔ فارسی؛ فاز ۲۵۱: جستجوی دسته‌ایِ NexaMap و حذفِ AI) این عدد را بالا می‌برد تا کش‌ها بازسازی شوند.
+export const NEARBY_V = 5
 
 // فاز ۲۴۶ — جستجوی شعاعیِ سامانه «مرزهای اداری» (استان/شهرستان/بخش/شهر/منطقه/محله) را هم به‌عنوانِ
 // «مکان» برمی‌گرداند («استان تهران · ۴۴ دقیقه پیاده»!) و دستهٔ بعضی POIها برچسبِ خامِ انگلیسی دارد
@@ -85,8 +83,8 @@ export async function computeNearby(lat: number, lng: number): Promise<NearbyRes
   const { redisEnabled, rGet, rSetEx } = await import('./redis')
   if (redisEnabled()) {
     try {
-      // فاز ۲۴۶: v2→v3 — کش‌های آلوده به «استان/شهر/محله» بازنشسته می‌شوند (بدونِ flushِ دستی)
-      const cached = await rGet(`nearby:v3:${ck}`)
+      // فاز ۲۵۱: v4→v5 — کش‌های ناقصِ روشِ قبلی (موازی/ماتریس) بازنشسته می‌شوند (بدونِ flushِ دستی)
+      const cached = await rGet(`nearby:v5:${ck}`)
       if (cached) {
         const data = JSON.parse(cached) as NearbyResult
         if (data.nearby?.length) { nearbyCache.set(ck, { at: Date.now(), data }); return data }
@@ -98,28 +96,55 @@ export async function computeNearby(lat: number, lng: number): Promise<NearbyRes
   if (data.nearby && data.nearby.length) {
     if (nearbyCache.size > 2000) nearbyCache.clear()
     nearbyCache.set(ck, { at: Date.now(), data })
-    if (redisEnabled()) rSetEx(`nearby:v3:${ck}`, NEARBY_TTL / 1000, JSON.stringify(data)).catch(() => {})
+    if (redisEnabled()) rSetEx(`nearby:v5:${ck}`, NEARBY_TTL / 1000, JSON.stringify(data)).catch(() => {})
   }
   return data
 }
 
+// دسته‌های کاربردیِ «دسترسی‌های اطراف» — هرکدام یک جستجوی واقعیِ NexaMap (بدونِ AI). عبارتِ جستجو
+// همان اصطلاحِ رایج است؛ برچسبِ نمایشیِ دسته کنارش. ترتیب = اولویتِ نمایش وقتی فاصله‌ها برابرند.
+const NEARBY_CATEGORIES: { q: string; label: string }[] = [
+  { q: 'ایستگاه مترو', label: 'مترو' },
+  { q: 'ایستگاه اتوبوس', label: 'ایستگاه اتوبوس' },
+  { q: 'بیمارستان', label: 'بیمارستان' },
+  { q: 'داروخانه', label: 'داروخانه' },
+  { q: 'پارک', label: 'پارک' },
+  { q: 'سوپرمارکت', label: 'سوپرمارکت' },
+  { q: 'نانوایی', label: 'نانوایی' },
+  { q: 'بانک', label: 'بانک' },
+  { q: 'مدرسه', label: 'مدرسه' },
+  { q: 'مرکز خرید', label: 'مرکز خرید' },
+  { q: 'رستوران', label: 'رستوران' },
+  { q: 'کافه', label: 'کافه' },
+]
+const NEARBY_MAX_KM = 2.5   // نزدیکیِ کاربردیِ پیاده/کوتاه؛ نزدیک‌ترین‌ها اول می‌آیند
+
 async function computeNearbyUncached(lat: number, lng: number): Promise<NearbyResult> {
   if (!geoApiEnabled()) return { nearby: [], source: 'none', note: 'سامانهٔ نقشه تنظیم نشده است (ادمین → اتصال‌ها → سامانهٔ نقشه).' }
 
-  // مسیرِ اصلی: جستجوی شعاعیِ واقعی — همهٔ مکان‌های داخلِ ۱ کیلومتر
-  try {
-    const found = await geoSearch('', { lat, lng, radius: 1000, limit: 24 })
-    // فاز ۲۴۶: واحدهای اداری (استان/شهر/محله…) مکانِ «قابلِ رفتن» نیستند؛ دسته‌ها فارسیِ نمایشی.
-    const places: Located[] = found.filter(f => !isAdminPlace(f)).map(f => ({
-      type: faPlaceType(f.type, f.categoryId), name: f.name, lat: f.lat, lng: f.lng,
-      km: typeof f.distanceM === 'number' ? f.distanceM / 1000 : haversine(lat, lng, f.lat, f.lng),
-    }))
-    const kept = keepVerifiedNearby(dedupByName(places), 1, 2).slice(0, 10)
-    if (kept.length) return await withTimes(lat, lng, kept, 'geoapi')
-  } catch { /* مسیرِ پشتیبان */ }
+  // برای هر دسته یک جستجوی واقعیِ NexaMap — کاملاً بدونِ AI. ترتیبی (نه موازی) اجرا می‌شود تا NexaMap
+  // زیرِ فشارِ ده‌ها درخواستِ هم‌زمان تعدادی را timeout/rate-limit نکند (تجربهٔ «فقط ۳تا آمد»). چون
+  // نتیجه ۶ ساعت کش می‌شود، این چند ثانیه فقط یک‌بار برای هر نقطه هزینه دارد.
+  const picked: Located[] = []
+  for (const c of NEARBY_CATEGORIES) {
+    try {
+      const found = await geoSearch(c.q, { lat, lng, radius: NEARBY_MAX_KM * 1000, limit: 5, timeoutMs: 8000 })
+      const near = found
+        .filter(f => f.name && !isAdminPlace(f))   // واحدهای اداری (استان/شهر/محله…) مکانِ «قابلِ رفتن» نیستند
+        .map(f => ({
+          type: c.label, name: f.name, lat: f.lat, lng: f.lng,
+          km: typeof f.distanceM === 'number' ? f.distanceM / 1000 : haversine(lat, lng, f.lat, f.lng),
+        }))
+        .filter(p => p.km <= NEARBY_MAX_KM)
+        .sort((a, b) => a.km - b.km)
+      if (near[0]) picked.push(near[0])
+    } catch { /* این دسته را رد کن */ }
+  }
 
-  // مسیرِ پشتیبان: دیتای POI سامانه هنوز برای این نقطه کم است → نام‌ها از AI + اعتبارسنجی با geocode
-  return await aiGroundedNearby(lat, lng)
+  // نزدیک‌ترینِ هر دسته → فهرستِ متنوعِ واقعی، مرتب بر اساسِ فاصله، حداکثر ۱۰تا.
+  const all = dedupByName(picked).sort((a, b) => a.km - b.km).slice(0, 10)
+  if (all.length < 2) return { nearby: [], source: 'geoapi', note: 'مکانِ نزدیکِ تأییدشده‌ای در NexaMap پیدا نشد.' }
+  return withWalkTimes(all, 'geoapi')
 }
 
 interface Located { type: string; name: string; lat: number; lng: number; km: number }
@@ -129,21 +154,12 @@ function dedupByName(places: Located[]): Located[] {
   return places.filter(p => { const k = p.name.replace(/\s+/g, ''); if (seen.has(k)) return false; seen.add(k); return true })
 }
 
-// زمانِ واقعیِ هر مقصد با ماتریسِ پیاده (v1/matrix mode=pedestrian) — داخلِ ۱ کیلومتر یعنی پیاده.
-async function withTimes(lat: number, lng: number, places: Located[], source: string): Promise<NearbyResult> {
-  let durations: number[][] | null = null
-  let distances: number[][] = []
-  try {
-    const m = await geoMatrix([{ lat, lng }], places.map(p => ({ lat: p.lat, lng: p.lng })), 'pedestrian')
-    if (m) { durations = m.durations; distances = m.distances }
-  } catch { /* تخمین زیر */ }
-  const nearby = places.map((p, i) => {
-    const distM = Number(distances?.[0]?.[i])
-    const durS = Number(durations?.[0]?.[i])
-    const meters = Number.isFinite(distM) && distM > 0 ? Math.round(distM) : Math.round(p.km * 1000 * 1.3)
-    const time = Number.isFinite(durS) && durS > 0
-      ? `${fa(Math.max(1, Math.round(durS / 60)))} دقیقه پیاده`
-      : `${fa(Math.max(1, Math.round(meters / 80)))} دقیقه پیاده`
+// زمانِ پیاده از فاصلهٔ واقعیِ NexaMap محاسبه می‌شود — نه از ماتریس (که زمان‌های پرت می‌داد،
+// «مترو ۴۴ دقیقه» برای ۹۰۰ متر). سرعتِ پیادهٔ ~۵km/h ⇒ ~۸۰ متر/دقیقه؛ ضریبِ ۱.۳ برای مسیرِ واقعی.
+function withWalkTimes(places: Located[], source: string): NearbyResult {
+  const nearby = places.map(p => {
+    const meters = Math.round(p.km * 1000)
+    const time = `${fa(Math.max(1, Math.round((meters * 1.3) / 80)))} دقیقه پیاده`
     return { type: p.type, name: p.name, time, meters }
   }).sort((a, b) => a.meters - b.meters)
   return { nearby, source }
@@ -162,38 +178,3 @@ export function keepVerifiedNearby<T extends { km: number }>(places: T[], maxKm 
   return close.length >= minKeep ? close : []
 }
 
-const AI_SYS = `تو متخصص جغرافیای شهری ایران هستی. برای یک محله، نزدیک‌ترین مکان‌های واقعی «داخلِ خودِ همان محله، حداکثر در شعاعِ حدودِ یک کیلومتر» را نام ببر که حتماً وجود دارند و روی نقشه قابل جستجو هستند. مکان‌های معروفِ مرکزِ شهر یا محله‌های دور را هرگز نیاور (کاربر محلی است و متوجه می‌شود). فقط یک آرایهٔ JSON برگردان (بدون توضیح):
-[{"type":"مترو","name":"ایستگاه مترو ..."},{"type":"بیمارستان","name":"بیمارستان ..."},{"type":"پارک","name":"بوستان ..."},{"type":"مرکز خرید","name":"..."},{"type":"بانک","name":"..."},{"type":"داروخانه","name":"داروخانه ..."},{"type":"مدرسه","name":"..."},{"type":"دانشگاه","name":"..."}]
-name باید نام دقیق و واقعی مکان باشد (نه عمومی). فقط مکان‌هایی که واقعاً نزدیک همان محله‌اند.`
-
-// مسیرِ پشتیبان: نام‌ها از AI، اعتبارسنجی و مکان‌یابی با geocodeِ سامانه، زمان با matrix.
-async function aiGroundedNearby(lat: number, lng: number): Promise<NearbyResult> {
-  const rev = await gaReverse(lat, lng)
-  const city = rev?.city || 'تهران'
-  const area = [rev?.neighbourhood, city].filter(Boolean).join('، ') || city
-  const model = agentModel('pricing', 'text') || agentModel('content', 'text') || agentModel('chat', 'text')
-  if (!model) return { nearby: [], source: 'geoapi', note: 'برای دسترسی‌ها به مدل AI نیاز است (پنل → API و مدل‌های AI).' }
-
-  let cands: { type: string; name: string }[] = []
-  try {
-    let out = await chatCompleteSafe(model, [{ role: 'system', content: AI_SYS }, { role: 'user', content: `محله: ${area}` }], { temperature: 0.4, max_tokens: 500, timeoutMs: 30_000 })
-    const m = out.match(/\[[\s\S]*\]/); if (m) out = m[0]
-    cands = JSON.parse(out)
-  } catch { /* parse failed */ }
-  if (!Array.isArray(cands) || !cands.length) return { nearby: [], source: 'geoapi', note: 'فهرست دسترسی‌ها ساخته نشد.' }
-
-  // فاز ۲۱۳: geocode با «نام، شهر» (نه محله — اعتبارسنجی دوری می‌شد)؛ فاز ۲۱۵: ۶ کاندیدِ موازی، تایم‌اوتِ کوتاه.
-  const results = await Promise.all(cands.slice(0, 6).map(async (c) => {
-    if (!c?.name) return null
-    const g = await geoGeocode(`${c.name}، ${city}`, 5000)
-    if (!g) return null
-    const km = haversine(lat, lng, g.lat, g.lng)
-    if (km > 7) return null
-    return { type: c.type || 'مکان', name: c.name, lat: g.lat, lng: g.lng, km } as Located
-  }))
-  const located = results.filter(Boolean) as Located[]
-  // فاز ۲۰۷ب: فقط واقعاً نزدیک‌ها و با حدنصاب — وگرنه صادقانه هیچ
-  const kept = keepVerifiedNearby(located)
-  if (!kept.length) return { nearby: [], source: 'geoapi', note: 'مکانِ نزدیکِ تأییدشده‌ای پیدا نشد.' }
-  return await withTimes(lat, lng, kept, 'geoapi-grounded')
-}

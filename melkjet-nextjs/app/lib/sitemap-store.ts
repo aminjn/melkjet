@@ -17,7 +17,7 @@ export const BASE = 'https://melkjet.com'
 export const DEFAULT_MAX = 10000
 type ChangeFreq = 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never'
 
-export interface UrlEntry { url: string; lastModified?: string; changeFrequency?: ChangeFreq; priority?: number }
+export interface UrlEntry { url: string; lastModified?: string; changeFrequency?: ChangeFreq; priority?: number; image?: string }
 export interface Shard { name: string; type: string; entries: UrlEntry[] }
 export interface ShardInfo { name: string; type: string; count: number; lastmod?: string; status: 'healthy' | 'empty' | 'over' }
 
@@ -91,7 +91,9 @@ export async function buildShards(force = false): Promise<Shard[]> {
     const groups = new Map<string, UrlEntry[]>()   // key = "{city}-{deal}"
     for (const it of listings) {
       const key = `${cityOf(it)}-${dealOf(it)}`
-      const e: UrlEntry = { url: `${BASE}${listingHref(it.id, it.title, it.location)}`, priority: 0.6, lastModified: iso(it.scrapedAt), changeFrequency: 'daily' }
+      // فاز ۲۵۴ (M8 — image-sitemap): عکسِ اصلیِ آگهی برای Google Images؛ فقط URLِ مطلق (نسبی → BASE).
+      const img = it.image ? (/^https?:\/\//.test(it.image) ? it.image : `${BASE}${it.image}`) : undefined
+      const e: UrlEntry = { url: `${BASE}${listingHref(it.id, it.title, it.location)}`, priority: 0.6, lastModified: iso(it.scrapedAt), changeFrequency: 'daily', image: img }
       ;(groups.get(key) || groups.set(key, []).get(key)!).push(e)
     }
     for (const [key, entries] of [...groups.entries()].sort()) {
@@ -212,7 +214,7 @@ export async function getShard(name: string): Promise<Shard | null> {
 // رشتهٔ آماده را فوری می‌دهند (بدونِ ساختِ درخواستی) → حتی زیرِ بار هم تایم‌اوت نمی‌دهد. ──
 const escXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 export function renderShardXml(entries: UrlEntry[]): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(e => `  <url>\n    <loc>${escXml(e.url)}</loc>${e.lastModified ? `\n    <lastmod>${e.lastModified}</lastmod>` : ''}${e.changeFrequency ? `\n    <changefreq>${e.changeFrequency}</changefreq>` : ''}${e.priority != null ? `\n    <priority>${e.priority}</priority>` : ''}\n  </url>`).join('\n')}\n</urlset>`
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${entries.map(e => `  <url>\n    <loc>${escXml(e.url)}</loc>${e.lastModified ? `\n    <lastmod>${e.lastModified}</lastmod>` : ''}${e.changeFrequency ? `\n    <changefreq>${e.changeFrequency}</changefreq>` : ''}${e.priority != null ? `\n    <priority>${e.priority}</priority>` : ''}${e.image ? `\n    <image:image><image:loc>${escXml(e.image)}</image:loc></image:image>` : ''}\n  </url>`).join('\n')}\n</urlset>`
 }
 export function renderIndexXml(infos: { name: string; lastmod?: string }[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${infos.map(s => `  <sitemap>\n    <loc>${BASE}/sitemaps/${s.name}.xml</loc>${s.lastmod ? `\n    <lastmod>${s.lastmod}</lastmod>` : ''}\n  </sitemap>`).join('\n')}\n</sitemapindex>`

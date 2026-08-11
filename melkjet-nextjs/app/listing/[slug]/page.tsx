@@ -25,7 +25,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { seoListingTitle, seoListingDescription, deriveListing } = await import('@/app/lib/listing-search')
   const d228 = deriveListing(it as Parameters<typeof deriveListing>[0])
   const title = seoListingTitle(d228)
-  const desc = seoListingDescription(d228, it.price)
+  let desc = seoListingDescription(d228, it.price)
+  // سئوِ محله‌ای — دسترسی‌های نزدیکِ واقعی (کشِ enrich، فقط NexaMap، بدونِ AI) را به توضیحاتِ متا
+  // بیفزا تا گوگل «نزدیک به مترو…، بانک…، مدرسه…» را برای هر آگهی ایندکس کند.
+  try {
+    const { getEnrichment } = await import('@/app/lib/enrich-store')
+    const nb = getEnrichment(it.id)?.nearby
+    if (Array.isArray(nb) && nb.length >= 2) {
+      const names = nb.slice(0, 5).map((n: { name?: string }) => n?.name).filter(Boolean).join('، ')
+      if (names) desc = `${desc} نزدیک به ${names}.`.slice(0, 320)
+    }
+  } catch { /* بدونِ سئوِ محله هم صفحه سالم است */ }
   // فاز ۲۱۸ (ممیزیِ کاملِ سئو): canonical قبلاً «همان slugِ درخواستی» بود — هر واریانتی خودش را
   // canonical اعلام می‌کرد و گوگل نسخه‌های تکراری نگه می‌داشت. حالا همیشه «یک» URLِ حقیقی.
   const url = `https://melkjet.com${listingHref(it.id, it.title, it.location)}`
@@ -145,10 +155,33 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
     })
   } catch { originality = null }
 
+  // فاز ۲۵۲ — سئوِ محله‌ای: دسترسی‌های نزدیکِ واقعی (کشِ enrich، فقط NexaMap، بدونِ AI) را هم به
+  // توضیحاتِ اسکیمای آگهی می‌ریزیم، هم یک ItemListِ ساختاریافته از Placeها می‌سازیم تا گوگل
+  // «نزدیک به مترو…، بانک…، مدرسه…» را ایندکس کند. اگر هنوز در کش نبود، این بخش بی‌صدا رد می‌شود.
+  let nearbyLd: Record<string, unknown> | null = null
+  try {
+    const { getEnrichment } = await import('@/app/lib/enrich-store')
+    const nb = getEnrichment(id)?.nearby as { type?: string; name?: string; time?: string }[] | undefined
+    if (Array.isArray(nb) && nb.length >= 2) {
+      const line = nb.slice(0, 8).map(n => `${n.type ? n.type + ' ' : ''}${n.name || ''}${n.time ? ` (${n.time})` : ''}`.trim()).filter(Boolean).join('، ')
+      if (line) {
+        ld.description = `${ld.description ? ld.description + ' ' : ''}دسترسی‌های نزدیک: ${line}.`
+        nearbyLd = {
+          '@context': 'https://schema.org', '@type': 'ItemList', name: `دسترسی‌های نزدیکِ ${it.title}`,
+          itemListElement: nb.slice(0, 10).filter(n => n.name).map((n, i) => ({
+            '@type': 'ListItem', position: i + 1,
+            item: { '@type': 'Place', name: n.name, ...(n.type ? { additionalType: n.type } : {}) },
+          })),
+        }
+      }
+    }
+  } catch { /* بدونِ سئوِ محله هم صفحه سالم است */ }
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
+      {nearbyLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(nearbyLd) }} />}
       <PropertyClient id={id} initial={promoKind ? { ...it, promoted: true, promoKind } as any : (it as any)} originality={originality} />
     </>
   )

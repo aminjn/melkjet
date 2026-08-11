@@ -16,7 +16,11 @@ export async function generateMetadata({ params }: Props) {
   const p = await getLawyerProfile(slug)
   if (!p) return { title: 'وکیل یافت نشد | ملک‌جت' }
   const desc = (p.bio[0] || `${p.name}، ${p.jobTitle}${p.city ? ` در ${p.city}` : ''}.`).slice(0, 160)
-  return { title: `${p.name} — ${p.jobTitle} | ملک‌جت`, description: desc, openGraph: { title: p.name, description: desc, images: p.avatar ? [p.avatar] : [] } }
+  return {
+    title: `${p.name} — ${p.jobTitle} | ملک‌جت`, description: desc,
+    alternates: { canonical: `https://melkjet.com/lawyers/${slug}` },   // فاز ۲۵۴ (M4): canonicalِ خودارجاع
+    openGraph: { title: p.name, description: desc, url: `https://melkjet.com/lawyers/${slug}`, images: p.avatar ? [p.avatar] : [] },
+  }
 }
 
 function Stars({ value, size = 14 }: { value: number; size?: number }) {
@@ -44,11 +48,21 @@ export default async function LawyerProfilePage({ params }: Props) {
     knowsAbout: p.specialties,
     aggregateRating: p.ratingCount ? { '@type': 'AggregateRating', ratingValue: p.rating, ratingCount: p.ratingCount, bestRating: '5' } : undefined,
   }
+  // فاز ۲۵۴ (M4): BreadcrumbList ساختاریافته هم‌راستا با بردکرامبِ نمایشی.
+  const crumbLd = {
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'دایرکتوری متخصصان', item: 'https://melkjet.com/directory' },
+      { '@type': 'ListItem', position: 2, name: 'دفاتر حقوقی و وکلا', item: 'https://melkjet.com/directory?cat=حقوقی' },
+      { '@type': 'ListItem', position: 3, name: p.name, item: `https://melkjet.com/lawyers/${slug}` },
+    ],
+  }
 
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit' }}>
       <Nav />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(crumbLd) }} />
 
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '24px 20px 64px' }}>
         <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 16 }}>

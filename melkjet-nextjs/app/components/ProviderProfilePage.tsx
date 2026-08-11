@@ -24,11 +24,14 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
   if (!p) notFound()
   if (p.type !== type) redirect(`/${p.type}/${p.slug}`)   // canonicalِ نوعِ درست
 
-  const ld = {
+  // فاز ۲۵۴ (سئو L4): فیلدهای خالی از JSON-LD حذف می‌شوند (description=""" اسکیمای نامعتبر می‌ساخت).
+  const bio = (p.bio || '').replace(/<[^>]+>/g, '').trim().slice(0, 300)
+  const ld: Record<string, unknown> = {
     '@context': 'https://schema.org', '@type': type === 'agency' ? 'RealEstateAgent' : 'LocalBusiness',
-    name: p.name, image: p.photo || undefined, description: (p.bio || '').replace(/<[^>]+>/g, '').slice(0, 300),
+    name: p.name, image: p.photo || undefined, description: bio || undefined,
     areaServed: p.city || undefined, url: `https://melkjet.com/${p.type}/${p.slug}`,
   }
+  Object.keys(ld).forEach(k => ld[k] === undefined && delete ld[k])
   const crumbLd = {
     '@context': 'https://schema.org', '@type': 'BreadcrumbList',
     itemListElement: [

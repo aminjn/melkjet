@@ -22,6 +22,12 @@ export default function NotFound() {
         <Link href="/" style={{ marginTop: 8, background: 'var(--gold)', color: '#1a1a1a', padding: '11px 26px', borderRadius: 10, fontWeight: 700, textDecoration: 'none' }}>
           بازگشت به خانه
         </Link>
+        {/* فاز ۲۵۴ (L7 سئو): مسیرهای بازیابیِ خزش/کاربر — به‌جای بن‌بست، لینک به بخش‌های اصلی */}
+        <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 14, justifyContent: 'center', marginTop: 18, fontSize: 13.5 }}>
+          {[['جستجوی ملک', '/search'], ['آگهی‌ها', '/listings'], ['مناطق و محله‌ها', '/locations'], ['مجله', '/blog'], ['متخصصان', '/directory']].map(([t, h]) => (
+            <Link key={h} href={h} style={{ color: 'var(--gold)', textDecoration: 'none' }}>{t}</Link>
+          ))}
+        </nav>
       </main>
       <Footer />
     </>

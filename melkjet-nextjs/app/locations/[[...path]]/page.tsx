@@ -71,8 +71,12 @@ export async function generateMetadata({ params }: { params: Promise<{ path?: st
   // فاز ۲۲۲ (دستورِ صریحِ کاربر: «هیچ‌جا نباید noindex داشته باشه») — منطقِ «کم‌محتوا → noindex»
   // به‌کل حذف شد؛ همهٔ صفحاتِ محله ایندکس‌پذیرند. (کشفِ GSC: تشخیصِ کم‌محتوا هم خراب بود و
   // محله‌های پرآگهی مثلِ گیشا را noindex می‌کرد.)
-  const url = `https://melkjet.com/locations/${locSlugs.join('/')}${action ? '/' + action : ''}`
-  return { title: `${title} | ملک‌جت`, description: `${title} در ملک‌جت — آگهی‌ها، متخصصان و اطلاعاتِ بازارِ ${name}.`, alternates: { canonical: url } }
+  const base = `https://melkjet.com/locations/${locSlugs.join('/')}`
+  // فاز ۲۵۴ (M5 — رفعِ «کشف‌شده ولی ایندکس‌نشده»): فقط «خرید/اجاره» زیرمجموعهٔ آگهیِ متمایز دارند و
+  // canonicalِ خودشان را نگه می‌دارند. بقیهٔ اکشن‌ها (سرمایه‌گذاری = عینِ پایه، تحلیل/پروژه/متخصصان که
+  // اغلب خالی‌اند) نازک/تکراری‌اند → canonical به «صفحهٔ پایهٔ محله» می‌خورد تا سیگنال تجمیع شود، نه noindex.
+  const canonical = (action === 'buy' || action === 'rent') ? `${base}/${action}` : base
+  return { title: `${title} | ملک‌جت`, description: `${title} در ملک‌جت — آگهی‌ها، متخصصان و اطلاعاتِ بازارِ ${name}.`, alternates: { canonical } }
 }
 
 export default async function LocationPage({ params }: { params: Promise<{ path?: string[] }> }) {

@@ -62,7 +62,15 @@ export async function neighbourhoodForecast(city: string, district: string, fall
     method = haveDistrict ? 'تخمینِ پایه (تاریخچهٔ محدودِ محله)' : 'تخمینِ پایه (بر اساسِ قیمتِ همین ملک و روندِ بازار)'
     confidence = 'low'
   }
-  monthlyGrowth = Math.max(-0.05, Math.min(0.06, monthlyGrowth))     // محدودهٔ منطقیِ ماهانه
+  // «ماه‌های» این سری از تاریخِ اسکرپِ آگهی‌ها می‌آید، نه یک سریِ زمانیِ واقعی؛ پس ترکیبِ نمونه
+  // به‌راحتی شیبِ منفی می‌سازد. در مسکنِ اسمیِ ایران افتِ سالانهٔ شدید عملاً رخ نمی‌دهد → شیبِ منفی
+  // را «نامطمئن» می‌گیریم و به پیش‌فرضِ محتاطانهٔ مثبت برمی‌گردیم (به‌جای نمایشِ رشدِ منفیِ گمراه‌کننده).
+  if (monthlyGrowth < 0) {
+    monthlyGrowth = 0.012
+    method = 'تخمینِ محتاطانه (روندِ نزولیِ دادهٔ محله نامطمئن بود)'
+    confidence = 'low'
+  }
+  monthlyGrowth = Math.max(0, Math.min(0.06, monthlyGrowth))     // محدودهٔ منطقیِ ماهانه — هرگز منفی
   const yearGrowth = Math.pow(1 + monthlyGrowth, 12) - 1
 
   const m = curFaMonth()

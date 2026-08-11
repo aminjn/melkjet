@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getEnrichment, patchEnrichment } from '@/app/lib/enrich-store'
-import { ENRICH_V, warmEnrichment } from '@/app/lib/enrich-warm'
+import { ENRICH_V, warmEnrichment, ensureAnalysisNow } from '@/app/lib/enrich-warm'
 import { NEARBY_V } from '@/app/lib/nearby'
 
 
@@ -16,9 +16,15 @@ export async function GET(req: NextRequest) {
   const id = new URL(req.url).searchParams.get('id') || ''
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
 
-  const cached = getEnrichment(id)
+  let cached = getEnrichment(id)
+  // قانونِ سخت: «آگهی بدونِ تحلیل نباید نمایش داده شود». تحلیل یک محاسبهٔ فوریِ فقط-ML (~۶ms،
+  // بدونِ AI، بدونِ نیاز به واکشیِ دیوار) است؛ پس همین‌جا روی همین درخواست می‌سازیمش تا هرگز
+  // منتظرِ صفِ پیش‌گرمِ پس‌زمینه (instance 0) نمانَد. گالری/نزدیکی همچنان پس‌زمینه‌اند.
+  if (!cached?.analysisOk) {
+    try { const u = await ensureAnalysisNow(id); if (u) cached = u } catch { /* بدترین حالت: warm پس‌زمینه */ }
+  }
   const complete = cached?.v === ENRICH_V && cached?.baseDone && cached?.analysisOk
-  if (!complete) warmEnrichment(id)   // پس‌زمینه، بدونِ انتظار — نتیجه در اسکرپِ بعدی/رفرش می‌آید
+  if (!complete) warmEnrichment(id)   // پس‌زمینه، بدونِ انتظار — گالری/نزدیکی/دیوار در رفرشِ بعدی می‌آید
   // فاز ۲۰۳: geo از کش یا از متایِ خودِ آگهی (آگهیِ ثبتِ کاربر geo دیواری ندارد ولی مختصات دارد)
   // فاز ۲۱۳ (فیدبک: «بیمارستانِ ۱۴کیلومتری را "۳ دقیقه پیاده" نشان می‌داد — اعتماد را می‌بَرد»):
   // هر nearbyِ کش‌شده با نسخهٔ قدیمیِ منطق (بدونِ مهرِ nearbyV=2 — اعتبارسنجیِ دوریِ محله‌ای/شعاعِ شل/

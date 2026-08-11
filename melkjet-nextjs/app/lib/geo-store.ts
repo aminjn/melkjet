@@ -44,7 +44,9 @@ const TEHRAN_CITY = c('تهران', [
 ])
 
 function simpleCity(name: string, neighborhoods: string[]): SeedCity {
-  return c(name, [d('مرکزی', neighborhoods)])
+  // فاز ۲۵۳: منطقهٔ این شهرها خودش «مرکزی» است؛ محله‌ای به‌نامِ «مرکزی» داخلش تکراری‌ست و URLِ
+  // بی‌معنیِ x/markazi/markazi می‌سازد → از seed حذفش می‌کنیم (گاردِ locations-store هم پشتیبان است).
+  return c(name, [d('مرکزی', neighborhoods.filter(n => String(n).replace(/‌/g, ' ').trim() !== 'مرکزی'))])
 }
 
 const SEED: { name: string; cities: SeedCity[] }[] = [

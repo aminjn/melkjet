@@ -112,6 +112,13 @@ function localAnalyze(b: AnalyzePayload): any | null {
   }
 }
 
+// نسخهٔ «فقط ماشین‌لرنینگ» (بدونِ هیچ فراخوانِ AI) — برای مسیرِ درخواستِ کاربر که هرگز نباید
+// AI بزند و باید آنی پاسخ دهد. تضمین می‌کند صفحهٔ ملک همیشه تحلیل داشته باشد (~۶ms، بدونِ دیوار).
+export function localAnalyzeOnly(b: AnalyzePayload): { analysis?: any; error?: string } {
+  const a = localAnalyze(b)
+  return a ? { analysis: a } : { error: 'داده‌ای برای تحلیل نبود' }
+}
+
 // تحلیل ساختاریافتهٔ یک آگهی → خروجی JSON برای صفحهٔ ملک. اکنون «اول ماشین‌لرنینگ»:
 // تحلیلِ محلی آنی می‌سازد؛ فقط اگر ورودی واقعاً تهی بود به AI می‌رود (و کش می‌شود).
 export async function analyzeListing(b: AnalyzePayload): Promise<{ analysis?: any; error?: string }> {
