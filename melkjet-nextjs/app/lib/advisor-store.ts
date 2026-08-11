@@ -288,6 +288,8 @@ export async function deleteListing(o: string, fid: string): Promise<void> { let
 
 // ---- انتشار عمومی روی سایت (آگهی پابلیک) ----
 function faNum(n?: number): string { return n ? n.toLocaleString('fa-IR') : '' }
+// سال/شماره هرگز جداکنندهٔ هزارگان نمی‌گیرد (جداکننده فقط برای قیمت‌هاست): «۱۴۰۴» نه «۱٬۴۰۴».
+function faYear(n?: number): string { return n ? n.toLocaleString('fa-IR', { useGrouping: false }) : '' }
 function publicPayload(l: Listing, advisorName: string, ownerPhone?: string) {
   // فاز ۲۳۰: قیمتِ صفر دیگر «تومانِ» خالی نمی‌سازد (faNum(0)='') — صادقانه «توافقی»؛
   // اجارهٔ روزانه هم قیمتش شبی است، نه کل.
@@ -302,7 +304,7 @@ function publicPayload(l: Listing, advisorName: string, ownerPhone?: string) {
   put('استان', l.province); put('شهر', l.city); put('منطقه', l.district); put('محله', l.neighborhood)
   put('نوع معامله', l.deal === 'rent' ? 'اجاره' : l.deal === 'daily' ? 'اجارهٔ کوتاه‌مدت' : 'فروش')
   put('نوع ملک', l.ptype); put('متراژ', l.area ? `${faNum(l.area)} متر` : ''); put('اتاق خواب', faNum(l.rooms))
-  put('طبقه', faNum(l.floor)); put('تعداد طبقات', faNum(l.totalFloors)); put('سال ساخت', faNum(l.yearBuilt))
+  put('طبقه', faYear(l.floor)); put('تعداد طبقات', faYear(l.totalFloors)); put('سال ساخت', faYear(l.yearBuilt))
   put('جهت', l.facing); put('سند', l.docType)
   // فاز ۲۳۱ — جدولِ اجارهٔ روزانه در متایِ آگهیِ عمومی (عینِ ساختارِ دیوار؛ فقط ردیف‌های واقعاً ثبت‌شده)
   if (l.deal === 'daily') {

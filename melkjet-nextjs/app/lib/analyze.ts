@@ -60,8 +60,10 @@ function localAnalyze(b: AnalyzePayload): any | null {
 
   // ── امتیازها (۰ تا ۱۰) از سیگنال‌های واقعی ──
   const age = factVal(facts, 'سال ساخت')
-  const ageYear = Number(faToEn(age).match(/1[34]\d{2}/)?.[0] || 0)
-  const quality = age === 'نوساز' ? 8.8 : ageYear >= 1400 ? 8.5 : ageYear >= 1395 ? 8 : ageYear >= 1385 ? 7 : ageYear ? 6.3 : 7.8
+  // جداکنندهٔ هزارگان (٬/،) را حذف کن وگرنه «۱٬۴۰۴» به سالِ معتبر تبدیل نمی‌شود و کیفیت اشتباه می‌ماند.
+  const ageYear = Number((faToEn(age).replace(/[^\d]/g, '').match(/1[34]\d{2}/) || ['0'])[0]) || 0
+  const isNew = age === 'نوساز' || /نوساز|کلید\s*نخورده|کلیدنخورده/.test(t)
+  const quality = (isNew || ageYear >= 1402) ? 8.8 : ageYear >= 1398 ? 8.3 : ageYear >= 1390 ? 7.6 : ageYear >= 1380 ? 6.9 : ageYear ? 6.2 : 7.9
   const amenityScore = clamp(5 + amenities.length * 0.6, 5, 9.6)
   const locScore = knowledge.length ? 8.4 : /مرکز|محدوده|بر\s*خیابان|بلوار/.test(t) ? 8 : 7.7
   const accessScore = /مترو|بی\s*آر\s*تی|brt|بزرگراه|اتوبان|ایستگاه/i.test(t) ? 8.8 : 8
@@ -75,13 +77,13 @@ function localAnalyze(b: AnalyzePayload): any | null {
   const area = factVal(facts, 'متراژ'); const rooms = factVal(facts, 'اتاق') || factVal(facts, 'خواب')
   const summary = [
     `${ptype}${area ? ` ${area}` : ''}${rooms ? `، ${rooms} خوابه` : ''}${district ? ` در ${district}` : ''}${city ? `، ${city}` : ''}`,
-    age === 'نوساز' ? 'نوساز و آمادهٔ بهره‌برداری' : ageYear ? `سالِ ساختِ حدودِ ${age}` : '',
+    isNew ? 'نوساز و آمادهٔ بهره‌برداری' : ageYear ? `سالِ ساختِ حدودِ ${ageYear}` : '',
     amenities.length ? `دارای ${amenities.slice(0, 3).join('، ')}` : '',
     isRent ? 'برای اجاره' : 'برای فروش',
   ].filter(Boolean).join('. ') + '.'
 
   const pros: string[] = []
-  if (age === 'نوساز' || ageYear >= 1400) pros.push('ساختِ نوساز و به‌روز')
+  if (isNew || ageYear >= 1400) pros.push('ساختِ نوساز و به‌روز')
   if (['پارکینگ', 'آسانسور', 'انباری'].every(x => amenities.includes(x))) pros.push('امکاناتِ کاملِ ساختمانی (پارکینگ، آسانسور، انباری)')
   else if (amenities.includes('پارکینگ')) pros.push('دارای پارکینگ')
   if (amenities.some(a => ['استخر', 'سونا', 'جکوزی', 'لابی', 'روف گاردن'].includes(a))) pros.push('امکاناتِ رفاهیِ ویژه')
