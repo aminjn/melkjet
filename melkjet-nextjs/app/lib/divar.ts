@@ -1,6 +1,6 @@
 import type { Source, Item } from './scraper-store'
-import { getAdminData } from './admin-store'
 import { proxiedRequest } from './proxy-fetch'
+import { pickDivarProxy, reportDivarProxy } from './divar-proxy-pool'
 import { getDistricts } from './divar-places'
 
 type RawItem = Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>
@@ -99,11 +99,6 @@ export async function scrapeDivar(source: Source): Promise<RawItem[]> {
     }
   }
 
-  const proxyUrl = getAdminData().divar?.proxyUrl || undefined  // فاز ۲۶۸ — خالی = مستقیم
-    || process.env.HTTPS_PROXY || process.env.https_proxy
-    || process.env.HTTP_PROXY || process.env.http_proxy
-    || undefined
-
   const headers = {
     'content-type': 'application/json',
     accept: 'application/json, text/plain, */*',
@@ -147,7 +142,10 @@ export async function scrapeDivar(source: Source): Promise<RawItem[]> {
   const collected: RawItem[] = []
 
   for (let page = 0; page < maxPages; page++) {
-    const res = await proxiedRequest(ENDPOINT, { method: 'POST', headers, body: buildBody(pagination), proxyUrl, timeout: 20000 })
+    const proxyUrl = pickDivarProxy()   // هر صفحه یک IP از استخر
+    let res: { status: number; body: string }
+    try { res = await proxiedRequest(ENDPOINT, { method: 'POST', headers, body: buildBody(pagination), proxyUrl, timeout: 20000 }); reportDivarProxy(proxyUrl, res.status === 200) }
+    catch (e) { reportDivarProxy(proxyUrl, false); throw e }
     if (res.status !== 200) { if (page === 0) throw new Error(`Divar HTTP ${res.status}`); break }
 
     let d: any

@@ -1,5 +1,5 @@
-import { getAdminData } from './admin-store'
 import { proxiedRequest } from './proxy-fetch'
+import { pickDivarProxy, reportDivarProxy } from './divar-proxy-pool'
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
@@ -71,9 +71,8 @@ export function divarProfileSlug(url?: string): string | null {
   return m ? m[1] : null
 }
 
-const PROXY = () => getAdminData().divar?.proxyUrl
-  || process.env.HTTPS_PROXY || process.env.https_proxy
-  || process.env.HTTP_PROXY || process.env.http_proxy || undefined  // فاز ۲۶۸ — خالی = مستقیم
+// پروکسیِ دیوار حالا از استخرِ چرخشی می‌آید (divar-proxy-pool): pickDivarProxy() به‌ازای هر
+// درخواست یک IP از استخر می‌دهد تا بارِ هم‌زمان پخش شود و throttleِ per-IPِ دیوار نخوریم.
 
 // اولین مقدارِ یک کلید در عمقِ JSON (برای پیداکردنِ cursorِ صفحهٔ بعد).
 function deepFindKey(node: any, key: string): any {
@@ -91,7 +90,6 @@ export interface BrandPost { token: string; title?: string; price?: string; loca
  *  عنوان/قیمت/تصویرِ هر آگهی هم از همین پاسخ برداشته می‌شود (دقیق‌تر از API تک‌آگهی). */
 export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: BrandPost[]; name?: string; reason?: string }> {
   if (!slug) return { posts: [], reason: 'bad_slug' }
-  const proxyUrl = PROXY()
   const ENDPOINT = `https://api.divar.ir/v8/premium-user/web/business/brand-landing/${encodeURIComponent(slug)}`
   const headers = {
     'content-type': 'application/json',
@@ -111,10 +109,12 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: Br
 
   for (let page = 0; page < 120; page++) {   // تا ~۳۰۰۰ آگهی (هر صفحه ~۲۴)؛ حلقه با نبودِ آگهیِ جدید/کرسر خودش می‌ایستد
     const body = JSON.stringify({ request_data: { brand_token: slug, tracker_session_id: '' }, specification: { last_item_identifier: cursor } })
+    const proxyUrl = pickDivarProxy()   // هر صفحه یک IP از استخر → پخشِ بار
     let res
     try {
       res = await proxiedRequest(ENDPOINT, { method: 'POST', headers, body, proxyUrl, timeout: 20000 })
-    } catch { reason = reason || 'unreachable'; break }
+      reportDivarProxy(proxyUrl, res.status === 200)
+    } catch { reportDivarProxy(proxyUrl, false); reason = reason || 'unreachable'; break }
     if (res.status !== 200) { if (page === 0) reason = `http_${res.status}`; break }
     any200 = true
 
@@ -158,11 +158,13 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: Br
   // می‌خوانیم و توکن‌ها را از JSONِ جاسازی‌شده (__NEXT_DATA__) درمی‌آوریم.
   if (!posts.size) {
     try {
+      const proxyUrl = pickDivarProxy()
       const res = await proxiedRequest(`https://divar.ir/pro/${encodeURIComponent(slug)}`, {
         method: 'GET',
         headers: { accept: 'text/html,application/xhtml+xml', 'user-agent': UA_BROWSER, referer: 'https://divar.ir/' },
         proxyUrl, timeout: 20000,
       })
+      reportDivarProxy(proxyUrl, res.status === 200)
       if (res.status === 200) {
         const html = res.body || ''
         any200 = true
@@ -184,11 +186,6 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
   const empty: DivarPost = { images: [], facts: [], amenities: [] }
   if (!token || !/^[A-Za-z0-9_-]{4,20}$/.test(token)) return { ...empty, reason: 'bad_token' }
 
-  const proxyUrl = getAdminData().divar?.proxyUrl
-    || process.env.HTTPS_PROXY || process.env.https_proxy
-    || process.env.HTTP_PROXY || process.env.http_proxy
-    || undefined
-
   // فاز ۱۷۶ (پورت از خودروجت): وقتی ده‌ها آگهیِ پشتِ‌سرِهم می‌گیریم، دیوار بخشی را با 429/خطا/خالی
   // رد می‌کند (ریشهٔ «آگهی‌های بی‌نام با متنِ خالی») — با backoff دوباره تلاش می‌کنیم تا متن واقعاً بیاید.
   const url = `https://api.divar.ir/v8/posts-v2/web/${token}`
@@ -196,11 +193,13 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
   const nap = (ms: number) => new Promise(r => setTimeout(r, ms))
   let res: { status: number; body: string } | null = null
   for (let attempt = 0; attempt < 4; attempt++) {
+    const proxyUrl = pickDivarProxy()   // هر تلاش یک IP از استخر → throttle/۴۲۹ روی یک IP، تلاشِ بعدی از IPِ دیگر
     try {
       res = await proxiedRequest(url, { method: 'GET', headers, proxyUrl, timeout: 15000 })
+      reportDivarProxy(proxyUrl, res.status === 200)
       if (res.status === 200 && res.body) break
       if (res.status !== 200 && res.status !== 429 && res.status < 500) return { ...empty, reason: `http_${res.status}` }   // 404/گم‌شده = تلاشِ دوباره بی‌فایده
-    } catch { /* شبکه/تایم‌اوت — دوباره تلاش */ }
+    } catch { reportDivarProxy(proxyUrl, false) /* شبکه/تایم‌اوت — دوباره تلاش */ }
     if (attempt < 3) await nap(700 * (attempt + 1))   // 0.7s, 1.4s, 2.1s
   }
   if (!res || res.status !== 200 || !res.body) return { ...empty, reason: res ? `http_${res.status}` : 'unreachable' }
