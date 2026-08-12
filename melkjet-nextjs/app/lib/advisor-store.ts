@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { addUserListing, updateUserListing, deleteItem, getItemById, setItemDealStatus, findPublicListingTwin } from './scraper-store'
-import { pgEnabled, kvGet, kvMutate } from './db'
+import { pgEnabled, kvGet, kvMutate, kvGetPrefix, kvDelete, pgTx } from './db'
 import { aiFor, agentModel, agentProvider } from './gapgpt'
 import { mlFirst } from './ml-gateway'
 const { chatCompleteSafe } = aiFor('پنلِ مشاور')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
@@ -10,7 +10,14 @@ const { chatCompleteSafe } = aiFor('پنلِ مشاور')   // فاز ۵۷: من
 // استور پنل «مشاور املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
 // دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
 const DATA_FILE = join(process.cwd(), '.advisor-data.json')
-const KV_KEY = 'advisor'
+// فاز ۲۵۹ (رفعِ گلوگاهِ اسکرپ): قبلاً دادهٔ همهٔ مشاورها در یک بلابِ kv('advisor') بود و هر نوشت
+// کلش را زیرِ یک قفلِ سراسری بازنویسی می‌کرد → با چند سینکِ هم‌زمان، statement timeout و ۴۶ث/توکن و
+// graduateِ ۶۳۳ثانیه‌ای. حالا هر مالک کلیدِ جدای خودش را دارد (advisor:{owner})؛ نوشتِ دو مالک هرگز
+// روی یک قفل نمی‌نشیند و بلابِ هر نوشت فقط دادهٔ همان مالک است (نه ۱۵۵ مالک).
+const KV_KEY = 'advisor'                       // بلابِ قدیمی — بعد از مهاجرت «یخ‌زده» (فقط برای rollback)
+const OWNER_PREFIX = 'advisor:'                // کلیدِ هر مالک: advisor:{owner}
+const MIGRATED_KEY = 'advisor_migrated_v2'     // نشانِ مهاجرت (بدونِ «:» تا در اسکنِ prefix نیاید)
+const ownerKey = (o: string) => OWNER_PREFIX + o
 
 export type Stage = 'new' | 'contacted' | 'visit' | 'negotiation' | 'closed' | 'lost'
 export type ListingStatus = 'active' | 'sold' | 'rented'
@@ -59,20 +66,45 @@ function id(p = '') { return p + randomBytes(5).toString('hex') }
 function fileLoad(): DB { if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} } return { advisors: {} } }
 function fileSave(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
 
-async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, { advisors: {} }) : fileLoad() }
-// wrapperِ عمومیِ خواندن-تغییر-نوشتن (نامش withDb تا با mutate(owner) پایین تداخل نکند)
-async function withDb<R>(fn: (db: DB) => R): Promise<R> {
-  if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { advisors: {} }, fn)
-  const db = fileLoad(); const r = fn(db); fileSave(db); return r
+// ── مهاجرتِ یک‌باره: بلابِ قدیمیِ kv('advisor') → کلیدِ هر مالک advisor:{owner} ──
+// ایدمپوتنت + مقاوم به رقابتِ ۴ اینستنس (قفلِ FOR UPDATE روی نشانِ مهاجرت سریالایز می‌کند)؛
+// بلابِ قدیمی هرگز پاک نمی‌شود (فقط rollback). ON CONFLICT DO NOTHING = نوشتِ تازه‌ترِ یک مالک را خراب نمی‌کند.
+let pgMigrated = false
+async function ensureMigratedPg(): Promise<void> {
+  if (!pgEnabled() || pgMigrated) return
+  try { if ((await kvGet<{ done?: boolean }>(MIGRATED_KEY, {})).done) { pgMigrated = true; return } }
+  catch { return }   // خطای گذرای PG → دفعهٔ بعد دوباره تلاش
+  await pgTx(async (client) => {
+    await client.query(`INSERT INTO kv(key, data) VALUES($1, '{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [MIGRATED_KEY])
+    const m = await client.query('SELECT data FROM kv WHERE key = $1 FOR UPDATE', [MIGRATED_KEY])
+    if (m.rows[0]?.data?.done) return
+    const lb = await client.query('SELECT data FROM kv WHERE key = $1', [KV_KEY])
+    const advisors = (lb.rows[0]?.data?.advisors || {}) as Record<string, AdvisorData>
+    let n = 0
+    for (const [owner, data] of Object.entries(advisors)) {
+      await client.query(`INSERT INTO kv(key, data) VALUES($1, $2) ON CONFLICT(key) DO NOTHING`, [OWNER_PREFIX + owner, JSON.stringify(data)])
+      n++
+    }
+    await client.query('UPDATE kv SET data = $2, updated_at = now() WHERE key = $1', [MIGRATED_KEY, JSON.stringify({ done: true, at: Date.now(), n })])
+    console.log(`[advisor] per-owner migration: ${n} owners split from legacy blob`)
+  })
+  pgMigrated = true
+}
+
+// همهٔ مالکان با یک اسکنِ prefix (list-all؛ جای بلابِ قدیمی).
+async function pgAllOwners(): Promise<Record<string, AdvisorData>> {
+  await ensureMigratedPg()
+  const rows = await kvGetPrefix<AdvisorData>(OWNER_PREFIX)
+  const out: Record<string, AdvisorData> = {}
+  for (const { key, data } of rows) out[key.slice(OWNER_PREFIX.length)] = data
+  return out
 }
 
 // فاز ۱۴۲ — ادغامِ دادهٔ مشاورِ from در to: همهٔ فهرست‌ها (لید/فایل/قرار/کمیسیون/آمار ماهانه)
 // جمع می‌شوند؛ فیلدهای خالیِ پروفایلِ مقصد از مبدأ پر می‌شود؛ کلیدِ مبدأ حذف می‌شود.
 export async function mergeAdvisorData(from: string, to: string): Promise<{ listings: number; leads: number }> {
-  return withDb(db => {
-    const src = db.advisors[from]
-    if (!src) return { listings: 0, leads: 0 }
-    const dst = db.advisors[to] = db.advisors[to] || { profile: { name: '' }, leads: [], listings: [], appts: [], commissions: [], monthlyDeals: [], createdAt: Date.now() }
+  // منطقِ ادغام (روی dst اعمال می‌شود، از src می‌خواند) — مشترکِ هر دو مسیر.
+  const doMerge = (dst: AdvisorData, src: AdvisorData) => {
     dst.leads = [...(dst.leads || []), ...(src.leads || [])]
     dst.listings = [...(dst.listings || []), ...(src.listings || [])]
     dst.appts = [...(dst.appts || []), ...(src.appts || [])]
@@ -81,10 +113,25 @@ export async function mergeAdvisorData(from: string, to: string): Promise<{ list
     for (const k of Object.keys(src.profile || {}) as (keyof AdvisorData['profile'])[]) {
       if (!dst.profile[k] && src.profile[k]) (dst.profile as any)[k] = src.profile[k]
     }
+  }
+  if (pgEnabled()) {
+    await ensureMigratedPg()
+    const src = await kvGet<AdvisorData | null>(ownerKey(from), null)
+    if (!src) return { listings: 0, leads: 0 }
     const counts = { listings: (src.listings || []).length, leads: (src.leads || []).length }
-    delete db.advisors[from]
+    await kvMutate<AdvisorData, void>(ownerKey(to), seed(), dst => doMerge(dst, src))
+    await kvDelete(ownerKey(from))
     return counts
-  })
+  }
+  const db = fileLoad()
+  const src = db.advisors[from]
+  if (!src) return { listings: 0, leads: 0 }
+  const dst = db.advisors[to] = db.advisors[to] || seed()
+  doMerge(dst, src)
+  const counts = { listings: (src.listings || []).length, leads: (src.leads || []).length }
+  delete db.advisors[from]
+  fileSave(db)
+  return counts
 }
 
 export const STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'closed', 'lost']
@@ -113,17 +160,32 @@ function applyAdvisor(db: DB, o: string): boolean {
 // فاز ۱۳۲ (پرفِ دایرکتوری): کلِ دیتابیسِ مشاوران با «یک» خواندن — به‌جای getAdvisor در حلقه
 // که روی PG برای هر مشاور یک رفت‌وبرگشت می‌شد و /api/directory را چند ثانیه‌ای می‌کرد.
 export async function allAdvisorProfiles(): Promise<Record<string, AdvisorData>> {
-  return (await load()).advisors || {}
+  if (pgEnabled()) return pgAllOwners()
+  return fileLoad().advisors || {}
 }
 
 export async function getAdvisor(o: string): Promise<AdvisorData> {
-  const db = await load()
-  // اگر seed/پاک‌سازی لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی dirty بود ذخیره می‌شد).
+  if (pgEnabled()) {
+    await ensureMigratedPg()
+    // مسیرِ داغ: اگر موجود و غیرِدمو بود، فقط بخوان (بدونِ نوشتن).
+    const cur = await kvGet<AdvisorData | null>(ownerKey(o), null)
+    if (cur && !isLegacyDemo(cur)) return cur
+    // نبود یا دمویِ قدیمی → seed/پاک‌سازی (فقط این‌جا می‌نویسد).
+    return kvMutate<AdvisorData, AdvisorData>(ownerKey(o), seed(), a => {
+      if (isLegacyDemo(a)) Object.assign(a, seed())   // AdvisorData شکلِ ثابت دارد → همهٔ کلیدها بازنویسی می‌شوند
+      return a
+    })
+  }
+  const db = fileLoad()
   if (!applyAdvisor(db, o)) return db.advisors[o]
-  return withDb(d => { applyAdvisor(d, o); return d.advisors[o] })
+  fileSave(db); return db.advisors[o]
 }
 async function mutate(o: string, fn: (a: AdvisorData) => void): Promise<AdvisorData> {
-  return withDb(db => { if (!db.advisors[o]) db.advisors[o] = seed(); fn(db.advisors[o]); return db.advisors[o] })
+  if (pgEnabled()) {
+    await ensureMigratedPg()
+    return kvMutate<AdvisorData, AdvisorData>(ownerKey(o), seed(), a => { fn(a); return a })
+  }
+  const db = fileLoad(); if (!db.advisors[o]) db.advisors[o] = seed(); fn(db.advisors[o]); fileSave(db); return db.advisors[o]
 }
 
 export async function advisorStats(o: string) {
@@ -415,9 +477,9 @@ export async function setCommissionStatus(o: string, cid: string, status: CommSt
 
 // فاز ۱۲۲ — نظارتِ سوپرادمین: خلاصهٔ کارِ همهٔ مشاوران (owner → شمارِ لید/فایل/قرار)
 export async function advisorWorkSummary(): Promise<Record<string, { leads: number; listings: number; appts: number }>> {
-  const db = await load()
+  const advisors = pgEnabled() ? await pgAllOwners() : (fileLoad().advisors || {})
   const out: Record<string, { leads: number; listings: number; appts: number }> = {}
-  for (const [o, a] of Object.entries(db.advisors)) out[o] = { leads: (a.leads || []).length, listings: (a.listings || []).length, appts: (a.appts || []).length }
+  for (const [o, a] of Object.entries(advisors)) out[o] = { leads: (a.leads || []).length, listings: (a.listings || []).length, appts: (a.appts || []).length }
   return out
 }
 

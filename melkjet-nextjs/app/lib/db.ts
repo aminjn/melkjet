@@ -142,3 +142,24 @@ export async function kvMutate<T, R>(key: string, fallback: T, fn: (data: T) => 
     throw e
   } finally { client.release() }
 }
+
+/** خواندنِ همهٔ کلیدهایی که با prefix شروع می‌شوند (اسکنِ رِنجِ روی PKِ key — سبک).
+ *  برای استورهای «شاردشده به ازای هر مالک» (مثلِ advisor:{owner}) تا list-all با یک کوئری بیاید. */
+export async function kvGetPrefix<T>(prefix: string): Promise<{ key: string; data: T }[]> {
+  const client = await getPool().connect()
+  try {
+    await ensureSchema(client)
+    const like = prefix.replace(/([%_\\])/g, '\\$1') + '%'
+    const r = await client.query(`SELECT key, data FROM kv WHERE key LIKE $1 ESCAPE '\\'`, [like])
+    return r.rows.map(x => ({ key: x.key as string, data: x.data as T }))
+  } finally { client.release() }
+}
+
+/** حذفِ یک کلید از kv. */
+export async function kvDelete(key: string): Promise<void> {
+  const client = await getPool().connect()
+  try {
+    await ensureSchema(client)
+    await client.query('DELETE FROM kv WHERE key = $1', [key])
+  } finally { client.release() }
+}
