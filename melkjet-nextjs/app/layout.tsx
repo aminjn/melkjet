@@ -69,6 +69,10 @@ export default function RootLayout({
       <head>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(siteLd) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }} />
+        {/* فاز ۲۵۷ (سرعت): اتصالِ آنالیتیکس را زودتر گرم کن — DNS/TLSِ گوگل قبل از رسیدنِ نوبتِ اسکریپتِ
+            async انجام می‌شود، پس بیکنِ اول چند صد میلی‌ثانیه زودتر می‌رود و مسیرِ رندر بلاک نمی‌شود. */}
+        {ga4 && <link rel="preconnect" href="https://www.googletagmanager.com" crossOrigin="" />}
+        {ga4 && <link rel="preconnect" href="https://www.google-analytics.com" crossOrigin="" />}
         {ga4 && <>
           <script async src={`https://www.googletagmanager.com/gtag/js?id=${ga4}`} />
           <script dangerouslySetInnerHTML={{ __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${ga4}');` }} />

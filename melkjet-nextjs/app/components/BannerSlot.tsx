@@ -67,7 +67,7 @@ export default function BannerSlot({ placement, category, slug, bannerId }: { pl
         style={{
           display: 'block',
           width: '100%',
-          maxHeight: 140,
+          height: 140,
           objectFit: 'cover',
         }}
       />

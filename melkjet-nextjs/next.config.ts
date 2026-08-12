@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // فاز ۲۵۷ (سرعت): در بیلدِ پروداکشن همهٔ console.* از باندلِ کلاینت حذف می‌شود (باندلِ JS کوچک‌تر،
+  // بدونِ نشتِ لاگ در مرورگرِ کاربر) — به‌جز error/warn که برای تشخیصِ مشکل روی prod لازم‌اند.
+  compiler: {
+    removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
+  },
   // فاز ۹۵ — بهینه‌سازِ داخلی تصاویر برای کارت‌های آگهی (تصاویر CDN دیوار):
   // /_next/image نسخهٔ webp کوچک‌شده را از دامنهٔ خودمان سرو و روی دیسک کش می‌کند.
   // آدرس‌های دیوار content-addressed هستند (هرگز عوض نمی‌شوند) → TTL بلند امن است.
