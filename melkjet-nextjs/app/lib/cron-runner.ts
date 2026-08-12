@@ -169,6 +169,11 @@ export function ensureCronStarted() {
 // روی اینستنسِ ۰، با سقفِ همزمانیِ سراسری اجرا می‌شود. پس هزار مشاورِ همزمان =
 // یک صفِ منظم، نه هزار حلقهٔ موازی روی اینستنس‌های کاربری.
 const MAX_ACTIVE_SYNCS = 4          // حداکثر همگام‌سازیِ همزمان روی کلِ سیستم — فاز ۱۳۴: با ۷۰+ مشاورِ روزانه، ۲ صف را ساعتی می‌کرد (کارها network-boundاند)
+// فاز ۲۵۸ — گلوگاهِ «هزاران آژانسِ گیرکرده»: سینکِ رُستر تک‌به‌تک و سریالی بود (یک آژانس در هر تیک،
+// قفلِ rosterRunning تا پایانِ همان یکی) — با هزاران آژانس ریاضی جواب نمی‌داد. حالا استخرِ N موازی:
+// هر تیک تا سقفِ همزمانی، آژانس‌های سررسیده fire-and-forget اجرا می‌شوند (هرکدام چک‌پوینت/بودجهٔ خودش).
+// مقدار از env قابلِ تنظیم (ROSTER_SYNCS) — اگر دیوار rate-limit کرد کمش کن.
+const MAX_ROSTER_SYNCS = Math.max(1, Math.min(8, Number(process.env.ROSTER_SYNCS) || 3))
 const QUEUE_TICK_MS = 45 * 1000     // هر ۴۵ ثانیه صف را درین کن (پاسخ‌گوییِ خوب به کاربر)
 let queueRunning = false
 let queueRunningSince = 0
@@ -286,12 +291,24 @@ async function queueTick(): Promise<void> {
       rosterRunning = true
       ;(async () => {
         try {
-          const { listDueRosters, syncRoster } = await import('./agency-roster-store')
+          const { listDueRosters, syncRoster, listScrapes } = await import('./agency-roster-store')
           const { touchCron } = await import('./cron-heartbeat')
-          const due = await listDueRosters(Date.now())
-          if (due.length) {
-            await touchCron({ lastRosterDueAt: Date.now(), lastRosterSyncAt: Date.now(), lastRosterSyncSlug: due[0].slug })
-            await syncRoster(due[0].id)
+          // فاز ۲۵۸ — پرکردنِ اسلات‌های آزاد تا سقفِ همزمانی. آژانس‌های در حالِ اجرا از listScrapes
+          // شمرده می‌شوند (رانِ مرده خودکار running:false می‌شود، پس دوباره نوبت می‌گیرد).
+          const active = (await listScrapes()).filter(s => s.running).length
+          let slots = MAX_ROSTER_SYNCS - active
+          if (slots > 0) {
+            const due = await listDueRosters(Date.now())
+            if (due.length) {
+              await touchCron({ lastRosterDueAt: Date.now(), lastRosterSyncAt: Date.now(), lastRosterSyncSlug: due[0].slug })
+              for (const s of due) {
+                if (slots <= 0) break
+                slots--
+                // fire-and-forget: هر آژانس بودجه/چک‌پوینتِ مستقلِ خودش را دارد؛ قفلِ rosterRunning
+                // فقط همین «پرکردن» را می‌پوشاند، نه خودِ سینک‌ها (تا اسلات‌ها موازی پر بمانند).
+                syncRoster(s.id).catch(() => {})
+              }
+            }
           }
         } catch { /* اسکرپِ بعدی در تیکِ بعد */ } finally { rosterRunning = false }
       })()

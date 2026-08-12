@@ -190,20 +190,26 @@ export async function listDueRosters(now: number): Promise<RosterScrape[]> {
   const db = await load()
   const g = { ...DEFAULT_SETTINGS, ...(db.settings || {}) }
   const hour = iranHour(now)
-  return Object.values(db.scrapes).filter(s => {
+  const dueList = Object.values(db.scrapes).filter(s => {
     if (s.running && !isStale(s, now)) return false
     if (s.runRequested) return true            // دستی — همیشه و فوری
     // زمان‌بندیِ هر اسکرپ: مقدارِ خودش، وگرنه پیش‌فرضِ سراسری.
     const autoSync = s.autoSync !== undefined ? s.autoSync : g.autoSync
     const startHour = s.startHour !== undefined ? s.startHour : g.startHour
     const endHour = s.endHour !== undefined ? s.endHour : g.endHour
-    if (!autoSync || !inSyncWindow(hour, startHour, endHour)) return false   // خاموش یا خارج از پنجرهٔ همین اسکرپ
-    if (s.schedule === 'off') return false
+    if (!autoSync || s.schedule === 'off') return false   // خاموش یا غیرفعال
+    // فاز ۲۵۸ — درین‌کردنِ بک‌لاگ: آژانسی که «هیچ‌وقت سینک نشده» (بدونِ داده) در هر ساعتی
+    // سررسیده است تا صفِ اولیه سریع خالی شود. تازه‌سازیِ آژانس‌های سینک‌شده فقط در پنجرهٔ شب می‌ماند.
+    if (!s.lastRun) return true
+    if (!inSyncWindow(hour, startHour, endHour)) return false   // خارج از پنجرهٔ همین اسکرپ (فقط تازه‌سازی)
     // «daily» = یک‌بار در هر بازشدنِ پنجرهٔ شبانه (حتی اگر روز دستی سینک شده باشد، شب باز می‌گیرد).
-    if (s.schedule === 'daily') return !s.lastRun || s.lastRun < windowOpenedAt(now, startHour)
+    if (s.schedule === 'daily') return s.lastRun < windowOpenedAt(now, startHour)
     // «6h» = هر ۶ ساعت درونِ پنجره.
-    return !s.lastRun || now - s.lastRun >= PERIOD['6h']
+    return now - s.lastRun >= PERIOD['6h']
   })
+  // فاز ۲۵۸ — ترتیبِ منصفانه: کم‌سابقه‌ترین اول (آژانسی که دیرترین‌بار تلاش شده، جلوتر) تا یک
+  // آژانسِ بزرگ که هر بار بودجه‌اش تمام می‌شود، اسلات‌ها را از بقیه نگیرد و همه به‌نوبت پیش بروند.
+  return dueList.sort((a, b) => (a.lastRun || a.runStartedAt || a.createdAt || 0) - (b.lastRun || b.runStartedAt || b.createdAt || 0))
 }
 // تنظیمِ زمان‌بندیِ اختصاصیِ یک اسکرپ.
 export async function saveScrapeSchedule(id: string, patch: { autoSync?: boolean; startHour?: number; endHour?: number }): Promise<boolean> {
@@ -324,7 +330,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
   // قبلاً تایمر حتی وقتی حلقه واقعاً مرده بود هم می‌زد → تشخیصِ stale هرگز فعال نمی‌شد (زامبیِ ۸ساعتهٔ ۵۲۳/۵۲۳).
   let lastWorkAt = Date.now()
   const workTick = () => { lastWorkAt = Date.now() }
-  const heartbeat = setInterval(() => { if (Date.now() - lastWorkAt < 3 * 60_000) patchScrape(id, { lastProgressAt: Date.now() }).catch(() => {}) }, 5000)
+  const heartbeat = setInterval(() => { if (Date.now() - lastWorkAt < 3 * 60_000) patchScrape(id, { lastProgressAt: Date.now() }).catch(() => {}) }, 10000)   // فاز ۲۵۸: ۱۰ث (بود ۵ث) — با ۳ سینکِ هم‌زمان، نوشتِ کمتر روی بلوکِ رُستر
   try {
     // پیشرفتِ زنده (throttleشده تا هر ۳ ثانیه یک نوشت) + heartbeatِ lastProgressAt تا سینکِ زنده «مرده» علامت نخورد.
     let lastWrite = 0
@@ -332,7 +338,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       workTick()
       try { onProgress?.(d, t) } catch {}
       const now = Date.now()
-      if (d === t || now - lastWrite > 3000) { lastWrite = now; patchScrape(id, { progress: { done: d, total: t }, lastProgressAt: now }).catch(() => {}) }
+      if (d === t || now - lastWrite > 8000) { lastWrite = now; patchScrape(id, { progress: { done: d, total: t }, lastProgressAt: now }).catch(() => {}) }   // فاز ۲۵۸: ۸ث (بود ۳ث)
     }
     // ازسرگیری: کشِ آگهی‌های قبلاً اسکرپ‌شده را بارگذاری کن؛ آگهی‌های تازه را افزوده و throttleشده ذخیره کن.
     const rowCache: RowCache = await loadRowCache(id)
@@ -390,7 +396,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       done193++
       if (done193 % 20 === 0 || done193 === totalTokens193) console.log(`[roster] import ${done193}/${totalTokens193}`)
       const now = Date.now()
-      if (done193 === totalTokens193 || now - lastImpWrite > 3000) { lastImpWrite = now; patchScrape(id, { phase: 'import', progress: { done: done193, total: totalTokens193 }, lastProgressAt: now }).catch(() => {}) }
+      if (done193 === totalTokens193 || now - lastImpWrite > 8000) { lastImpWrite = now; patchScrape(id, { phase: 'import', progress: { done: done193, total: totalTokens193 }, lastProgressAt: now }).catch(() => {}) }   // فاز ۲۵۸: ۸ث (بود ۳ث)
     }
     await patchScrape(id, { phase: 'import', progress: { done: 0, total: totalTokens193 } })
     const deadline193 = Date.now() + (opts196?.budgetMs ?? 45 * 60_000)   // بودجهٔ زمانیِ هر ران؛ ادامه در رانِ بعد (خودکار، فاز ۱۹۲)
