@@ -160,6 +160,58 @@ to connect` (db.ts) → nginx 504. It was NOT CPU/RAM/Arvan (load avg was ~0.5).
   `kv('scraper_meta')` exists. To force a clean re-migrate: `DELETE FROM kv WHERE key='scraper_meta';
   TRUNCATE listings;` then reload (old `scraper` blob re-seeds them).
 
+### advisor-store PER-OWNER SHARD (فاز ۲۵۹ — permanent fix for statement-timeout / slow graduate / instance-0 death)
+Root cause of the roster-scrape meltdown (46s/token, 633s graduate, `statement timeout`, instance-0
+crash-loop): **the whole `kv('advisor')` blob was ONE row holding ALL owners** — it had grown to
+**58 MB / 3708 owners / 27k listings**. EVERY advisor write (a lead stage change, a Divar import,
+a graduate move) rewrote all 58 MB under a single global `FOR UPDATE` lock. With 3 concurrent syncs
+the pool serialized on that one row → `canceling statement due to statement timeout` → cascading fail.
+- **Fix (advisor-store.ts + db.ts):** each owner is now its own kv key **`advisor:{owner}`** (~16 KB
+  each). `getAdvisor`/`mutate` lock only that owner's row → two owners never contend, and a write
+  copies ~16 KB not 58 MB. The 3 cross-owner readers (`allAdvisorProfiles`, `advisorWorkSummary`,
+  `mergeAdvisorData`) use a **prefix scan** via new `db.ts` helpers **`kvGetPrefix(prefix)`** +
+  **`kvDelete(key)`**. Every exported signature is unchanged → callers untouched. File-mode path
+  (no DATABASE_URL) is unchanged; only the PG path shards.
+- **Auto-migration:** one-time, idempotent, race-safe across the 4 instances (marker
+  `kv('advisor_migrated_v2')` locked via pgTx `FOR UPDATE`; `INSERT … ON CONFLICT DO NOTHING` per
+  owner). The old `kv('advisor')` blob is left **FROZEN** as rollback backup (never written again).
+- **Marker/keys note:** owner keys are `advisor:%` (colon); the migration marker is `advisor_migrated_v2`
+  (NO colon) and the legacy blob is bare `advisor` — so neither is caught by the `advisor:%` prefix scan.
+  No other store uses an `advisor:`-prefixed kv key (verified).
+- Committed `e3dd760`. Verified live: migration ran (3717 owners), sampled owners intact, graduate
+  completes `ok=true` with no timeout. **After this, per-token time is Divar-bound, not DB-bound** (below).
+
+### Divar scrape: per-IP throttle + rotating proxy pool (فاز ۲۶۰)
+After the advisor shard, the remaining ~40s/token is **Divar's anti-scrape throttle, per source-IP**
+(proven: a SOLO `fetchDivarPost` is <1 s, but under ~9 concurrent requests from one IP Divar delays
+each response to 30–50 s; log shows thousands of `[roster] divar کند/محدود` backoff messages). This is
+NOT our code — Divar rate-limits scraping by IP. Kenar (kenar.divar.dev, Divar's official OAuth API)
+was rejected by the user (consent-per-ad model + they say it's down) → **direct scrape stays the way**.
+- **Rotating proxy pool (`app/lib/divar-proxy-pool.ts`, committed `b56afe8`):** `pickDivarProxy()`
+  round-robins requests across multiple proxies (distinct IPs) so each IP stays under Divar's ceiling;
+  `reportDivarProxy()` puts a failing/429/timeout proxy into exponential cooldown (5s→5min). Wired into
+  `fetchDivarProfileTokens` (per page), `fetchDivarPost` (per retry attempt), and `scrapeDivar` (per page).
+- **Config source is SEPARATE from the single `divar.proxyUrl`** (which telegram/web-push/search-console/…
+  read as one URL and would break if made multi-value). Pool reads, in order: env **`DIVAR_PROXIES`**
+  (comma/newline-separated) → optional admin field `divar.proxyPool` → fallback the single `divar.proxyUrl`.
+  **Empty `DIVAR_PROXIES` = exact previous behavior (one proxy).** IPs must be **Iranian** (Divar filters
+  foreign IPs). Activate with zero code:
+  `DIVAR_PROXIES=http://127.0.0.1:1080,http://user:pass@<ir-ip2>:<port>,http://<ir-ip3>:<port>` in
+  `.env.production.local` + `pm2 reload ecosystem.config.js --update-env`. `divarProxyStatus()` reports pool health.
+- **Concurrency tuning (env, on instance 0):** `ROSTER_SYNCS` = agencies synced in parallel,
+  `ROSTER_CONCURRENCY` = token fetches per agency. Total concurrent Divar requests = SYNCS × CONCURRENCY.
+  On ONE IP, keep total ≈ 4 (throttle-free; 9 throttled hard). Current: **`ROSTER_SYNCS=4`,
+  `ROSTER_CONCURRENCY=1`** (4 agencies parallel, throttle-safe) — drains the one-time 155-agency backlog
+  fastest without throttling. With N proxies you can raise total to ~4×N. NOTE: the first sync of all
+  agencies is a one-time multi-hour backlog; daily updates are incremental+cached (fast).
+- **`advisor-divar-store` is still a single 3.3 MB file** (`.advisor-divar-data.json`, all owners' import
+  records, rewritten per `recordImport`). NOT the bottleneck (single-process on instance 0, no lock
+  contention, ~30 ms/write). A future per-owner shard (same pattern as advisor-store) is optional hygiene, not urgent.
+- **`.next` ENOTEMPTY on build** (`rmdir … not empty`) is a Turbopack stale-`.next` glitch, unrelated to
+  code — fix with `rm -rf .next && npm run build`. A build killed mid-way (Ctrl-C) corrupts `.next` and the
+  NEXT instance restart fails with "Could not find a production build" → crash-loop; always let `npm run build`
+  finish, then `pm2 reload`.
+
 ## Conventions
 - **Persistence = file-based JSON stores** in `process.cwd()`, all gitignored (`.*-data.json`).
   Mirror the style of `app/lib/scraper-store.ts` / `crm-store.ts` for any new store.
