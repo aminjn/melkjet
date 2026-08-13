@@ -212,6 +212,21 @@ was rejected by the user (consent-per-ad model + they say it's down) → **direc
   NEXT instance restart fails with "Could not find a production build" → crash-loop; always let `npm run build`
   finish, then `pm2 reload`.
 
+## ⛔ قانونِ شمارهٔ یک — هیچ کاری نباید بی‌صدا بمیرد (NEVER LET WORK STALL)
+**بزرگ‌ترین وظیفهٔ دستیار در این پروژه.** بارها یک ماژول/ورک‌فلو/جابِ پس‌زمینه وسطِ کار
+متوقف شده و چون **نوتیفیکیشنی نمی‌آید**، ساعت‌ها بی‌توجه مانده (ورک‌فلوی لوگو ۴ ساعت؛
+دیپلوی نیمه‌کاره که `.next` را خراب کرد و instance 0 را در کرش‌لوپ نگه داشت).
+- **هرگز منفعلانه منتظرِ نوتیفیکیشن نمان** — کارِ مرده سیگنال نمی‌فرستد.
+- **فعالانه چک کن** (mtime و محتوای فایلِ واقعی، نه حدس):
+  ورک‌فلو → `ls -la <wf>/journal.jsonl` + `grep -c '"type":"result"'`؛
+  جابِ پس‌زمینه → mtime فایلِ `.output`؛ سرور → `pm2 status` (↺/status) و `/root/.pm2/logs/*-out.log`؛
+  سینکِ روستر → `progress.done/total` + خطوطِ `[roster] import N/M`.
+- **دیده‌بان:** اسکریپتِ ثبت‌محور با ابزارِ Monitor؛ هر ۲ دقیقه اسکن، هشدار پس از ۸ دقیقه بی‌پیشرفتی.
+  (فقط کارهای ثبت‌شده را بپاید — وگرنه برای تسک‌های تمام‌شده هشدارِ کاذب می‌دهد.)
+- **وقتی گیر کرد: از همان نقطه ادامه بده، نه از صفر** — ورک‌فلو `resumeFromRunId`؛
+  سینکِ روستر از RowCache؛ دیپلوی با `rm -rf .next && npm run build`.
+- **گزارشِ صادق** — همان لحظه به کاربر بگو و نجاتش بده، نه سکوت.
+
 ## Conventions
 - **Persistence = file-based JSON stores** in `process.cwd()`, all gitignored (`.*-data.json`).
   Mirror the style of `app/lib/scraper-store.ts` / `crm-store.ts` for any new store.
