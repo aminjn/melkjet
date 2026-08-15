@@ -6,7 +6,7 @@ import { importDivarToken } from './advisor-divar-import'
 import { warmEnrichment } from './enrich-warm'
 import { getEnrichment, patchEnrichment } from './enrich-store'
 import { getDivar, recordImport, clearImports } from './advisor-divar-store'
-import { getAdvisor, addListing, publishListing, deleteListing, setListingStatus, updateAdvisorProfile, type Listing } from './advisor-store'
+import { getAdvisor, addListing, publishListingsBatch, deleteListing, setListingStatus, updateAdvisorProfile, type Listing } from './advisor-store'
 import { createAccount, accountExists } from './account-store'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
@@ -484,9 +484,40 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
 }
 
 // انتقالِ آگهی‌های یک ownerِ موقت به یک ownerِ نهایی (شماره) — با استفاده از توابعِ موجود (public item درست ساخته می‌شود).
+// «انتشارِ دسته‌ای» (CLAUDE.md): قبلاً هر فایلِ فعال یک publishListing جدا می‌خورد و هر
+// کدام روی PG یک فول‌اسکنِ جدولِ listings بود (~۵ث/فایل). حالا فایل‌های فعال در چانک‌های
+// ~۱۵تایی جمع و با publishListingsBatch (یک mutateِ اسکرپر برای هر چانک، همان منطقِ
+// prev/twin/remoderate per-item) منتشر می‌شوند. کپی/حذفِ per-file اتمی (فاز ۲۷۷) دست نخورد.
 async function reassignListings(fromO: string, toO: string, sourceId: string): Promise<number> {
   const from = await getAdvisor(fromO)
   const moved: { oldId: string; newId: string }[] = []
+  const t0 = Date.now()
+  // فایل‌های در انتظارِ انتشارِ دسته‌ای: {fid: شناسهٔ فایلِ مقصد، prevEnrichId: publicIdِ قبلی برای کپیِ غنی‌سازی}
+  const pending: { fid: string; prevEnrichId?: string }[] = []
+  const flush = async () => {
+    if (!pending.length) return
+    const chunk = pending.splice(0, pending.length)
+    const rs = await publishListingsBatch(toO, chunk.map(x => x.fid))
+    for (const r of rs) {
+      // فاز ۲۷۷ («فایل‌ها را ده بار می‌گیرد؛ باید یک‌بار بگیرد و نگه دارد») — غنی‌سازیِ آگهیِ
+      // قبلی (گالری/تحلیل/دسترسی‌ها) روی شناسهٔ عمومیِ جدید کپی می‌شود، پس warmEnrichment
+      // آن را «غنی» می‌بیند و هیچ درخواستِ تازه‌ای به دیوار نمی‌زند. قبلاً هر انتقال — و هر
+      // تلاشِ دوبارهٔ صف — همهٔ فایل‌ها را دوباره از دیوار می‌گرفت: هم کند، هم خوردن به
+      // سقفِ ضدِاسکرپِ دیوار.
+      const prevId = chunk.find(x => x.fid === r.fid)?.prevEnrichId
+      const prev = prevId ? getEnrichment(prevId) : null
+      if (prev) patchEnrichment(r.publicId, prev)
+      warmEnrichment(r.publicId)
+    }
+  }
+  // ── مسیرِ ترمیم (پنجرهٔ کرشِ انتشارِ معوق): فایلی که در تلاشِ قبلی copy+delete شد ولی
+  // چانکش publish نشد، این‌جا با «فعال + بدونِ publicId + رکوردِ ایمپورتِ همین sourceId»
+  // شناسایی و به اولین چانک اضافه می‌شود (بدونِ prevEnrichId — فقط warmEnrichment).
+  const impIdsTo = new Set(getDivar(toO).imports.filter(i => i.sourceId === sourceId).map(i => i.listingId))
+  for (const l of (await getAdvisor(toO)).listings) {
+    // فاز ۲۸۴ (یافتهٔ بازبین): unpublishedAt یعنی مشاور «عمداً» از انتشار درآورده — ترمیم نکن.
+    if (l.status === 'active' && !l.publicId && !l.unpublishedAt && impIdsTo.has(l.id)) pending.push({ fid: l.id })
+  }
   // فاز ۲۷۷ — انتقال «per-فایل اتمی» شد: کپی، سپس بلافاصله حذفِ مبدأ.
   // قبلاً همهٔ کپی‌ها انجام می‌شد و حذفِ مبدأ *در پایان*. اگر کار وسطِ راه می‌مرد (ری‌لودِ
   // دیپلوی، یا claimِ دوبارهٔ صف بعد از ۱۰ دقیقه)، مبدأ دست‌نخورده می‌ماند و تلاشِ بعدی
@@ -494,7 +525,11 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
   // ادعای ایدمپوتنت‌بودن داشت ولی این حلقه آن را نقض می‌کرد.
   // حالا هر فایل که منتقل شد از مبدأ می‌رود؛ پس ازسرگیری فقط باقی‌مانده‌ها را می‌برد.
   const items = [...from.listings]   // اسنپ‌شات: داخلِ حلقه از مبدأ حذف می‌کنیم
-  const t0 = Date.now()
+  // رکوردهای ایمپورتِ مبدأ به تفکیکِ listingId — برای انتقالِ per-file (لازمهٔ مسیرِ ترمیمِ بالا)
+  const impsByOld = new Map<string, ReturnType<typeof getDivar>['imports']>()
+  for (const im of getDivar(fromO).imports.filter(i => i.sourceId === sourceId)) {
+    const arr = impsByOld.get(im.listingId) || []; arr.push(im); impsByOld.set(im.listingId, arr)
+  }
   console.log(`[roster] reassign start from=${fromO} → ${toO} files=${items.length}`)
   for (let i = 0; i < items.length; i++) {
     const l = items[i]
@@ -504,24 +539,18 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
     // حالا که به کاربرِ واقعی رسید: هر آگهیِ فعال عمومی و با AI تحلیل می‌شود (چیزی که هنگامِ
     // مالکِ موقت عمداً انجام نشد). آگهیِ فروخته/اجاره‌رفته عمومی نمی‌شود.
     if (l.status !== 'active') await setListingStatus(toO, nl.id, l.status)
-    else {
-      const pub = await publishListing(toO, nl.id)
-      if (pub?.publicId) {
-        // فاز ۲۷۷ («فایل‌ها را ده بار می‌گیرد؛ باید یک‌بار بگیرد و نگه دارد») — غنی‌سازیِ آگهیِ
-        // قبلی (گالری/تحلیل/دسترسی‌ها) روی شناسهٔ عمومیِ جدید کپی می‌شود، پس warmEnrichment
-        // آن را «غنی» می‌بیند و هیچ درخواستِ تازه‌ای به دیوار نمی‌زند. قبلاً هر انتقال — و هر
-        // تلاشِ دوبارهٔ صف — همهٔ فایل‌ها را دوباره از دیوار می‌گرفت: هم کند، هم خوردن به
-        // سقفِ ضدِاسکرپِ دیوار.
-        const prev = _p ? getEnrichment(_p) : null
-        if (prev) patchEnrichment(pub.publicId, prev)
-        warmEnrichment(pub.publicId)
-      }
-    }
+    else pending.push({ fid: nl.id, prevEnrichId: _p })
     moved.push({ oldId: l.id, newId: nl.id })
+    // رکوردِ ایمپورتِ همین فایل «همین‌جا» منتقل می‌شود (recordImport بر اساسِ token جایگزین
+    // می‌کند — ایدمپوتنت)؛ وگرنه فایلِ copy+deleteشده که چانکش publish نشده بعدِ کرش با
+    // sourceId قابلِ‌شناسایی نبود و برای همیشه بدونِ publicId می‌ماند.
+    for (const im of impsByOld.get(l.id) || []) recordImport(toO, { ...im, listingId: nl.id })
     try { await deleteListing(fromO, l.id) } catch {}   // ← اتمی: مبدأ همین‌جا آزاد می‌شود
+    if (pending.length >= 15) await flush()   // یک mutateِ اسکرپر برای هر ~۱۵ فایل
     const ms = Date.now() - tf
     if (ms > 3000 || (i + 1) % 5 === 0 || i === items.length - 1) console.log(`[roster] reassign ${i + 1}/${items.length} (${ms}ms)`)
   }
+  await flush()   // flushِ پایانی: باقی‌ماندهٔ چانک + فایل‌های مسیرِ ترمیم
   // انتقالِ رکوردهای ایمپورت (توکن→listingId جدید) تا آپدیتِ بعدی همان فایل‌ها را بشناسد.
   for (const im of getDivar(fromO).imports.filter(i => i.sourceId === sourceId)) {
     const m = moved.find(x => x.oldId === im.listingId)

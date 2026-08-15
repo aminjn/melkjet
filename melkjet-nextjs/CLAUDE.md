@@ -314,7 +314,32 @@ was rejected by the user (consent-per-ad model + they say it's down) → **direc
   `node --import ./scripts/reos-loader.mjs scripts/roster-orphans.mjs` (گزارش) و `--apply` (حذف).
 - **درسِ عملیاتی:** هر `pm2 reload` (یعنی هر دیپلوی) کارِ در حالِ اجرای اینستنسِ ۰ را می‌کُشد.
   وسطِ سینک/انتقالِ زنده دیپلوی نکن؛ اول صف را خالی کن.
-### ⏭ صفِ کارِ بعدی — سه ایرادِ گزارش‌شدهٔ کاربر روی موبایل/جست‌وجو (فاز ۲۸۳، فقط تشخیص)
+### فازهای ۲۸۳–۲۸۴ — DONE (ورک‌فلوی چندعاملی + بازبینیِ خصمانه)
+هر پنج کارِ باز با ۱۲ عامل (شناخت→پیاده‌سازی→تست→راستی‌آزمایی→۲ بازبینِ خصمانه) بسته شد:
+- **عکسِ کارت‌ها فوری شد:** `CardImg.tsx` آدرسِ remote (divarcdn) را دیگر از `/_next/image`
+  نمی‌گذراند (resizeِ بارِ اول روی همان سرورِ اسکرپ/AI گلوگاه بود)؛ مسیرهای محلی (/api/media)
+  همچنان از بهینه‌ساز می‌گذرند. OPT_OFF_KEY و fallbackِ onError حفظ شد. next.config بخشِ images
+  عمداً ماند (بنرها/URLهای کش‌شده) — حذف نشود.
+- **گالریِ موبایل:** نوارِ scroll-snap + چیپِ «۲/۸ 📷» (ارقامِ فارسی) + نقطه‌ها (سقفِ ۸)؛
+  ایندکس با `galleryIndexFromScroll` (RTL-safe با Math.abs). LCP حفظ شد (عکسِ ۰ eager).
+- **نشانِ «دیده‌اید 👁»:** `app/lib/seen-listings.ts` لایهٔ خواندنیِ SSR-safe روی seen-storeِ
+  فاز ۲۵۵ (کلیدِ mj_seen_v1 — استورِ دوم نساختیم)؛ در SearchClient بعد از mount (ضدِ hydration
+  mismatch). نصب در هابِ سئو (app/listings) هنوز اختیاری/انجام‌نشده.
+- **موتورِ «آگهی‌های مشابه» (kind.ts جدید):** فیلترِ سختِ لایه‌ای — dealِ چهارگانه (dealOf)،
+  kindOf (land/villa/shop/office/apartment)، وتوی شهر، باندِ متراژ ±۴۰٪→±۷۰٪ — سپس امتیازِ
+  ترکیبی. کمتر از k → باند شل می‌شود ولی نوع/معامله/شهر هرگز. simPct حالا واقعی و پخش است.
+- **انتشارِ دسته‌ای (فاز ۲۸۴):** هسته‌های in-db مشترک (addUserListingCore/updateUserListingCore)
+  + `publishUserListingsBatch` (یک mutate per chunk ~۱۵) + `advisor-store.publishListingsBatch`؛
+  reassignListings حلقهٔ copy→delete اتمی را نگه داشت و فقط publish جمع شد + مسیرِ ترمیمِ
+  «فعال بدونِ publicId از همین sourceId». انتقالِ ۲۹ فایل: از ~۲.۵ دقیقه به چند ثانیه.
+- **یافته‌های بازبینِ خصمانه که بسته شد:** (۱) **major:** faToEnِ listing-similarity «٬» را
+  ترجمه نمی‌کرد → «۱۲٬۵۰۰٬۰۰۰٬۰۰۰» به ۵۰۰ خوانده می‌شد (قیمتِ مشابه‌ها + twin آلوده). (۲) وتوی
+  شهر با هر دو ترتیبِ سگمنتِ location (mapRow «محله، شهر» می‌سازد، fieldsOf برعکس فرض می‌کرد).
+  (۳) `unpublishedAt` روی Listing تا ترمیمِ graduate، unpublishِ عمدیِ مشاور را دوباره منتشر
+  نکند. (۴) `TwinIndex.remove` تا اسنپ‌شاتِ کهنه در چانکِ batch آیتمِ بعدی را گمراه نکند.
+- تست‌ها: +۴۲ (عامل) +۴ (رگرسیونِ بازبینی) → ۱۰۶۸ پاس؛ tsc/build سبز؛ فلایویلِ ML سبز.
+
+### آرشیو — تشخیصِ اولیهٔ فاز ۲۸۳ (انجام شد، برای تاریخچه)
 ۱. **عکس‌های جست‌وجو دقیقه‌ها طول می‌کشند.** ریشه: `CardImg.tsx` تصویر را از `previewSrc()` یعنی
    **`/_next/image`** می‌گیرد → بهینه‌سازِ سمتِ سرور هر عکس را از divarcdn می‌گیرد، resize و روی دیسک
    کش می‌کند. این کار روی همان سرورِ ۴هسته‌ای انجام می‌شود که سینکِ رُستر/ایمپورت/AI رویش می‌دود، و

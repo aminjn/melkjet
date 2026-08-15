@@ -22,6 +22,8 @@ import { hoodPartOf, trustedMapCenter } from '@/app/lib/map-pins'
 // همان منطقی که /api/map/clusters روی کلِ استخر اجرا می‌کند (نقشه و کارت‌ها هم‌زبان).
 import { parseQuery, deriveListing, effectiveFiltersOf, matchesListing } from '@/app/lib/listing-search'
 import { listingAgeLabel, isFreshListing } from '@/app/lib/fa-time'
+// فاز ۲۸۴ — نشانِ «دیده‌اید» روی کارتِ نتایج: خوانشِ گِیت‌شدهٔ بعد از mount از استورِ فاز ۲۵۵ (mj_seen_v1)
+import { useSeenSet } from '@/app/lib/seen-listings'
 
 function toPersianDigits(n: number | string): string { return String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
 function faNum(n: number): string { return (Number(n) || 0).toLocaleString('fa-IR') }
@@ -155,6 +157,8 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const prefArea = histArea || userArea   // سوابق > موقعیتِ لحظه‌ای
 
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
+  // فاز ۲۸۴ — شناسه‌های دیده‌شده؛ قبل از mount مقدارش null است (صفحه SSR است → ضدِ hydration mismatch)
+  const seenSet = useSeenSet()
   const [properties, setProperties] = useState<PropertyT[]>(() => initial.map(toProperty))
   const [poolTotal, setPoolTotal] = useState(0)          // فاز ۱۵۱: کلِ نتیجهٔ واقعیِ فیلترِ شهر/تب در سرور
   // فاز ۹۲ (پرفورمنس: رندرِ ۱۰۰۰ کارت + ۱۰۰۰ تصویرِ background = ۴۴MB و LCP ~۱۰ث): رندرِ تدریجیِ ۲۴تایی
@@ -610,6 +614,8 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
             {shownProperties.slice(0, visN).map((p, index) => {
               const isHov = hoveredCard === p.id
               const isPromoted = promotedIdSet.has(p.id)
+              // فاز ۲۸۴ — کاربر این آگهی را قبلاً باز کرده؟ (روی آگهیِ فروخته/اجاره‌رفته نشان نمی‌دهیم)
+              const isSeenCard = !p.dealStatus && !!seenSet?.has(String(p.id))
               const cards = []
               if (index === 3) cards.push(<div key="promo" style={{ gridColumn: '1 / -1' }}><BannerSlot placement="search" /></div>)
               cards.push(
@@ -626,6 +632,13 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
                         </span>
                       )}
                       {!p.dealStatus && <LikeHeart listingId={p.id} />}
+                      {/* فاز ۲۸۴ — نشانِ ظریفِ «دیده‌اید»: گوشهٔ پایین-چپِ فیزیکی (insetInlineEnd در RTL) —
+                          پایین-راست مالِ چیپِ سنِ آگهی است و بالا مالِ لایک/پرومو */}
+                      {isSeenCard && (
+                        <span title="این آگهی را دیده‌اید" style={{ position: 'absolute', bottom: 9, insetInlineEnd: 10, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3.5px 9px', borderRadius: 999, background: 'rgba(20,18,14,0.72)', backdropFilter: 'blur(6px)', color: '#fff', fontSize: 10.5, fontWeight: 700, border: '1px solid rgba(255,255,255,0.16)' }}>
+                          <span aria-hidden style={{ fontSize: 11 }}>👁</span> دیده‌اید
+                        </span>
+                      )}
                       {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 44 }}><PromoBadge kind={p.promoKind || 'ویژه'} /></div>}
                       {p.dealStatus && (
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -636,7 +649,8 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
                       )}
                     </div>
                     <div style={{ padding: '13px 14px 15px' }}>
-                      <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.4, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
+                      {/* فاز ۲۸۴ — عنوانِ آگهیِ دیده‌شده کمی کدرتر تا در مرور، تازه‌ها زودتر به چشم بیایند */}
+                      <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.4, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: isSeenCard ? 0.72 : 1 }}>{p.title}</div>
                       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 3 }}>
                         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}><path d="M6 1a3.5 3.5 0 0 1 3.5 3.5C9.5 7.5 6 11 6 11S2.5 7.5 2.5 4.5A3.5 3.5 0 0 1 6 1z" stroke="currentColor" strokeWidth="1.2" /><circle cx="6" cy="4.5" r="1.2" fill="currentColor" /></svg>
                         {p.location}

@@ -4,7 +4,7 @@ import { getItemById } from '@/app/lib/scraper-store'
 import { listingHref } from '@/app/lib/listing-url'
 import { getEnrichment } from '@/app/lib/enrich-store'
 
-// GET /api/reos/similar?propertyId=...&k=8 — «املاکِ مشابه» با شباهتِ برداری (embedding cosine).
+// GET /api/reos/similar?propertyId=...&k=8 — «املاکِ مشابه» با فیلترِ سختِ لایه‌ای + امتیازِ ترکیبی (reos/kind.ts).
 // عمومی است (فقط آگهی‌های عمومی را برمی‌گرداند) — مثلِ «خانه‌های مشابه» در Zillow.
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams

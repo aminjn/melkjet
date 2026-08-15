@@ -639,67 +639,140 @@ export async function findPublicListingTwin(probe: { title?: string; price?: str
   return idx.find(simFieldsOf(probe))
 }
 
+// شکلِ ورودیِ مشترکِ ثبت/به‌روزرسانیِ آگهیِ کاربر (همان shapeِ همیشگی — فقط نام‌گذاری شد).
+export type UserListingRaw = {
+  title: string; price?: string; location?: string; image?: string; excerpt?: string;
+  phone?: string; owner?: string; url?: string; meta?: Record<string, string>
+}
+
+// ایندکسِ هم‌ملک‌یابیِ آگهی‌های قابلِ‌نمایش روی همین db (همان predicateِ همیشگی:
+// listing و نه duplicate/rejected — منقضی‌ها عمداً داخل‌اند، مثلِ رفتارِ قبلی).
+function buildUserTwinIndex(db: DB): TwinIndex<Item> {
+  const idx = new TwinIndex<Item>()
+  for (const i of db.items) if (i.type === 'listing' && i.status !== 'duplicate' && i.status !== 'rejected') idx.add(simFieldsOf(i), i)
+  return idx
+}
+
+// ── هستهٔ درون-تراکنشیِ ثبتِ آگهیِ کاربر (انتشارِ دسته‌ای) ─────────────────────────
+// دقیقاً همان بدنهٔ addUserListing؛ فقط sync و روی db، تا هم مسیرِ تکی و هم دسته‌ای
+// «یک» منطق داشته باشند (هم‌رفتاری by construction، نه دو کپی). twinIdx از بیرون
+// می‌آید تا در دسته یک‌بار ساخته شود (تکی: همان buildUserTwinIndex روی همین db).
+function addUserListingCore(db: DB, raw: UserListingRaw, twinIdx: TwinIndex<Item>): Item {
+  db.owners = db.owners || []
+  let ownerId: string | undefined
+  if (raw.owner || raw.phone) {
+    const pn = raw.phone ? raw.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') : ''
+    const nn = normName(raw.owner || '')
+    let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
+    if (!owner) { owner = { id: id(), name: raw.owner || 'کاربر', phone: raw.phone, count: 0, firstSeen: Date.now() }; db.owners.push(owner) }
+    if (raw.phone && !owner.phone) owner.phone = raw.phone
+    owner.count++; ownerId = owner.id
+  }
+  // هم‌ملک‌یابیِ درجا (داخلِ همان تراکنش — بدونِ race با درج‌های هم‌زمان)
+  const probeF = simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta })
+  const twin = twinIdx.find(probeF)
+  const item: Item = {
+    id: id(), sourceId: 'user', sourceName: 'ثبت توسط کاربر', type: 'listing',
+    title: raw.title, price: raw.price, location: raw.location, image: raw.image,
+    excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner, url: raw.url, ownerId,
+    meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
+    scrapedAt: Date.now(),
+    status: twin ? 'duplicate' : 'pending',
+    aiReason: twin ? `تکراری در لحظهٔ ثبت — هم‌ملکِ «${twin.title.slice(0, 60)}»` : undefined,
+    expiresAt: Date.now() + LISTING_TTL,
+  }
+  db.items.unshift(item)
+  return item
+}
+
 // Insert a single user-submitted listing (status pending → goes to AI moderation immediately).
 // گِیتِ ضدتکراری در لحظهٔ ثبت: اگر هم‌ملکِ آگهیِ موجود باشد، با وضعیتِ «duplicate» ساخته می‌شود
 // (هرگز عمومی نمی‌شود) و علتش برای ادمین ثبت است — نه اینکه نسخهٔ دوم واردِ سایت شود.
-export function addUserListing(raw: {
-  title: string; price?: string; location?: string; image?: string; excerpt?: string;
-  phone?: string; owner?: string; url?: string; meta?: Record<string, string>
-}): Promise<Item> {
-  return mutate(db => {
-    db.owners = db.owners || []
-    let ownerId: string | undefined
-    if (raw.owner || raw.phone) {
-      const pn = raw.phone ? raw.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') : ''
-      const nn = normName(raw.owner || '')
-      let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
-      if (!owner) { owner = { id: id(), name: raw.owner || 'کاربر', phone: raw.phone, count: 0, firstSeen: Date.now() }; db.owners.push(owner) }
-      if (raw.phone && !owner.phone) owner.phone = raw.phone
-      owner.count++; ownerId = owner.id
-    }
-    // هم‌ملک‌یابیِ درجا (داخلِ همان تراکنش — بدونِ race با درج‌های هم‌زمان)
-    const probeF = simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta })
-    const twinIdx = new TwinIndex<Item>()
-    for (const i of db.items) if (i.type === 'listing' && i.status !== 'duplicate' && i.status !== 'rejected') twinIdx.add(simFieldsOf(i), i)
-    const twin = twinIdx.find(probeF)
-    const item: Item = {
-      id: id(), sourceId: 'user', sourceName: 'ثبت توسط کاربر', type: 'listing',
-      title: raw.title, price: raw.price, location: raw.location, image: raw.image,
-      excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner, url: raw.url, ownerId,
-      meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
-      scrapedAt: Date.now(),
-      status: twin ? 'duplicate' : 'pending',
-      aiReason: twin ? `تکراری در لحظهٔ ثبت — هم‌ملکِ «${twin.title.slice(0, 60)}»` : undefined,
-      expiresAt: Date.now() + LISTING_TTL,
-    }
-    db.items.unshift(item)
-    return item
-  })
+export function addUserListing(raw: UserListingRaw): Promise<Item> {
+  return mutate(db => addUserListingCore(db, raw, buildUserTwinIndex(db)))
 }
 // فاز ۱۴۰ (فیدبک: «تأیید می‌کنم دوباره خودش برمی‌گردد») — به‌روزرسانیِ «درجای» آگهیِ عمومیِ کاربر.
 // بازانتشار قبلاً حذف+ساختِ دوباره بود → هر سینکِ دیوار حکمِ ممیزی (تأیید/ردِ دستیِ ادمین) را پاک می‌کرد.
 // حالا فیلدها درجا آپدیت می‌شوند و حکم می‌ماند؛ فقط اگر متنِ ممیزی‌شونده عوض شده باشد (remoderate)
 // دوباره به صفِ ممیزی می‌رود. وضعیتِ duplicate دست نمی‌خورد.
-export async function updateUserListing(itemId: string, raw: {
-  title: string; price?: string; location?: string; image?: string; excerpt?: string;
-  phone?: string; owner?: string; url?: string; meta?: Record<string, string>
-}, opts?: { remoderate?: boolean }): Promise<Item | null> {
-  return mutate(db => {
-    const it = db.items.find(i => i.id === itemId && i.type === 'listing')
-    if (!it) return null
-    it.title = raw.title; it.price = raw.price; it.location = raw.location; it.image = raw.image
-    it.excerpt = raw.excerpt; it.phone = raw.phone; it.owner = raw.owner
-    // فاز ۱۵۳: مهرِ زمانِ معامله (__soldAt) نباید با بازنشرِ آگهی گم شود — تنها منبعِ «زمانِ فروش» است
-    const soldAt153 = it.meta?.['__soldAt']
-    it.meta = raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined
-    if (soldAt153 && it.meta && it.meta['__dealStatus'] && !it.meta['__soldAt']) it.meta['__soldAt'] = soldAt153
-    it.scrapedAt = Date.now(); it.expiresAt = Date.now() + LISTING_TTL
-    if (opts?.remoderate && it.status !== 'duplicate') {
-      it.status = 'pending'; it.moderatedAt = undefined; it.aiScore = undefined
-      it.aiReason = 'متنِ آگهی تغییر کرد — در صفِ ممیزیِ دوباره'
-    }
-    return it
-  })
+// هستهٔ درون-تراکنشی — دقیقاً بدنهٔ قبلیِ updateUserListing (ازجمله «آپدیت‌نشدنِ url»
+// که عمدی/تاریخی است، حفظِ __soldAt، و remoderate فقط وقتی status!=='duplicate').
+function updateUserListingCore(db: DB, itemId: string, raw: UserListingRaw, opts?: { remoderate?: boolean }): Item | null {
+  const it = db.items.find(i => i.id === itemId && i.type === 'listing')
+  if (!it) return null
+  it.title = raw.title; it.price = raw.price; it.location = raw.location; it.image = raw.image
+  it.excerpt = raw.excerpt; it.phone = raw.phone; it.owner = raw.owner
+  // فاز ۱۵۳: مهرِ زمانِ معامله (__soldAt) نباید با بازنشرِ آگهی گم شود — تنها منبعِ «زمانِ فروش» است
+  const soldAt153 = it.meta?.['__soldAt']
+  it.meta = raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined
+  if (soldAt153 && it.meta && it.meta['__dealStatus'] && !it.meta['__soldAt']) it.meta['__soldAt'] = soldAt153
+  it.scrapedAt = Date.now(); it.expiresAt = Date.now() + LISTING_TTL
+  if (opts?.remoderate && it.status !== 'duplicate') {
+    it.status = 'pending'; it.moderatedAt = undefined; it.aiScore = undefined
+    it.aiReason = 'متنِ آگهی تغییر کرد — در صفِ ممیزیِ دوباره'
+  }
+  return it
+}
+export async function updateUserListing(itemId: string, raw: UserListingRaw, opts?: { remoderate?: boolean }): Promise<Item | null> {
+  return mutate(db => updateUserListingCore(db, itemId, raw, opts))
+}
+
+// ── انتشارِ دسته‌ای (CLAUDE.md «انتشارِ دسته‌ای») ────────────────────────────────
+// ریشهٔ کندی: هر mutate روی PG یک فول‌اسکنِ جدولِ listings + ~۲×۲۸هزار stringify است؛
+// N انتشارِ تکی = N فول‌اسکن. این‌جا هر چانک (~۱۵ درخواست) در «یک» mutate می‌نشیند و
+// درونش دقیقاً همان هسته‌ها/همان منطقِ publishListing per-item اجرا می‌شود:
+//   prevId موجود → آپدیتِ درجا (remoderate فقط با تغییرِ متنِ ممیزی‌شونده)؛
+//   publicId شکسته → هم‌ملک‌یابی و بازپس‌گیری (فاز ۱۵۶A4)؛ وگرنه درجِ نو با گِیتِ ضدتکراری.
+// ایندکسِ هم‌ملک‌یابی یک‌بار در ابتدای چانک ساخته می‌شود و آیتم‌های درج/آپدیت‌شده به آن
+// افزوده می‌شوند تا درخواست‌های بعدیِ همان چانک هم‌ملک‌یابی شوند (هم‌ارزِ مسیرِ ترتیبی که
+// هر publish ایندکس را از نو می‌سازد). انحرافِ آگاهانه و کم‌اثر: entryِ کهنهٔ آیتمِ
+// آپدیت‌شده از ایندکس برداشته نمی‌شود — refش همان آیتم است، پس بدترین حالت آپدیتِ دوبارهٔ
+// همان آیتم است، نه آگهیِ گم‌شده/تکراری.
+export interface PublishUserListingReq { prevId?: string; raw: UserListingRaw }
+const PUBLISH_CHUNK = 15   // قفلِ KV_META را طولانی نکن — بزرگ‌ترش نکنید (هشدارِ CLAUDE.md)
+export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): Promise<{ item: Item; created: boolean }[]> {
+  const out: { item: Item; created: boolean }[] = []
+  for (let c = 0; c < reqs.length; c += PUBLISH_CHUNK) {
+    const chunk = reqs.slice(c, c + PUBLISH_CHUNK)
+    const part = await mutate(db => {
+      const idx = buildUserTwinIndex(db)
+      const res: { item: Item; created: boolean }[] = []
+      for (const { prevId, raw } of chunk) {
+        // مثلِ publishListing: prev باید آیتمِ listing موجود باشد (وضعیتش هرچه باشد — حتی duplicate)
+        const prev = prevId ? db.items.find(x => x.id === prevId && x.type === 'listing') : undefined
+        if (prev) {
+          const textChanged = prev.title !== raw.title || (prev.excerpt || '') !== (raw.excerpt || '')
+          const it = updateUserListingCore(db, prev.id, raw, { remoderate: textChanged })
+          if (it) {
+            // فاز ۲۸۴ — اول اسنپ‌شاتِ کهنهٔ همین آیتم از ایندکس برداشته می‌شود (هم‌رفتاری با مسیرِ تکی
+            // که هر بار ایندکس را تازه می‌سازد)، بعد فیلدهای جدید می‌نشیند.
+            idx.remove(it)
+            if (it.status !== 'duplicate' && it.status !== 'rejected') idx.add(simFieldsOf(it), it)
+            res.push({ item: it, created: false })
+            continue
+          }
+        }
+        // publicId شکسته/غایب → هم‌ملکِ عمومیِ موجود بازپس گرفته می‌شود (فاز ۱۵۶A4)
+        const twin = idx.find(simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta }))
+        if (twin) {
+          const textChanged = twin.title !== raw.title || (twin.excerpt || '') !== (raw.excerpt || '')
+          const it = updateUserListingCore(db, twin.id, raw, { remoderate: textChanged })
+          if (it) {
+            idx.remove(it)
+            if (it.status !== 'duplicate' && it.status !== 'rejected') idx.add(simFieldsOf(it), it)
+            res.push({ item: it, created: false })
+            continue
+          }
+        }
+        const it = addUserListingCore(db, raw, idx)
+        if (it.status !== 'duplicate') idx.add(simFieldsOf(it), it)
+        res.push({ item: it, created: true })
+      }
+      return res
+    })
+    out.push(...part)
+  }
+  return out
 }
 // فاز ۱۴۲ — در ادغامِ دو حساب، مالکیتِ آگهی‌های عمومی (نگاشتِ «آگهی‌های من») به شمارهٔ اصلی می‌رود.
 export async function reassignListingOwnerPhone(from: string, to: string): Promise<number> {

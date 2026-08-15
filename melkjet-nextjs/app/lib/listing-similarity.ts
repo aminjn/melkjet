@@ -4,7 +4,10 @@
 import { dealOf } from './listing-filter'
 
 export function faToEn(s: string): string {
-  return (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+  // فاز ۲۸۴ — جداکننده‌های فارسی هم ترجمه می‌شوند: بازبینِ خصمانه ثابت کرد بدونِ «٬»→«,»
+  // عبارتِ «۱۲٬۵۰۰٬۰۰۰٬۰۰۰» در regexِ \d[\d,]* می‌شکست و بزرگ‌ترین «گروهِ سه‌رقمی» (۵۰۰!)
+  // به‌جای کلِ قیمت خوانده می‌شد — هم امتیازِ قیمتِ موتورِ مشابه و هم twin-matching را آلوده می‌کرد.
+  return (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/٬/g, ',').replace(/٫/g, '.')
 }
 export function norm(s?: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() }
 function toks(s?: string): Set<string> { return new Set(norm(s).split(/[\s,،.\/\-+*()]+/).filter(t => t.length > 2)) }
@@ -117,6 +120,12 @@ export class TwinIndex<T> {
   private blocks = new Map<string, { f: SimFields; ref: T }[]>()
   add(f: SimFields, ref: T) {
     for (const k of blockKeys(f)) { let a = this.blocks.get(k); if (!a) { a = []; this.blocks.set(k, a) } a.push({ f, ref }) }
+  }
+  // حذفِ همهٔ entryهای یک ref (فاز ۲۸۴ — پیش از re-add پس از آپدیت، تا اسنپ‌شاتِ کهنهٔ
+  // فیلدهای شباهت در همان چانک، آیتمِ بعدی را به آپدیتِ اشتباه نکشاند؛ مسیرِ تکی هر بار
+  // ایندکس را تازه می‌سازد و این کهنگی را ندارد — این متد هم‌رفتاری را برمی‌گرداند).
+  remove(ref: T) {
+    for (const [k, arr] of this.blocks) { const b = arr.filter(e => e.ref !== ref); if (b.length !== arr.length) this.blocks.set(k, b) }
   }
   // بهترین هم‌ملک با شباهت ≥ آستانه (یا null).
   find(f: SimFields, threshold = DUP_THRESHOLD): T | null {

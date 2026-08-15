@@ -35,6 +35,19 @@ function nearbyIcon(n: { type?: string; name?: string; label?: string }): string
 }
 
 function toFa(n: number | string): string { return String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
+
+// فاز ۲۸۴ — اندیسِ اسلایدِ گالری از موقعیتِ اسکرول. خالص و exportشده برای تستِ واحد.
+// ⚠️ RTL: مقدارِ scrollLeft در کانتینرِ راست‌به‌چپ (کروم/فایرفاکس) از صفر «منفی» می‌شود —
+// قدرمطلق هر دو رفتار (مثبت/منفی) را پوشش می‌دهد و clamp اندیس را در بازهٔ معتبر نگه می‌دارد.
+export function galleryIndexFromScroll(scrollLeft: number, width: number, count: number): number {
+  if (!(width > 0) || count <= 1) return 0
+  return Math.max(0, Math.min(count - 1, Math.round(Math.abs(scrollLeft) / width)))
+}
+// نقطه‌های ریزِ اسلاید فقط تا این سقف رندر می‌شوند؛ بیشتر از آن، چیپِ «n/N» کافی است.
+export const GALLERY_DOTS_MAX = 8
+export function galleryDotCount(count: number, max = GALLERY_DOTS_MAX): number {
+  return count > 1 && count <= max ? count : 0
+}
 function timeAgo(ts: number): string {
   const h = Math.floor((Date.now() - ts) / 3600000)
   if (h < 1) return 'کمتر از یک ساعت پیش'
@@ -69,6 +82,7 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
   const [loading, setLoading] = useState(!initial)
   const [gallery, setGallery] = useState<string[]>([])
   const [activeImg, setActiveImg] = useState(0)
+  const stripRef = useRef<HTMLDivElement | null>(null)   // فاز ۲۸۴ — نوارِ اسلایدِ عکسِ اصلی
   // فاز ۲۰۱ (فیدبک: «عکس‌های آگهی هست، فقط کلیک می‌کنی باز نمی‌شه بزرگ ببینی») — نمایشگرِ تمام‌صفحهٔ عکس‌ها
   const [lightbox, setLightbox] = useState(false)
   const [facts, setFacts] = useState<Fact[]>([])
@@ -212,6 +226,16 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
   }, [lightbox, images.length])
 
+  // فاز ۲۸۴ — وقتی activeImg از بیرونِ نوار عوض می‌شود (تامبنیل/کاشیِ کناری/فلش‌های لایت‌باکس)،
+  // نوارِ اسلاید هم به همان عکس بپرد. scrollIntoView به‌جای scrollTo تا علامتِ منفیِ RTL بی‌اثر باشد؛
+  // behavior 'auto' (آنی) تا رویدادهای onScrollِ میانی حلقهٔ اصلاحِ متقابل نسازند.
+  useEffect(() => {
+    const el = stripRef.current
+    if (!el || !(el.clientWidth > 0)) return
+    if (galleryIndexFromScroll(el.scrollLeft, el.clientWidth, images.length) !== activeImg)
+      (el.children[activeImg] as HTMLElement | undefined)?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'start' })
+  }, [activeImg, images.length])
+
   const dealStatus: 'sold' | 'rented' | '' = item?.meta?.['__dealStatus'] === 'sold' ? 'sold' : item?.meta?.['__dealStatus'] === 'rented' ? 'rented' : ''
   // فاز ۲۳۰: مرجعِ واحدِ نوعِ معامله — اجارهٔ روزانه دیگر ماشین‌حسابِ وام/قیمتِ متری نمی‌گیرد.
   const deal = item ? dealOf(item) : 'sale'
@@ -302,7 +326,32 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
             </nav>
             <div className="mjp-gallery" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gridTemplateRows: '200px 200px', gap: 10, borderRadius: 20, overflow: 'hidden', height: 410 }}>
               <div style={{ gridRow: '1/3', position: 'relative', background: 'var(--surface)' }}>
-                {images.length ? <img src={images[activeImg]} alt={item.title} onClick={() => setLightbox(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in', filter: dealStatus ? 'grayscale(0.5) brightness(0.72)' : 'none' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, opacity: 0.1 }}>🏠</div>}
+                {/* فاز ۲۸۴ (فیدبک: «روی موبایل معلوم نیست عکسِ بیشتری هست») — عکسِ تکی → نوارِ
+                    scroll-snap با سوایپ؛ عکسِ اولِ LCP همان src و eager می‌ماند، بقیه lazy. */}
+                <style>{`.mjp-strip::-webkit-scrollbar{display:none}@media(min-width:641px){.mjp-dots{display:none!important}}`}</style>
+                {images.length ? (
+                  <div ref={stripRef} className="mjp-strip" onScroll={() => { const el = stripRef.current; if (el) setActiveImg(galleryIndexFromScroll(el.scrollLeft, el.clientWidth, images.length)) }}
+                    style={{ position: 'absolute', inset: 0, display: 'flex', overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory', overscrollBehaviorX: 'contain', scrollbarWidth: 'none' }}>
+                    {images.map((src, i) => (
+                      <img key={i} src={src} alt={i === 0 ? item.title : ''} loading={i === 0 ? undefined : 'lazy'} onClick={() => { setActiveImg(i); setLightbox(true) }}
+                        style={{ flex: '0 0 100%', width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in', scrollSnapAlign: 'start', scrollSnapStop: 'always', filter: dealStatus ? 'grayscale(0.5) brightness(0.72)' : 'none' }} />
+                    ))}
+                  </div>
+                ) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, opacity: 0.1 }}>🏠</div>}
+                {/* چیپِ شمارندهٔ «n/N 📷» — گوشهٔ پایین (در RTL راست)، فقط وقتی بیش از یک عکس هست */}
+                {images.length > 1 && (
+                  <span style={{ position: 'absolute', bottom: 10, insetInlineStart: 10, zIndex: 2, pointerEvents: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 999, background: 'rgba(20,18,14,0.65)', backdropFilter: 'blur(6px)', color: '#fff', fontSize: 11.5, fontWeight: 700, border: '1px solid rgba(255,255,255,0.16)' }}>
+                    <span aria-hidden style={{ fontSize: 12 }}>📷</span> {toFa(activeImg + 1)}/{toFa(images.length)}
+                  </span>
+                )}
+                {/* نقطه‌های ریزِ اسلاید — فقط موبایل (دسکتاپ تامبنیل دارد)؛ تعدادِ زیاد → فقط چیپ */}
+                {galleryDotCount(images.length) > 0 && (
+                  <div className="mjp-dots" style={{ position: 'absolute', bottom: 11, left: '50%', transform: 'translateX(-50%)', zIndex: 2, pointerEvents: 'none', display: 'flex', gap: 5 }}>
+                    {images.map((_, i) => (
+                      <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i === activeImg ? 'var(--gold)' : 'rgba(255,255,255,0.45)', boxShadow: '0 0 4px rgba(0,0,0,0.5)', transition: 'background .15s' }} />
+                    ))}
+                  </div>
+                )}
                 {(item as any).promoKind && !dealStatus && <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2 }}><PromoBadge kind={(item as any).promoKind} /></div>}
                 {/* ذخیرهٔ واقعیِ آگهی — همان سیگنالی که کوئستِ «۱ آگهی ذخیره کن» می‌خواند */}
                 {!dealStatus && <LikeHeart listingId={item.id} />}

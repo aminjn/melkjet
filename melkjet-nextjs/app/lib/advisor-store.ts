@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { addUserListing, updateUserListing, deleteItem, getItemById, setItemDealStatus, findPublicListingTwin } from './scraper-store'
+import { addUserListing, updateUserListing, publishUserListingsBatch, deleteItem, getItemById, setItemDealStatus, findPublicListingTwin } from './scraper-store'
 import { pgEnabled, kvGet, kvMutate, kvGetPrefix, kvDelete, pgTx } from './db'
 import { aiFor, agentModel, agentProvider } from './gapgpt'
 import { mlFirst } from './ml-gateway'
@@ -44,6 +44,7 @@ export interface Listing {
   amenities?: string[]
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
   published?: boolean; publicId?: string
+  unpublishedAt?: number   // فاز ۲۸۴ — unpublishِ عمدیِ مشاور؛ مسیرِ ترمیمِ graduate این را دوباره منتشر نمی‌کند
   // اتصال فایل به لیدها: یک لیدِ فروشنده + چند لیدِ خریدار (برای CRM)
   sellerLeadId?: string; buyerLeadIds?: string[]
 }
@@ -411,9 +412,35 @@ export async function publishListing(o: string, fid: string): Promise<Listing | 
   let res: Listing | null = null
   await mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
-    l.publicId = itemId; l.published = true; res = l
+    l.publicId = itemId; l.published = true; l.unpublishedAt = undefined; res = l
   })
   return res
+}
+// ── انتشارِ دسته‌ایِ چند فایلِ یک مشاور (CLAUDE.md «انتشارِ دسته‌ای») ─────────────
+// هم‌ارزِ N بار publishListing ولی: یک getAdvisor + چانک‌های ~۱۵تاییِ scraper در یک mutate
+// (publishUserListingsBatch — همان هسته‌ها/همان منطقِ prev/twin/remoderate) + «یک» نوشتِ
+// advisor برای نشاندنِ همهٔ publicIdها. publishListing تک‌تایی (مسیرِ مشترکِ ایمپورتِ
+// دیوار/ثبتِ دستی/ادمین) عمداً دست‌نخورده ماند؛ این مسیر فقط مصرفِ دسته‌ای (reassign) دارد.
+export async function publishListingsBatch(o: string, fids: string[]): Promise<{ fid: string; publicId: string }[]> {
+  if (!fids.length) return []
+  const a0 = await getAdvisor(o)
+  const name = a0.profile.name || 'مشاور'
+  const reqs: { fid: string; prevId?: string; raw: ReturnType<typeof publicPayload> }[] = []
+  for (const fid of fids) {
+    const l = a0.listings.find(x => x.id === fid)
+    if (!l) continue
+    reqs.push({ fid, prevId: l.publicId, raw: publicPayload(l, name, o) })
+  }
+  if (!reqs.length) return []
+  const rs = await publishUserListingsBatch(reqs.map(r => ({ prevId: r.prevId, raw: r.raw })))
+  const out = rs.map((r, i) => ({ fid: reqs[i].fid, publicId: r.item.id }))
+  await mutate(o, a => {
+    for (const { fid, publicId } of out) {
+      const l = a.listings.find(x => x.id === fid); if (!l) continue
+      l.publicId = publicId; l.published = true; l.unpublishedAt = undefined
+    }
+  })
+  return out
 }
 export async function unpublishListing(o: string, fid: string): Promise<Listing | null> {
   let res: Listing | null = null
@@ -421,7 +448,7 @@ export async function unpublishListing(o: string, fid: string): Promise<Listing 
   await mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
     if (l.publicId) pub = l.publicId
-    l.publicId = undefined; l.published = false; res = l
+    l.publicId = undefined; l.published = false; l.unpublishedAt = Date.now(); res = l
   })
   if (pub) await deleteItem(pub)
   return res

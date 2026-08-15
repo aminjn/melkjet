@@ -1,13 +1,14 @@
 // REOS · Data adapters — موجودیت‌های موتور را از دادهٔ واقعیِ اپ می‌سازد (آگهی/مشاور/کاربر).
-import { listItems, candidateListings, getItemById, type Item } from '../scraper-store'
+import { candidateListings, getItemById, type Item } from '../scraper-store'
 import { forIds } from '../listing-stats-store'
 import { getPrefs } from '../user-store'
 import { getAgency } from '../agency-store'
 import { getAdvisor as getAdvisorProfile } from '../advisor-store'
 import { agencyAdvisorFiles } from '../agency-team'
-import { getFeatures, recentEvents, saveEmbeddings, getEmbedding, getEmbeddings, existingEmbeddingIds, nearestByVector } from './store'
-import { parseFaNum, rentPartsOf, tokenize, propertyVector, cosine } from './features'
+import { getFeatures, recentEvents, saveEmbeddings, existingEmbeddingIds } from './store'
+import { parseFaNum, rentPartsOf, tokenize, propertyVector } from './features'
 import { dealOf } from '../listing-filter'
+import { pickSimilar } from './kind'
 import type { PropertyEntity, UserEntity, AgentEntity, Intent } from './types'
 
 // ── Item (آگهیِ عمومی) → PropertyEntity ──
@@ -55,23 +56,17 @@ export async function ensurePropertyEmbeddings(props: PropertyEntity[]): Promise
   } catch { /* بردار اختیاری است؛ نبودش رتبه‌بندی را نمی‌شکند */ }
 }
 
-// «املاکِ مشابه» با شباهتِ برداری روی embeddingهای ذخیره‌شده (استفادهٔ واقعیِ لایهٔ embedding).
+// «املاکِ مشابه» — فیلترِ سختِ لایه‌ای + امتیازِ ترکیبی (kind.ts)، نه top-kِ برداریِ بی‌فیلتر.
+// چرا مسیرِ embedding (getEmbedding/nearestByVector) کنار گذاشته شد: بردارِ token-hashِ ۶۴بُعدی
+// نوعِ معامله/نوعِ ملک/شهر/متراژ را اصلاً ندارد و top-k روی آن همه را در باندِ ~۸۴–۸۸٪ فشرده
+// می‌کرد — نمونهٔ واقعیِ گزارش‌شده: آپارتمانِ ۲۶۴متریِ جنت‌آباد ↔ کلنگیِ ۵۲۰متریِ سعادت‌آباد
+// «۸۵٪ مشابه». استورِ embedding و ensurePropertyEmbeddings برای rank/feed سرِ جای خودشان می‌مانند.
 export async function similarProperties(propertyId: string, k = 8): Promise<{ id: string; sim: number }[]> {
-  let base = await getEmbedding('property', propertyId).catch(() => null)
-  if (!base) {
-    const it = await getItemById(propertyId)
-    if (!it) return []
-    base = propertyVector(itemToProperty(it)).embed
-    await saveEmbeddings('property', [{ id: propertyId, embed: base }]).catch(() => {})
-  }
-  // مسیرِ pgvector (native، ایندکسِ HNSW) — مقیاس‌پذیر؛ اگر نبود، cosineِ JS روی همهٔ بردارها.
-  const native = await nearestByVector('property', base, k + 1).catch(() => null)
-  if (native) return native.filter(n => n.id !== propertyId).slice(0, k)
-  const all = await getEmbeddings('property', 3000)
-  const out = all.filter(e => e.id !== propertyId && e.embed?.length)
-    .map(e => ({ id: e.id, sim: Math.round(cosine(base!, e.embed) * 1000) / 1000 }))
-  out.sort((a, b) => b.sim - a.sim)
-  return out.slice(0, k)
+  const it = await getItemById(propertyId)
+  if (!it) return []
+  // کاندیداها از جدولِ آگهی‌ها (status سالم + expired حذف‌شده)، نه از استورِ بردارهای کهنه.
+  const candidates = await candidateListings(1500)
+  return pickSimilar(it, candidates, k)
 }
 
 // ── کاربر (خریدار/سرمایه‌گذار) → UserEntity: علاقه‌مندی + رفتار + ویژگی‌ها ──

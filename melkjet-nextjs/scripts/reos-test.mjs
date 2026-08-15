@@ -2341,6 +2341,22 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('ورودیِ لاتین دست‌نخورده می‌ماند (بدونِ رگرسیون)', digitsOnly('09155557482') === '09155557482')
       ok('جداکنندهٔ فارسیِ قیمت به لاتین برمی‌گردد', enDigits('۸٬۵۰۰٬۰۰۰') === '8,500,000')
     }
+    // فاز ۲۸۴ (یافتهٔ major بازبینِ خصمانه): faToEnِ listing-similarity «٬» را ترجمه نمی‌کرد،
+    // پس «۱۲٬۵۰۰٬۰۰۰٬۰۰۰» به‌جای کلِ عدد، بزرگ‌ترین گروهِ سه‌رقمی (۵۰۰) خوانده می‌شد —
+    // هم امتیازِ قیمتِ موتورِ مشابه و هم twin-matching آلوده بود.
+    {
+      const { fieldsOf, faToEn } = await import('../app/lib/listing-similarity.ts')
+      ok('faToEn جداکنندهٔ «٬» را هم ترجمه می‌کند', faToEn('۱۲٬۵۰۰٬۰۰۰') === '12,500,000')
+      const a = fieldsOf({ title: 'آپارتمان', price: '۱۲٬۵۰۰٬۰۰۰٬۰۰۰ تومان' })
+      const b = fieldsOf({ title: 'آپارتمان', price: '۱۲٬۰۰۰٬۰۰۰٬۰۰۰ تومان' })
+      ok('قیمتِ با جداکنندهٔ فارسی کامل خوانده می‌شود (نه گروهِ سه‌رقمی)', a.price === 12_500_000_000 && b.price === 12_000_000_000)
+      const { TwinIndex } = await import('../app/lib/listing-similarity.ts')
+      const idx = new TwinIndex()
+      const f1 = fieldsOf({ title: 'آپارتمان ۱۰۰ متری جنت‌آباد', price: '5,000,000,000', location: 'تهران، جنت‌آباد', meta: { 'متراژ': '100' } })
+      idx.add(f1, 'X')
+      idx.remove('X')
+      ok('TwinIndex.remove اسنپ‌شاتِ کهنه را از همهٔ بلاک‌ها برمی‌دارد', idx.find(f1) === null)
+    }
     // فاز ۲۷۷ (فیدبکِ روی دادهٔ زنده): «کسری» از «کسری بودجه» مشاور شده بود، و «محمد» جدا از
     // «محمد پرنده» خوشهٔ دوم ساخته بود در حالی که یک نفرند.
     {
@@ -3086,6 +3102,176 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
   for (let i = 0; i < 30 && !ms.done; i++) ms = auctionMoveOf('u45', ms, 'wait', 0, mCfg)
   ok('تماشاچیِ همیشگی هرگز برنده نمی‌شود', ms.done === true && ms.won === false)
   ok('حرکت روی رانِ تمام‌شده بی‌اثر است', auctionMoveOf('u45', mw, 'bid', 0, mCfg).final === mw.final)
+}
+
+// «آگهی‌های مشابهِ» REOS (فیدبک+CLAUDE.md: برای آپارتمانِ ۲۶۴متریِ جنت‌آباد، کلنگیِ ۵۲۰متریِ
+// سعادت‌آباد «۸۵٪ مشابه» می‌آمد — حتی اجاره‌ای؛ همه در باندِ ~۸۴–۸۸٪). درمان در app/lib/reos/kind.ts:
+// وتوی سختِ نوعِ معامله/نوعِ ملک/شهر (هرگز شل نمی‌شوند) + باندِ متراژ ±۴۰٪ (تنها پلهٔ شل‌شدن) +
+// امتیازِ ترکیبی از شواهدِ واقعی — این‌جا دقیقاً همان سناریوی باگ بازتولید و اثبات می‌شود.
+console.log('\n── REOS: آگهی‌های مشابه — kindOf/pickSimilar (فیلترِ سخت + امتیازِ صادق) ──')
+{
+  const { kindOf, pickSimilar } = await import('../app/lib/reos/kind.ts')
+  // طبقه‌بندیِ نوعِ ملک: تقدمِ متای «نوع ملک» → category → عنوان
+  ok('متای صریح: آپارتمان/مغازه/اداری', kindOf({ meta: { 'نوع ملک': 'آپارتمان' } }) === 'apt' && kindOf({ meta: { 'نوع ملک': 'مغازه' } }) === 'shop' && kindOf({ category: 'اداری' }) === 'office')
+  ok('کلنگی از عنوان → هم‌کلاسِ زمین (سناریوی باگ)', kindOf({ title: 'فروش کلنگی ۵۲۰ متری سعادت‌آباد' }) === 'land')
+  ok('متای طبقه‌ناپذیر («مسکونی») جاخالی نمی‌دهد — از عنوان ادامه می‌دهد', kindOf({ meta: { 'نوع ملک': 'مسکونی' }, title: 'ویلا دوبلکس ۳۰۰ متری' }) === 'villa')
+  ok('بی‌نشانه → نامعلوم (نه حدسِ الکی)', kindOf({}) === '' && kindOf({ title: 'ملک خوب در شمال شهر' }) === '')
+  // کورپوسِ معیارِ پذیرش — target: آپارتمانِ فروشیِ ۱۲۰متریِ جنت‌آباد
+  const target = { id: 'base', title: 'فروش آپارتمان ۱۲۰ متری جنت‌آباد', price: '۱۲,۰۰۰,۰۰۰,۰۰۰ تومان', location: 'تهران، جنت‌آباد', meta: { 'نوع ملک': 'آپارتمان', 'نوع معامله': 'فروش', 'شهر': 'تهران', 'محله': 'جنت‌آباد', 'متراژ': '۱۲۰ متر', 'امکانات': 'پارکینگ، آسانسور، انباری' } }
+  const cA = { id: 'a', title: 'فروش آپارتمان ۱۲۵ متری جنت آباد', price: '۱۲,۵۰۰,۰۰۰,۰۰۰ تومان', location: 'تهران، جنت آباد', meta: { 'نوع ملک': 'آپارتمان', 'نوع معامله': 'فروش', 'شهر': 'تهران', 'محله': 'جنت آباد', 'متراژ': '۱۲۵ متر', 'امکانات': 'پارکینگ، آسانسور' } }   // هم‌محله (فاصله به‌جای نیم‌فاصله)
+  const cH = { id: 'h', title: 'فروش آپارتمان ۱۴۰ متری جنت‌آباد شمالی', price: '۱۴,۵۰۰,۰۰۰,۰۰۰ تومان', location: 'تهران، جنت‌آباد شمالی', meta: { 'نوع ملک': 'آپارتمان', 'نوع معامله': 'فروش', 'شهر': 'تهران', 'محله': 'جنت‌آباد شمالی', 'متراژ': '۱۴۰ متر' } }
+  const cB = { id: 'b', title: 'فروش آپارتمان ۱۶۰ متری سعادت‌آباد', price: '۲۴,۰۰۰,۰۰۰,۰۰۰ تومان', location: 'تهران، سعادت‌آباد', meta: { 'نوع ملک': 'آپارتمان', 'نوع معامله': 'فروش', 'شهر': 'تهران', 'محله': 'سعادت‌آباد', 'متراژ': '۱۶۰ متر' } }
+  const cC = { id: 'c', title: 'فروش کلنگی ۵۲۰ متری سعادت‌آباد', price: '۶۰,۰۰۰,۰۰۰,۰۰۰ تومان', location: 'تهران، سعادت‌آباد', meta: { 'نوع ملک': 'کلنگی', 'نوع معامله': 'فروش', 'شهر': 'تهران', 'محله': 'سعادت‌آباد', 'متراژ': '۵۲۰ متر' } }   // دقیقاً آگهیِ باگ
+  const cE = { id: 'e', title: 'فروش مغازه ۱۲۰ متری جنت‌آباد', price: '۳۰,۰۰۰,۰۰۰,۰۰۰ تومان', location: 'تهران، جنت‌آباد', meta: { 'نوع ملک': 'مغازه', 'نوع معامله': 'فروش', 'شهر': 'تهران', 'محله': 'جنت‌آباد', 'متراژ': '۱۲۰ متر' } }
+  const cD = { id: 'd', title: 'اجاره آپارتمان ۱۱۵ متری جنت‌آباد', price: 'ودیعه ۵۰۰,۰۰۰,۰۰۰ تومان · اجاره ۲۰,۰۰۰,۰۰۰ تومان', location: 'تهران، جنت‌آباد', meta: { 'نوع ملک': 'آپارتمان', 'نوع معامله': 'اجاره', 'شهر': 'تهران', 'محله': 'جنت‌آباد', 'متراژ': '۱۱۵ متر' } }
+  const cI = { id: 'i', title: 'سوئیت مبله جنت‌آباد', price: 'شبی ۳,۰۰۰,۰۰۰ تومان', location: 'تهران، جنت‌آباد', meta: { 'نوع ملک': 'آپارتمان', 'شهر': 'تهران', 'محله': 'جنت‌آباد', 'متراژ': '۱۱۰ متر' } }   // روزانه بدونِ متای نوع معامله (فاز ۲۳۰)
+  const cF = { id: 'f', title: 'فروش آپارتمان ۱۲۰ متری هاشمیه', price: '۶,۰۰۰,۰۰۰,۰۰۰ تومان', location: 'مشهد، هاشمیه', meta: { 'نوع ملک': 'آپارتمان', 'نوع معامله': 'فروش', 'شهر': 'مشهد', 'محله': 'هاشمیه', 'متراژ': '۱۲۰ متر' } }
+  const cG = { id: 'g', title: 'فروش آپارتمان ۴۰۰ متری الهیه', price: '۶۰,۰۰۰,۰۰۰,۰۰۰ تومان', location: 'تهران، الهیه', meta: { 'نوع ملک': 'آپارتمان', 'نوع معامله': 'فروش', 'شهر': 'تهران', 'محله': 'الهیه', 'متراژ': '۴۰۰ متر' } }   // خارجِ باند — فقط در قحطی
+  const all = [cA, cH, cB, cC, cE, cD, cI, cF, cG]
+  const r8 = pickSimilar(target, all, 8)
+  const ids8 = r8.map(x => x.id)
+  ok('کلنگی/مغازه/اجاره/روزانه/مشهد هرگز در خروجی نیستند (وتوی سخت)', !ids8.includes('c') && !ids8.includes('e') && !ids8.includes('d') && !ids8.includes('i') && !ids8.includes('f'))
+  const simOf = (id) => r8.find(x => x.id === id)?.sim ?? -1
+  ok('رتبه‌بندی: هم‌محله+متراژِ نزدیک اول، بعد هم‌محلهٔ شمولی، بعد صرفِ هم‌شهری', JSON.stringify(ids8) === JSON.stringify(['a', 'h', 'b', 'g']))
+  ok('simPct پخش‌شده و صادق (نه «۸۵٪ برای همه»)', simOf('a') >= 0.8 && simOf('b') <= 0.7 && simOf('a') - simOf('b') >= 0.15 && simOf('g') <= 0.45)
+  ok('وقتی باندِ ±۴۰٪ خودش k را پر می‌کند، خارج‌ازباند نمی‌آید', !pickSimilar(target, all, 3).some(x => x.id === 'g'))
+  ok('قحطی: فقط باندِ متراژ شل می‌شود — کلنگی حتی در قحطی هم نمی‌آید', JSON.stringify(pickSimilar(target, [cB, cC, cG], 6).map(x => x.id)) === JSON.stringify(['b', 'g']))
+  const rU = pickSimilar(target, [cA, { id: 'u', title: 'ملک در جنت‌آباد', location: 'تهران، جنت‌آباد', meta: { 'شهر': 'تهران', 'محله': 'جنت‌آباد' } }], 8)
+  ok('kindِ نامعلوم وتو نمی‌شود ولی کفِ مخرجِ 0.75 امتیازِ دروغین نمی‌دهد', rU.length === 2 && rU[0].id === 'a' && rU[1].id === 'u' && rU[1].sim < 0.6)
+  ok('خودِ target و idهای تکراری حذف؛ خروجی قطعی است', JSON.stringify(pickSimilar(target, [{ ...target }, cA, { ...cA, title: 'کپی' }], 8).map(x => x.id)) === JSON.stringify(['a']) && JSON.stringify(pickSimilar(target, all, 8)) === JSON.stringify(r8))
+}
+
+// فاز ۲۸۴ — «دیده‌شده» روی کارت‌های جست‌وجو: لایهٔ خواندنیِ SSR-safe/تزریق‌پذیر روی استورِ فاز ۲۵۵
+// (seen-listings.ts استورِ دوم نمی‌سازد و هرگز نمی‌نویسد؛ منبعِ حقیقت mj_seen_v1 در seen-store ماند).
+console.log('\n── فاز ۲۸۴: دیده‌شده — خوانشِ امن + قانونِ سقف/ترتیب (خالص) ──')
+{
+  const { readSeenMap, seenIdsOf, sortSeenNewestFirst, pruneSeenMap, SEEN_KEY, SEEN_MAX } = await import('../app/lib/seen-listings.ts')
+  ok('روی سرور (بدونِ window) همیشه {}', JSON.stringify(readSeenMap()) === '{}')
+  ok('storage=null / JSONِ خراب / فرمتِ آرایه‌ای → {} (محافظ)', JSON.stringify(readSeenMap(null)) === '{}' && JSON.stringify(readSeenMap({ getItem: () => 'خراب{' })) === '{}' && JSON.stringify(readSeenMap({ getItem: () => '[1,2]' })) === '{}')
+  ok('دقیقاً از کلیدِ استورِ فاز ۲۵۵ می‌خواند (mj_seen_v1، سقفِ ۳۰۰۰)', SEEN_KEY === 'mj_seen_v1' && SEEN_MAX === 3000 && JSON.stringify(readSeenMap({ getItem: k => k === 'mj_seen_v1' ? '{"z":7}' : null })) === '{"z":7}')
+  const m284 = readSeenMap({ getItem: () => '{"a":2,"b":9,"c":0}' })
+  ok('آبجکتِ سالم عیناً + seenIdsOf', seenIdsOf(m284).size === 3 && seenIdsOf(m284).has('b') && !seenIdsOf(m284).has('x'))
+  ok('ترتیبِ «جدیدترین اول» و timestampِ غایب=۰', JSON.stringify(sortSeenNewestFirst(m284)) === JSON.stringify(['b', 'a', 'c']))
+  const small284 = { a: 1, b: 2 }
+  ok('ورودیِ ≤max همان مرجع برمی‌گردد (بدونِ کپیِ بیهوده)', pruneSeenMap(small284, 3) === small284)
+  ok('سرریز: قدیمی‌ترین‌ها حذف، جدیدترین‌ها می‌مانند (آینهٔ قانونِ سقفِ markSeen)', JSON.stringify(Object.keys(pruneSeenMap({ x1: 1, x2: 2, x3: 3, x4: 4, x5: 5 }, 3)).sort()) === JSON.stringify(['x3', 'x4', 'x5']))
+}
+
+// انتشارِ دسته‌ای (CLAUDE.md — «هر فایل ~۵ ثانیه» چون هر publishListing روی PG یک فول‌اسکن بود):
+// publishUserListingsBatch باید «by construction» هم‌رفتارِ مسیرِ تکی باشد — همان هسته‌ها، همان
+// منطقِ prev/twin/remoderate — وگرنه به‌جای کندی «آگهیِ گم‌شده/تکراری» می‌گیریم (هشدارِ CLAUDE.md).
+console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مسیرِ تکی + twin-dedup + remoderate + graduate/ترمیم ──')
+{
+  const fs285 = await import('fs')
+  const st285 = await import('../app/lib/scraper-store.ts')
+  const adv285 = await import('../app/lib/advisor-store.ts')
+  const dv285 = await import('../app/lib/advisor-divar-store.ts')
+  const ros285 = await import('../app/lib/agency-roster-store.ts')
+  // ── سطحِ اسکرپر: چانک‌بندی (مرزِ ۱۵) + twin-dedupِ درون/بینِ چانک + dedupِ مالک ──
+  const mkRaw = (i, over = {}) => ({
+    title: `فروش آپارتمان ${60 + 6 * i} متری تستِ انتشارِ دسته‌ای ${i}`,
+    price: `${(5_000_000_000 + i * 400_000_000).toLocaleString('fa-IR')} تومان`,
+    location: `تهران، محلهٔ آزمایشیِ ${i}`,
+    excerpt: `توضیحِ کاملِ فایلِ شمارهٔ ${i}`,
+    owner: 'مالکِ تستِ دسته‌ای ' + i,
+    meta: { 'شهر': 'تهران', 'محله': `محلهٔ آزمایشیِ ${i}`, 'متراژ': `${60 + 6 * i} متر`, 'نوع معامله': 'فروش' },
+    ...over,
+  })
+  const reqs285 = []
+  for (let i = 0; i < 14; i++) reqs285.push({ raw: mkRaw(i, i === 1 ? { phone: '۰۹۱۲۲۸۵۰۰۱۱' } : i === 2 ? { phone: '09122850011' } : {}) })
+  reqs285.push({ raw: mkRaw(0) })    // idx14 — هم‌ملک، داخلِ همان چانک (ایندکس باید درون-چانک به‌روز شود)
+  reqs285.push({ raw: mkRaw(15) })   // idx15 — اولین آیتمِ چانکِ دوم (PUBLISH_CHUNK=15)
+  reqs285.push({ raw: mkRaw(0) })    // idx16 — هم‌ملک، از چانکِ دوم (ایندکس از dbِ تازه ساخته می‌شود)
+  const bOut = await st285.publishUserListingsBatch(reqs285)
+  ok('batch با ۱۷ درخواست (مرزِ چانکِ ۱۵) کامل و هم‌ترتیبِ ورودی برمی‌گردد', bOut.length === 17 && bOut[5].item.title === mkRaw(5).title && bOut[15].item.title === mkRaw(15).title)
+  ok('فیلدهای مسیرِ تکی: sourceId/sourceName/pending/انقضای ۳۰روزه', bOut[0].item.sourceId === 'user' && bOut[0].item.sourceName === 'ثبت توسط کاربر' && bOut[0].item.status === 'pending' && bOut[0].item.expiresAt > Date.now() + 29 * 86400_000)
+  ok('twin-dedupِ درون-چانکی: دو فایلِ هم‌ملک در یک batch → یک publicId (آپدیت، نه ردیفِ نو)', bOut[14].created === false && bOut[14].item.id === bOut[0].item.id)
+  ok('twin-dedupِ بینِ چانک‌ها هم کار می‌کند', bOut[16].created === false && bOut[16].item.id === bOut[0].item.id && bOut.slice(0, 14).every(x => x.created) && bOut[15].created === true)
+  const scrDb285 = JSON.parse(fs285.readFileSync('.scraper-data.json', 'utf-8'))
+  const own285 = (scrDb285.owners || []).filter(o => (o.phone || '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/\D/g, '') === '09122850011')
+  ok('dedupِ مالک: تلفنِ یکسان با رقمِ فارسی/لاتین → یک Owner با count=2', own285.length === 1 && own285[0].count === 2)
+  const dup285 = await st285.addUserListing(mkRaw(3))
+  ok('ثبتِ کاربرِ هم‌ملک بعد از batch → duplicate با دلیلِ روشن', dup285.status === 'duplicate' && /تکراری در لحظهٔ ثبت/.test(dup285.aiReason || ''))
+  const rec285 = await st285.publishUserListingsBatch([{ prevId: 'missing_prev_285', raw: mkRaw(5) }])
+  ok('publicIdِ شکسته (prevId ناموجود) → بازپس‌گیریِ هم‌ملکِ موجود (فاز ۱۵۶A4 از مسیرِ batch)', rec285.length === 1 && rec285[0].created === false && rec285[0].item.id === bOut[5].item.id)
+  // ── سطحِ مشاور: publishListingsBatch — هم‌ارزیِ فیلد-به-فیلد با publishListing ──
+  const oa285 = '09001285101'
+  await adv285.updateAdvisorProfile(oa285, { name: 'مشاور تستِ ۲۸۵' })
+  const l1 = await adv285.addListing(oa285, { title: 'آپارتمان تستِ هم‌ارزی الف', deal: 'sale', price: 7_100_000_000, area: 101, rooms: 2, city: 'تهران', neighborhood: 'محلهٔ هم‌ارزیِ الف', description: 'توضیحِ الف', amenities: ['پارکینگ'] })
+  const l2 = await adv285.addListing(oa285, { title: 'آپارتمان تستِ هم‌ارزی ب', deal: 'sale', price: 8_200_000_000, area: 88, rooms: 3, city: 'تهران', neighborhood: 'محلهٔ هم‌ارزیِ ب', description: 'توضیحِ ب' })
+  const pSingle = await adv285.publishListing(oa285, l1.id)          // مسیرِ تکی (مرجع)
+  const rb1 = await adv285.publishListingsBatch(oa285, [l2.id])      // مسیرِ دسته‌ای
+  const itS = await st285.getItemById(pSingle.publicId)
+  const itB = await st285.getItemById(rb1[0].publicId)
+  ok('هم‌ارزی: هویت/مالک/وضعیت مثلِ مسیرِ تکی', rb1[0].fid === l2.id && itB.sourceId === 'user' && itB.sourceName === 'ثبت توسط کاربر' && itB.status === 'pending' && itB.owner === 'مشاور تستِ ۲۸۵' && itB.meta['__ownerPhone'] === oa285)
+  ok('هم‌ارزی: قیمت/لوکیشن/متای ساخته از publicPayload', itB.price === `${(8_200_000_000).toLocaleString('fa-IR')} تومان` && itB.location === 'تهران، محلهٔ هم‌ارزیِ ب' && itB.meta['متراژ'] === `${(88).toLocaleString('fa-IR')} متر` && itB.meta['نوع معامله'] === 'فروش')
+  ok('هم‌ارزی: ساختارِ آیتمِ تکی و دسته‌ای یکی است (کلیدها)', JSON.stringify(Object.keys(itS).sort()) === JSON.stringify(Object.keys(itB).sort()))
+  const advA285 = await adv285.getAdvisor(oa285)
+  ok('publicId/published روی فایلِ advisor نشست', advA285.listings.find(x => x.id === l2.id).publicId === rb1[0].publicId && advA285.listings.find(x => x.id === l2.id).published === true)
+  // بازانتشارِ بدونِ تغییرِ متن از مسیرِ batch — حکمِ ادمین باید بماند (عینِ تستِ فاز ۱۴۰)
+  await st285.setModeration(rb1[0].publicId, 'approved', 'تأییدِ دستیِ ادمین ۲۸۵', 91)
+  const rb2 = await adv285.publishListingsBatch(oa285, [l1.id, l2.id])
+  const itB2 = await st285.getItemById(rb1[0].publicId)
+  ok('بازانتشارِ بدونِ تغییر: publicId ثابت و حکمِ ادمین پاک نمی‌شود', rb2[0].publicId === pSingle.publicId && rb2[1].publicId === rb1[0].publicId && itB2.status === 'approved' && itB2.aiReason === 'تأییدِ دستیِ ادمین ۲۸۵')
+  await adv285.updateListing(oa285, l2.id, { description: 'توضیحِ کاملاً تازه برای ممیزیِ دوباره' })
+  const rb3 = await adv285.publishListingsBatch(oa285, [l2.id])
+  const itB3 = await st285.getItemById(rb3[0].publicId)
+  ok('remoderate فقط با تغییرِ متن: pending + پاک‌شدنِ مهرها + دلیلِ استاندارد', rb3[0].publicId === rb1[0].publicId && itB3.status === 'pending' && !itB3.moderatedAt && itB3.aiScore === undefined && itB3.aiReason === 'متنِ آگهی تغییر کرد — در صفِ ممیزیِ دوباره' && itB3.excerpt === 'توضیحِ کاملاً تازه برای ممیزیِ دوباره')
+  await adv285.setListingStatus(oa285, l1.id, 'sold')
+  const soldAt285 = (await st285.getItemById(pSingle.publicId)).meta['__soldAt']
+  await adv285.publishListingsBatch(oa285, [l1.id])
+  const itS2 = await st285.getItemById(pSingle.publicId)
+  ok('مهرِ __soldAt (فاز ۱۵۳) با بازانتشارِ دسته‌ای گم نمی‌شود', !!soldAt285 && itS2.meta['__dealStatus'] === 'sold' && itS2.meta['__soldAt'] === soldAt285)
+  // ── graduate کامل: reassign حالا دسته‌ای است (۱۷ فعال = عبور از مرزِ چانکِ ۱۵ + flushِ پایانی) ──
+  const rosR = await ros285.addScrape({ slug: 'batchtest285' })
+  const sid285 = rosR.scrape.id
+  const tempO285 = 'adv:batchtest285:akbari'
+  await ros285.patchScrape(sid285, { advisors: [{ key: 'akbari', name: 'اکبری', owner: tempO285, listingCount: 0 }] })
+  for (let i = 0; i < 17; i++) {
+    const l = await adv285.addListing(tempO285, { title: `آپارتمان ${70 + 7 * i} متری گرجوئیتِ ${i}`, deal: 'sale', price: 6_000_000_000 + i * 450_000_000, area: 70 + 7 * i, city: 'تهران', neighborhood: `محلهٔ گرجوئیتِ ${i}`, description: `توضیحِ ${i}` })
+    dv285.recordImport(tempO285, { token: 'tk285_' + i, listingId: l.id, title: l.title, url: '', at: Date.now(), published: false, sourceId: sid285 })
+  }
+  const lSold = await adv285.addListing(tempO285, { title: 'آپارتمان فروختهٔ گرجوئیت', deal: 'sale', price: 9_000_000_000, area: 95, city: 'تهران', neighborhood: 'محلهٔ گرجوئیتِ فروخته', description: 'فروخته' })
+  await adv285.setListingStatus(tempO285, lSold.id, 'sold')
+  const logs285 = []
+  const origLog285 = console.log
+  let gr285
+  try {
+    console.log = (...a) => { logs285.push(a.join(' ')) }   // لاگ‌های reassign جمع می‌شوند (خلوتیِ خروجیِ تست)
+    gr285 = await ros285.graduateAdvisor(sid285, 'akbari', '09001285201')
+  } finally { console.log = origLog285 }
+  const tgt285 = await adv285.getAdvisor('09001285201')
+  const act285 = tgt285.listings.filter(l => l.status === 'active')
+  ok('graduate: موفق و همهٔ ۱۸ فایل منتقل شد', gr285.ok === true && gr285.moved === 18 && tgt285.listings.length === 18)
+  ok('target: هر ۱۷ فایلِ فعال publicId دارد (انتشارِ دسته‌ای، با flushِ چانک+پایانی)', act285.length === 17 && act285.every(l => l.publicId && l.published))
+  const soldL285 = tgt285.listings.find(l => l.status === 'sold')
+  ok('فایلِ فروخته منتشر نشد و وضعیتش ماند', !!soldL285 && !soldL285.publicId)
+  ok('مبدأ (مالکِ موقت) کاملاً خالی شد', (await adv285.getAdvisor(tempO285)).listings.length === 0)
+  ok('آیتمِ عمومی با __ownerPhoneِ مالکِ جدید ساخته شد', (await st285.getItemById(act285[0].publicId))?.meta?.['__ownerPhone'] === '09001285201')
+  const impsT285 = dv285.getDivar('09001285201').imports.filter(i => i.sourceId === sid285)
+  const tgtIds285 = new Set(tgt285.listings.map(l => l.id))
+  ok('رکوردهای ایمپورت روی مالکِ جدید با listingIdِ نو؛ مبدأ خالی', impsT285.length === 17 && impsT285.every(i => tgtIds285.has(i.listingId)) && dv285.getDivar(tempO285).imports.length === 0)
+  const recAdv285 = (await ros285.getScrape(sid285)).advisors.find(a => a.key === 'akbari')
+  ok('رکوردِ رُستر بسته شد (owner=شماره، بدونِ transferFrom/graduating)', recAdv285.owner === '09001285201' && recAdv285.graduating === false && !recAdv285.transferFrom)
+  ok('لاگِ عملیاتیِ «reassign done files=N» حاضر است (قانونِ شمارهٔ یک)', logs285.some(l => l.includes('reassign done files=18')))
+  // ── مسیرِ ترمیمِ کرش: فایلِ copy+deleteشده که چانکش publish نشده بود، در graduateِ دوباره publicId می‌گیرد ──
+  const advDb285 = JSON.parse(fs285.readFileSync('.advisor-data.json', 'utf-8'))
+  const crashL = advDb285.advisors['09001285201'].listings.find(l => l.status === 'active' && l.publicId)
+  const crashTitle = crashL.title, crashPub = crashL.publicId
+  delete crashL.publicId; delete crashL.published            // شبیه‌سازیِ کرش قبل از flush
+  fs285.writeFileSync('.advisor-data.json', JSON.stringify(advDb285))
+  const rosDb285 = JSON.parse(fs285.readFileSync('.agency-roster-data.json', 'utf-8'))
+  rosDb285.scrapes[sid285].advisors.find(a => a.key === 'akbari').transferFrom = tempO285   // ازسرگیریِ انتقالِ نیمه‌کاره
+  fs285.writeFileSync('.agency-roster-data.json', JSON.stringify(rosDb285))
+  let gr2_285
+  try {
+    console.log = () => {}
+    gr2_285 = await ros285.graduateAdvisor(sid285, 'akbari', '09001285201')
+  } finally { console.log = origLog285 }
+  const fixedL285 = (await adv285.getAdvisor('09001285201')).listings.find(l => l.title === crashTitle)
+  ok('ترمیم: فایل دوباره publicId گرفت — با بازپس‌گیریِ همان آیتم، نه ردیفِ نو', gr2_285.ok === true && fixedL285.publicId === crashPub && fixedL285.published === true)
+  const scrDb2_285 = JSON.parse(fs285.readFileSync('.scraper-data.json', 'utf-8'))
+  ok('ترمیم: در اسکرپر فقط «یک» آیتمِ غیرduplicate از آن ملک هست', scrDb2_285.items.filter(i => i.title === crashTitle && i.status !== 'duplicate').length === 1)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
