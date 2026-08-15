@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { validName } from './agency-name-lexicon'
 
 // ── مدلِ یادگیرندهٔ «اسمِ مشاور» ──────────────────────────────────────────────
 // هدف: تشخیصِ نامِ مشاور از متنِ آگهی، و «یادگیریِ تدریجی» تا کم‌کم مستقل از AI شود.
@@ -34,6 +35,10 @@ export function nameKey(name: string): string {
 export async function learnName(name: string, teacher: 'ai' | 'admin' = 'ai', bump?: number): Promise<void> {
   const n = String(name || '').trim()
   if (!n || n.length < 2) return
+  // فاز ۲۷۵ — دروازهٔ ورود: نامی که از واژه‌نامه رد شود (واژهٔ ملکی/نوفه/آدرس) هرگز آموخته نمی‌شود.
+  // وگرنه یک حدسِ خرابِ AI («لوکیشن») وزن می‌گیرد و از آن به بعد قطعی و بدونِ AI بازتولید می‌شود.
+  // تأییدِ ادمین (ساختِ حساب برای مشاورِ واقعی) استثناست — انسان دیده و تأیید کرده.
+  if (teacher !== 'admin' && !validName(n)) return
   const k = nameKey(n)
   await mutate(db => {
     if (db.negatives[k]) delete db.negatives[k]   // اگر قبلاً منفی بود، تأییدِ جدید آزادش می‌کند
@@ -47,6 +52,23 @@ export async function learnName(name: string, teacher: 'ai' | 'admin' = 'ai', bu
 export async function forgetName(name: string): Promise<void> {
   const k = nameKey(name)
   await mutate(db => { delete db.names[k]; db.negatives[k] = (db.negatives[k] || 0) + 1 })
+}
+
+// ── پاک‌سازیِ واژه‌نامه از اسم‌های آشغالِ گذشته (فاز ۲۷۵) ──────────────────────
+// واژه‌نامهٔ زندهٔ تولید پیش از دروازهٔ ورودی پر شده بود («لوکیشن، منطقه، دوخواب، قابل،
+// عزیزان، باهماهنگی، آزاد، ایرانی») و چون وزن گرفته بودند، هر سینک قطعی بازتولیدشان می‌کرد.
+// این تابع idempotent است و هر نامی را که از واژه‌نامه رد شود حذف می‌کند. نامِ آموختهٔ ادمین
+// (تأییدِ انسانی) دست‌نخورده می‌ماند. خروجی: فهرستِ نام‌های حذف‌شده (برای لاگ).
+export async function pruneLearned(): Promise<string[]> {
+  return mutate(db => {
+    const dropped: string[] = []
+    for (const [k, r] of Object.entries(db.names)) {
+      if (r.teacher === 'admin') continue
+      if (validName(r.name)) continue
+      dropped.push(r.name); delete db.names[k]
+    }
+    return dropped
+  })
 }
 
 // فهرستِ نام‌های آموخته‌شده (برای تطبیقِ لغوی هنگامِ اسکرپ). مرتب بر اساسِ وزن.
