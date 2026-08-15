@@ -1,7 +1,7 @@
 import { fetchDivarProfileTokens, fetchDivarPost, divarProfileSlug, type BrandPost } from './divar-post'
 import { aiFor, resolveAgent } from './gapgpt'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
-import { keyOf, deEmoji, addressTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
+import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // ── خوشه‌بندیِ آگهی‌های یک آژانسِ دیوار به تفکیکِ مشاور، از روی «امضای» داخلِ آگهی ──
@@ -67,7 +67,8 @@ const RE_SELF = /([ء-ی]{2,15}(?:\s+[ء-ی]{2,15})?)\s+(?:هستم|هستیم|�
 
 export function extractSignature(title: string, desc: string, agencyName = ''): string[] {
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
-  const banned = addressTokens(raw)   // «فلاحی» در «بین فلاحی ۴۱ و ۴۳» → هرگز اسم نمی‌شود
+  // «فلاحی» در «بین فلاحی ۴۱ و ۴۳» و «کسری» در «کسری بودجه» → هرگز اسم نمی‌شوند
+  const banned = new Set([...addressTokens(raw), ...contextNoiseTokens(raw)])
   const out: string[] = []
   const push = (s?: string) => { const v = validName(s || '', agencyName, banned); if (v && !out.includes(v)) out.push(v) }
 
@@ -192,7 +193,8 @@ export async function buildAgencyRoster(
       try { opts.onRow?.(p.token, { title, desc }) } catch {}   // چک‌پوینت برای ازسرگیری
       await sleep(600)   // نرخِ کندتر تا دیوار زیرِ فشار آگهی‌ها را رد نکند (fetchDivarPost خودش retry هم دارد)
     }
-    rows.push({ post: p, title, desc, cand: extractSignature(title, desc, name), addr: addressTokens(`${title}\n${desc}`) })
+    const txt = `${title}\n${desc}`
+    rows.push({ post: p, title, desc, cand: extractSignature(title, desc, name), addr: new Set([...addressTokens(txt), ...contextNoiseTokens(txt)]) })
     try { opts.onProgress?.(i + 1, maxDetails) } catch {}
   }
 
@@ -282,6 +284,25 @@ export async function buildAgencyRoster(
     if (!c) { c = { key: k, name: chosen, tokens: [], posts: [] }; clusters.set(k, c) }
     c.tokens.push(r.post.token); c.posts.push(r.post)
   })
+
+  // ── ادغامِ «نامِ کوتاه» در «نامِ کامل» (فاز ۲۷۷) ──
+  // فیدبکِ واقعی: «محمد پرنده وجود دارد، رفته یک «محمد» جدا هم ساخته». بعضی آگهی‌ها فقط نامِ
+  // کوچک را امضا می‌کنند و بعضی نامِ کامل را؛ نتیجه دو مشاورِ جعلی از یک نفر. اگر یک خوشهٔ
+  // تک‌کلمه‌ای دقیقاً یکی از کلمه‌های یک خوشهٔ چندکلمه‌ای باشد، همان یک نفر است.
+  // شرطِ ایمنی: فقط وقتی **دقیقاً یک** خوشهٔ چندکلمه‌ای کاندید باشد — وگرنه «محمد» بینِ
+  // «محمد پرنده» و «محمد رضایی» مبهم است و دست نمی‌خورد.
+  for (const [k, c] of [...clusters]) {
+    if (c.name.includes(' ')) continue
+    const hosts = [...clusters.values()].filter(m => m !== c && m.name.includes(' ') && m.name.split(/\s+/).some(w => keyOf(w) === k))
+    if (hosts.length !== 1) continue
+    const host = hosts[0]
+    host.tokens.push(...c.tokens); host.posts.push(...c.posts)
+    fileCount.set(host.key, (fileCount.get(host.key) || 0) + (fileCount.get(k) || 0))
+    if (strongKeys.has(k)) strongKeys.add(host.key)
+    if (freshKeys.has(k)) freshKeys.add(host.key)
+    clusters.delete(k)
+    console.log(`[roster] merged «${c.name}» → «${host.name}» (${c.tokens.length} فایل)`)
+  }
 
   // ── چرت‌وپرت‌زدایی (فیدبک: «چرت و پرت زیاد میاره») ──
   // یک خوشه فقط وقتی «مشاورِ واقعی» است که یا ≥۲ آگهی امضا کرده باشد (مشاورِ واقعیِ آژانس چند

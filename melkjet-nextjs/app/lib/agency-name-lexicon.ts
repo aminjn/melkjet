@@ -141,6 +141,23 @@ export function addressTokens(text: string): Set<string> {
   return out
 }
 
+// واژه‌هایی که «کلمهٔ پیش از خودشان» را به اسمِ مرکب تبدیل می‌کنند، نه نامِ آدم.
+// نمونهٔ واقعی: «برای کسریِ بودجه…» ⇒ مشاورِ جعلیِ «کسری» (که اتفاقاً نامِ واقعی هم هست،
+// پس نمی‌شود خودِ کلمه را لیستِ سیاه کرد — باید به بافتِ بعدش نگاه کرد).
+const COMPOUND_NEXT = new Set(['بودجه', 'تومان', 'ریال', 'میلیون', 'میلیارد', 'درصد', 'متر', 'متری', 'واحد', 'خواب', 'طبقه', 'ساله', 'ساعت'].map(keyOf))
+
+// کلماتی که به‌خاطرِ بافتِ همین آگهی اسم نیستند («کسری» در «کسری بودجه»).
+export function contextNoiseTokens(text: string): Set<string> {
+  const out = new Set<string>()
+  for (const seg of deEmoji(String(text || '')).split(SEG_SPLIT)) {
+    const ws = seg.trim().split(/\s+/).filter(Boolean)
+    for (let i = 0; i + 1 < ws.length; i++) {
+      if (COMPOUND_NEXT.has(keyOf(ws[i + 1]))) out.add(keyOf(ws[i]))
+    }
+  }
+  return out
+}
+
 // پاک‌سازیِ نام: حذفِ القاب و کلماتِ نوفه/ملکی/آدرس از ابتدا و میانِ کاندیدا.
 export function cleanName(s: string): string {
   return s.split(/\s+/).filter(Boolean).filter(w => !isNoiseWord(w)).join(' ').trim()
