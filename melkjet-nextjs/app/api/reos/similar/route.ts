@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { similarProperties } from '@/app/lib/reos/data'
 import { getItemById } from '@/app/lib/scraper-store'
 import { listingHref } from '@/app/lib/listing-url'
+import { getEnrichment } from '@/app/lib/enrich-store'
 
 // GET /api/reos/similar?propertyId=...&k=8 — «املاکِ مشابه» با شباهتِ برداری (embedding cosine).
 // عمومی است (فقط آگهی‌های عمومی را برمی‌گرداند) — مثلِ «خانه‌های مشابه» در Zillow.
@@ -18,7 +19,10 @@ export async function GET(req: NextRequest) {
     return {
       id: n.id, sim: n.sim, simPct: Math.round(n.sim * 100),
       title: it.title, price: it.price || '', location: it.location || '',
-      image: it.image || undefined, href: listingHref(it.id, it.title, it.location),
+      // فاز ۲۸۲ — عکسِ آگهی‌های دیوار روی خودِ آیتم نیست؛ در کشِ غنی‌سازی (gallery) است.
+      // برای همین صفحهٔ خودِ ملک عکس داشت ولی کارت‌های «مشابه» خالی بودند.
+      image: it.image || getEnrichment(n.id)?.gallery?.[0] || undefined,
+      href: listingHref(it.id, it.title, it.location),
     }
   }))
 
