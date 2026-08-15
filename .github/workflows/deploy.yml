@@ -2,6 +2,14 @@ name: Deploy to server
 
 # دیپلویِ دستی از خودِ گیت‌هاب: تبِ Actions → «Deploy to server» → دکمهٔ «Run workflow».
 # (اتوماتیک روی هر push نیست تا خودت کنترل کنی کِی دیپلوی شود.)
+#
+# ⚠️ این فایل باید در «ریشهٔ ریپو» بماند (`melkjet/.github/workflows/`)، نه کنارِ اپ در
+#    `melkjet-nextjs/.github/`. گیت‌هاب اکشنز فقط ریشه را می‌خواند؛ قبلاً همین‌جا بود و
+#    برای همین ورک‌فلو هرگز در تبِ Actions ظاهر نشد و یک‌بار هم اجرا نشد.
+#
+# سکرت‌های لازم (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST=94.101.176.251   DEPLOY_USER=<کاربرِ ssh>   DEPLOY_PORT=22
+#   DEPLOY_SSH_KEY=<کلیدِ خصوصیِ کاملِ ed25519 که publicش در authorized_keys سرور است>
 on:
   workflow_dispatch:
     inputs:
