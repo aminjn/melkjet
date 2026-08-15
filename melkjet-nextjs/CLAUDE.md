@@ -9,6 +9,22 @@ cd /var/www/melkjet/melkjet-nextjs && git pull && npm run build && pm2 reload ec
 Better: `sudo scripts/deploy.sh` — same steps but **health-checks localhost:3001-3003 after
 reload**, so a broken deploy is caught immediately (not from the browser).
 
+### دیپلوی خودکار — «پوش به main = رفتن روی سرور» (فاز ۲۷۵)
+سه مسیر وجود دارد و هر سه به یک `deploy.sh`/`auto-deploy.sh` می‌رسند:
+1. **کرونِ سرور (فعالِ اصلی):** `scripts/auto-deploy.sh` هر ۲ دقیقه `origin/main` را چک می‌کند و
+   اگر پوشِ جدیدی بود pull+build+reload+هلث‌چک می‌کند. نصب (یک‌بار، روی سرور، کاربرِ root):
+   `*/2 * * * * /var/www/melkjet/melkjet-nextjs/scripts/auto-deploy.sh >> /var/log/melkjet-deploy.log 2>&1`
+   به هیچ سکرت/کلیدِ SSH نیاز ندارد. لاگ: `tail -f /var/log/melkjet-deploy.log`.
+2. **دکمهٔ گیت‌هاب:** تبِ Actions → «Deploy to server» → Run workflow (SSH → `sudo scripts/deploy.sh`).
+   سکرت‌های لازم: `DEPLOY_HOST/USER/PORT/SSH_KEY`. ⚠️ ورک‌فلو باید در **ریشهٔ ریپو** بماند
+   (`melkjet/.github/workflows/`) — قبلاً داخلِ `melkjet-nextjs/.github/` بود و برای همین گیت‌هاب
+   هرگز نمی‌دیدش و یک‌بار هم اجرا نشد.
+3. **دستی:** `sudo scripts/deploy.sh`.
+**قفلِ مشترک:** هر دو اسکریپت روی `/tmp/melkjet-deploy.lock` قفل می‌گیرند — کرون اگر قفل گرفته باشد
+رد می‌شود، دستی/دکمه‌ای منتظر می‌ماند. دو build هم‌زمان `.next` را خراب می‌کند (همان کرش‌لوپِ بالا).
+**نکته:** `auto-deploy.sh` اگر `git fetch` شکست بخورد (پروکسیِ گیت‌هاب در کرون نیست) دیگر بی‌صدا
+نمی‌میرد — در لاگ فریاد می‌زند (قانونِ شمارهٔ یک).
+
 ## Why deploys used to break ("This page couldn't load" / crash-loops) — FIXED, keep it fixed
 Two independent root causes, both now closed:
 1. **Missing `app/not-found.tsx`** → Next 16 + Turbopack failed to emit
