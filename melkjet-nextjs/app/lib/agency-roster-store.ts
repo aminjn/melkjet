@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { pgEnabled, kvGet, kvMutate } from './db'
+import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete } from './db'
 import { buildAgencyRoster } from './agency-roster'
 import { importDivarToken } from './advisor-divar-import'
 import { warmEnrichment } from './enrich-warm'
@@ -80,17 +80,33 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> { if (pgEnabled()) retur
 type RowCache = Record<string, { title: string; desc: string; name?: string; at?: number }>   // name = نامِ AI؛ at = زمانِ اسکرپِ ردیف (فاز ۱۹۸ — کشِ دائمیِ اینکرمنتال)
 const CACHE_KV = 'agency_roster_cache'
 const CACHE_FILE = join(process.cwd(), '.agency-roster-cache.json')
+// ── فاز ۲۷۵c — کشِ ردیف «per-اسکرپ» شارد شد (همان الگوی فاز ۲۵۹ برای advisor) ──────────
+// ریشهٔ «ساختِ حساب ۱۰ دقیقه طول می‌کشد»: کشِ متنِ آگهی‌های **همهٔ** آژانس‌ها در یک ردیفِ
+// `kv('agency_roster_cache')` بود و `saveRowCache` هر ۵ ثانیه با `kvMutate` (یعنی
+// `SELECT … FOR UPDATE` + بازنویسیِ کلِ بلاب) صدا زده می‌شد. با ۲۸ آژانس و هزاران آگهی،
+// هر ۵ ثانیه ده‌ها مگابایت زیرِ قفل بازنویسی می‌شد → پولِ PG اشباع → هر کارِ دیگری روی
+// اینستنسِ ۰ (ازجمله برداشتنِ کارِ «ساخت حساب» از صف) پشتِ صف می‌ماند؛ اندازه‌گیریِ زنده:
+// ۶۶۵ و ۶۱۶ ثانیه فاصلهٔ «ثبت در صف» تا «شروع».
+// حالا هر اسکرپ کلیدِ خودش را دارد و چون تک‌نویسنده است (اینستنسِ ۰)، با `kvSet` نوشته
+// می‌شود — بدونِ هیچ قفلِ FOR UPDATE. آژانس‌ها دیگر با هم رقابت نمی‌کنند.
+const cacheKey = (id: string) => `${CACHE_KV}:${id}`
 function cacheFileLoad(): Record<string, RowCache> { if (existsSync(CACHE_FILE)) { try { return JSON.parse(readFileSync(CACHE_FILE, 'utf-8')) } catch {} } return {} }
 async function loadRowCache(id: string): Promise<RowCache> {
-  if (pgEnabled()) return (await kvGet<Record<string, RowCache>>(CACHE_KV, {}))[id] || {}
-  return cacheFileLoad()[id] || {}
+  if (!pgEnabled()) return cacheFileLoad()[id] || {}
+  const own = await kvGet<RowCache>(cacheKey(id), {})
+  if (Object.keys(own).length) return own
+  // مهاجرتِ یک‌بارهٔ تنبل: اگر هنوز در بلابِ قدیمی است، همان‌جا برداشته و به کلیدِ خودش منتقل می‌شود.
+  // بلابِ قدیمی دست‌نخورده می‌ماند (پشتیبانِ بازگشت) و چون دیگر نوشته نمی‌شود، هزینه‌ای ندارد.
+  const legacy = (await kvGet<Record<string, RowCache>>(CACHE_KV, {}))[id]
+  if (legacy && Object.keys(legacy).length) { await kvSet(cacheKey(id), legacy); return legacy }
+  return {}
 }
 async function saveRowCache(id: string, cache: RowCache): Promise<void> {
-  if (pgEnabled()) { await kvMutate<Record<string, RowCache>, void>(CACHE_KV, {}, db => { db[id] = cache }); return }
+  if (pgEnabled()) { await kvSet(cacheKey(id), cache); return }   // تک‌نویسنده → جایگزینیِ کامل، بدونِ قفل
   const all = cacheFileLoad(); all[id] = cache; writeFileSync(CACHE_FILE, JSON.stringify(all), 'utf-8')
 }
 async function clearRowCache(id: string): Promise<void> {
-  if (pgEnabled()) { await kvMutate<Record<string, RowCache>, void>(CACHE_KV, {}, db => { delete db[id] }); return }
+  if (pgEnabled()) { await kvDelete(cacheKey(id)); return }
   const all = cacheFileLoad(); delete all[id]; writeFileSync(CACHE_FILE, JSON.stringify(all), 'utf-8')
 }
 
