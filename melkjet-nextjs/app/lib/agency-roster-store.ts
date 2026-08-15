@@ -4,6 +4,7 @@ import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete } from './db'
 import { buildAgencyRoster } from './agency-roster'
 import { importDivarToken } from './advisor-divar-import'
 import { warmEnrichment } from './enrich-warm'
+import { getEnrichment, patchEnrichment } from './enrich-store'
 import { getDivar, recordImport, clearImports } from './advisor-divar-store'
 import { getAdvisor, addListing, publishListing, deleteListing, setListingStatus, updateAdvisorProfile, type Listing } from './advisor-store'
 import { createAccount, accountExists } from './account-store'
@@ -26,6 +27,7 @@ export interface RosterAdvisor {
   tokens?: string[]      // توکنِ آگهی‌های این مشاور (برای بازکردنِ لینکِ دیوار) — سقفِ ۱۰۰
   graduatedAt?: number
   graduating?: boolean   // در صفِ «ساختِ حساب» روی اینستنسِ ۰
+  transferFrom?: string  // فاز ۲۷۷ — ownerِ موقتِ مبدأ تا وقتی انتقالِ فایل‌ها تمام نشده (ازسرگیریِ امن)
 }
 // کارِ صفِ «ساختِ حساب» — سنگین (انتقالِ فایل‌ها)، روی اینستنسِ ۰ اجرا می‌شود تا درخواستِ ادمین قفل نشود.
 export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; error?: string }   // فاز ۱۹۹ — claim برای صفِ at-least-once
@@ -474,22 +476,48 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
 async function reassignListings(fromO: string, toO: string, sourceId: string): Promise<number> {
   const from = await getAdvisor(fromO)
   const moved: { oldId: string; newId: string }[] = []
-  for (const l of from.listings) {
+  // فاز ۲۷۷ — انتقال «per-فایل اتمی» شد: کپی، سپس بلافاصله حذفِ مبدأ.
+  // قبلاً همهٔ کپی‌ها انجام می‌شد و حذفِ مبدأ *در پایان*. اگر کار وسطِ راه می‌مرد (ری‌لودِ
+  // دیپلوی، یا claimِ دوبارهٔ صف بعد از ۱۰ دقیقه)، مبدأ دست‌نخورده می‌ماند و تلاشِ بعدی
+  // همان فایل‌ها را **دوباره** کپی می‌کرد → آگهیِ تکراری روی حسابِ مشاور. کامنتِ فاز ۱۹۹
+  // ادعای ایدمپوتنت‌بودن داشت ولی این حلقه آن را نقض می‌کرد.
+  // حالا هر فایل که منتقل شد از مبدأ می‌رود؛ پس ازسرگیری فقط باقی‌مانده‌ها را می‌برد.
+  const items = [...from.listings]   // اسنپ‌شات: داخلِ حلقه از مبدأ حذف می‌کنیم
+  const t0 = Date.now()
+  console.log(`[roster] reassign start from=${fromO} → ${toO} files=${items.length}`)
+  for (let i = 0; i < items.length; i++) {
+    const l = items[i]
+    const tf = Date.now()
     const { id: _id, publicId: _p, ...fields } = l as Listing & { publicId?: string }
     const nl = await addListing(toO, fields)
     // حالا که به کاربرِ واقعی رسید: هر آگهیِ فعال عمومی و با AI تحلیل می‌شود (چیزی که هنگامِ
     // مالکِ موقت عمداً انجام نشد). آگهیِ فروخته/اجاره‌رفته عمومی نمی‌شود.
     if (l.status !== 'active') await setListingStatus(toO, nl.id, l.status)
-    else { const pub = await publishListing(toO, nl.id); if (pub?.publicId) warmEnrichment(pub.publicId) }
+    else {
+      const pub = await publishListing(toO, nl.id)
+      if (pub?.publicId) {
+        // فاز ۲۷۷ («فایل‌ها را ده بار می‌گیرد؛ باید یک‌بار بگیرد و نگه دارد») — غنی‌سازیِ آگهیِ
+        // قبلی (گالری/تحلیل/دسترسی‌ها) روی شناسهٔ عمومیِ جدید کپی می‌شود، پس warmEnrichment
+        // آن را «غنی» می‌بیند و هیچ درخواستِ تازه‌ای به دیوار نمی‌زند. قبلاً هر انتقال — و هر
+        // تلاشِ دوبارهٔ صف — همهٔ فایل‌ها را دوباره از دیوار می‌گرفت: هم کند، هم خوردن به
+        // سقفِ ضدِاسکرپِ دیوار.
+        const prev = _p ? getEnrichment(_p) : null
+        if (prev) patchEnrichment(pub.publicId, prev)
+        warmEnrichment(pub.publicId)
+      }
+    }
     moved.push({ oldId: l.id, newId: nl.id })
+    try { await deleteListing(fromO, l.id) } catch {}   // ← اتمی: مبدأ همین‌جا آزاد می‌شود
+    const ms = Date.now() - tf
+    if (ms > 3000 || (i + 1) % 5 === 0 || i === items.length - 1) console.log(`[roster] reassign ${i + 1}/${items.length} (${ms}ms)`)
   }
   // انتقالِ رکوردهای ایمپورت (توکن→listingId جدید) تا آپدیتِ بعدی همان فایل‌ها را بشناسد.
   for (const im of getDivar(fromO).imports.filter(i => i.sourceId === sourceId)) {
     const m = moved.find(x => x.oldId === im.listingId)
     recordImport(toO, { ...im, listingId: m ? m.newId : im.listingId })
   }
-  for (const l of from.listings) { try { await deleteListing(fromO, l.id) } catch {} }
   clearImports(fromO)
+  console.log(`[roster] reassign done files=${moved.length} totalMs=${Date.now() - t0}`)
   return moved.length
 }
 
@@ -503,7 +531,8 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   const rec = isAgency ? null : scrape.advisors.find(r => r.key === key)
   if (!isAgency && !rec) return { ok: false, error: 'مشاور یافت نشد' }
   const name = isAgency ? scrape.agencyName : rec!.name
-  const fromOwner = isAgency ? scrape.agencyOwner : rec!.owner
+  // اگر انتقالِ قبلی نیمه‌کاره مانده، مبدأ همان ownerِ موقتِ ذخیره‌شده است نه شمارهٔ تازه‌نشسته.
+  const fromOwner = isAgency ? scrape.agencyOwner : (rec!.transferFrom || rec!.owner)
   if (fromOwner === p) return { ok: false, error: 'این شماره از قبل تنظیم شده' }
 
   if (!accountExists(p)) {
@@ -522,11 +551,25 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   }
   try { await updateAdvisorProfile(p, { name, phone: p, agency: scrape.agencyName }) } catch {}
 
-  const moved = await reassignListings(fromOwner, p, scrape.id)
+  // فاز ۲۷۷ (فیدبک: «ساخت حساب باید کمتر از ۱ ثانیه باشد») — حساب همین‌جا «تمام‌شده» ثبت می‌شود.
+  // قبلاً رکورد فقط *بعد از* انتقالِ همهٔ فایل‌ها به‌روز می‌شد، پس پنل ساعت‌ها «در حال ساخت حساب»
+  // نشان می‌داد در حالی که حساب از ثانیهٔ اول ساخته شده بود. انتقالِ فایل‌ها کارِ پس‌زمینه است.
+  // `transferFrom` مبدأ را نگه می‌دارد تا اگر انتقال نیمه‌کاره ماند، تلاشِ بعدی بداند از کجا
+  // ادامه دهد (وگرنه owner دیگر شماره است و مبدأ برای همیشه گم می‌شد).
   await mutate(db => {
     const s = db.scrapes[id]; if (!s) return
     if (isAgency) { s.agencyOwner = p; s.agencyPhone = p }
-    else { const r = s.advisors.find(x => x.key === key); if (r) { r.owner = p; r.phone = p; r.graduatedAt = Date.now(); r.graduating = false } }
+    else {
+      const r = s.advisors.find(x => x.key === key)
+      if (r) { if (!r.transferFrom) r.transferFrom = fromOwner; r.owner = p; r.phone = p; r.graduatedAt = Date.now() }
+    }
+  })
+
+  const moved = await reassignListings(fromOwner, p, scrape.id)
+  await mutate(db => {
+    const s = db.scrapes[id]; if (!s) return
+    const r = s.advisors.find(x => x.key === key)
+    if (r) { r.graduating = false; delete r.transferFrom }   // انتقال تمام شد
   })
   // یادگیریِ ماشین: تأییدِ ادمین قوی‌ترین سیگنال است → این نام برای همیشه یاد گرفته می‌شود.
   if (!isAgency && name) { try { const { learnName } = await import('./agency-roster-ml'); await learnName(name, 'admin') } catch {} }
@@ -591,6 +634,13 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
     return j ? { ...j } : null
   })
   if (!job) return { ran: false }
+  // فاز ۲۷۷ — ضربانِ claim: مهلتِ ۱۰ دقیقه بینِ «کارِ مرده» و «کارِ زندهٔ کُند» فرق نمی‌گذاشت،
+  // پس انتقالِ طولانی دوباره برداشته می‌شد در حالی که هنوز در حالِ اجرا بود (دو اجرای هم‌زمان
+  // روی یک مشاور). حالا تا وقتی زنده است هر ۲ دقیقه startedAt تازه می‌شود؛ فقط کاری که واقعاً
+  // مرده (ری‌لود/کیل) مهلتش تمام می‌شود و از سر گرفته می‌شود.
+  const beat = setInterval(() => {
+    mutate(db => { const j = (db.graduateQueue || []).find(x => x.jid === job.jid); if (j) j.startedAt = Date.now() }).catch(() => {})
+  }, 2 * 60_000)
   try {
     console.log(`[roster] graduate job start key=${job.key} phone=${job.phone}`)
     const t0 = Date.now()
@@ -614,6 +664,6 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
       })
     }
     return { ran: true, ok: false, error: msg }
-  }
+  } finally { clearInterval(beat) }
 }
 export async function hasGraduateJobs(): Promise<boolean> { return ((await load()).graduateQueue || []).length > 0 }
