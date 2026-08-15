@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import AreaPicker from '@/app/components/AreaPicker'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // پنلِ «مزایدهٔ محله‌محورِ آگهی» — در صفحهٔ پلن‌ها. برندهٔ هر محله در صدرِ آن محله
 // (بالاتر از پروموت‌های عادی) نمایش داده می‌شود؛ مبلغ فقط در صورتِ برنده‌شدن، در پایانِ
@@ -185,7 +186,7 @@ function BidModal({ config, onClose, onDone }: { config: AuctionConfig; onClose:
         <div style={{ fontSize: 13, fontWeight: 800, margin: '18px 0 8px' }}>۳. مبلغِ پیشنهاد (تومان)</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => setAmount(a => Math.max(minNext, a - step))} style={{ width: 40, height: 42, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 18, cursor: 'pointer', fontFamily: FONT }}>−</button>
-          <input value={amount} onChange={e => setAmount(Math.max(0, parseInt(e.target.value.replace(/\D/g, '') || '0', 10)))} inputMode="numeric" style={{ flex: 1, height: 42, textAlign: 'center', padding: '0 12px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 15, fontWeight: 800, outline: 'none', fontFamily: FONT, boxSizing: 'border-box' }} />
+          <input value={amount} onChange={e => setAmount(Math.max(0, parseInt(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') || '0', 10)))} inputMode="numeric" style={{ flex: 1, height: 42, textAlign: 'center', padding: '0 12px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 15, fontWeight: 800, outline: 'none', fontFamily: FONT, boxSizing: 'border-box' }} />
           <button onClick={() => setAmount(a => a + step)} style={{ width: 40, height: 42, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 18, cursor: 'pointer', fontFamily: FONT }}>+</button>
         </div>
 

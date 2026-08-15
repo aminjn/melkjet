@@ -10,6 +10,7 @@ import {
   Shell, useProDesk, Kpi, LoginGate, SectionCard, Modal, btnGold, ProAiTool, ProLoanCalc, ProCreditScore,
   money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
 } from '@/app/components/prodesk/ProDeskKit'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // میزِ کارِ «بانک و بیمه» — نسخهٔ تخصصی: محصولات (تسهیلات/بیمه) + متقاضیان با محاسبهٔ قسط/حق‌بیمه + گردشِ تأیید.
 const ROLE = '/finance'
@@ -64,8 +65,8 @@ function Products({ records, post }: { records: ProRecord[]; post: (p: any) => P
             <input placeholder="نامِ طرح" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }} />
             <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{PRODUCT_TYPES.map(t => <option key={t}>{t}</option>)}</select>
             <input placeholder="نرخ (٪)" value={f.rate} onChange={e => setF({ ...f, rate: e.target.value.replace(/[^\d.]/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
-            <input placeholder="سقف / مبلغ (تومان)" value={f.cap} onChange={e => setF({ ...f, cap: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
-            <input placeholder="مدت (ماه)" value={f.term} onChange={e => setF({ ...f, term: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <input placeholder="سقف / مبلغ (تومان)" value={f.cap} onChange={e => setF({ ...f, cap: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <input placeholder="مدت (ماه)" value={f.term} onChange={e => setF({ ...f, term: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
           </div>
           <button onClick={save} style={{ ...btnGold, width: '100%', marginTop: 14, padding: 11 }}>ثبتِ طرح</button>
         </Modal>
@@ -113,9 +114,9 @@ function Applicants({ requests, post }: { requests: ProRequest[]; post: (p: any)
             <input placeholder="نامِ متقاضی" value={f.clientName} onChange={e => setF({ ...f, clientName: e.target.value })} style={inputStyle} />
             <input placeholder="شمارهٔ تماس" value={f.clientPhone} onChange={e => setF({ ...f, clientPhone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
             <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }}>{APPLICANT_PRODUCTS.map(t => <option key={t}>{t}</option>)}</select>
-            <input placeholder={isLoan(f.kind) ? 'مبلغِ وام (تومان)' : 'سرمایهٔ بیمه (تومان)'} value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <input placeholder={isLoan(f.kind) ? 'مبلغِ وام (تومان)' : 'سرمایهٔ بیمه (تومان)'} value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
             <input placeholder="نرخ (٪)" value={f.rate} onChange={e => setF({ ...f, rate: e.target.value.replace(/[^\d.]/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
-            {isLoan(f.kind) && <input placeholder="مدت (ماه)" value={f.term} onChange={e => setF({ ...f, term: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />}
+            {isLoan(f.kind) && <input placeholder="مدت (ماه)" value={f.term} onChange={e => setF({ ...f, term: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />}
           </div>
           <div style={{ marginTop: 12, padding: '11px 14px', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, fontSize: 13, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: 'var(--muted)' }}>{c.label}</span><span style={{ color: 'var(--gold)' }}>{c.value ? money(c.value) : '—'}</span>

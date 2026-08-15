@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // میزِ کارِ متخصص — بک‌اندِ مشترکِ داشبوردهای معمار/پیمانکار/کارشناس/دفتر حقوقی/بانک‌وبیمه/دفترخانه.
 // هر پنل نمای اختصاصیِ خودش را دارد، اما داده در دو مجموعهٔ منعطف ذخیره می‌شود:
@@ -49,7 +50,7 @@ export interface ProRecord {
 interface DB { requests: ProRequest[]; records: ProRecord[] }
 const EMPTY: DB = { requests: [], records: [] }
 function id() { return randomBytes(6).toString('hex') }
-const norm = (p: string) => String(p || '').replace(/\D/g, '')
+const norm = (p: string) => String(p || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
 
 function fileLoad(): DB {
   if (existsSync(DATA_FILE)) {

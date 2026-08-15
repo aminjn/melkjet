@@ -10,6 +10,7 @@ import {
   Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, Modal, btnGold, ProAiTool,
   money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
 } from '@/app/components/prodesk/ProDeskKit'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // میزِ کارِ «پیمانکار» — نسخهٔ تخصصی: پروژه‌های اجرایی با پیشرفتِ مرحله‌ای + برآورد/مناقصه.
 const ROLE = '/contractor'
@@ -70,8 +71,8 @@ function Projects({ records, post }: { records: ProRecord[]; post: (p: any) => P
             <input placeholder="نامِ پروژه" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }} />
             <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{WORK_TYPES.map(t => <option key={t}>{t}</option>)}</select>
             <input placeholder="موقعیت / محله" value={f.location} onChange={e => setF({ ...f, location: e.target.value })} style={inputStyle} />
-            <input placeholder="متراژِ زیربنا (متر)" value={f.area} onChange={e => setF({ ...f, area: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
-            <input placeholder="ارزشِ قرارداد (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <input placeholder="متراژِ زیربنا (متر)" value={f.area} onChange={e => setF({ ...f, area: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <input placeholder="ارزشِ قرارداد (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
           </div>
           <button onClick={save} style={{ ...btnGold, width: '100%', marginTop: 14, padding: 11 }}>ثبتِ پروژه</button>
         </Modal>
@@ -118,8 +119,8 @@ function Tenders({ requests, post }: { requests: ProRequest[]; post: (p: any) =>
             <input placeholder="نامِ کارفرما" value={f.clientName} onChange={e => setF({ ...f, clientName: e.target.value })} style={inputStyle} />
             <input placeholder="شمارهٔ تماس" value={f.clientPhone} onChange={e => setF({ ...f, clientPhone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
             <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }}>{WORK_TYPES.map(t => <option key={t}>{t}</option>)}</select>
-            <input placeholder="متراژ (متر)" value={f.area} onChange={e => setF({ ...f, area: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
-            <input placeholder="قیمتِ هر متر (تومان)" value={f.ppm} onChange={e => setF({ ...f, ppm: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <input placeholder="متراژ (متر)" value={f.area} onChange={e => setF({ ...f, area: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <input placeholder="قیمتِ هر متر (تومان)" value={f.ppm} onChange={e => setF({ ...f, ppm: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
             <input placeholder="توضیح" value={f.detail} onChange={e => setF({ ...f, detail: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }} />
           </div>
           <div style={{ marginTop: 12, padding: '11px 14px', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, fontSize: 13, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>

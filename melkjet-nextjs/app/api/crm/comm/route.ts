@@ -5,6 +5,7 @@ import { getLead, addActivity } from '@/app/lib/leads-store'
 import { sendServiceSms } from '@/app/lib/sms'
 import { sendMail } from '@/app/lib/smtp'
 import { getAdminData } from '@/app/lib/admin-store'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // Communication Hub — پیامک/ایمیل/واتساپ/ثبتِ تماس؛ هر ارسال یک فعالیت در تایم‌لاینِ لید ثبت می‌کند.
 // POST { leadId, channel:'sms'|'email'|'whatsapp'|'call', text?, subject?, to? }
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (channel === 'whatsapp') {
-    const to = String(b.to || lead.phone || '').replace(/\D/g, '').replace(/^0/, '98')
+    const to = String(b.to || lead.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '').replace(/^0/, '98')
     const link = to ? `https://wa.me/${to}?text=${encodeURIComponent(text)}` : ''
     await addActivity(s.phone, lead.id, { type: 'whatsapp', note: `واتساپ: ${text.slice(0, 80)}`, meta: { to } })
     return NextResponse.json({ ok: true, link })

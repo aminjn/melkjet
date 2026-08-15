@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import { FA_DIGITS, faDigit } from '../../lib/digits'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ async function loadGroup(g: string): Promise<{ name: string; href: string }[]> {
       const { urlTypeForRole } = await import('@/app/lib/provider-public')
       const { allProviderSlugsByPhone } = await import('@/app/lib/provider-slug-store')
       const map = await allProviderSlugsByPhone()
-      const norm = (p: string) => String(p || '').replace(/\D/g, '')
+      const norm = (p: string) => String(p || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
       const out: { name: string; href: string }[] = []
       for (const a of listAccounts()) {
         const type = urlTypeForRole(a.role); if (!type) continue

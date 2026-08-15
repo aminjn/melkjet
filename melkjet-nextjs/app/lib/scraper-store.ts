@@ -4,6 +4,7 @@ import { readJsonCached, writeJsonCached } from './json-file'
 import { pgEnabled, kvGet, pgTx, pgListingsAll } from './db'
 // موتورِ خالصِ هم‌ملک‌یابیِ ویژگی‌محور (متن+مشخصات+لوکیشن) — گِیتِ ضدتکراریِ همهٔ ورودی‌ها
 import { fieldsOf as simFieldsOf, TwinIndex, norm as simNorm } from './listing-similarity'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 const KV_KEY = 'scraper'          // بلابِ قدیمی — بعد از migration دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند
@@ -532,7 +533,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
     }
     // کلیدِ هویتیِ غیرآگهی‌ها (محصول/پروفایل/قیمت/مقاله): نوع + عنوانِ نرمال + مالک (تلفن/نام/منبع)
     const identKey = (i: { type?: string; title?: string; phone?: string; owner?: string; sourceName?: string }) =>
-      `${i.type || source.type}|${simNorm(i.title)}|${(i.phone || '').replace(/\D/g, '') || simNorm(i.owner) || simNorm(i.sourceName)}`
+      `${i.type || source.type}|${simNorm(i.title)}|${(i.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '') || simNorm(i.owner) || simNorm(i.sourceName)}`
     const identMap = new Map<string, Item>()
     if (source.type !== 'listing') {
       for (const i of db.items) if (i.type === source.type && i.status !== 'rejected') identMap.set(identKey(i), i)
@@ -593,9 +594,9 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
       // owner dedup: one user per advertiser (by phone, else by name)
       let ownerId: string | undefined
       if (r.owner || r.phone) {
-        const pn = r.phone ? r.phone.replace(/\D/g, '') : ''
+        const pn = r.phone ? r.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') : ''
         const nn = normName(r.owner || '')
-        let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
+        let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
         if (!owner) {
           owner = { id: id(), name: r.owner || 'نامشخص', phone: r.phone, count: 0, firstSeen: Date.now() }
           db.owners.push(owner)
@@ -649,9 +650,9 @@ export function addUserListing(raw: {
     db.owners = db.owners || []
     let ownerId: string | undefined
     if (raw.owner || raw.phone) {
-      const pn = raw.phone ? raw.phone.replace(/\D/g, '') : ''
+      const pn = raw.phone ? raw.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') : ''
       const nn = normName(raw.owner || '')
-      let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
+      let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
       if (!owner) { owner = { id: id(), name: raw.owner || 'کاربر', phone: raw.phone, count: 0, firstSeen: Date.now() }; db.owners.push(owner) }
       if (raw.phone && !owner.phone) owner.phone = raw.phone
       owner.count++; ownerId = owner.id

@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // نظراتِ واقعیِ مشتریان برای هر کسب‌وکار (per-owner phone). بازدیدکنندگانِ سایت ثبت می‌کنند،
 // در بلوکِ «نظرات مشتریان» نمایش داده می‌شوند. مالک می‌تواند مدیریت/حذف کند.
@@ -26,7 +27,7 @@ function clampRating(v: any): number { const n = Math.round(Number(v) || 5); ret
 
 // ثبتِ نظرِ جدید توسطِ بازدیدکننده — به‌صورتِ پیش‌فرض نمایش داده می‌شود (مالک می‌تواند حذف کند).
 export function addReview(ownerPhone: string, input: { name?: string; text?: string; rating?: any }): { ok: boolean; error?: string; review?: Review } {
-  const phone = String(ownerPhone || '').replace(/\D/g, '')
+  const phone = String(ownerPhone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(phone)) return { ok: false, error: 'صاحبِ سایت نامعتبر است' }
   const name = String(input.name || '').trim().slice(0, 60)
   const text = String(input.text || '').trim().slice(0, 600)
@@ -51,7 +52,7 @@ export function applyReviewModeration(id: string, approved: boolean, reason: str
 export function allApprovedReviews(): Review[] { return load().reviews.filter(r => r.approved) }
 
 export function listReviews(ownerPhone: string, opts?: { all?: boolean }): Review[] {
-  const phone = String(ownerPhone || '').replace(/\D/g, '')
+  const phone = String(ownerPhone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!phone) return []
   return load().reviews.filter(r => r.ownerPhone === phone && (opts?.all || r.approved)).sort((a, b) => b.createdAt - a.createdAt)
 }

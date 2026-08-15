@@ -3,6 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { getAdminData } from '@/app/lib/admin-store'
 import { shecanRequest } from '@/app/lib/shecan-https'
 import { chargeSend } from '@/app/lib/comm-store'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // ارسالِ سریعِ پیامکِ مذاکره: اگر پترن تنظیم شده باشد از مسیرِ پترن (سریع/خدماتی) می‌رود،
 // وگرنه از مسیرِ ارسالِ تکیِ معمولی. از اعتبارِ پیامکِ کاربر کم می‌شود (به‌جز سوپرادمین).
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   const b = await req.json().catch(() => ({} as any))
   const text = String(b.message || '').trim()
-  const recipient = String(b.recipient || '').replace(/\D/g, '')
+  const recipient = String(b.recipient || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!text) return NextResponse.json({ error: 'متنِ پیام خالی است' }, { status: 400 })
   if (!/^09\d{9}$/.test(recipient)) return NextResponse.json({ error: 'شمارهٔ موبایلِ معتبر وارد کنید (۰۹...)' }, { status: 400 })
 

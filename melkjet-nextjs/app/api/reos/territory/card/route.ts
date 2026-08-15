@@ -2,12 +2,13 @@ import { NextRequest } from 'next/server'
 import { agentTerritories } from '@/app/lib/reos/territory'
 import { getTrust } from '@/app/lib/reos/trust'
 import { primeConfig } from '@/app/lib/reos/reos-config'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // GET /api/reos/territory/card?agent=09xxx — کارتِ اشتراکِ اعتبار (SVG) برای انتشارِ ویروسی.
 // عمومی (بدونِ session): آژانس پروفایلِ اعتبارِ خود را به‌اشتراک می‌گذارد.
 export async function GET(req: NextRequest) {
   await primeConfig().catch(() => {})
-  const agent = String(new URL(req.url).searchParams.get('agent') || '').replace(/\D/g, '')
+  const agent = String(new URL(req.url).searchParams.get('agent') || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   const name = new URL(req.url).searchParams.get('name') || 'آژانسِ املاک'
   const empty = { score: 50 }
   const [terrs, trust] = agent ? await Promise.all([agentTerritories(agent).catch(() => []), getTrust(agent).catch(() => empty)]) : [[], empty]

@@ -5,6 +5,7 @@ import {
   listAgencies, getAdvisorMembership, listAgencyMembers, requestsForAdvisor, requestsForAgency,
   advisorRequestJoin, agencyInvite, respondRequest, cancelRequest, removeMembership,
 } from '@/app/lib/agency-link-store'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 function isAgency(phone: string): boolean {
   const a = getAccount(phone); return dashForRole(a?.role) === '/agency'
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
     // ── سمت آژانس ──
     case 'invite': {
       if (!agency) return NextResponse.json({ error: 'این عملیات برای آژانس است' }, { status: 400 })
-      const r = await agencyInvite(s.phone, String(b.advisorPhone || '').replace(/\D/g, ''))
+      const r = await agencyInvite(s.phone, String(b.advisorPhone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, ''))
       return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.error }, { status: 200 })
     }
     case 'remove': {

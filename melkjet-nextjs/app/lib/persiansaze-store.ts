@@ -3,6 +3,7 @@ import path from 'path'
 import { bulkCreate, listAccounts } from './account-store'
 import { listRoles } from './role-store'
 import { districtFromAddress, neighbourhoodFromAddress } from './geo-store'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ─── پرشین سازه: کانفیگِ اسکرپ + دادهٔ اسکرپ‌شده + پروفایلِ سازنده‌ها ───────────
 // دو فایلِ gitignore در ریشهٔ اپ:
@@ -256,9 +257,9 @@ export function getProfile(id: string): PSProfile | null { return getProfiles()[
 // شناسهٔ سازنده (constructor.id) را از روی شمارهٔ حسابِ ملک‌جت پیدا می‌کند — پلِ بینِ
 // حسابِ سازنده (login phone) و پروفایلِ عمومیِ پرشین سازه.
 export function builderIdForPhone(phone: string): string | null {
-  const norm = String(phone).replace(/\D/g, '')
+  const norm = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!norm) return null
-  const prof = Object.values(getProfiles()).find(p => (p.phones || []).some(ph => String(ph).replace(/\D/g, '') === norm))
+  const prof = Object.values(getProfiles()).find(p => (p.phones || []).some(ph => String(ph).replace(FA_DIGITS, faDigit).replace(/\D/g, '') === norm))
   return prof?.id || null
 }
 
@@ -418,7 +419,7 @@ export function builderRoleId(): string | null {
 }
 // شمارهٔ تلفنِ معتبرِ موبایلِ یک پروفایل (اولین ۰۹...).
 function profilePhone(p: PSProfile): string | null {
-  for (const ph of p.phones || []) { const n = String(ph).replace(/\D/g, ''); if (/^09\d{9}$/.test(n)) return n }
+  for (const ph of p.phones || []) { const n = String(ph).replace(FA_DIGITS, faDigit).replace(/\D/g, ''); if (/^09\d{9}$/.test(n)) return n }
   return null
 }
 // چند حسابِ سازنده از پروفایل‌ها ساخته شده (با یک‌بار خواندنِ حساب‌ها).

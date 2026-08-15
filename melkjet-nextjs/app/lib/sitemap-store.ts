@@ -12,6 +12,7 @@ import { slugify } from './slugify'
 import { listingHref } from './listing-url'
 import { dealOf as sharedDealOf } from './listing-filter'
 import { getAdminData, saveAdminData } from './admin-store'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 export const BASE = 'https://melkjet.com'
 export const DEFAULT_MAX = 10000
@@ -145,7 +146,7 @@ export async function buildShards(force = false): Promise<Shard[]> {
       const { urlTypeForRole } = await import('./provider-public')
       const { allProviderSlugsByPhone } = await import('./provider-slug-store')
       const map = await allProviderSlugsByPhone()
-      const norm = (p: string) => String(p || '').replace(/\D/g, '')
+      const norm = (p: string) => String(p || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
       const byType = new Map<string, UrlEntry[]>()
       for (const a of listAccounts()) {
         const type = urlTypeForRole(a.role); if (!type) continue
@@ -305,7 +306,7 @@ export async function precomputeSlugs(): Promise<{ projects: number; providers: 
     const { getProfile } = await import('./profile-store')
     const { ensureManyProviderSlugs, allProviderSlugsByPhone } = await import('./provider-slug-store')
     const have = await allProviderSlugsByPhone()
-    const norm = (p: string) => String(p || '').replace(/\D/g, '')
+    const norm = (p: string) => String(p || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     const need: { phone: string; name: string }[] = []
     for (const a of listAccounts()) {
       const type = urlTypeForRole(a.role); if (!type || have[norm(a.phone)]) continue

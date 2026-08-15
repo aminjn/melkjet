@@ -5,6 +5,7 @@ import { getItemById } from './scraper-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { promoPricing, type PromoPricing } from './promo-pricing-store'
 import { matchesLocationName } from './location-match'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 const FILE = join(process.cwd(), '.promotion-data.json')
 const KV_KEY = 'promotions'
@@ -240,7 +241,7 @@ export async function updatePromotion(id: string, patch: Partial<Pick<Promotion,
 export async function deletePromotion(id: string): Promise<void> { await mutate(rows => { const i = rows.findIndex(p => p.id === id); if (i >= 0) rows.splice(i, 1) }) }
 
 // ── پروموتِ پروفایل (مشاور/وکیل/… در دایرکتوری) — بدونِ نیاز به آیتمِ اسکرپ ──
-const normPhone = (p: string) => String(p || '').replace(/\D/g, '')
+const normPhone = (p: string) => String(p || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
 export async function addProfilePromotion(slot: string, phone: string, name: string, area?: string, expiresAt?: number, kind?: string, areas?: string[]): Promise<Promotion | null> {
   const s = slotOf(slot); if (!s || s.target !== 'directory') return null
   return mutate(rows => {

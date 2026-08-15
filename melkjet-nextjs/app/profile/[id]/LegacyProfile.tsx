@@ -6,6 +6,7 @@ import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
 import RevealContact from '../../components/RevealContact'
 import RepBadges from '../../components/RepBadges'
+import { FA_DIGITS, faDigit } from '../../lib/digits'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -541,7 +542,7 @@ interface RealItem {
 const digits = (s?: string): string => {
   if (!s) return ''
   const fa = '۰۱۲۳۴۵۶۷۸۹'
-  return s.replace(/[۰-۹]/g, d => String(fa.indexOf(d))).replace(/\D/g, '')
+  return s.replace(/[۰-۹]/g, d => String(fa.indexOf(d))).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
 }
 // Convert a local Iranian number (09xxxxxxxxx) to international form for wa.me.
 const waNumber = (s?: string): string => {

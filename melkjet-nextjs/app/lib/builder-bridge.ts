@@ -4,6 +4,7 @@
 // پرشین‌سازه: پروژه‌ها/آمار). کرانِ پرشین‌سازه برای سازنده‌ها «حساب» می‌سازد → لینک‌ها به صفحهٔ
 // خالیِ حساب می‌رفتند در حالی که صفحهٔ غنیِ همان سازنده وجود داشت. این پل با «شماره» وصلشان می‌کند.
 import type { PSProfile } from './persiansaze-store'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 /** اگر slugِ پروفایلِ حسابِ سازنده به یک سازندهٔ واقعیِ بانک (پرشین‌سازه) برسد، مسیرِ صفحهٔ غنی را می‌دهد. */
 export async function richBuilderHrefForProviderSlug(slug: string): Promise<string | null> {
@@ -14,7 +15,7 @@ export async function richBuilderHrefForProviderSlug(slug: string): Promise<stri
     if (!phone) return null
     const { getProfiles } = await import('./persiansaze-store')
     const profiles = Object.values(getProfiles()) as PSProfile[]
-    const hit = profiles.find(p => (p.phones || []).some(x => String(x).replace(/\D/g, '') === phone))
+    const hit = profiles.find(p => (p.phones || []).some(x => String(x).replace(FA_DIGITS, faDigit).replace(/\D/g, '') === phone))
     if (!hit) return null
     const { ensureBuilderSlug } = await import('./builder-slug-store')
     const bslug = await ensureBuilderSlug(String((hit as { id?: string | number }).id ?? ''), hit.name || '')

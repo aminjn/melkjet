@@ -15,6 +15,7 @@ import { getCrmSettings, setCrmSettings } from '@/app/lib/crm-settings-store'
 import { sendServiceSms } from '@/app/lib/sms'
 import { getAdvisorMembership } from '@/app/lib/agency-link-store'
 import { getAgency } from '@/app/lib/agency-store'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // آشتی‌سازی: لیدهای آژانسی که به این مشاور تخصیص یافته‌اند را در پنلِ خودش می‌سازد (گذشته‌نگر +
 // خوددرمان). با هر بار بازکردنِ پنل اجرا می‌شود، پس مهم نیست تخصیص کِی انجام شده. مطابقت بر اساسِ
@@ -25,13 +26,13 @@ async function syncAgencyLeads(advisorPhone: string): Promise<void> {
     if (!mem) return
     const agency = await getAgency(mem.agencyPhone)
     const nm = (x?: string) => (x || '').replace(/\s+/g, ' ').trim()
-    const digits = (x?: string) => (x || '').replace(/\D/g, '')
+    const digits = (x?: string) => (x || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     const myId = digits(advisorPhone)
     // مطابقت فقط با آیدیِ پروفایل (شماره) — نه نام. سیستم هیچ‌وقت بهم نمی‌ریزد.
     const assigned = agency.leads.filter(l => digits(l.assignedToPhone) === myId && myId && l.stage !== 'lost')
     if (!assigned.length) return
     const existing = await listLeads(advisorPhone)
-    const key = (l: { phone?: string; name?: string }) => (l.phone || '').replace(/\D/g, '') || nm(l.name)
+    const key = (l: { phone?: string; name?: string }) => (l.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '') || nm(l.name)
     const have = new Set(existing.map(key))
     const stageMap: Record<string, string> = { new: 'new', assigned: 'contacted', visit: 'visit', negotiation: 'negotiation', closed: 'closed', lost: 'lost' }
     for (const l of assigned) {

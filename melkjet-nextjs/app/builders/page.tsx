@@ -7,6 +7,7 @@ import StaticMap from '../components/StaticMap'
 import NeshanMap from '../components/NeshanMap'
 import { readCity } from '../components/CitySelector'
 import CompareButton from '../components/CompareButton'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string }
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -135,18 +136,18 @@ export default function Sazandeha() {
       <div>
         <label style={labelStyle}>زیربنا (متر مربع)</label>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input value={areaMin} onChange={e => setAreaMin(e.target.value.replace(/\D/g, ''))} placeholder="از" inputMode="numeric" style={inputStyle} />
-          <input value={areaMax} onChange={e => setAreaMax(e.target.value.replace(/\D/g, ''))} placeholder="تا" inputMode="numeric" style={inputStyle} />
+          <input value={areaMin} onChange={e => setAreaMin(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} placeholder="از" inputMode="numeric" style={inputStyle} />
+          <input value={areaMax} onChange={e => setAreaMax(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} placeholder="تا" inputMode="numeric" style={inputStyle} />
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <div style={{ flex: 1 }}>
           <label style={labelStyle}>حداقل طبقات</label>
-          <input value={floorsMin} onChange={e => setFloorsMin(e.target.value.replace(/\D/g, ''))} placeholder="مثلاً ۵" inputMode="numeric" style={inputStyle} />
+          <input value={floorsMin} onChange={e => setFloorsMin(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} placeholder="مثلاً ۵" inputMode="numeric" style={inputStyle} />
         </div>
         <div style={{ flex: 1 }}>
           <label style={labelStyle}>حداقل واحد</label>
-          <input value={unitsMin} onChange={e => setUnitsMin(e.target.value.replace(/\D/g, ''))} placeholder="مثلاً ۱۰" inputMode="numeric" style={inputStyle} />
+          <input value={unitsMin} onChange={e => setUnitsMin(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} placeholder="مثلاً ۱۰" inputMode="numeric" style={inputStyle} />
         </div>
       </div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text)', cursor: 'pointer' }}>

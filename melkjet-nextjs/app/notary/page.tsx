@@ -12,6 +12,7 @@ import {
   money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
 } from '@/app/components/prodesk/ProDeskKit'
 import { jToday, jKey, jLabel } from '@/app/lib/jalali'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // میزِ کارِ «دفترخانه» — نوبت‌دهی با تقویمِ واقعیِ جلالی + چک‌لیستِ مدارک + دفترِ اسناد با پیوستِ فایل.
 const ROLE = '/notary'
@@ -116,7 +117,7 @@ function IssueModal({ req, post, onClose, today }: { req: ProRequest; post: (p: 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <input placeholder="شمارهٔ سند" value={f.sanadNo} onChange={e => setF({ ...f, sanadNo: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
         <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{SERVICES.map(t => <option key={t}>{t}</option>)}</select>
-        <input placeholder="حق‌التحریر (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+        <input placeholder="حق‌التحریر (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
         <input placeholder="تاریخِ ثبت" value={jLabel(today.jy, today.jm, today.jd)} readOnly style={{ ...inputStyle, color: 'var(--muted)' }} />
         <input placeholder="طرفین / موضوعِ سند" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }} />
         <FileField value={f.file} onChange={v => setF({ ...f, file: v })} label="📎 پیوستِ فایلِ سند (تصویر یا PDF)" />

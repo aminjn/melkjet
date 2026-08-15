@@ -3,6 +3,7 @@ import { getProfile, completeness } from './profile-store'
 import { getAdminData } from './admin-store'
 import { dashForRoleId } from './role-store'
 import { shecanRequest } from './shecan-https'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // fullText برای حالتِ آزاد (خطِ تبلیغاتی)؛ varValue مقدارِ کوتاهِ متغیرِ پترن (خطِ خدماتی).
 async function sendGateSms(phone: string, fullText: string, varValue: string, cfg: any) {
@@ -10,7 +11,7 @@ async function sendGateSms(phone: string, fullText: string, varValue: string, cf
   const apiKey = process.env.IPPANEL_API_KEY || admin.ippanel?.apiKey
   const sender = process.env.IPPANEL_SENDER || admin.ippanel?.sender
   if (!apiKey || !sender) return
-  const recipient = String(phone).replace(/\D/g, '')
+  const recipient = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(recipient)) return
   const patternCode = (cfg.pattern || '').trim()
   const patternVar = (cfg.patternVar || 'message').trim() || 'message'

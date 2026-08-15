@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { dashForRoleId, listRoles } from './role-store'
 import { readJsonCached, writeJsonCached, withFileLock, readJsonFresh } from './json-file'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 const FILE = join(process.cwd(), '.account-data.json')
 
@@ -143,7 +144,7 @@ export function activePlan(phone: string): { plan: string; expiresAt?: number } 
 
 // ساختِ کاربر توسطِ سوپرادمین (دستی) — با هویتِ شاهکار (اختیاری) و وضعیتِ تأیید
 export function createAccount(phone: string, patch: { name?: string; role?: string; plan?: string; identity?: Idy; verified?: boolean }): { ok: boolean; error?: string; account?: Account } {
-  const p = String(phone).replace(/\D/g, '')
+  const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(p)) return { ok: false, error: 'شمارهٔ موبایل معتبر نیست (۰۹...)' }
   return mutateDb(db => {
     if (db[p]) return { ok: false, error: 'این کاربر از قبل وجود دارد' }
@@ -164,7 +165,7 @@ export function bulkCreate(rows: { phone: string; name?: string; role?: string }
   return mutateDb(db => {
     let created = 0, skipped = 0, invalid = 0
     for (const r of rows) {
-      const p = String(r.phone).replace(/\D/g, '')
+      const p = String(r.phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
       if (!/^09\d{9}$/.test(p)) { invalid++; continue }
       if (db[p]) { skipped++; continue }
       db[p] = { phone: p, name: r.name ? String(r.name).slice(0, 60) : undefined, role: r.role || undefined, onboarded: !!r.role, createdAt: Date.now() }

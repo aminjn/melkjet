@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import { FA_DIGITS, faDigit } from '../../lib/digits'
 
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => n.toLocaleString('fa-IR')
@@ -193,7 +194,7 @@ function socialHref(k: string, v: string) {
   if (v.startsWith('http')) return v
   if (k === 'instagram') return `https://instagram.com/${v.replace('@', '')}`
   if (k === 'telegram') return `https://t.me/${v.replace('@', '')}`
-  if (k === 'whatsapp') return `https://wa.me/${v.replace(/\D/g, '')}`
+  if (k === 'whatsapp') return `https://wa.me/${v.replace(FA_DIGITS, faDigit).replace(/\D/g, '')}`
   return v
 }
 

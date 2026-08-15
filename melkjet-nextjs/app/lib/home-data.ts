@@ -11,6 +11,7 @@ import { getMeta } from './persiansaze-store'
 import { getProfile } from './profile-store'
 import { getAccount } from './account-store'
 import type { ContentItem } from './content-display'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 function toContent(it: any): ContentItem {
   const { phone, ...rest } = it
@@ -112,7 +113,7 @@ async function compute(): Promise<HomeData> {
     const { urlTypeForRole } = await import('./provider-public')
     const { allProviderSlugsByPhone } = await import('./provider-slug-store')
     const slugs = await allProviderSlugsByPhone()
-    const norm = (p: string) => String(p || '').replace(/\D/g, '')
+    const norm = (p: string) => String(p || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     const { listAccounts } = await import('./account-store')
     const providers = listAccounts().filter(a => urlTypeForRole(a.role) && slugs[norm(a.phone)]).length
     sysStats.advisors = Math.max(sysStats.advisors, providers)

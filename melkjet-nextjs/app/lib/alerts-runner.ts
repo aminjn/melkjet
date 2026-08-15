@@ -10,6 +10,7 @@ import { matchesLocationName } from './location-match'
 import { dealOf } from './listing-filter'
 import { listForPhone, removeByEndpoint } from './push-store'
 import { sendPush } from './web-push'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
 const toLatin = (s: string) => (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
@@ -44,7 +45,7 @@ async function sendSms(phone: string, label: string) {
   const apiKey = process.env.IPPANEL_API_KEY || admin.ippanel?.apiKey
   const sender = process.env.IPPANEL_SENDER || admin.ippanel?.sender
   if (!apiKey || !sender) return
-  const recipient = String(phone).replace(/\D/g, '')
+  const recipient = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(recipient)) return
   const text = `آگهیِ جدید مطابقِ جستجوی شما${label ? ` در ${label}` : ''} در ملک‌جت اضافه شد. برای دیدن وارد گفتگوها شوید.`
   const patternCode = (admin.alerts.pattern || '').trim()

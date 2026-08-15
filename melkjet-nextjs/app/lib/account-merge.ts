@@ -6,6 +6,7 @@
 // adminSections (دسترسیِ پرسنلی) عمداً هرگز منتقل نمی‌شود.
 
 import { mergeAccounts, isProtectedAccount, getAccount } from './account-store'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 export interface MergeSummary {
   ok: boolean; error?: string
@@ -14,7 +15,7 @@ export interface MergeSummary {
 }
 
 export async function mergeUserAccounts(primary: string, secondary: string): Promise<MergeSummary> {
-  const p = String(primary || '').replace(/\D/g, ''); const s = String(secondary || '').replace(/\D/g, '')
+  const p = String(primary || '').replace(FA_DIGITS, faDigit).replace(/\D/g, ''); const s = String(secondary || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!p || !s || p === s) return { ok: false, error: 'دو شمارهٔ متفاوت لازم است' }
   if (!getAccount(p) || !getAccount(s)) return { ok: false, error: 'یکی از دو حساب پیدا نشد' }
   // حسابِ محافظت‌شده (سوپرادمین/پرسنل) هرگز «ادغام‌شونده» نمی‌شود — تعلیق و انتقالِ داده‌اش ممنوع.

@@ -7,6 +7,7 @@ import { funnel } from '@/app/lib/reos/crm'
 import { getTrust } from '@/app/lib/reos/trust'
 import { syncTerritories } from '@/app/lib/reos/territory-sync'
 import { flagEnabled } from '@/app/lib/reos/flags'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // GET /api/reos/territory — هوشِ رقابتیِ Market Dominance.
 //   ?view=profile          → پروفایلِ اعتبارِ آژانسِ جاری (قلمروها، نشان‌ها، زنجیره)
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const view = url.searchParams.get('view') || 'profile'
   const territory = url.searchParams.get('territory') || ''
-  const agentId = String(s.phone || '').replace(/\D/g, '')
+  const agentId = String(s.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   const H = { headers: { 'Cache-Control': 'no-store, private' } }
   // Feature Flag: اگر «اقتدارِ بازار» برای این کاربر روشن نباشد، لایه غیرفعال است.
   if (!(await flagEnabled('dominance', { userId: agentId, role: String(s.role || '') }))) return NextResponse.json({ ok: true, disabled: true }, H)
@@ -83,12 +84,12 @@ export async function POST(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'وارد شوید' }, { status: 401 })
   await primeConfig().catch(() => {})
   const body = await req.json().catch(() => ({})) as { action?: string; territory?: string; defenderId?: string; id?: string }
-  const agentId = String(s.phone || '').replace(/\D/g, '')
+  const agentId = String(s.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
 
   if (body.action === 'touch') return NextResponse.json({ ok: true, streak: await touchStreak(agentId) })
   if (body.action === 'battle') {
     if (!body.territory || !body.defenderId) return NextResponse.json({ error: 'territory و defenderId لازم است' }, { status: 400 })
-    return NextResponse.json({ ok: true, battle: await startBattle(body.territory, agentId, String(body.defenderId).replace(/\D/g, '')) })
+    return NextResponse.json({ ok: true, battle: await startBattle(body.territory, agentId, String(body.defenderId).replace(FA_DIGITS, faDigit).replace(/\D/g, '')) })
   }
   if (body.action === 'resolve') {
     if (!body.id) return NextResponse.json({ error: 'id لازم است' }, { status: 400 })

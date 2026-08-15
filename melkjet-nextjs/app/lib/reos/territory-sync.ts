@@ -9,6 +9,7 @@ import { getTrust } from './trust'
 import { clamp01 } from './features'
 import { recordDominance, territoryKeyFromName, type DominanceSignals, type FraudSignals } from './territory'
 import type { PropertyEntity } from './types'
+import { FA_DIGITS, faDigit } from '../../lib/digits'
 
 // کیفیتِ آگهی (۰..۱): کاملیِ اطلاعات (هم‌راستا با feed.quality).
 function listingQuality(p: PropertyEntity): number {
@@ -33,7 +34,7 @@ export async function syncTerritories(opts: { limit?: number } = {}): Promise<{ 
   const agentSet = new Set<string>()
   const agentTotalListings = new Map<string, number>()
   for (const it of withPhone) {
-    const phone = String(it.phone).replace(/\D/g, '')
+    const phone = String(it.phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (!phone) continue
     agentSet.add(phone)
     agentTotalListings.set(phone, (agentTotalListings.get(phone) || 0) + 1)

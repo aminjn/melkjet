@@ -4,6 +4,7 @@ import { listRoles } from '@/app/lib/role-store'
 import { getProfile } from '@/app/lib/profile-store'
 import { allApprovedReviews } from '@/app/lib/reviews-store'
 import { allAdvisorProfiles } from '@/app/lib/advisor-store'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // دایرکتوریِ متخصصانِ «ثبت‌شده در سایت» — تا کاربران واقعیِ نقش‌دار (مشاور/آژانس/سازنده/
 // مصالح/حقوقی) در دایرکتوری دیده شوند و به پروفایلِ عمومی‌شان لینک شوند.
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
   try {
     const { listItems } = await import('@/app/lib/scraper-store')
     for (const it of await listItems('listing', { publicOnly: true })) {
-      const ph = String((it as any).meta?.__ownerPhone || '').replace(/\D/g, '')
+      const ph = String((it as any).meta?.__ownerPhone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
       if (!ph) continue
       const a = listingAgg.get(ph) || { count: 0, sold: 0 }
       a.count++
@@ -144,7 +145,7 @@ export async function GET(req: NextRequest) {
     }
     if (!name) continue                                  // بدونِ نام، در دایرکتوری نیاور
     // سیگنال‌های اعتبار → نشان‌های اکتسابی (با کامل‌ترشدنِ دیتا خودکار فعال می‌شوند).
-    const norm = String(a.phone || '').replace(/\D/g, '')
+    const norm = String(a.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     const agg = listingAgg.get(norm) || { count: 0, sold: 0 }
     const badges = computeRepBadges({
       createdAt: a.createdAt,
@@ -154,7 +155,7 @@ export async function GET(req: NextRequest) {
       responsive: hasPhone,
     })
     // فاز ۱۳۰ — آمارِ واقعیِ کارت (هیچ عددی ساختگی نیست): نظرها/امتیاز از نظراتِ تأییدشده، معامله از آگهی‌های فروخته/اجاره‌رفته، عضویت از createdAt
-    const rv = reviewsByOwner.get(String(a.phone).replace(/\D/g, '')) || { n: 0, rated: 0, sum: 0 }
+    const rv = reviewsByOwner.get(String(a.phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')) || { n: 0, rated: 0, sum: 0 }
     const avgRating = rv.rated ? Math.round(rv.sum / rv.rated * 10) / 10 : 0
     const memberYears = a.createdAt ? Math.max(0, Math.floor((Date.now() - a.createdAt) / (365.25 * 864e5))) : 0
     items.push({
@@ -191,7 +192,7 @@ export async function GET(req: NextRequest) {
   try {
     const { promotedProfileInfo } = await import('@/app/lib/promotion-store')
     const promoted = await promotedProfileInfo()
-    const norm = (p?: string) => String(p || '').replace(/\D/g, '')
+    const norm = (p?: string) => String(p || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     for (const it of items) { const info = promoted.get(norm(it.revealId || it.id)); it.promoted = !!info; if (info) it.promoKind = info.kind || 'ویژه' }
   } catch { /* پروموت در دسترس نبود */ }
   // ویژه‌ها اول، سپس تازه‌ترها / کامل‌ترها (عکس‌دار/تخصص‌دار).

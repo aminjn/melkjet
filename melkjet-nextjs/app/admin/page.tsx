@@ -15,6 +15,7 @@ import EmpireAdminPanel from '@/app/components/EmpireAdminPanel'
 import StaffCrmView from '@/app/components/StaffCrmView'
 import { STAFF_GRANTABLE } from '@/app/lib/admin-access'
 import { listingHref } from '@/app/lib/listing-url'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
@@ -619,7 +620,7 @@ function ListingsView() {
                       : <span style={{ color: ownerName ? 'var(--text)' : 'var(--faint)' }}>👤 {ownerName || 'صاحبِ نامشخص'}</span>}
                     {it.phone && <span style={{ color: 'var(--faint)', direction: 'ltr' }}>{it.phone}</span>}
                     {it.phone && it.ownerAccount && <button onClick={() => openUserPanel(it.phone)} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 7, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, fontWeight: 700 }}>پنلِ کاربر ↗</button>}
-                    {it.phone && <button title="فقط آگهی‌های این کاربر" onClick={() => setOwnerF((it.phone || '').replace(/\D/g, ''))} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 7, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5 }}>آگهی‌هایش</button>}
+                    {it.phone && <button title="فقط آگهی‌های این کاربر" onClick={() => setOwnerF((it.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 7, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5 }}>آگهی‌هایش</button>}
                     {it.phone && !it.ownerAccount && <span style={{ fontSize: 10, color: 'var(--faint)' }}>(حسابِ ملک‌جت ندارد)</span>}
                   </div>
                   {it.aiReason && <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--gold)' }}>🤖</span><span>{it.aiReason}</span>{typeof it.aiScore === 'number' && <span style={{ color: it.aiScore >= 70 ? '#5fd98a' : it.aiScore >= 45 ? '#e7a14a' : '#e7674a', fontWeight: 700 }}>({it.aiScore})</span>}</div>}
@@ -1968,7 +1969,7 @@ function AgencyRosterPanel() {
   const eff = (s: any, k: 'autoSync' | 'startHour' | 'endHour') => (s[k] !== undefined && s[k] !== null ? s[k] : (settings as any)[k])
   const remove = async (id: string) => { if (!confirm('این اسکرپ حذف شود؟ (حساب‌ها و فایل‌های ساخته‌شده می‌مانند)')) return; await post({ action: 'remove', id }); load() }
   const graduate = async (id: string, key: string) => {
-    const ph = (phones[`${id}:${key}`] || '').replace(/\D/g, '')
+    const ph = (phones[`${id}:${key}`] || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (!/^09\d{9}$/.test(ph)) { setMsg('❌ شمارهٔ موبایلِ ۰۹... معتبر وارد کن'); return }
     const j = await post({ action: 'graduate', id, key, phone: ph })
     if (j.ok) { setMsg('⏳ در صفِ ساختِ حساب — انتقالِ فایل‌ها روی سرور انجام می‌شود (تا ۱–۲ دقیقه)'); load() } else setMsg('❌ ' + (j.error || 'خطا')) }
@@ -3593,7 +3594,7 @@ function OutreachCampaign() {
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={onlyNew} onChange={e => setOnlyNew(e.target.checked)} /> فقط حساب‌هایی که هنوز وارد نشده‌اند</label>
         <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>تعداد در این ارسال:</span>
-        <input value={limit} onChange={e => setLimit(e.target.value.replace(/\D/g, ''))} style={inp} />
+        <input value={limit} onChange={e => setLimit(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} style={inp} />
         <GoldButton onClick={send} disabled={busy}>{busy ? 'در حال ارسال…' : '📣 ارسالِ دعوت'}</GoldButton>
         {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{msg}</span>}
       </div>
@@ -4937,7 +4938,7 @@ function CreateUserPopup({ roles, plans, onClose, onCreated }: { roles: IdName[]
         </div>
         <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>فقط شمارهٔ موبایل را وارد کنید. <b>اطلاعاتِ هویتی و پروفایلِ کاربر، در اولین ورودِ خودش با احرازِ شاهکار به‌صورتِ خودکار کامل می‌شود.</b></div>
-          <div><label style={lab}>شماره موبایل *</label><input style={{ ...inp, direction: 'ltr', textAlign: 'right' }} placeholder="۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} autoFocus /></div>
+          <div><label style={lab}>شماره موبایل *</label><input style={{ ...inp, direction: 'ltr', textAlign: 'right' }} placeholder="۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={e => setPhone(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 11))} autoFocus /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div><label style={lab}>نقش (اختیاری)</label><select style={inp} value={role} onChange={e => setRole(e.target.value)}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
             <div><label style={lab}>پلن (اختیاری)</label><select style={inp} value={plan} onChange={e => setPlan(e.target.value)}><option value="">بدون پلن</option>{planOptions(plans)}</select></div>
@@ -6433,7 +6434,7 @@ function PromoPricingEditor() {
 
   const inp: React.CSSProperties = { width: 110, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 9px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }
   const tinp: React.CSSProperties = { ...inp, width: 'auto' }
-  const num = (e: React.ChangeEvent<HTMLInputElement>) => Math.max(0, parseInt(e.target.value.replace(/\D/g, '') || '0', 10))
+  const num = (e: React.ChangeEvent<HTMLInputElement>) => Math.max(0, parseInt(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') || '0', 10))
   const setV = (grp: string, id: string, field: string, n: number) => setVals((s: any) => ({ ...s, [grp]: { ...s[grp], [id]: { ...s[grp][id], [field]: n } } }))
   const slotById = (id: string) => slots.find(s => s.id === id)
   const derivedTarget = (slotId: string): 'profile' | 'listing' => { const s = slotById(slotId); return s && s.target === 'directory' ? 'profile' : 'listing' }
@@ -6570,7 +6571,7 @@ function PromoPricingEditor() {
       </Card>
       <Card>
         <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>📍 محله‌محوری</div>
-        <label style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>سقفِ محله در هر پروموت: <input style={{ ...inp, width: 90 }} value={maxAreas} onChange={e => setMaxAreas(Math.max(0, parseInt(e.target.value.replace(/\D/g, '') || '0', 10)))} /></label>
+        <label style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>سقفِ محله در هر پروموت: <input style={{ ...inp, width: 90 }} value={maxAreas} onChange={e => setMaxAreas(Math.max(0, parseInt(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') || '0', 10)))} /></label>
       </Card>
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', position: 'sticky', bottom: 0, background: 'var(--bg)', padding: '10px 0' }}>

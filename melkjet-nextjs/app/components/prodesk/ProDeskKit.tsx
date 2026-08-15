@@ -6,6 +6,7 @@ import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/compon
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
 import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
 import ArticleEditor from '@/app/components/ArticleEditor'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // ابزارکِ مشترکِ میزِ کارِ متخصص — چرومِ سایدبار/هدر + هوکِ داده + اجزای درخواست‌ها و رکوردها.
 // هر داشبوردِ شغلی (معمار/پیمانکار/…) این‌ها را با کانفیگِ اختصاصیِ خودش می‌چیند.
@@ -198,7 +199,7 @@ export function RequestsInbox({ requests, terms, post }: { requests: ProRequest[
           <input placeholder="نامِ متقاضی" value={f.clientName} onChange={e => setF({ ...f, clientName: e.target.value })} style={inputStyle} />
           <input placeholder="شمارهٔ تماس" value={f.clientPhone} onChange={e => setF({ ...f, clientPhone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
           <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{terms.kinds.map(k => <option key={k} value={k}>{k}</option>)}</select>
-          <input placeholder="مبلغِ برآورد (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+          <input placeholder="مبلغِ برآورد (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
           <input placeholder="توضیح" value={f.detail} onChange={e => setF({ ...f, detail: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }} />
           <button onClick={submit} style={{ gridColumn: '1 / -1', padding: '9px', borderRadius: 9, background: 'var(--gold)', color: '#16140f', fontWeight: 800, border: 'none', cursor: 'pointer', fontFamily: FONT }}>ثبت</button>
         </div>
@@ -239,7 +240,7 @@ export function RecordsPanel({ records, terms, post }: { records: ProRecord[]; t
           <input placeholder={terms.titlePh} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} style={inputStyle} />
           <input placeholder={terms.subtitlePh} value={f.subtitle} onChange={e => setF({ ...f, subtitle: e.target.value })} style={inputStyle} />
           <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{terms.kinds.map(k => <option key={k} value={k}>{k}</option>)}</select>
-          {terms.withAmount && <input placeholder="مبلغ (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />}
+          {terms.withAmount && <input placeholder="مبلغ (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />}
           <button onClick={submit} style={{ gridColumn: '1 / -1', padding: '9px', borderRadius: 9, background: 'var(--gold)', color: '#16140f', fontWeight: 800, border: 'none', cursor: 'pointer', fontFamily: FONT }}>ثبت</button>
         </div>
       )}
@@ -428,9 +429,9 @@ export function ProLoanCalc() {
   return (
     <SectionCard title="🧮 محاسبه‌گرِ وام و اقساط">
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
-        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مبلغِ وام (تومان)</label><input value={amount} onChange={e => setAmount(e.target.value.replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مبلغِ وام (تومان)</label><input value={amount} onChange={e => setAmount(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
         <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>نرخِ سالانه (٪)</label><input value={rate} onChange={e => setRate(e.target.value.replace(/[^\d.]/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
-        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مدت (ماه)</label><input value={months} onChange={e => setMonths(e.target.value.replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مدت (ماه)</label><input value={months} onChange={e => setMonths(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
       </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 140px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>قسطِ ماهانه</div><div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)', marginTop: 4 }}>{money(monthly)}</div></div>
@@ -470,12 +471,12 @@ export function ProCreditScore() {
   return (
     <SectionCard title="📊 امتیازِ اعتباری (Credit Scoring)">
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 14 }}>
-        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>درآمدِ ماهانه (تومان)</label><input value={f.income} onChange={e => set('income', e.target.value.replace(/\D/g, ''))} style={inp} /></div>
-        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>اقساطِ فعلی (ماهانه)</label><input value={f.debt} onChange={e => set('debt', e.target.value.replace(/\D/g, ''))} style={inp} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>درآمدِ ماهانه (تومان)</label><input value={f.income} onChange={e => set('income', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} style={inp} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>اقساطِ فعلی (ماهانه)</label><input value={f.debt} onChange={e => set('debt', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} style={inp} /></div>
         <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>نوعِ شغل</label><select value={f.job} onChange={e => set('job', e.target.value)} style={inputStyle}><option value="gov">دولتی/رسمی</option><option value="formal">شرکتِ معتبر</option><option value="private">بخشِ خصوصی</option><option value="self">آزاد</option></select></div>
         <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>سابقهٔ اعتباری</label><select value={f.history} onChange={e => set('history', e.target.value)} style={inputStyle}><option value="excellent">عالی</option><option value="good">خوب</option><option value="fair">متوسط</option><option value="bad">بدحساب</option></select></div>
         <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>وثیقه/ضامن</label><select value={f.collateral} onChange={e => set('collateral', e.target.value)} style={inputStyle}><option value="yes">دارد</option><option value="no">ندارد</option></select></div>
-        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مبلغِ درخواستی (تومان)</label><input value={f.amount} onChange={e => set('amount', e.target.value.replace(/\D/g, ''))} style={inp} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مبلغِ درخواستی (تومان)</label><input value={f.amount} onChange={e => set('amount', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} style={inp} /></div>
       </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ flex: '1 1 140px', background: 'var(--bg2)', borderRadius: 12, padding: 14, textAlign: 'center' }}>

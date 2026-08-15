@@ -1,5 +1,6 @@
 import { getProfile, regionLabel, phaseLabel, type PSProfile } from './persiansaze-store'
 import { getPublic, reviewStats, followerCount, STATUS_LABEL, type ProjStatus, type Review } from './builder-public-store'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ─── سرهم‌کردنِ پروفایلِ عمومیِ سازنده از دادهٔ واقعیِ پرشین سازه + ورودیِ خودِ سازنده ──
 
@@ -72,7 +73,7 @@ export function assembleBuilderProfile(id: string): BuilderProfile | null {
   const unitsDelivered = past.reduce((s, c) => s + (Number(c.units) || 0), 0)
 
   const rs = reviewStats(id)
-  const since = (pub.sinceYear || '').replace(/\D/g, '')
+  const since = (pub.sinceYear || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   const experienceYears = since ? Math.max(0, currentFaYear() - Number(since)) : null
 
   const regionsText = pub.activeRegionsText || (prof.regions || []).map(r => regionLabel({ cityId: 1, regionId: r })).filter(Boolean).slice(0, 4).join('، ')

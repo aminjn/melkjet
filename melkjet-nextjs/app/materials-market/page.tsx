@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
@@ -105,9 +106,9 @@ export default function BazarMasaleh() {
         <div>
           <div style={fh}>محدودهٔ قیمت (تومان)</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input inputMode="numeric" value={minPrice} onChange={e => setMinPrice(e.target.value.replace(/\D/g, ''))} placeholder={`از ${money(facets.priceRange.min)}`} style={{ ...sel, textAlign: 'center' }} />
+            <input inputMode="numeric" value={minPrice} onChange={e => setMinPrice(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} placeholder={`از ${money(facets.priceRange.min)}`} style={{ ...sel, textAlign: 'center' }} />
             <span style={{ color: 'var(--faint)' }}>تا</span>
-            <input inputMode="numeric" value={maxPrice} onChange={e => setMaxPrice(e.target.value.replace(/\D/g, ''))} placeholder={`تا ${money(facets.priceRange.max)}`} style={{ ...sel, textAlign: 'center' }} />
+            <input inputMode="numeric" value={maxPrice} onChange={e => setMaxPrice(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} placeholder={`تا ${money(facets.priceRange.max)}`} style={{ ...sel, textAlign: 'center' }} />
           </div>
         </div>
       )}

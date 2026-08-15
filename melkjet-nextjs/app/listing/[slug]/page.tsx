@@ -3,6 +3,7 @@ import { notFound, permanentRedirect } from 'next/navigation'
 import { getItemById } from '@/app/lib/scraper-store'
 import { idFromListingSlug, listingHref } from '@/app/lib/listing-url'
 import PropertyClient from './PropertyClient'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 export const revalidate = 300
 export function generateStaticParams() { return [] }
@@ -137,7 +138,7 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
     } catch { /* نامعلوم */ }
     let ownerAccount: { exists: boolean; ageDays: number } | null = null
     try {
-      const phone = String((it.meta as Record<string, string> | undefined)?.['__ownerPhone'] || it.phone || '').replace(/\D/g, '')
+      const phone = String((it.meta as Record<string, string> | undefined)?.['__ownerPhone'] || it.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
       if (phone) {
         const { getAccount } = await import('@/app/lib/account-store')
         const a = getAccount(phone)

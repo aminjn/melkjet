@@ -15,6 +15,7 @@ import { pickStack, isValidManifest, type SpriteManifest, type SpriteDef, type B
 // ☀️ فاز ۱۶۷ — زنگِ صبحگاهی: اشتراکِ پوش با اجازهٔ خودِ کاربر (force=true یعنی بپرس)
 import { ensurePushSubscribed } from '@/app/lib/push-client'
 import Link from 'next/link'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
 // فاز ۷۲ (صداقتِ اعداد): «۱۸۶,۱۹۲ روز» بی‌معناست — دوامِ بالای ۳ سال یعنی خرجِ روزانه عملاً صفر
@@ -26,7 +27,7 @@ const faB = (n: number) => n >= 1e9 ? `${(Math.round(n / 1e8) / 10).toLocaleStri
 const digitsOf = (s: string) => s
   .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
   .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
-  .replace(/\D/g, '').slice(0, 15)
+  .replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 15)
 
 // حصارِ خطا (فاز ۳۱): اگر رندرِ بخشی از صفحه کرش کند، به‌جای «صفحهٔ مرده که هیچ دکمه‌ای کار نمی‌کند»
 // پیامِ دقیقِ خطا نشان داده می‌شود و خطا به لاگِ سرور هم می‌رود — ریشه‌یابی بدونِ کنسولِ کاربر.

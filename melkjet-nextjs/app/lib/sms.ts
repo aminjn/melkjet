@@ -1,6 +1,7 @@
 import { getAdminData } from './admin-store'
 import { shecanRequest } from './shecan-https'
 import { shortenLinksInText, linkVarName, firstUrl, siteBase } from './shortener'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ارسالِ پیامکِ متنِ آزاد با IPPanel — برای اتوماسیون/پیام‌های دلخواه.
 // چون متنِ دلخواه نمی‌تواند پترنِ ثابتِ تأییدشده باشد، با endpointِ متنِ آزاد (bulk) فرستاده
@@ -13,7 +14,7 @@ export async function sendServiceSms(phone: string, text: string, summary = 'ا�
   const apiKey = process.env.IPPANEL_API_KEY || a.ippanel?.apiKey
   const sender = process.env.IPPANEL_SENDER || a.ippanel?.sender
   if (!apiKey || !sender) return { ok: false, error: 'پیامک پیکربندی نشده' }
-  const recipient = String(phone).replace(/\D/g, '')
+  const recipient = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(recipient)) return { ok: false, error: 'شمارهٔ نامعتبر' }
   // لینک‌های داخلِ متن را کوتاه و ردگیری کن (برای حالتِ متنِ آزاد/bulk)
   text = await shortenLinksInText(text, { channel: 'automation', phone: recipient })

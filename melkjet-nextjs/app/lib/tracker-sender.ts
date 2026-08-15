@@ -3,6 +3,7 @@ import { listDuePending, markSent } from './tracker-store'
 import { shecanRequest } from './shecan-https'
 import { shortenUrl, linkVarName } from './shortener'
 import { createLink, setLinkMeta } from './tracker-links-store'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // صفِ پیامکِ هدفمندِ ترکر را پردازش می‌کند (توسطِ cron هر چند دقیقه).
 // ارسالِ سریع از مسیرِ پترن (اگر تنظیم شده)، وگرنه ارسالِ تکیِ معمولی.
@@ -20,7 +21,7 @@ export async function processTrackerQueue(now = Date.now()): Promise<{ due: numb
   const patternVar = (t.patternVar || 'message').trim() || 'message'
 
   for (const { vid, phone, pending } of due) {
-    const recipient = String(phone).replace(/\D/g, '')
+    const recipient = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (!/^09\d{9}$/.test(recipient)) { await markSent(vid, false); continue }
     // لینکِ آگهی را با nxal کوتاه کن (id برای آمار ذخیره می‌شود).
     let message = pending.message

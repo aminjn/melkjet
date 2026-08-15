@@ -25,6 +25,7 @@ import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import SupportPanel from '@/app/components/SupportPanel'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // درختِ جغرافیاییِ سایت (استان → شهر → منطقه → محله)
 interface GeoDistrict { id: string; name: string; neighborhoods: string[] }
@@ -1601,11 +1602,11 @@ export default function ProsPage() {
                   {form.deal === 'rent' ? <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>اجاره ماهانه (تومان)</label><NumberInput value={form.rentMonthly} onChange={v => setForm({ ...form, rentMonthly: v })} style={inputStyle} /></div> : <div />}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 12 }}>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={form.area} onChange={e => setForm({ ...form, area: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد خواب</label><input value={form.rooms} onChange={e => setForm({ ...form, rooms: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>طبقه</label><input value={form.floor} onChange={e => setForm({ ...form, floor: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>کل طبقات</label><input value={form.totalFloors} onChange={e => setForm({ ...form, totalFloors: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سال ساخت</label><input value={form.yearBuilt} onChange={e => setForm({ ...form, yearBuilt: e.target.value.replace(/\D/g, '') })} placeholder="۱۴۰۲" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={form.area} onChange={e => setForm({ ...form, area: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد خواب</label><input value={form.rooms} onChange={e => setForm({ ...form, rooms: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>طبقه</label><input value={form.floor} onChange={e => setForm({ ...form, floor: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>کل طبقات</label><input value={form.totalFloors} onChange={e => setForm({ ...form, totalFloors: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سال ساخت</label><input value={form.yearBuilt} onChange={e => setForm({ ...form, yearBuilt: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} placeholder="۱۴۰۲" style={inputStyle} /></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>جهت</label><select value={form.facing} onChange={e => setForm({ ...form, facing: e.target.value })} style={inputStyle}><option value="">—</option>{FACING_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع سند</label><input value={form.docType} onChange={e => setForm({ ...form, docType: e.target.value })} placeholder="تک‌برگ" style={inputStyle} /></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>

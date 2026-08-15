@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // پاپ‌آپِ ورود/ثبت‌نام — سراسری. با رویدادِ window «mj-open-auth» باز می‌شود.
 // پس از ورودِ موفق: رویدادِ «mj-auth-success» را می‌فرستد و بسته می‌شود (روی همان صفحه می‌ماند).
@@ -59,7 +60,7 @@ export default function AuthModal() {
   }
   async function submitShahkar() {
     setError('')
-    const y = faToEn(by).replace(/\D/g, ''), m = faToEn(bm).replace(/\D/g, ''), d = faToEn(bd).replace(/\D/g, '')
+    const y = faToEn(by).replace(FA_DIGITS, faDigit).replace(/\D/g, ''), m = faToEn(bm).replace(FA_DIGITS, faDigit).replace(/\D/g, ''), d = faToEn(bd).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (y.length !== 4 || !m || !d) { setError('تاریخ تولدِ شمسی را کامل وارد کنید (سال/ماه/روز).'); return }
     const jbd = y + m.padStart(2, '0') + d.padStart(2, '0')
     setLoading(true)
@@ -150,7 +151,7 @@ export default function AuthModal() {
             <>
               <div style={{ marginBottom: 16 }}>
                 <label style={lab}>شماره موبایل</label>
-                <input type="tel" inputMode="numeric" placeholder="09xxxxxxxxx" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} onKeyDown={e => e.key === 'Enter' && sendOTP()} style={inp} autoFocus />
+                <input type="tel" inputMode="numeric" placeholder="09xxxxxxxxx" value={phone} onChange={e => setPhone(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 11))} onKeyDown={e => e.key === 'Enter' && sendOTP()} style={inp} autoFocus />
                 <p style={{ fontSize: 12, color: 'var(--faint)', marginTop: 8 }}>کد تایید ۶ رقمی به این شماره ارسال می‌شود</p>
               </div>
               {errBox}
@@ -165,14 +166,14 @@ export default function AuthModal() {
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={lab}>کد ملی</label>
-                <input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setNid(v); if (v.length === 10) yRef.current?.focus() }} style={{ ...inp, textAlign: 'center', letterSpacing: 2 }} autoFocus />
+                <input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => { const v = e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 10); setNid(v); if (v.length === 10) yRef.current?.focus() }} style={{ ...inp, textAlign: 'center', letterSpacing: 2 }} autoFocus />
               </div>
               <div style={{ marginBottom: 16 }}>
                 <label style={lab}>تاریخ تولد (شمسی) — سال / ماه / روز</label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8, direction: 'ltr' }}>
-                  <input ref={yRef} type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setBy(v); if (v.length === 4) mRef.current?.focus() }} style={{ ...inp, textAlign: 'center' }} />
-                  <input ref={mRef} type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 2); setBm(v); if (v.length === 2) dRef.current?.focus() }} style={{ ...inp, textAlign: 'center' }} />
-                  <input ref={dRef} type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inp, textAlign: 'center' }} />
+                  <input ref={yRef} type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => { const v = e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 4); setBy(v); if (v.length === 4) mRef.current?.focus() }} style={{ ...inp, textAlign: 'center' }} />
+                  <input ref={mRef} type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => { const v = e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 2); setBm(v); if (v.length === 2) dRef.current?.focus() }} style={{ ...inp, textAlign: 'center' }} />
+                  <input ref={dRef} type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 2))} style={{ ...inp, textAlign: 'center' }} />
                 </div>
               </div>
               {errBox}
@@ -188,7 +189,7 @@ export default function AuthModal() {
               {devCode && <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 13 }}>کد ورود شما:<strong style={{ display: 'block', fontSize: 26, letterSpacing: 8, textAlign: 'center', marginTop: 4, fontFamily: 'JetBrains Mono, monospace' }}>{devCode}</strong></div>}
               <div style={{ marginBottom: 16 }}>
                 <label style={lab}>کد تایید ۶ رقمی</label>
-                <input type="tel" inputMode="numeric" placeholder="_ _ _ _ _ _" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} onKeyDown={e => e.key === 'Enter' && verifyOTP()} style={{ ...inp, fontSize: 24, textAlign: 'center', letterSpacing: 8, fontFamily: 'JetBrains Mono, monospace' }} autoFocus />
+                <input type="tel" inputMode="numeric" placeholder="_ _ _ _ _ _" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 6))} onKeyDown={e => e.key === 'Enter' && verifyOTP()} style={{ ...inp, fontSize: 24, textAlign: 'center', letterSpacing: 8, fontFamily: 'JetBrains Mono, monospace' }} autoFocus />
               </div>
               {errBox}
               <button onClick={verifyOTP} disabled={loading} style={btn}>{loading ? 'در حال تایید…' : 'تایید و ورود'}</button>

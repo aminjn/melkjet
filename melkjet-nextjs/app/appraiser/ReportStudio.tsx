@@ -1,6 +1,7 @@
 'use client'
 import { useRef, useState } from 'react'
 import { SectionCard, btnGold, inputStyle, money, fa } from '@/app/components/prodesk/ProDeskKit'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 function SignaturePad({ onChange, label }: { onChange: (d: string) => void; label: string }) {
   const ref = useRef<HTMLCanvasElement | null>(null)
@@ -78,16 +79,16 @@ export default function ReportStudio({ post }: { post: (p: any) => Promise<any> 
         <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مالک</label><input value={f.owner} onChange={e => set('owner', e.target.value)} style={inputStyle} /></div>
         <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>نشانی ملک</label><input value={f.addr} onChange={e => set('addr', e.target.value)} style={inputStyle} /></div>
         <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>نوع</label><select value={f.ptype} onChange={e => set('ptype', e.target.value)} style={inputStyle}>{['آپارتمان', 'ویلا/خانه', 'زمین', 'تجاری', 'اداری'].map(t => <option key={t}>{t}</option>)}</select></div>
-        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>متراژ (م²)</label><input value={f.area} onChange={e => set('area', e.target.value.replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
-        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>سن بنا</label><input value={f.age} onChange={e => set('age', e.target.value.replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>متراژ (م²)</label><input value={f.area} onChange={e => set('area', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>سن بنا</label><input value={f.age} onChange={e => set('age', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
         <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>طبقه</label><input value={f.floor} onChange={e => set('floor', e.target.value)} style={inputStyle} /></div>
       </div>
       <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>املاکِ مشابه (تحلیلِ بازار)</div>
       {comps.map((c, i) => (
         <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.4fr', gap: 8, marginBottom: 8 }}>
           <input value={c.addr} onChange={e => setComp(i, 'addr', e.target.value)} placeholder={`مشابه ${fa(i + 1)} — نشانی`} style={inputStyle} />
-          <input value={c.area} onChange={e => setComp(i, 'area', e.target.value.replace(/\D/g, ''))} placeholder="متراژ" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
-          <input value={c.price} onChange={e => setComp(i, 'price', e.target.value.replace(/\D/g, ''))} placeholder="قیمت کل (تومان)" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
+          <input value={c.area} onChange={e => setComp(i, 'area', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} placeholder="متراژ" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
+          <input value={c.price} onChange={e => setComp(i, 'price', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} placeholder="قیمت کل (تومان)" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
         </div>
       ))}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '12px 0' }}>

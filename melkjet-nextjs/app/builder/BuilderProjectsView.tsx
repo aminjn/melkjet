@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import ImageUpload from '../components/ImageUpload'
 import LiveScore from '../components/LiveScore'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // مدیریتِ پروژه‌ها در پنلِ سازنده — یک‌جا، یکپارچه: پروژه‌های پایگاه (با override) و
 // پروژه‌های دستی. هر پروژه: مرحلهٔ ساخت (نردبانِ یکسانِ سایت)، وضعیت، عکس، پلان (چند سبک)،
@@ -138,11 +139,11 @@ function ProjectForm({ isManual, initial, title, psPhase, onSave, onDelete, busy
         <div><label style={lbl}>وضعیتِ فروش</label><select style={inp} value={f.status} onChange={e => set('status', e.target.value)}>{STATUSES.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}</select></div>
         <div><label style={lbl}>مرحلهٔ ساخت{psPhase ? ` (پایگاه: ${psPhase})` : ''}</label><select style={inp} value={f.stage} onChange={e => set('stage', e.target.value)}><option value="">{psPhase ? `خودکار (${psPhase})` : '—'}</option>{STAGES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
         <div><label style={lbl}>تاریخِ تحویل</label><input style={inp} value={f.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} placeholder="۱۴۰۶" /></div>
-        <div><label style={lbl}>تعداد واحد</label><input style={inp} inputMode="numeric" value={f.units} onChange={e => set('units', e.target.value.replace(/\D/g, ''))} /></div>
-        <div><label style={lbl}>طبقات (روی‌زمین)</label><input style={inp} inputMode="numeric" value={f.floors} onChange={e => set('floors', e.target.value.replace(/\D/g, ''))} /></div>
+        <div><label style={lbl}>تعداد واحد</label><input style={inp} inputMode="numeric" value={f.units} onChange={e => set('units', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} /></div>
+        <div><label style={lbl}>طبقات (روی‌زمین)</label><input style={inp} inputMode="numeric" value={f.floors} onChange={e => set('floors', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} /></div>
         <div><label style={lbl}>بازهٔ متراژ</label><input style={inp} value={f.areaRange} onChange={e => set('areaRange', e.target.value)} placeholder="۱۰۰ تا ۲۰۰ متر" /></div>
         <div><label style={lbl}>قیمت (متن)</label><input style={inp} value={f.priceText} onChange={e => set('priceText', e.target.value)} placeholder="از ۱۴ میلیارد" /></div>
-        <div><label style={lbl}>پیشرفتِ فروش (٪)</label><input style={inp} inputMode="numeric" value={f.salesProgress} onChange={e => set('salesProgress', e.target.value.replace(/\D/g, ''))} /></div>
+        <div><label style={lbl}>پیشرفتِ فروش (٪)</label><input style={inp} inputMode="numeric" value={f.salesProgress} onChange={e => set('salesProgress', e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, ''))} /></div>
       </div>
 
       <div><label style={lbl}>توضیح</label><textarea rows={2} style={{ ...inp, resize: 'vertical' }} value={f.description} onChange={e => set('description', e.target.value)} /></div>

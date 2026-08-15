@@ -7,6 +7,7 @@ import { warmEnrichment } from './enrich-warm'
 import { getDivar, recordImport, clearImports } from './advisor-divar-store'
 import { getAdvisor, addListing, publishListing, deleteListing, setListingStatus, updateAdvisorProfile, type Listing } from './advisor-store'
 import { createAccount, accountExists } from './account-store'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ── «هوش آژانس»: یک لینکِ آژانسِ دیوار → مشاورها + آژانس، هر کدام حسابِ جدا ──
 // جریان: buildAgencyRoster خوشه‌بندی می‌کند → هر مشاور زیرِ یک ownerِ موقت (adv:slug:key) و
@@ -494,7 +495,7 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
 
 // ── graduate: به یک مشاورِ کشف‌شده شمارهٔ موبایل بده → حسابِ واقعی بساز و آگهی‌ها را منتقل کن ──
 export async function graduateAdvisor(id: string, key: string, phone: string, role = 'advisor'): Promise<{ ok: boolean; error?: string; moved?: number }> {
-  const p = String(phone).replace(/\D/g, '')
+  const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(p)) return { ok: false, error: 'شمارهٔ موبایل معتبر نیست (۰۹...)' }
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد' }
@@ -557,7 +558,7 @@ export async function removeAdvisor(id: string, key: string): Promise<{ ok: bool
 // اعتبارسنجی فوری است؛ انتقالِ فایل‌ها (که برای مشاورِ پرفایل چند دقیقه طول می‌کشد و با سینکِ
 // در حالِ اجرا رقابت می‌کند) به صفِ اینستنسِ ۰ می‌رود تا درخواست ۶۰ثانیه‌ای تایم‌اوت نشود.
 export async function enqueueGraduate(id: string, key: string, phone: string, role = 'advisor'): Promise<{ ok: boolean; error?: string; queued?: boolean }> {
-  const p = String(phone).replace(/\D/g, '')
+  const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(p)) return { ok: false, error: 'شمارهٔ موبایل معتبر نیست (۰۹...)' }
   return mutate(db => {
     const s = db.scrapes[id]; if (!s) return { ok: false, error: 'اسکرپ یافت نشد' }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getIdentity, shahkarMatch, isValidNationalId, podConfigured, podMissing } from '@/app/lib/podium'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 const faToEn = (v: string) => (v || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
   if (!idn.ok || !idn.identity) return NextResponse.json({ error: idn.error || 'استعلامِ هویت ناموفق بود.' }, { status: 400 })
 
   let matched: boolean | null = null
-  const phone = faToEn(String(b.phone || '')).replace(/\D/g, '')
+  const phone = faToEn(String(b.phone || '')).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (/^09\d{9}$/.test(phone)) { const m = await shahkarMatch(nid, phone); matched = m.ok ? m.matched : null }
 
   const i = idn.identity

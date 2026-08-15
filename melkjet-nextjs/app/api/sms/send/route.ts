@@ -4,6 +4,7 @@ import { getSession } from '@/app/lib/session'
 import { getAdminData } from '@/app/lib/admin-store'
 import { shecanRequest } from '@/app/lib/shecan-https'
 import { chargeSend } from '@/app/lib/comm-store'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // ارسال پیامک انبوه بازاریابی از طریق سرویس داخلی IPPanel.
 // فرمت رسمی IPPanel: POST https://api2.ippanel.com/api/v1/sms/send/webservice/single
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   const text = String(b.message || '').trim()
   const raw: string[] = Array.isArray(b.recipients) ? b.recipients : String(b.recipients || '').split(/[\s,;]+/)
-  const recipients = Array.from(new Set(raw.map(x => x.replace(/\D/g, '')).filter(x => /^09\d{9}$/.test(x))))
+  const recipients = Array.from(new Set(raw.map(x => x.replace(FA_DIGITS, faDigit).replace(/\D/g, '')).filter(x => /^09\d{9}$/.test(x))))
 
   if (!text) return NextResponse.json({ error: 'متن پیامک خالی است' }, { status: 400 })
   if (!recipients.length) return NextResponse.json({ error: 'شماره موبایل معتبری وارد نشده (قالب: 09xxxxxxxxx)' }, { status: 400 })

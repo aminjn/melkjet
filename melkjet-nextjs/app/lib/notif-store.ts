@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // اعلان‌های درون‌برنامه‌ایِ هر کاربر (صندوقِ اعلان). دومَحاله (PG/فایل).
 const FILE = join(process.cwd(), '.notif-data.json')
@@ -19,7 +20,7 @@ async function mutate<R>(fn: (db: NDB) => R): Promise<R> {
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
-const norm = (p: string) => String(p || '').replace(/\D/g, '')
+const norm = (p: string) => String(p || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
 
 export async function addNotif(owner: string, text: string, kind = 'info'): Promise<void> {
   const o = norm(owner); if (!o || !text) return

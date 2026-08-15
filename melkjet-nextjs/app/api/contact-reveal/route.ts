@@ -5,6 +5,7 @@ import { getProfile } from '@/app/lib/persiansaze-store'
 import { getPublic } from '@/app/lib/builder-public-store'
 import { getAccount } from '@/app/lib/account-store'
 import { addContact } from '@/app/lib/contact-log-store'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!phone) return NextResponse.json({ error: 'شماره‌ای ثبت نشده است' }, { status: 404 })
 
   // تماس را ثبت کن (مگر اینکه بیننده خودِ سازنده باشد).
-  const norm = (p: string) => String(p).replace(/\D/g, '')
+  const norm = (p: string) => String(p).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   const isOwner = (prof.phones || []).some(ph => norm(ph) === norm(s.phone))
   if (!isOwner) {
     await addContact(builderId, {

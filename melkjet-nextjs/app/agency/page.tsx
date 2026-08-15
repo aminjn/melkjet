@@ -27,6 +27,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 import PlansPanel from '@/app/components/PlansPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import SupportPanel from '@/app/components/SupportPanel'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // ════════ Types (mirror app/lib/agency-store.ts) ════════
 type Stage = 'new' | 'assigned' | 'visit' | 'negotiation' | 'closed' | 'lost'
@@ -1410,11 +1411,11 @@ export default function AgencyPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10 }}>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>{ff.deal === 'rent' ? 'ودیعه (تومان)' : 'قیمت کل (تومان)'}</label><NumberInput value={ff.price} onChange={v => setFf({ ...ff, price: v })} style={inputStyle} /></div>
                   {ff.deal === 'rent' && <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>اجاره ماهانه</label><NumberInput value={ff.rentMonthly} onChange={v => setFf({ ...ff, rentMonthly: v })} style={inputStyle} /></div>}
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={ff.area} onChange={e => setFf({ ...ff, area: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>خواب</label><input value={ff.rooms} onChange={e => setFf({ ...ff, rooms: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>طبقه</label><input value={ff.floor} onChange={e => setFf({ ...ff, floor: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>کل طبقات</label><input value={ff.totalFloors} onChange={e => setFf({ ...ff, totalFloors: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سال ساخت</label><input value={ff.yearBuilt} onChange={e => setFf({ ...ff, yearBuilt: e.target.value.replace(/\D/g, '') })} placeholder="۱۴۰۲" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={ff.area} onChange={e => setFf({ ...ff, area: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>خواب</label><input value={ff.rooms} onChange={e => setFf({ ...ff, rooms: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>طبقه</label><input value={ff.floor} onChange={e => setFf({ ...ff, floor: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>کل طبقات</label><input value={ff.totalFloors} onChange={e => setFf({ ...ff, totalFloors: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سال ساخت</label><input value={ff.yearBuilt} onChange={e => setFf({ ...ff, yearBuilt: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} placeholder="۱۴۰۲" style={inputStyle} /></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>جهت</label><select value={ff.facing} onChange={e => setFf({ ...ff, facing: e.target.value })} style={inputStyle}><option value="">—</option>{FACING_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع سند</label><input value={ff.docType} onChange={e => setFf({ ...ff, docType: e.target.value })} placeholder="تک‌برگ" style={inputStyle} /></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={ff.phone} onChange={e => setFf({ ...ff, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>

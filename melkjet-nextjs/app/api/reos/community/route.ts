@@ -8,6 +8,7 @@ import {
   addComment, listComments, hideComment, socialProof, publicRankings, type TargetType,
 } from '@/app/lib/reos/community'
 import { flagEnabled } from '@/app/lib/reos/flags'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // GET /api/reos/community — لایهٔ اجتماعی.
 //   ?view=me (پیش‌فرض)            → اثباتِ اجتماعی + مجموعه‌های کاربرِ جاری
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
   await primeConfig().catch(() => {})
   const url = new URL(req.url)
   const view = url.searchParams.get('view') || 'me'
-  const me = String(s.phone || '').replace(/\D/g, '')
+  const me = String(s.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   const H = { headers: { 'Cache-Control': 'no-store, private' } }
   if (!(await flagEnabled('community', { userId: me, role: String(s.role || '') }))) return NextResponse.json({ ok: true, disabled: true }, H)
 
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, items: await collectionItems(id) }, H)
   }
   if (view === 'profile') {
-    const agent = String(url.searchParams.get('agent') || '').replace(/\D/g, '')
+    const agent = String(url.searchParams.get('agent') || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (!agent) return NextResponse.json({ error: 'agent لازم است' }, { status: 400 })
     const [proof, following] = await Promise.all([socialProof(agent), isFollowing(me, agent, 'agent')])
     return NextResponse.json({ ok: true, agent, proof, following }, H)
@@ -58,13 +59,13 @@ export async function POST(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'وارد شوید' }, { status: 401 })
   await primeConfig().catch(() => {})
   const b = await req.json().catch(() => ({})) as Record<string, string | boolean>
-  const me = String(s.phone || '').replace(/\D/g, '')
+  const me = String(s.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   const isAdmin = String(s.phone) === '09122862184'
   const str = (k: string) => (typeof b[k] === 'string' ? String(b[k]) : '')
 
   switch (b.action) {
-    case 'follow': return NextResponse.json(await follow(me, str('targetId').replace(/\D/g, '') || str('targetId'), (str('targetType') as TargetType) || 'agent'))
-    case 'unfollow': return NextResponse.json(await unfollow(me, str('targetId').replace(/\D/g, '') || str('targetId'), (str('targetType') as TargetType) || 'agent'))
+    case 'follow': return NextResponse.json(await follow(me, str('targetId').replace(FA_DIGITS, faDigit).replace(/\D/g, '') || str('targetId'), (str('targetType') as TargetType) || 'agent'))
+    case 'unfollow': return NextResponse.json(await unfollow(me, str('targetId').replace(FA_DIGITS, faDigit).replace(/\D/g, '') || str('targetId'), (str('targetType') as TargetType) || 'agent'))
     case 'collection_create': return NextResponse.json({ ok: true, collection: await createCollection(me, str('name'), b.public !== false) })
     case 'collection_add': return NextResponse.json(await addToCollection(str('collectionId'), str('itemId'), (str('itemType') as TargetType) || 'property'))
     case 'collection_remove': return NextResponse.json(await removeFromCollection(str('collectionId'), str('itemId')))

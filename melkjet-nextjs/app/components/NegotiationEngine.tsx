@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // موتور مذاکره — داخلِ پنلِ مشاور/آژانس. چند سناریو + قیمتِ پیشنهادیِ دقیق (قابلِ تایپ).
 
@@ -67,7 +68,7 @@ export default function NegotiationEngine({ listings = [] }: { listings?: NegLis
   const sendSms = async (idx: number, text: string) => {
     if (sending >= 0) return
     setSendMsg('')
-    const ph = toLatin(phone).replace(/\D/g, '')
+    const ph = toLatin(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (!/^09\d{9}$/.test(ph)) { setSendMsg('⚠ شمارهٔ موبایلِ معتبر وارد کنید (۰۹...)'); return }
     setSending(idx)
     try {

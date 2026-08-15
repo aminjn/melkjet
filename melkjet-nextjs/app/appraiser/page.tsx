@@ -13,6 +13,7 @@ import {
 } from '@/app/components/prodesk/ProDeskKit'
 import { jToday, jKey, jLabel } from '@/app/lib/jalali'
 import ReportStudio from './ReportStudio'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // میزِ کارِ «کارشناسِ رسمی» — نسخهٔ تخصصی: پرونده‌های ارزیابی با محاسبهٔ ارزش + صدورِ گزارش.
 const ROLE = '/appraiser'
@@ -66,8 +67,8 @@ function Requests({ requests, post, onReport, today }: { requests: ProRequest[];
             <input placeholder="شمارهٔ تماس" value={f.clientPhone} onChange={e => setF({ ...f, clientPhone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
             <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{APPRAISAL_TYPES.map(t => <option key={t}>{t}</option>)}</select>
             <select value={f.ptype} onChange={e => setF({ ...f, ptype: e.target.value })} style={inputStyle}>{PROPERTY_TYPES.map(t => <option key={t}>{t}</option>)}</select>
-            <input placeholder="متراژ (متر)" value={f.area} onChange={e => setF({ ...f, area: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
-            <input placeholder="ارزشِ هر متر (تومان)" value={f.vpm} onChange={e => setF({ ...f, vpm: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <input placeholder="متراژ (متر)" value={f.area} onChange={e => setF({ ...f, area: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <input placeholder="ارزشِ هر متر (تومان)" value={f.vpm} onChange={e => setF({ ...f, vpm: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
             <div style={{ gridColumn: '1 / -1', fontSize: 11.5, color: 'var(--muted)', marginBottom: -4 }}>تاریخِ بازدید</div>
             <JalaliPicker jy={f.jy} jm={f.jm} jd={f.jd} baseYear={today.jy} onChange={v => setF({ ...f, ...v })} />
             <input placeholder="توضیح" value={f.detail} onChange={e => setF({ ...f, detail: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }} />
@@ -96,7 +97,7 @@ function ReportModal({ req, post, onClose }: { req: ProRequest; post: (p: any) =
         <input placeholder="شمارهٔ پرونده" value={f.caseNo} onChange={e => setF({ ...f, caseNo: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
         <input placeholder="تاریخ" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} style={inputStyle} />
         <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{REPORT_TYPES.map(t => <option key={t}>{t}</option>)}</select>
-        <input placeholder="ارزشِ نهایی (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+        <input placeholder="ارزشِ نهایی (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
         <textarea placeholder="خلاصهٔ نظرِ کارشناسی" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1', minHeight: 70, resize: 'vertical' }} />
         <FileField value={f.file} onChange={v => setF({ ...f, file: v })} label="📎 پیوستِ فایلِ گزارش (تصویر یا PDF)" />
       </div>

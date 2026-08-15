@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 type Tab = 'phone' | 'email'
 type OtpStep = 'enter-phone' | 'shahkar' | 'enter-code' | 'onboard'
@@ -60,7 +61,7 @@ export default function AuthPage() {
   }
   async function submitShahkar() {
     setError('')
-    const y = faToEn(by).replace(/\D/g, ''), m = faToEn(bm).replace(/\D/g, ''), d = faToEn(bd).replace(/\D/g, '')
+    const y = faToEn(by).replace(FA_DIGITS, faDigit).replace(/\D/g, ''), m = faToEn(bm).replace(FA_DIGITS, faDigit).replace(/\D/g, ''), d = faToEn(bd).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (y.length !== 4 || !m || !d) { setError('تاریخ تولدِ شمسی را کامل وارد کنید.'); return }
     const jbd = y + m.padStart(2, '0') + d.padStart(2, '0')
     setLoading(true)
@@ -251,8 +252,8 @@ export default function AuthPage() {
                       <button onClick={() => { setOtpStep('enter-phone'); setError('') }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 22, padding: 0 }}>←</button>
                       <div><p style={{ fontSize: 14, color: 'var(--text)', margin: 0, fontWeight: 700 }}>تأییدِ هویت (سامانهٔ شاهکار)</p><p style={{ fontSize: 12, color: 'var(--faint)', margin: '3px 0 0' }}>برای ثبت‌نام، هویتت با ثبت‌احوال و شاهکار راستی‌آزمایی می‌شود.</p></div>
                     </div>
-                    <div style={fieldStyle}><label style={labelStyle}>کد ملی</label><input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setNid(v); if (v.length === 10) yRef.current?.focus() }} style={{ ...inputStyle, textAlign: 'center', letterSpacing: 2 }} autoFocus /></div>
-                    <div style={fieldStyle}><label style={labelStyle}>تاریخ تولد (شمسی) — سال / ماه / روز</label><div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8, direction: 'ltr' }}><input ref={yRef} type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setBy(v); if (v.length === 4) mRef.current?.focus() }} style={{ ...inputStyle, textAlign: 'center' }} /><input ref={mRef} type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 2); setBm(v); if (v.length === 2) dRef.current?.focus() }} style={{ ...inputStyle, textAlign: 'center' }} /><input ref={dRef} type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inputStyle, textAlign: 'center' }} /></div></div>
+                    <div style={fieldStyle}><label style={labelStyle}>کد ملی</label><input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => { const v = e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 10); setNid(v); if (v.length === 10) yRef.current?.focus() }} style={{ ...inputStyle, textAlign: 'center', letterSpacing: 2 }} autoFocus /></div>
+                    <div style={fieldStyle}><label style={labelStyle}>تاریخ تولد (شمسی) — سال / ماه / روز</label><div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8, direction: 'ltr' }}><input ref={yRef} type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => { const v = e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 4); setBy(v); if (v.length === 4) mRef.current?.focus() }} style={{ ...inputStyle, textAlign: 'center' }} /><input ref={mRef} type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => { const v = e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 2); setBm(v); if (v.length === 2) dRef.current?.focus() }} style={{ ...inputStyle, textAlign: 'center' }} /><input ref={dRef} type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 2))} style={{ ...inputStyle, textAlign: 'center' }} /></div></div>
                     {error && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 9, background: 'rgba(220,53,69,.1)', border: '1px solid rgba(220,53,69,.25)', color: '#e25563', fontSize: 13 }}>{error}</div>}
                     <button onClick={submitShahkar} disabled={loading} style={btnStyle}>{loading ? 'در حال راستی‌آزمایی...' : 'تأیید هویت و دریافت کد'}</button>
                   </>

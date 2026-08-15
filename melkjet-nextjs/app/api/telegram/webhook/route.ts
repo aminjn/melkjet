@@ -13,6 +13,7 @@ import { moderateOne, userSubmitModel } from '@/app/lib/moderation'
 import { saveMedia } from '@/app/lib/media-store'
 import { getAccount } from '@/app/lib/account-store'
 import { generateListingCopy, type ListingFields } from '@/app/lib/listing-copy'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,7 @@ const CITIES = ['تهران', 'مشهد', 'کرج', 'اصفهان', 'شیراز'
 const isAdmin = (chatId: number) => !!process.env.TELEGRAM_ADMIN_CHAT && String(chatId) === process.env.TELEGRAM_ADMIN_CHAT
 // شمارهٔ تلگرام (989…/+989…/09…) → 09xxxxxxxxx
 function normPhone(raw: string): string {
-  let d = String(raw || '').replace(/\D/g, '')
+  let d = String(raw || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   if (d.startsWith('98')) d = '0' + d.slice(2)
   else if (d.startsWith('9') && d.length === 10) d = '0' + d
   return d

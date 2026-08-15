@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ویرایشگرِ پروفایلِ عمومیِ سازنده در پنل — وصل به /api/builder (action‌های public).
 // آنچه این‌جا پر می‌شود، دقیقاً در صفحهٔ عمومی /builders/[id] نمایش داده می‌شود.
@@ -77,7 +78,7 @@ export default function BuilderPublicView() {
         <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>معرفی و اطلاعاتِ تماس</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
           <div><label style={lbl}>عنوان/تخصص (مثلاً انبوه‌ساز لوکس)</label><input style={inp} value={pub.tagline || ''} onChange={e => setPub({ ...pub, tagline: e.target.value })} /></div>
-          <div><label style={lbl}>فعال از سال (شمسی)</label><input style={inp} inputMode="numeric" value={pub.sinceYear || ''} onChange={e => setPub({ ...pub, sinceYear: e.target.value.replace(/\D/g, '') })} placeholder="مثلاً ۱۳۸۸" /></div>
+          <div><label style={lbl}>فعال از سال (شمسی)</label><input style={inp} inputMode="numeric" value={pub.sinceYear || ''} onChange={e => setPub({ ...pub, sinceYear: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} placeholder="مثلاً ۱۳۸۸" /></div>
           <div><label style={lbl}>مناطقِ فعالیت</label><input style={inp} value={pub.activeRegionsText || ''} onChange={e => setPub({ ...pub, activeRegionsText: e.target.value })} placeholder="تهران و البرز" /></div>
           <div><label style={lbl}>تلفنِ تماسِ عمومی</label><input style={{ ...inp, direction: 'ltr' }} value={pub.phonePublic || ''} onChange={e => setPub({ ...pub, phonePublic: e.target.value })} placeholder="۰۲۱-..." /></div>
           <div><label style={lbl}>وب‌سایت</label><input style={{ ...inp, direction: 'ltr' }} value={pub.website || ''} onChange={e => setPub({ ...pub, website: e.target.value })} placeholder="example.com" /></div>

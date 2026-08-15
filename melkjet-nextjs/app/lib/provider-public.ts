@@ -4,6 +4,7 @@ import { getAdvisor } from './advisor-store'
 import { listItems } from './scraper-store'
 import { computeRepBadges } from './reputation'
 import { ensureProviderSlug, phoneForProviderSlug } from './provider-slug-store'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // نوعِ URLِ متخصص ↔ برچسبِ فارسی. فقط نقش‌های «عرضه‌کنندهٔ خدمت» صفحهٔ عمومی دارند.
 const TYPE_LABEL: Record<string, string> = {
@@ -54,7 +55,7 @@ export async function providersInArea(types: string[], trailNames: string[], lim
     const match = wants.length === 0 || wants.some(w => hay.includes(w) || (gp.city && w.includes(gp.city)))
     if (!match) continue
     const slug = await ensureProviderSlug(a.phone, name)
-    out.push({ name, slug, type: t, typeLabel: typeLabel(t), photo: gp.logo || '', city: gp.city || '', phone: a.phone, promoted: promotedSet.has(String(a.phone).replace(/\D/g, '')) })
+    out.push({ name, slug, type: t, typeLabel: typeLabel(t), photo: gp.logo || '', city: gp.city || '', phone: a.phone, promoted: promotedSet.has(String(a.phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')) })
     if (out.length >= limit * 2) break
   }
   out.sort((x, y) => Number(y.promoted) - Number(x.promoted))

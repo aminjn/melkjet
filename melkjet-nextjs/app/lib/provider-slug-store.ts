@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { slugify, uniqueSlug } from './slugify'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ── نگاشتِ Slug ↔ شمارهٔ متخصص (برای URLهای عمومیِ /{type}/{slug}) ──
 // slug یکتا و پایدار از نامِ کسب‌وکار ساخته و ذخیره می‌شود؛ تغییرِ نام، slug را عوض نمی‌کند.
@@ -9,7 +10,7 @@ const FILE = join(process.cwd(), '.provider-slug-data.json')
 const KV_KEY = 'provider_slugs'
 interface SDB { bySlug: Record<string, string>; byPhone: Record<string, string> }
 const EMPTY: SDB = { bySlug: {}, byPhone: {} }
-const norm = (p: string) => String(p || '').replace(/\D/g, '')
+const norm = (p: string) => String(p || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
 
 function fileLoad(): SDB { if (existsSync(FILE)) { try { const d = JSON.parse(readFileSync(FILE, 'utf-8')); return { bySlug: d.bySlug || {}, byPhone: d.byPhone || {} } } catch {} } return { bySlug: {}, byPhone: {} } }
 function fileSave(db: SDB) { writeFileSync(FILE, JSON.stringify(db, null, 2), 'utf-8') }

@@ -1,6 +1,7 @@
 'use client'
 // فاز ۲۶۲ — کارتِ احرازِ هویتِ «اختیاری» با شاهکار (داخلِ پنلِ کاربر). موفقیت → نشانِ تأیید + پاداشِ ملک‌کوین.
 import { useState, useEffect } from 'react'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 const REWARD = 500
 const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }
@@ -21,8 +22,8 @@ export default function IdentityVerify() {
 
   const submit = async () => {
     setErr('')
-    if (nid.replace(/\D/g, '').length !== 10) { setErr('کد ملیِ ۱۰ رقمی را کامل وارد کنید.'); return }
-    const jbd = `${y.padStart(4, '0')}${m.padStart(2, '0')}${d.padStart(2, '0')}`.replace(/\D/g, '')
+    if (nid.replace(FA_DIGITS, faDigit).replace(/\D/g, '').length !== 10) { setErr('کد ملیِ ۱۰ رقمی را کامل وارد کنید.'); return }
+    const jbd = `${y.padStart(4, '0')}${m.padStart(2, '0')}${d.padStart(2, '0')}`.replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (jbd.length !== 8) { setErr('تاریخ تولدِ شمسی را کامل وارد کنید (سال/ماه/روز).'); return }
     setBusy(true)
     try {
@@ -59,14 +60,14 @@ export default function IdentityVerify() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
         <div>
           <label style={{ fontSize: 12, color: 'var(--muted)' }}>کد ملی</label>
-          <input value={nid} onChange={e => setNid(e.target.value.replace(/\D/g, '').slice(0, 10))} inputMode="numeric" placeholder="کد ملیِ ۱۰ رقمی" style={{ ...inp, letterSpacing: 2 }} />
+          <input value={nid} onChange={e => setNid(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 10))} inputMode="numeric" placeholder="کد ملیِ ۱۰ رقمی" style={{ ...inp, letterSpacing: 2 }} />
         </div>
         <div>
           <label style={{ fontSize: 12, color: 'var(--muted)' }}>تاریخ تولد (شمسی)</label>
           <div style={{ display: 'flex', gap: 8, direction: 'rtl' }}>
-            <input value={y} onChange={e => setY(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" placeholder="سال ۱۳۷۰" style={inp} />
-            <input value={m} onChange={e => setM(e.target.value.replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="ماه ۰۱" style={{ ...inp, maxWidth: 90 }} />
-            <input value={d} onChange={e => setD(e.target.value.replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="روز ۰۱" style={{ ...inp, maxWidth: 90 }} />
+            <input value={y} onChange={e => setY(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 4))} inputMode="numeric" placeholder="سال ۱۳۷۰" style={inp} />
+            <input value={m} onChange={e => setM(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="ماه ۰۱" style={{ ...inp, maxWidth: 90 }} />
+            <input value={d} onChange={e => setD(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="روز ۰۱" style={{ ...inp, maxWidth: 90 }} />
           </div>
         </div>
       </div>

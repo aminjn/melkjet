@@ -13,6 +13,7 @@ import {
 } from '@/app/components/prodesk/ProDeskKit'
 import { jToday, jKey, jLabel } from '@/app/lib/jalali'
 import ContractStudio from './ContractStudio'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // میزِ کارِ «دفترِ حقوقی» — نسخهٔ تخصصی: پرونده‌ها با مرحلهٔ رسیدگی + جلساتِ پیشِ‌رو + پذیرشِ موکل.
 const ROLE = '/lawfirm'
@@ -35,7 +36,7 @@ function CaseForm({ initial, onSave, onClose, today }: { initial?: Partial<{ tit
         <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{DISPUTE_TYPES.map(t => <option key={t}>{t}</option>)}</select>
         <input placeholder="شمارهٔ پرونده" value={f.caseNo} onChange={e => setF({ ...f, caseNo: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
         <input placeholder="شعبه / دادگاه" value={f.court} onChange={e => setF({ ...f, court: e.target.value })} style={inputStyle} />
-        <input placeholder="حق‌الوکاله (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right', gridColumn: '1 / -1' }} />
+        <input placeholder="حق‌الوکاله (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right', gridColumn: '1 / -1' }} />
         <div style={{ gridColumn: '1 / -1', fontSize: 11.5, color: 'var(--muted)', marginBottom: -4 }}>تاریخِ جلسهٔ بعدی</div>
         <JalaliPicker jy={f.jy} jm={f.jm} jd={f.jd} baseYear={today.jy} onChange={v => setF({ ...f, ...v })} />
         <FileField value={f.file} onChange={v => setF({ ...f, file: v })} label="📎 پیوستِ پرونده / لایحه (تصویر یا PDF)" />

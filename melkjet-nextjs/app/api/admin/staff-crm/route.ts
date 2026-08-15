@@ -12,6 +12,7 @@ import { sendServiceSms } from '@/app/lib/sms'
 import { advisorWorkSummary } from '@/app/lib/advisor-store'
 import { agencyWorkSummary } from '@/app/lib/agency-store'
 import { listAllLeads } from '@/app/lib/leads-store'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // 📞 فاز ۱۱۶ — CRM مرکزیِ پرسنل: مشتری = اکانتِ واقعیِ سایت؛ پرسنل تماس/پیگیری/یادداشت ثبت می‌کنند.
 // دسترسی: سوپرادمین یا پرسنلِ دارای بخشِ staffCrm (اجرای اصلی در proxy؛ اینجا دفاعِ دوم).
@@ -199,7 +200,7 @@ export async function POST(req: NextRequest) {
   if (action === 'assign') {
     // فاز ۱۷۴ — ارجاع از دراپ‌داونِ پرسنل: `to` شمارهٔ پرسنل است (خالی = برداشتنِ مسئول).
     // ذخیره به شکلِ «نام (شماره)» تا فیلترِ «فقط کارهای من» دقیق بماند + اطلاعِ خودکار به پرسنل.
-    const toPhone = String(b.to || '').replace(/\D/g, '')
+    const toPhone = String(b.to || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (!toPhone) { const e0 = await assignStaff(phone, ''); return NextResponse.json({ ok: true, entry: e0 }) }
     const toAcc = getAccount(toPhone)
     if (!toAcc || !((toAcc.adminSections || []).length > 0 || toAcc.role === 'staff' || toPhone === SUPER_ADMIN_PHONE))

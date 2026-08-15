@@ -1,4 +1,5 @@
 import type { Agent, Lead, Listing } from './agency-store'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ── موتورِ تقسیمِ خودکارِ لید + مدیریتِ تداخلِ لید (آژانس) ──
 // معیارهای تقسیم: عملکردِ مشاور (معاملات) + تعادلِ بار (لیدهای بازِ کمتر) +
@@ -79,7 +80,7 @@ export function findConflicts(leads: Lead[]): ConflictGroup[] {
   const byName = new Map<string, Lead[]>()
   for (const l of leads) {
     if (l.stage === 'closed' || l.stage === 'lost') continue
-    const ph = (l.phone || '').replace(/\D/g, '')
+    const ph = (l.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (ph.length >= 7) { const a = byPhone.get(ph) || []; a.push(l); byPhone.set(ph, a) }
     const nm = norm(l.name)
     if (nm.length > 2) { const a = byName.get(nm) || []; a.push(l); byName.set(nm, a) }

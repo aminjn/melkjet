@@ -5,6 +5,7 @@ import { xpStatus, seasonLeaderboard, seasonKey } from '@/app/lib/reos/xp'
 import { listMissions, claimMission } from '@/app/lib/reos/missions'
 import { walletSummary, walletLedger, creditBucket, refundTxn, type Bucket, BUCKETS } from '@/app/lib/reos/wallet'
 import { flagEnabled } from '@/app/lib/reos/flags'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // GET /api/reos/economy — گیمیفیکیشن + کیفِ پولِ چندسطلی.
 //   ?view=profile (پیش‌فرض) → سطح/فصل/رتبه + مأموریت‌ها + خلاصهٔ کیف پول
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'وارد شوید' }, { status: 401 })
   await primeConfig().catch(() => {})
   const view = new URL(req.url).searchParams.get('view') || 'profile'
-  const agentId = String(s.phone || '').replace(/\D/g, '')
+  const agentId = String(s.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   const H = { headers: { 'Cache-Control': 'no-store, private' } }
   if (!(await flagEnabled('economy', { userId: agentId, role: String(s.role || '') }))) return NextResponse.json({ ok: true, disabled: true }, H)
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'وارد شوید' }, { status: 401 })
   await primeConfig().catch(() => {})
   const body = await req.json().catch(() => ({})) as { action?: string; missionKey?: string; ownerId?: string; bucket?: string; amount?: number; txnId?: string }
-  const agentId = String(s.phone || '').replace(/\D/g, '')
+  const agentId = String(s.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   const isAdmin = String(s.phone) === '09122862184'
 
   if (body.action === 'claim') {
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
     if (!isAdmin) return NextResponse.json({ error: 'دسترسی محدود' }, { status: 403 })
     const bucket = body.bucket as Bucket
     if (!BUCKETS.includes(bucket) || !body.ownerId || !body.amount) return NextResponse.json({ error: 'ورودی نامعتبر' }, { status: 400 })
-    return NextResponse.json({ ok: true, result: await creditBucket(String(body.ownerId).replace(/\D/g, ''), bucket, Number(body.amount), 'شارژِ سوپرادمین') })
+    return NextResponse.json({ ok: true, result: await creditBucket(String(body.ownerId).replace(FA_DIGITS, faDigit).replace(/\D/g, ''), bucket, Number(body.amount), 'شارژِ سوپرادمین') })
   }
   if (body.action === 'refund') {
     if (!isAdmin) return NextResponse.json({ error: 'دسترسی محدود' }, { status: 403 })

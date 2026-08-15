@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 const DATA_FILE = join(process.cwd(), '.builder-data.json')
 const KV_KEY = 'builder'
@@ -136,8 +137,8 @@ export async function ensureImported(owner: string): Promise<void> {
   let projects: Project[] = []
   try {
     const { getProfiles, regionLabel, phaseLabel } = await import('./persiansaze-store')
-    const norm = String(owner).replace(/\D/g, '')
-    const prof = Object.values(getProfiles()).find(p => (p.phones || []).some(ph => String(ph).replace(/\D/g, '') === norm))
+    const norm = String(owner).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+    const prof = Object.values(getProfiles()).find(p => (p.phones || []).some(ph => String(ph).replace(FA_DIGITS, faDigit).replace(/\D/g, '') === norm))
     if (prof) {
       for (const pr of prof.projects || []) {
         const label = phaseLabel(pr)

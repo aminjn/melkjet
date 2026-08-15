@@ -6,6 +6,7 @@ import { logAudit } from '@/app/lib/audit-store'
 import { teachFromAdmin, displayReason } from '@/app/lib/moderation'
 import { forIds } from '@/app/lib/listing-stats-store'
 import { getAccount } from '@/app/lib/account-store'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 async function guard() {
   const s = await getSession()
@@ -27,8 +28,8 @@ export async function POST(req: NextRequest) {
   } else {
     const { norm } = await import('@/app/lib/listing-similarity')
     const all = await listItems(type)
-    const t = norm(String(b.title)), ph = String(b.phone || '').replace(/\D/g, ''), ow = norm(String(b.owner || ''))
-    const twin = all.find(i => i.status !== 'rejected' && norm(i.title) === t && ((ph && (i.phone || '').replace(/\D/g, '') === ph) || (!ph && ow && norm(i.owner || '') === ow) || (!ph && !ow)))
+    const t = norm(String(b.title)), ph = String(b.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, ''), ow = norm(String(b.owner || ''))
+    const twin = all.find(i => i.status !== 'rejected' && norm(i.title) === t && ((ph && (i.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '') === ph) || (!ph && ow && norm(i.owner || '') === ow) || (!ph && !ow)))
     if (twin) return NextResponse.json({ error: `آیتمِ مشابه از قبل وجود دارد: «${twin.title.slice(0, 70)}» — همان را ویرایش کنید.`, duplicateOf: twin.id }, { status: 409 })
   }
   const it = await addItemManual({
@@ -63,8 +64,8 @@ export async function GET(req: NextRequest) {
   const q = (sp.get('q') || '').trim()
   if (q) items = items.filter(i => i.title.includes(q) || (i.location || '').includes(q) || (i.sourceName || '').includes(q) || (i.phone || '').includes(q) || (i.owner || '').includes(q))
   // فیلترِ «فقط آگهی‌های این کاربر» (شمارهٔ صاحبِ آگهی)
-  const ownerQ = (sp.get('owner') || '').replace(/\D/g, '')
-  if (ownerQ) items = items.filter(i => (i.phone || '').replace(/\D/g, '') === ownerQ)
+  const ownerQ = (sp.get('owner') || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+  if (ownerQ) items = items.filter(i => (i.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '') === ownerQ)
   // فهرستِ محله‌ها (facet) از روی موقعیتِ آگهی‌ها — قبل از اعمالِ فیلترِ محله تا دراپ‌داون خالی نشود.
   const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim()
   const hoodOf = (loc: string) => { const p = norm(loc).split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
   const stats = await forIds(page.map(i => i.id)).catch(() => ({} as Record<string, { views: number; contacts: number }>))
   const accCache = new Map<string, { name: string; role: string } | null>()
   const accountOf = (phoneRaw?: string) => {
-    const phone = (phoneRaw || '').replace(/\D/g, '')
+    const phone = (phoneRaw || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (!phone) return null
     if (!accCache.has(phone)) { const a = getAccount(phone) || getAccount('0' + phone.replace(/^0/, '')); accCache.set(phone, a ? { name: a.name || a.fullName || '', role: a.role || '' } : null) }
     return accCache.get(phone)

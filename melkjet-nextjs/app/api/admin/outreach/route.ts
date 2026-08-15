@@ -7,6 +7,7 @@ import { invitedSet, markInvited, invitedCount } from '@/app/lib/outreach-store'
 import { shecanRequest } from '@/app/lib/shecan-https'
 import { shortenLinksInText, linkVarName, trackAndShorten, siteBase } from '@/app/lib/shortener'
 import { SUPER_ADMIN_PHONE } from '@/app/lib/session'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -20,7 +21,7 @@ function targets(onlyNew = false) {
     .filter(a => a.phone !== SUPER_ADMIN_PHONE && a.role)
     .filter(a => { const d = dashForRoleId(a.role); return d && d !== '/buyer' && d !== '/admin' })
     .filter(a => !onlyNew || !a.lastLogin)
-    .map(a => ({ name: (a.name || 'همکار').trim(), phone: String(a.phone || '').replace(/\D/g, '') }))
+    .map(a => ({ name: (a.name || 'همکار').trim(), phone: String(a.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '') }))
     .filter(a => /^09\d{9}$/.test(a.phone))
 }
 

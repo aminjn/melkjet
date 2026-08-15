@@ -32,7 +32,7 @@ async function pushLeadToAdvisor(agencyName: string, lead: { name: string; phone
   try {
     const nm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim()
     const existing = await advListLeads(advisorPhone)
-    const key = (l: { phone?: string; name?: string }) => (l.phone || '').replace(/\D/g, '') || nm(l.name)
+    const key = (l: { phone?: string; name?: string }) => (l.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '') || nm(l.name)
     const want = key(lead)
     if (want && existing.some(l => key(l) === want)) return   // قبلاً ساخته شده
     const stageMap: Record<string, string> = { new: 'new', assigned: 'contacted', visit: 'visit', negotiation: 'negotiation', closed: 'closed', lost: 'lost' }
@@ -52,6 +52,7 @@ async function advisorPhoneOf(agencyOwner: string, advisorName: string): Promise
   try { const members = await listAgencyMembers(agencyOwner); return members.find(x => nm(x.advisorName) === nm(advisorName))?.advisorPhone } catch { return undefined }
 }
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // همهٔ دادهٔ پنل آژانس، مخصوص کاربرِ واردشده (per-profile).
 export async function GET() {

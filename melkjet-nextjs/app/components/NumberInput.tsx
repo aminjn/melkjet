@@ -1,5 +1,6 @@
 'use client'
 import React from 'react'
+import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ورودیِ عددی با جداکنندهٔ هزارگان (برای مبالغ). مقدار را به‌صورت رشتهٔ ارقام
 // لاتین نگه می‌دارد (سازگار با Number(value)) ولی با ارقام فارسی + «٬» نمایش می‌دهد.
@@ -8,7 +9,7 @@ function toLatin(s: string): string {
     .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
     .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
 }
-function digitsOnly(s: string): string { return toLatin(s).replace(/\D/g, '') }
+function digitsOnly(s: string): string { return toLatin(s).replace(FA_DIGITS, faDigit).replace(/\D/g, '') }
 function grouped(s: string): string {
   const d = digitsOnly(s)
   if (!d) return ''
