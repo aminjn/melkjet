@@ -2351,6 +2351,36 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('«کسری بودجه» دیگر مشاور نمی‌سازد', extractSignature('آپارتمان', 'امکان وام برای کسری بودجه\nمشاور فروش شما', 'مسکن دیپلمات').length === 0)
       ok('نامِ واقعی با همین قاعده آسیب نمی‌بیند', extractSignature('آپارتمان', 'محمد پرنده هستم مشاور و کارشناس شما', 'مسکن دیپلمات')[0] === 'محمد پرنده')
     }
+    // فاز ۲۷۹ (فیدبک: «محمد همان محمدپرنده است، وحید حسنی‌منش دوبار تکرار شده — علتش این است
+    // که کاربر گاهی بین نام و فامیل فاصله می‌گذارد و گاهی نه») — ادغام روی کلیدِ بی‌فاصله.
+    {
+      const { buildAgencyRoster } = await import('../app/lib/agency-roster.ts')
+      const mk = (ads, pinnedKeys) => buildAgencyRoster('testagency279', {
+        useAI: false, pinnedKeys,
+        f: {
+          profileTokens: async () => ({ posts: ads.map(a => ({ token: a.token, title: a.title })), name: 'املاک تست' }),
+          post: async (t) => { const a = ads.find(x => x.token === t); return { title: a.title, description: a.desc } },
+        },
+      })
+      const ADS = [
+        { token: 't279a', title: 'آپارتمان ۹۰', desc: 'واحد نوساز.\nمحمد پرنده هستم مشاور شما' },
+        { token: 't279b', title: 'آپارتمان ۸۰', desc: 'واحد بازسازی.\nمحمدپرنده هستم مشاور شما' },
+        { token: 't279c', title: 'ویلا', desc: 'حیاط‌دار.\nمشاور فروش: محمد' },
+        { token: 't279d', title: 'مغازه', desc: 'موقعیت عالی.\nمشاور فروش: محمد' },
+      ]
+      const r = await mk(ADS)
+      ok('نامِ بافاصله و بی‌فاصله یک خوشه‌اند و نامِ کوچک هم در آن ادغام می‌شود',
+        r.advisors.length === 1 && r.advisors[0].tokens.length === 4)
+      // ضدتست: «محمدی» نباید «محمد» را ببلعد (باقی‌ماندهٔ ۱ حرفی)
+      const r2 = await mk([
+        { token: 't279e', title: 'x', desc: 'مشاور فروش: محمدی' }, { token: 't279f', title: 'x', desc: 'مشاور فروش: محمدی' },
+        { token: 't279g', title: 'x', desc: 'مشاور فروش: محمد' }, { token: 't279h', title: 'x', desc: 'مشاور فروش: محمد' },
+      ])
+      ok('«محمد» و «محمدی» دو نفرِ جدا می‌مانند (ادغامِ بیش‌ازحد ممنوع)', r2.advisors.length === 2)
+      // مشاورِ دارای حساب همیشه میزبان است (کلیدش عوض نمی‌شود، وگرنه فایل‌هایش پاک می‌شدند)
+      const r3 = await mk(ADS, ['محمد'])
+      ok('کلیدِ مشاورِ دارای حساب پس از ادغام حفظ می‌شود', r3.advisors.length === 1 && r3.advisors[0].key === 'محمد')
+    }
     // فاز ۱۷۰ (قیفِ ورود): retryِ پیامکِ OTP — گذرا=دوباره، قطعی=هرگز (پیامکِ تکراری ممنوع)
     {
       const { sendPatternOnce, sendPatternWithRetry } = await import('../app/lib/send-otp.ts')

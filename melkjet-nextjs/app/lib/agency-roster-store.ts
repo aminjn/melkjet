@@ -376,7 +376,10 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     }
     // فاز ۱۹۴ — فازِ شناساییِ نام‌ها (AI) هم پیشرفتِ دیدنی دارد
     const onCluster = (d: number, t: number) => { workTick(); patchScrape(id, { phase: 'cluster', progress: { done: d, total: t }, lastProgressAt: Date.now() }).catch(() => {}) }
-    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow, onCluster, f: opts196?.f, shouldStop })
+    // فاز ۲۷۹ — مشاورهای دارای حساب «سنجاق» می‌شوند: در ادغامِ نامِ کوتاه/بلند همیشه میزبان
+    // می‌مانند تا کلیدشان عوض نشود؛ وگرنه در همین سینک «غایب» حساب و فایل‌هایشان پاک می‌شد.
+    const pinnedKeys = (scrape.advisors || []).filter(a => a.phone).map(a => a.key)
+    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow, onCluster, pinnedKeys, f: opts196?.f, shouldStop })
     // فاز ۱۹۶ — flushِ نهاییِ کشِ ازسرگیری: ذخیرهٔ throttled (هر ۵ث) دُمِ کش (و نام‌های AI) را جا می‌گذاشت
     // → پاسِ بعد دوباره از دیوار می‌خواند و AI را دوباره می‌پرسید. (خودِ تستِ شبیه‌سازی این را گرفت.)
     await saveRowCache(id, rowCache).catch(() => {})

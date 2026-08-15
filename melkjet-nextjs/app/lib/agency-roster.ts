@@ -161,6 +161,7 @@ export async function buildAgencyRoster(
   slugOrUrl: string,
   opts: { useAI?: boolean; maxDetails?: number; onProgress?: (done: number, total: number) => void;
     cached?: Record<string, { title: string; desc: string; name?: string }>;   // توکن→متن + نامِ AI (ازسرگیری)
+    pinnedKeys?: string[];   // فاز ۲۷۹ — کلیدِ مشاورهایی که حسابِ واقعی دارند: در ادغام همیشه میزبان می‌مانند
     onRow?: (token: string, r: { title: string; desc: string; name?: string }) => void;
     onCluster?: (done: number, total: number) => void;   // فاز ۱۹۴ — پیشرفتِ فازِ AI هم دیده شود
     f?: { profileTokens?: typeof fetchDivarProfileTokens; post?: typeof fetchDivarPost; ai?: typeof aiCanonical };   // فاز ۱۹۶ — تزریق برای تستِ کاملِ چرخه
@@ -285,23 +286,37 @@ export async function buildAgencyRoster(
     c.tokens.push(r.post.token); c.posts.push(r.post)
   })
 
-  // ── ادغامِ «نامِ کوتاه» در «نامِ کامل» (فاز ۲۷۷) ──
-  // فیدبکِ واقعی: «محمد پرنده وجود دارد، رفته یک «محمد» جدا هم ساخته». بعضی آگهی‌ها فقط نامِ
-  // کوچک را امضا می‌کنند و بعضی نامِ کامل را؛ نتیجه دو مشاورِ جعلی از یک نفر. اگر یک خوشهٔ
-  // تک‌کلمه‌ای دقیقاً یکی از کلمه‌های یک خوشهٔ چندکلمه‌ای باشد، همان یک نفر است.
-  // شرطِ ایمنی: فقط وقتی **دقیقاً یک** خوشهٔ چندکلمه‌ای کاندید باشد — وگرنه «محمد» بینِ
-  // «محمد پرنده» و «محمد رضایی» مبهم است و دست نمی‌خورد.
+  // ── ادغامِ «نامِ کوتاه» در «نامِ کامل» (فاز ۲۷۷ → بازنویسیِ ۲۷۹) ──
+  // فیدبکِ واقعی: «محمد» و «محمدپرنده» دو مشاور شده بودند، «حسنی‌منش» و «وحید حسنی‌منش» هم.
+  // علت (تشخیصِ خودِ کاربر): آگهی‌ها گاهی نام را با فاصله می‌نویسند و گاهی بی‌فاصله، و گاهی
+  // فقط نامِ کوچک یا فقط فامیل را امضا می‌کنند. پس مقایسه باید روی **کلیدِ بی‌فاصله** باشد،
+  // نه روی وجودِ فاصله در نام (نسخهٔ اولِ این ادغام همین اشتباه را داشت و «محمدپرنده»ی
+  // بی‌فاصله را اصلاً میزبان حساب نمی‌کرد).
+  // قاعده: کلیدِ کوتاه باید پیشوند یا پسوندِ کلیدِ بلند باشد و «باقی‌ماندهٔ» آن ≥۳ حرف —
+  // تا «محمد» در «محمدپرنده» ادغام شود ولی در «محمدی» (باقی‌مانده = «ی») هرگز.
+  // ایمنی: فقط وقتی **دقیقاً یک** میزبان کاندید باشد؛ و اگر یکی از دو طرف حسابِ واقعی دارد
+  // (graduate شده) همان میزبان می‌ماند — وگرنه کلیدِ خوشه عوض می‌شد و فایل‌های مشاورِ واقعی
+  // در سینکِ بعدی «غایب» حساب و پاک می‌شدند.
+  const pinned = new Set(opts.pinnedKeys || [])
+  const mergeInto = (small: RosterAdvisor, host: RosterAdvisor) => {
+    host.tokens.push(...small.tokens); host.posts.push(...small.posts)
+    fileCount.set(host.key, (fileCount.get(host.key) || 0) + (fileCount.get(small.key) || 0))
+    if (strongKeys.has(small.key)) strongKeys.add(host.key)
+    if (freshKeys.has(small.key)) freshKeys.add(host.key)
+    clusters.delete(small.key)
+    console.log(`[roster] merged «${small.name}» → «${host.name}» (${small.tokens.length} فایل)`)
+  }
   for (const [k, c] of [...clusters]) {
-    if (c.name.includes(' ')) continue
-    const hosts = [...clusters.values()].filter(m => m !== c && m.name.includes(' ') && m.name.split(/\s+/).some(w => keyOf(w) === k))
+    if (!clusters.has(k)) continue
+    const hosts = [...clusters.values()].filter(m => {
+      if (m.key === k || m.key.length <= k.length) return false
+      const rest = m.key.startsWith(k) ? m.key.slice(k.length) : m.key.endsWith(k) ? m.key.slice(0, -k.length) : ''
+      return rest.length >= 3
+    })
     if (hosts.length !== 1) continue
-    const host = hosts[0]
-    host.tokens.push(...c.tokens); host.posts.push(...c.posts)
-    fileCount.set(host.key, (fileCount.get(host.key) || 0) + (fileCount.get(k) || 0))
-    if (strongKeys.has(k)) strongKeys.add(host.key)
-    if (freshKeys.has(k)) freshKeys.add(host.key)
-    clusters.delete(k)
-    console.log(`[roster] merged «${c.name}» → «${host.name}» (${c.tokens.length} فایل)`)
+    // اگر خوشهٔ کوتاه حسابِ واقعی دارد، جهتِ ادغام برعکس می‌شود (نامِ بلند در کوتاه).
+    if (pinned.has(k) && !pinned.has(hosts[0].key)) mergeInto(hosts[0], c)
+    else mergeInto(c, hosts[0])
   }
 
   // ── چرت‌وپرت‌زدایی (فیدبک: «چرت و پرت زیاد میاره») ──
