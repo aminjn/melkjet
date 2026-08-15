@@ -23,13 +23,35 @@ if ! timeout 60 git fetch origin main --quiet; then
 fi
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/main)
-if [ "$LOCAL" = "$REMOTE" ]; then exit 0; fi   # چیزی تغییر نکرده
+# «دیپلویِ ناتمام» = pull انجام شده ولی build شکسته. چون از آن به بعد HEAD با origin/main یکی است،
+# دورهای بعدیِ کرون بی‌صدا رد می‌شدند و سرور برای همیشه روی buildِ خرابِ نیمه‌کاره می‌ماند
+# (قانونِ شمارهٔ یک). مارکر این حالت را زنده نگه می‌دارد تا خودکار دوباره تلاش شود.
+FAILED_MARK="$APP_DIR/.deploy-failed"
+if [ "$LOCAL" = "$REMOTE" ]; then
+  [ -f "$FAILED_MARK" ] || exit 0                       # واقعاً چیزی تغییر نکرده
+  echo "$(date) ↻ دیپلویِ قبلی ناتمام مانده بود — تلاشِ دوباره روی همان کامیت ($LOCAL)"
+else
+  echo "$(date) → پوش جدید: $REMOTE  — دیپلوی شروع شد"
+  git pull origin main --quiet
+fi
+echo "$REMOTE" > "$FAILED_MARK"   # تا وقتی build+reload موفق نشده، «ناتمام» حساب می‌شود
 
-echo "$(date) → پوش جدید: $REMOTE  — دیپلوی شروع شد"
-git pull origin main --quiet
 # nice/ionice مثلِ deploy.sh: build تمامِ ۴ هسته را نمی‌بلعد و سایت وسطِ دیپلویِ خودکار ۵۰۴ نمی‌دهد.
-NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build
+build() { NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build; }
+# ENOTEMPTY (`rmdir … not empty`) گلیچِ `.next`ِ کهنهٔ توربوپک است، نه ایرادِ کد — درمانش پاک‌کردنِ
+# `.next` و buildِ دوباره است. پس خودمان یک‌بار همین کار را می‌کنیم به‌جای مردن.
+if ! build; then
+  echo "$(date) ✗ build شکست خورد — .next پاک می‌شود و یک‌بارِ دیگر تلاش می‌کنم (گلیچِ ENOTEMPTY)"
+  rm -rf .next
+  if ! build; then
+    echo "$(date) ✗✗ buildِ دوم هم شکست خورد. سرور روی نسخهٔ قبلی است و کرون خودکار باز تلاش می‌کند."
+    echo "$(date)    اگر تکرار شد دستی ببین:  cd $APP_DIR && rm -rf .next && npm run build"
+    exit 1                                              # مارکر می‌ماند → دورِ بعد دوباره تلاش
+  fi
+  echo "$(date) ✓ تلاشِ دوم پس از پاک‌کردنِ .next موفق شد"
+fi
 pm2 reload ecosystem.config.js --update-env
+rm -f "$FAILED_MARK"                                     # از این‌جا به بعد دیپلوی تمام‌شده است
 
 # چکِ سلامت: اگر اینستنسی ۲۰۰ نداد، در لاگ فریاد بزن (ولی خروجی را غیرصفر نکن تا کرون هی هشدار نفرستد).
 sleep 3

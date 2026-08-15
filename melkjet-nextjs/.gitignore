@@ -120,3 +120,4 @@ next-env.d.ts
 -H
 15
 INSTALLATION_COMPLETE
+.deploy-failed

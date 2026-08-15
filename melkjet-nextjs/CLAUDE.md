@@ -24,6 +24,11 @@ reload**, so a broken deploy is caught immediately (not from the browser).
 رد می‌شود، دستی/دکمه‌ای منتظر می‌ماند. دو build هم‌زمان `.next` را خراب می‌کند (همان کرش‌لوپِ بالا).
 **نکته:** `auto-deploy.sh` اگر `git fetch` شکست بخورد (پروکسیِ گیت‌هاب در کرون نیست) دیگر بی‌صدا
 نمی‌میرد — در لاگ فریاد می‌زند (قانونِ شمارهٔ یک).
+**buildِ شکسته دیگر دیپلوی را نمی‌کُشد:** ENOTEMPTY (گلیچِ `.next`ِ کهنهٔ توربوپک) خودکار با
+`rm -rf .next` + buildِ دوباره درمان می‌شود. و چون بعدِ `git pull` مقدارِ HEAD با origin یکی می‌شود،
+یک buildِ شکسته باعث می‌شد کرون تا ابد بی‌صدا رد شود و سرور روی نسخهٔ نیمه‌کاره بماند — حالا مارکرِ
+`.deploy-failed` (gitignore) این حالت را زنده نگه می‌دارد تا دورِ بعدِ کرون همان کامیت را دوباره
+build کند. مارکر فقط پس از `pm2 reload`ِ موفق پاک می‌شود.
 
 ## Why deploys used to break ("This page couldn't load" / crash-loops) — FIXED, keep it fixed
 Two independent root causes, both now closed:
