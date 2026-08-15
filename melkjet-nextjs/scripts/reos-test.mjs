@@ -2381,6 +2381,35 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       const r3 = await mk(ADS, ['محمد'])
       ok('کلیدِ مشاورِ دارای حساب پس از ادغام حفظ می‌شود', r3.advisors.length === 1 && r3.advisors[0].key === 'محمد')
     }
+    // فاز ۲۸۰ — «قانونِ موضع» برای همهٔ منابع. بازتولیدِ دقیقِ آگهیِ gaHRMEeD: «فلاحی» فقط در
+    // عنوان است (نامِ کوچه)، امضا «محمد پرنده هستم مشاور» — ولی «فلاحی» از قبل در واژه‌نامه
+    // یاد گرفته شده بود و چون تطبیقِ ML به موضع کاری نداشت، آگهی را می‌دزدید.
+    {
+      const { buildAgencyRoster } = await import('../app/lib/agency-roster.ts')
+      const { learnName, resetMl } = await import('../app/lib/agency-roster-ml.ts')
+      const run = (ads) => buildAgencyRoster('t280', { useAI: false, f: {
+        profileTokens: async () => ({ posts: ads.map(a => ({ token: a.token, title: a.title })), name: 'مسکن دیپلمات' }),
+        post: async (t) => { const a = ads.find(x => x.token === t); return { title: a.title, description: a.desc } },
+      } })
+      await resetMl()
+      await learnName('فلاحی', 'ai', 5)          // آلودگیِ گذشته: «فلاحی» تثبیت‌شده در واژه‌نامه
+      await learnName('محمد پرنده', 'ai', 5)
+      const r = await run([
+        { token: 'gaHRMEeD', title: 'اپارتمان فلاحی 2شخصی سازسندتکبرگ', desc: 'ساختمان 7واحدی خلوت\nمسکن دیپلمات\nمحمد پرنده هستم مشاور و امین شما عزیزان' },
+        { token: 'ga8sjqmX', title: 'اپارتمان 90 متری', desc: 'لوکیشن قوی (فلاحی 38)\nمحمد پرنده هستم مشاور و کارشناس شما' },
+      ])
+      ok('نامِ آموخته از عنوان/آدرس دیگر آگهی را نمی‌دزدد', !r.advisors.some(a => a.key === 'فلاحی'))
+      ok('آگهی به صاحبِ امضای واقعی می‌رسد', r.advisors.length === 1 && r.advisors[0].key === 'محمدپرنده' && r.advisors[0].tokens.length === 2)
+      // ولی تعمیمِ کنترل‌شده باید بماند: مشاورِ تثبیت‌شده در همین آژانس، آگهیِ بی‌امضایش را می‌گیرد
+      const r2 = await run([
+        { token: 'a1', title: 'واحد ۹۰', desc: 'مشاور فروش: کاملی' },
+        { token: 'a2', title: 'واحد ۸۰', desc: 'مشاور فروش: کاملی' },
+        { token: 'a3', title: 'واحد ۷۰', desc: 'این واحد را کاملی برای بازدید آماده کرده است.' },
+      ])
+      ok('مشاورِ تثبیت‌شده آگهیِ بی‌امضای خودش را می‌گیرد (قدرتِ واژه‌نامه حفظ شد)',
+        r2.advisors.length === 1 && r2.advisors[0].tokens.length === 3)
+      await resetMl()
+    }
     // فاز ۱۷۰ (قیفِ ورود): retryِ پیامکِ OTP — گذرا=دوباره، قطعی=هرگز (پیامکِ تکراری ممنوع)
     {
       const { sendPatternOnce, sendPatternWithRetry } = await import('../app/lib/send-otp.ts')

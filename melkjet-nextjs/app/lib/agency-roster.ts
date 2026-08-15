@@ -259,6 +259,7 @@ export async function buildAgencyRoster(
   const freshKeys = new Set<string>()     // خوشه‌هایی که این اجرا واقعاً از متن استخراج شدند (نه پژواکِ lexicon)
   const fileCount = new Map<string, number>()   // برای وزن‌دهیِ یادگیری بر اساسِ تعدادِ فایل
   const unnamed: { tokens: string[]; posts: BrandPost[] } = { tokens: [], posts: [] }
+  const unnamedIdx: number[] = []   // فاز ۲۸۰ — برای پاسِ دومِ «تعمیمِ کنترل‌شدهٔ واژه‌نامه»
   rows.forEach((r, idx) => {
     // کاندیداهای «موضعِ امضا»یِ همین آگهی (heuristic) — تنها جایی که یک اسم واقعاً امضای مشاور است.
     const cand = r.cand.map(c => validName(c, name, r.addr)).filter(Boolean)
@@ -267,17 +268,23 @@ export async function buildAgencyRoster(
     // lexicon فقط وقتی معتبر است که نامِ آموخته‌شده در موضعِ امضایِ همین آگهی باشد (جزوِ cand)،
     // نه هر جای متن — وگرنه «ایران/ایرانی» در آدرس، آگهیِ مشاورِ دیگری («لشگری») را می‌دزدد.
     const lex = lexRaw && candKeys.has(keyOf(lexRaw)) ? lexRaw : ''
-    // استثنا: نامِ کاملِ چندکلمه‌ای («علی رضایی») هرجای متن هم تقریباً حتماً امضاست (تصادفِ ناچیز).
-    const lexFull = (!lex && lexRaw && lexRaw.includes(' ')) ? lexRaw : ''
-    // نامِ AI هم از همان فیلترها رد می‌شود: واژهٔ ملکی/نوفه و توکنِ آدرسِ همین آگهی هرگز اسم نیست.
+    // فاز ۲۸۰ — «قانونِ موضع» برای همهٔ منابع، بدونِ استثنا:
+    // پیش‌تر دو درِ پشتی باز مانده بود که نامِ آموخته می‌توانست از هرجای متن آگهی را تصاحب کند:
+    // (۱) `lexFull` (نامِ چندکلمه‌ای هرجای متن) و (۲) `resolved` (نامِ تثبیت‌شدهٔ ML، بدونِ هیچ
+    // شرطِ موضعی). همین دومی باعث شد آگهیِ `gaHRMEeD` — که امضایش «محمد پرنده هستم مشاور» است
+    // و کلمهٔ «فلاحی» فقط در **عنوان** («اپارتمان فلاحی 2شخصی ساز…») آمده — به مشاورِ جعلیِ
+    // «فلاحی» برسد. یعنی همان باگِ اصلی (خواندن از هرجای متن) در مسیرِ ML زنده مانده بود.
+    // حالا هر سه منبع فقط وقتی معتبرند که نام در **موضعِ امضای همین آگهی** باشد.
+    // (تعمیمِ کنترل‌شدهٔ واژه‌نامه به آگهی‌های بی‌امضا، پس از خوشه‌بندی و فقط برای مشاورِ
+    //  «تثبیت‌شده در همین آژانس» انجام می‌شود — پایین‌تر.)
     const ai = validName(aiMap[idx] || '', name, r.addr)
-    const res = resolved[idx] || ''   // نامِ مورد اعتمادِ ML که پیش از AI این آگهی را نسبت داد
-    // اولویت: AIِ متن‌آگاه (اگر پرسیده شد) → نامِ مورد اعتمادِ ML → lexiconِ موضعِ امضا → heuristic → نامِ کامل.
-    const chosen = ai || res || lex || cand[0] || lexFull
-    if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); return }
+    const res = resolved[idx] && candKeys.has(keyOf(resolved[idx])) ? resolved[idx] : ''
+    // اولویت: AIِ متن‌آگاه → نامِ تثبیت‌شدهٔ ML (در موضعِ امضا) → lexiconِ موضعِ امضا → heuristic.
+    const chosen = ai || res || lex || cand[0]
+    if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); unnamedIdx.push(idx); return }
     const k = keyOf(chosen)
-    // «سیگنالِ قوی» = نامِ مورد اعتمادِ ML، یا نامِ آموخته در موضعِ امضا، یا توافقِ مستقلِ AI و heuristic.
-    if (res || lex || lexFull || (ai && candKeys.has(keyOf(ai)))) strongKeys.add(k)
+    // «سیگنالِ قوی» = نامِ آموختهٔ تثبیت‌شده در موضعِ امضا، یا توافقِ مستقلِ AI و heuristic.
+    if (res || lex || (ai && candKeys.has(keyOf(ai)))) strongKeys.add(k)
     // «تازه» = این اجرا از متن استخراج شد (AI یا heuristic)، نه صرفاً پژواکِ نامِ از قبل آموخته.
     if (ai || cand.length) freshKeys.add(k)
     fileCount.set(k, (fileCount.get(k) || 0) + 1)
@@ -328,6 +335,35 @@ export async function buildAgencyRoster(
     if (c.tokens.length >= MIN_FILES || strongKeys.has(k)) continue
     unnamed.tokens.push(...c.tokens); unnamed.posts.push(...c.posts)
     clusters.delete(k)
+  }
+
+  // ── پاسِ دوم: تعمیمِ کنترل‌شدهٔ واژه‌نامه به آگهی‌های بی‌امضا (فاز ۲۸۰) ──
+  // چرا لازم است: بعضی مشاورها در بعضی آگهی‌ها امضا نمی‌کنند و فقط وسطِ متن نامشان می‌آید
+  // («این واحد را رضایی آماده کرده»). قانونِ موضع اینها را بی‌نام می‌کند، که ضرر است.
+  // چرا امن است: این تعمیم فقط برای مشاوری مجاز است که **در همین آژانس و همین اجرا** دست‌کم
+  // یک آگهیِ امضاشده دارد (خوشه‌اش با سیگنالِ موضعی ساخته شده). پس یک نامِ آموختهٔ خرابِ
+  // گذشته («فلاحی») هرگز نمی‌تواند آگهی بگیرد، چون هیچ امضایی در این آژانس ندارد.
+  // این جایگزینِ اصولیِ آن دو درِ پشتیِ حذف‌شده است: قدرتِ واژه‌نامه حفظ می‌شود، بی‌آنکه
+  // بتواند از هیچ، مشاور بسازد.
+  if (unnamedIdx.length && clusters.size) {
+    const established = [...clusters.values()].filter(c => strongKeys.has(c.key) || c.tokens.length >= 2)
+    const claimed: number[] = []
+    for (const idx of unnamedIdx) {
+      const r = rows[idx]
+      const hit = validName(lexiconMatch(`${r.title}\n${r.desc}`, established.map(c => ({ name: c.name }))), name, r.addr)
+      if (!hit) continue
+      const host = clusters.get(keyOf(hit))
+      if (!host) continue
+      host.tokens.push(r.post.token); host.posts.push(r.post)
+      fileCount.set(host.key, (fileCount.get(host.key) || 0) + 1)
+      claimed.push(idx)
+    }
+    if (claimed.length) {
+      const drop = new Set(claimed.map(i => rows[i].post.token))
+      unnamed.tokens = unnamed.tokens.filter(t => !drop.has(t))
+      unnamed.posts = unnamed.posts.filter(p2 => !drop.has(p2.token))
+      console.log(`[roster] lexicon claimed ${claimed.length} unsigned ads for established advisors`)
+    }
   }
 
   // ── یادگیریِ تدریجی (موتورِ فلایویل) ──
