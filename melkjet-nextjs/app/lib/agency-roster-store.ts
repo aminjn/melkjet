@@ -398,14 +398,22 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // هرسِ خودکار: رکوردهای قدیمی که این‌بار دیگر کشف نشدند و به حساب هم تبدیل نشده‌اند
     // (اسم‌های خرابِ نوفه از سینکِ قبلی) حذف می‌شوند تا لیست تمیز شود.
     // رکوردی که «شماره/حساب» دارد (graduateشده) هرگز حذف نمی‌شود.
+    // فاز ۲۷۸ — ownerِ موقتِ رکوردِ هرس‌شده باید «تخلیه» شود، نه فقط فراموش.
+    // ریشهٔ یتیمی: رکورد از فهرست حذف می‌شد ولی آگهی‌هایش زیرِ ownerِ موقت می‌ماندند و هیچ‌کس
+    // دیگر سراغشان نمی‌رفت. روی سرورِ زنده هزاران ردیف این‌طور جا مانده بود
+    // (`advisor:adv:pQRgYEXa:لوکیشن` = ۵۷۰ فایل) — لاشهٔ خوشه‌های آشغالِ پیش از فاز ۲۷۵.
+    const orphaned: string[] = []
     for (let i = recs.length - 1; i >= 0; i--) {
-      if (!freshByKey.has(recs[i].key) && !recs[i].phone && !recs[i].graduating) recs.splice(i, 1)
+      if (!freshByKey.has(recs[i].key) && !recs[i].phone && !recs[i].graduating) { orphaned.push(recs[i].owner); recs.splice(i, 1) }
     }
+    if (orphaned.length) console.log(`[roster] pruning ${orphaned.length} stale clusters (freeing their listings)`)
 
     // owner→tokens: هر مشاور آگهی‌های خودش؛ رکوردهای قدیمیِ غایب → توکنِ خالی (همه‌شان «رفته»)؛ آژانس → بی‌نام‌ها.
     const jobs: { rec?: RosterAdvisor; owner: string; tokens: string[] }[] = []
     for (const rec of recs) { const f = freshByKey.get(rec.key); jobs.push({ rec, owner: rec.owner, tokens: f ? f.tokens : [] }) }
     jobs.push({ owner: scrape.agencyOwner, tokens: roster.unnamed.tokens })
+    // خوشه‌های هرس‌شده با فهرستِ توکنِ خالی از همان مسیرِ آشنا تخلیه می‌شوند (کدِ تازه‌ای لازم نیست).
+    for (const o of orphaned) jobs.push({ owner: o, tokens: [] })
 
     // فاز ۱۹۳ — پیشرفتِ فازِ ایمپورت هم دیده می‌شود (قبلاً UI روی «N/N» یخ می‌زد و هنگ به نظر می‌رسید)
     const totalTokens193 = jobs.reduce((a, j) => a + j.tokens.length, 0)
