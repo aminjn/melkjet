@@ -1,6 +1,7 @@
 import { fetchDivarProfileTokens, fetchDivarPost, divarProfileSlug, type BrandPost } from './divar-post'
 import { aiFor, resolveAgent } from './gapgpt'
-import { knownNames, learnName } from './agency-roster-ml'
+import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
+import { keyOf, deEmoji, addressTokens, validName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // ── خوشه‌بندیِ آگهی‌های یک آژانسِ دیوار به تفکیکِ مشاور، از روی «امضای» داخلِ آگهی ──
@@ -13,13 +14,7 @@ const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // 
 // چون دامنه به یک آژانس محدود است، تصادمِ نام («هزار شایان») بی‌اثر است.
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-
-const ZWNJ = /‌/g
-// نرمال‌سازیِ کلیدِ خوشه: فارسی → یکدست، لاتین → CAPS، فاصله/نیم‌فاصله حذف.
-function keyOf(name: string): string {
-  const s = String(name || '').replace(ZWNJ, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
-  return /^[A-Za-z]+$/.test(s) ? s.toUpperCase() : s
-}
+let lexiconPruned = false   // پاک‌سازیِ یک‌بارهٔ واژه‌نامهٔ آموخته در هر پروسه (فاز ۲۷۵)
 
 // حروفِ لاتینِ فاصله‌دار را جمع می‌کند: "S H A Y G A N" → "SHAYGAN".
 function collapseSpacedLatin(t: string): string {
@@ -27,71 +22,14 @@ function collapseSpacedLatin(t: string): string {
 }
 
 const DECOR = '\\u2728\\u2b50\\u2605\\u2733\\ufe0f\\u2734\\u2795\\u274c\\u2705\\u2666\\ud83d\\udd37\\ud83d\\udd36\\*\\u2022\\u25c6\\u25aa\\u066d'
-const STOPWORDS = new Set([
-  'فروش', 'خرید', 'اجاره', 'ودیعه', 'رهن', 'ملک', 'املاک', 'مشاور', 'کارشناس', 'گروه', 'دپارتمان', 'تخصصی',
-  'آپارتمان', 'اداری', 'تجاری', 'ویلا', 'مسکونی', 'شما', 'واحد', 'کد', 'وضعیت', 'طبقه', 'سلام',
-  'احترام', 'قیمت', 'تایید', 'تأیید', 'آگهی', 'تماس', 'شماره', 'موبایل', 'آژانس', 'مسکن',
-  'متری', 'متراژ', 'نوساز', 'کلنگی', 'بازسازی', 'فول', 'معاوضه', 'فوری', 'بازدید',
-  'تحویل', 'اقساط', 'اقساطی', 'نقد', 'نقدی', 'سند', 'وام', 'پارکینگ', 'آسانسور', 'انباری',
-  'ویژه', 'ما', 'شما', 'ان', 'آن', 'این', 'ها', 'های', 'بهترین', 'عالی', 'تخفیف', 'شرایط', 'بدون',
-  'نمایندگی', 'خدمات', 'ویترین', 'همکار', 'همکاران', 'ارزان', 'حراج', 'استثنایی', 'تضمین', 'کیفیت', 'برج', 'مجتمع', 'سوییت', 'دفترکار', 'مغازه', 'زمین', 'باغ',
-  'به', 'با', 'از', 'در', 'که', 'تا', 'را', 'هم', 'یا', 'برای', 'جهت', 'دلیل', 'بازار', 'نوسان',
-  'استعلام', 'مشغول', 'هماهنگی', 'باشید', 'بگیرید', 'دارای', 'سابقه', 'شعبه', 'فعال', 'مجرب', 'روز',
-  'راهنمایی', 'راهنما', 'مشتریان', 'مشتری', 'گرامی', 'عزیز', 'محترم', 'تماس', 'مشاوره', 'خرید', 'فروش',
-  // ── واژه‌های نوفهٔ آگهی (قید/صفت/فعلِ تبلیغاتی) که «اسمِ مشاور» نیستند و منبعِ چرت‌وپرت بودند ──
-  'فقط', 'حالا', 'همین', 'الان', 'اکنون', 'اینک', 'واقعی', 'تزئینی', 'تزیینی', 'قطعی', 'فایل',
-  'مستاجر', 'مستأجر', 'مالک', 'عکس', 'عکسها', 'عکس‌ها', 'تصویر', 'تصاویر', 'فیلم', 'ویدیو', 'ویدئو',
-  'لطفا', 'لطفاً', 'حتما', 'حتماً', 'کاملا', 'کاملاً', 'دقیقا', 'دقیقاً', 'تقریبا', 'تقریباً', 'حدود', 'حدودا',
-  'مناسب', 'لاکچری', 'لوکس', 'شیک', 'خاص', 'منحصر', 'بفرد', 'رزرو', 'موجود', 'فروخته', 'رایگان', 'تضمینی',
-  'کمیسیون', 'درصد', 'هزینه', 'اقامت', 'است', 'بود', 'شده', 'دارد', 'ندارد', 'کنید', 'دهید', 'بفرمایید',
-  'هلدینگ', 'مجموعه', 'کلیه', 'انواع', 'همه', 'تمام', 'حال', 'کار', 'امکانات', 'موقعیت', 'دسترسی',
-  // وضعیتِ ملک/سکونت (نه اسمِ آدم) — «خالی» بزرگ‌ترین آلودهٔ لِکسیکونِ تولید بود
-  'خالی', 'تخلیه', 'واگذار', 'واگذاری', 'آماده', 'سکونت', 'مسکون', 'اجاره‌ای', 'رهنی', 'خواب', 'همکف', 'زیرزمین',
-])
-
-// واژه‌های دامنهٔ ملک (نوعِ ملک/امکانات + کدهای لاتینِ رایج) — اینها «اسمِ مشاور» نیستند و نباید
-// به‌عنوانِ امضا برداشته شوند (همان الگوی خودروجت که مدل/برند را رد می‌کرد).
-const CAR_TOKENS = new Set<string>()
-{
-  const add = (s: string) => { const n = keyOf(s); if (n.length >= 2) CAR_TOKENS.add(n) }
-  for (const t of ['آپارتمان', 'ویلا', 'پنت‌هاوس', 'سوییت', 'کلنگی', 'مغازه', 'دفترکار', 'دفتر کار', 'زمین', 'باغ', 'باغچه', 'برج', 'مجتمع', 'مستغلات', 'همکف', 'دوبلکس', 'تریپلکس', 'نوساز', 'بازسازی', 'شهرک', 'اقساط', 'مسکونی', 'اداری', 'تجاری', 'صنعتی', 'کشاورزی', 'ویلایی', 'آپارتمانی']) add(t)
-  for (const t of ['VIP', 'FULL', 'BASE', 'PRO', 'PLUS', 'MAX', 'GT', 'TOP', 'LUX', 'LUXURY', 'HOME', 'HOUSE', 'VILLA', 'TOWER', 'RESIDENCE', 'PENTHOUSE', 'OFFICE', 'SUITE', 'DUPLEX']) CAR_TOKENS.add(t)
-}
-
-// عناوین/القاب (خودِ اینها اسم نیستند؛ «خانم رضایی» → «رضایی»، «خانم» تنها → رد).
-const TITLES = new Set(['خانم', 'آقا', 'آقای', 'اقا', 'اقای', 'جناب', 'سرکار', 'مهندس', 'دکتر', 'حاج', 'حاجی', 'استاد', 'همکار', 'مدیر', 'مدیریت', 'فروشنده', 'مشاور', 'کارشناس', 'آقایان', 'اقایان'].map(keyOf))
-
-// پاک‌سازیِ نام: حذفِ القاب و کلماتِ نوفه/خودرو از ابتدا و میانِ کاندیدا.
-function cleanName(s: string): string {
-  return s.split(/\s+/).filter(Boolean).filter(w => { const k = keyOf(w); return !TITLES.has(k) && !STOPWORDS.has(w) && !CAR_TOKENS.has(k) }).join(' ').trim()
-}
-
-// آیا این کاندیدا نامِ واقعیِ شخص/آژانس است یا نوفه/مدلِ خودرو؟
-function isBadName(v: string): boolean {
-  const words = v.split(/\s+/).filter(Boolean)
-  if (!words.length) return true
-  if (words.some(w => w.length < 2)) return true                       // تکه‌های تک‌حرفی مثل «ی تایید»
-  if (words.length >= 2 && words.every(w => w.length <= 2)) return true // تکه‌های کوتاهِ مثلِ «ان ما»
-  if (CAR_TOKENS.has(keyOf(v))) return true                            // کلِ نام یک مدل/برند است
-  if (words.every(w => STOPWORDS.has(w) || CAR_TOKENS.has(keyOf(w)))) return true  // همه‌اش کلمهٔ نوفه/خودرو
-  if (/^\d+$/.test(keyOf(v))) return true
-  return false
-}
-
-// نامِ نهاییِ معتبر یا خالی: پاک‌سازیِ القاب/نوفه + ردِ نامِ خراب + ردِ نامِ خودِ آژانس.
-export function validName(s: string, agencyName = ''): string {
-  const v = cleanName((s || '').trim())
-  if (!v || v.length < 2 || v.length > 24 || isBadName(v)) return ''
-  const k = keyOf(v), a = keyOf(agencyName)
-  if (a && k.length >= 2 && (k === a || a.includes(k) || k.includes(a))) return ''   // خودِ آژانس امضا نیست
-  return v
-}
+// واژه‌نامه (نوفه/واژگانِ املاکی/القاب/نشانه‌های آدرس) به `agency-name-lexicon.ts` منتقل شد
+// تا یادگیرنده (`agency-roster-ml.ts`) هم با همان تعریف کار کند. اینجا فقط re-export می‌شود
+// چون فراخوان‌ها (تست‌ها، `roster-ml-report`) `validName` را از همین ماژول می‌گیرند.
+export { validName, addressTokens } from './agency-name-lexicon'
 
 // تطبیقِ لغوی با «نام‌های آموخته‌شده»: اگر یکی از نام‌های تأییدشدهٔ قبلی در متنِ آگهی باشد،
 // همان را برمی‌گرداند — قطعی، رایگان، بدونِ AI. هستهٔ «یادگیریِ تدریجیِ ماشین».
-// هر کاراکترِ غیرِ (حرفِ فارسی/لاتین، رقم، فاصله، ZWNJ) → فاصله. اموجی/نماد (♀️✅☑️☎️…) که به اسم
-// می‌چسبند و مرزِ کلمه را از بین می‌برند، این‌طور جدا می‌شوند. کلیدِ رفعِ «♀️محمدی».
-const deEmoji = (s: string) => String(s || '').replace(/[^ء-ی‌\sA-Za-z0-9۰-۹:：.\-،_]/g, ' ')
+// deEmoji (اموجی/نماد → فاصله؛ کلیدِ رفعِ «♀️محمدی») از واژه‌نامهٔ مشترک می‌آید.
 const normTxt = (s: string) => (' ' + deEmoji(s).replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک') + ' ')
 function lexiconMatch(text: string, learned: { name: string }[]): string {
   if (!learned.length) return ''
@@ -109,38 +47,64 @@ function lexiconMatch(text: string, learned: { name: string }[]): string {
   return best
 }
 
-// استخراجِ «امضای واقعیِ» آگهی. فقط دو سیگنالِ قابلِ اعتماد:
-// (۱) بلوکِ تزئینیِ برند، (۲) نامِ پس از کلیدواژهٔ «مشاور/کارشناس/امضا/…».
-// حدسِ «خطِ اولِ متن» حذف شد — منبعِ اصلیِ نوفه بود (آریس صنعت/فروش ویژه/«ی»/«خانم»).
+// ── استخراجِ امضا: فقط از «بلوکِ امضا»، نه از هرجای متن (فاز ۲۷۵) ───────────
+// ریشهٔ باگِ «نامِ آشغال»: الگوها روی کلِ متنِ صاف‌شده اجرا می‌شدند، پس یک کلیدواژه در
+// انتهای یک خط، اولین کلمهٔ خطِ بعد (اغلب آدرس) را به‌عنوان اسم برمی‌داشت — نمونهٔ واقعی:
+//   «▪ مصطفی هوشمند / ▪ مشاور تخصصی شهرک غرب»  ولی موتور «فلاحی» را از «بین فلاحی ۴۱ و ۴۳» گرفت.
+// حالا متن «خط به خط» دیده می‌شود و اسم فقط از این جاها برداشته می‌شود:
+//   (الف) خودِ خطِ امضا (خطی که کلیدواژهٔ مشاور/کارشناس/املاک/با احترام… دارد)،
+//   (ب) خطِ بالا/پایینِ خطِ امضا، اگر «فقط یک نامِ ۱–۲کلمه‌ای» باشد (همان مثالِ بالا)،
+//   (ج) بلوکِ تزئینیِ برند و نامِ چسبیده به اموجیِ شخص (این دو خودشان شکلِ امضا هستند)،
+//   (د) خطی که به‌تنهایی یک نامِ دقیقاً ۲کلمه‌ای است (کم‌اولویت‌ترین).
+// در همهٔ حالت‌ها، توکن‌های آدرسِ همان آگهی (پس از بین/خیابان/کوچه/بلوار/نبش/میدان/…) رد می‌شوند.
+const SIG_LINE = /(کارشناسِ?\s*فروش|مشاورِ?\s*فروش|کارشناس|مشاورین|مشاوران|مشاور|فروشنده|املاک|مسکن|امضا|با\s*احترام|با\s*تشکر|جهتِ?\s*راهنمایی|جهتِ?\s*هماهنگی|هماهنگی|راهنمایی|جهتِ?\s*تماس)/
+const RE_TITLED = /(?:سرکار\s+)?(?:خانم|آقای?|جناب|مهندس|دکتر|حاج|حاجی|استاد)\s+([ء-ی]{2,15}(?:\s+[ء-ی]{2,15})?)/g
+const RE_AFTER_KEY = /(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|کارشناس|مشاور|فروشنده|امضا|با\s*احترام)(?![ء-ی])\s*[:：.\-]*\s*([A-Za-zء-ی][A-Za-zء-ی]{1,15}(?:\s+[A-Za-zء-ی]{2,15})?)/g
+const RE_TAIL = /(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|جهتِ?\s*راهنمایی|جهتِ?\s*هماهنگی|هماهنگی|راهنمایی|جهتِ?\s*تماس|با\s*احترام|امضا)([ء-ی\s]{1,45})/g
+
 export function extractSignature(title: string, desc: string, agencyName = ''): string[] {
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
-  const flat = deEmoji(raw)   // اموجی/نماد → فاصله؛ اسمِ چسبیده به اموجی جدا می‌شود
+  const banned = addressTokens(raw)   // «فلاحی» در «بین فلاحی ۴۱ و ۴۳» → هرگز اسم نمی‌شود
   const out: string[] = []
-  const push = (s?: string) => { const v = validName(s || '', agencyName); if (v && !out.includes(v)) out.push(v) }
+  const push = (s?: string) => { const v = validName(s || '', agencyName, banned); if (v && !out.includes(v)) out.push(v) }
 
-  // ۱) بلوکِ تزئینی: بین دو رشتهٔ نماد ( ✦✦✦ SHAYGAN ✦✦✦ / ✨ ملکی ✨ / ✴️SHAYAN✴️ ) — روی متنِ اصلی.
+  // خط‌ها روی متنِ بدونِ اموجی/بولت (▪ و ✅ به فاصله تبدیل می‌شوند، ولی مرزِ خط حفظ می‌شود).
+  const lines = deEmoji(raw).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
+  const isSig = lines.map(l => SIG_LINE.test(l))
+
+  // (الف) نام روی خودِ خطِ امضا — هر سه الگوی امضا، ولی محدود به همان خط.
+  lines.forEach((line, i) => {
+    if (!isSig[i]) return
+    for (const m of line.matchAll(RE_TITLED)) push(m[1])
+    for (const m of line.matchAll(RE_AFTER_KEY)) push(m[1])
+    for (const m of line.matchAll(RE_TAIL)) {
+      const ws = (m[1] || '').trim().split(/\s+/).filter(Boolean).filter(w => !TITLES.has(keyOf(w)) && !isNoiseWord(w))
+      if (ws.length) push(ws.slice(0, 2).join(' '))
+    }
+  })
+
+  // (ب) خطِ چسبیده به خطِ امضا که فقط یک نام است: «▪ مصطفی هوشمند» بالای «▪ مشاور تخصصی …».
+  lines.forEach((_l, i) => {
+    if (!isSig[i]) return
+    for (const j of [i - 1, i + 1]) {
+      if (j < 0 || j >= lines.length || isSig[j]) continue
+      push(bareNameLine(lines[j], 1, agencyName, banned))
+    }
+  })
+
+  // (ج۱) بلوکِ تزئینی: بین دو رشتهٔ نماد ( ✦✦✦ SHAYGAN ✦✦✦ / ✨ ملکی ✨ ) — روی متنِ اصلی (نمادها لازم‌اند).
   const deco = new RegExp(`[${DECOR}]{1,8}\\s*([A-Za-z\\u0622-\\u06cc][A-Za-z\\u0622-\\u06cc]{1,22})\\s*[${DECOR}]`, 'g')
   for (const m of raw.matchAll(deco)) push(m[1])
 
-  // ۲) نام پس از عنوان (سرکار خانم/خانم/آقای/جناب …): «کارشناس فروش: سرکار خانم کامرانی».
-  for (const m of flat.matchAll(/(?:سرکار\s+)?(?:خانم|آقای?|جناب|مهندس|دکتر|حاج|حاجی|استاد)\s+([ء-ی]{2,15}(?:\s+[ء-ی]{2,15})?)/g)) push(m[1])
-
-  // ۳) نام پس از کلیدواژهٔ امضا (بدونِ عنوان). (?![آ-ی]) جلوی «کارشناسیِ تایید»→«کارشناس» را می‌گیرد.
-  for (const m of flat.matchAll(/(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|کارشناس|مشاور|فروشنده|امضا|با\s*احترام)(?![ء-ی])\s*[:：\.\-]*\s*([A-Za-zء-ی][A-Za-zء-ی]{1,15}(?:\s+[A-Za-zء-ی]{2,15})?)/g)) push(m[1])
-
-  // ۴) دنبالهٔ امضا: پس از «کارشناس/مشاور فروش» یا «راهنمایی/هماهنگی/تماس»، اولین نامِ معتبرِ ادامه.
-  //    «کارشناس فروش جهت راهنمایی ♀️محمدی» → «محمدی» (جهت/راهنمایی stopword‌اند، ♀️ حالا فاصله است).
-  for (const m of flat.matchAll(/(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|جهتِ?\s*راهنمایی|جهتِ?\s*هماهنگی|هماهنگی|راهنمایی|جهتِ?\s*تماس|با\s*احترام|امضا)([ء-ی\s]{1,45})/g)) {
-    const ws = (m[1] || '').trim().split(/\s+/).filter(Boolean)
-      .filter(w => { const k = keyOf(w); return !TITLES.has(k) && !STOPWORDS.has(w) && !CAR_TOKENS.has(k) })
-    if (ws.length) push(ws.slice(0, 2).join(' '))
-  }
-
-  // ۵) نامِ چسبیده به اموجیِ شخص («🙍‍♀️رضایی» / «👤کریمی») — روی متنِ اصلی، اموجیِ آدم/دست فقط.
+  // (ج۲) نامِ چسبیده به اموجیِ شخص («🙍‍♀️رضایی» / «👤کریمی») — روی متنِ اصلی، اموجیِ آدم فقط.
   const PERSON = '\\u{1F464}-\\u{1F469}\\u{1F481}\\u{1F482}\\u{1F470}\\u{1F935}\\u{1F64B}-\\u{1F64F}\\u{1F9D0}-\\u{1F9DF}\\u{1F471}\\u{1F474}\\u{1F475}'
   const CONNECT = '\\u{200D}\\u{FE0F}\\u{2640}\\u{2642}\\u{1F3FB}-\\u{1F3FF}\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}'
   const re5 = new RegExp(`[${PERSON}][${CONNECT}]*\\s*((?:سرکار\\s+)?(?:خانم|آقای?|جناب|مهندس|دکتر|حاج)?\\s*[ء-ی]{2,15}(?:\\s+[ء-ی]{2,15})?)`, 'gu')
   for (const m of raw.matchAll(re5)) push(m[1])
+
+  // (د) خطی که به‌تنهایی دقیقاً یک نامِ ۲کلمه‌ای است (بدونِ هیچ واژهٔ نوفه/آدرس/رقم) — آخرین اولویت،
+  //     چون بدونِ کلیدواژهٔ امضا کم‌اطمینان‌ترین سیگنال است. خطِ عنوان (i=0) شمرده نمی‌شود.
+  lines.forEach((line, i) => { if (i > 0 && !isSig[i]) push(bareNameLine(line, 2, agencyName, banned)) })
 
   return out
 }
@@ -161,6 +125,9 @@ async function aiCanonical(items: { i: number; title: string; desc: string }[]):
     '(۴) القاب را حذف کن: «خانم رضایی»→«رضایی». «خانم/آقا» به‌تنهایی = خالی. ' +
     '(۵) عبارتِ تبلیغاتی یا قید/صفت («فروش ویژه»، «تضمین بهترین خرید»، «کارشناسی رایگان»، «جهت راهنمایی»، «همین حالا»، «فقط»، «واقعی»، «عکس‌ها تزئینی»، «قطعی»، «مستاجر»، «مالک»، «موجود»، «رزرو») هرگز اسم نیست → خالی. ' +
     '(۶) اگر اسمِ واقعیِ فروشنده در متن نبود، خالی بگذار (حدس نزن). فقط چیزی را برگردان که مطمئنی نامِ یک آدم است؛ کوچک‌ترین تردید = خالی. ' +
+    // فاز ۲۷۵ — بزرگ‌ترین منبعِ اسمِ جعلی: نامِ کوچه/خیابان را اسمِ آدم می‌گرفت («بین فلاحی ۴۱ و ۴۳» → «فلاحی»).
+    '(۷) نامِ معبر/محله هرگز اسمِ مشاور نیست: هر کلمه‌ای که بعدِ «بین/خیابان/کوچه/بلوار/نبش/میدان/شهرک/فاز/منطقه/پلاک» آمده آدرس است، نه آدم → خالی. مثال: «بین فلاحی ۴۱ و ۴۳» ⇒ «فلاحی» آدرس است. ' +
+    '(۸) واژهٔ ملکی/موقعیتی مثلِ «لوکیشن، منطقه، دوخواب، قابل، آزاد، ایرانی، عزیزان، هماهنگی» اسم نیست → خالی. ' +
     'خروجی فقط JSON، بدونِ توضیح: [{"i":<شماره>,"name":"<نام یا خالی>"}]'
   const out = await Promise.race([
     chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: list }], { temperature: 0, max_tokens: 1500 }, provider),
@@ -206,7 +173,8 @@ export async function buildAgencyRoster(
   // چند دقیقه طول می‌کشد — با ازسرگیری و heartbeat مشکلی نیست و در پنجرهٔ شبانه اجرا می‌شود.
   const maxDetails = Math.max(1, Math.min(opts.maxDetails ?? 3000, posts.length))
   // برای هر آگهی: عنوان + توضیحات را می‌گیریم و کاندیدای امضا را می‌سازیم.
-  const rows: { post: BrandPost; title: string; desc: string; cand: string[] }[] = []
+  // `addr` = توکن‌های آدرسِ همین آگهی؛ هیچ منبعی (AI/lexicon/heuristic) اجازه ندارد از آنها اسم بسازد.
+  const rows: { post: BrandPost; title: string; desc: string; cand: string[]; addr: Set<string> }[] = []
   for (let i = 0; i < maxDetails; i++) {
     if (i % 5 === 0 && opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
     const p = posts[i]
@@ -220,7 +188,7 @@ export async function buildAgencyRoster(
       try { opts.onRow?.(p.token, { title, desc }) } catch {}   // چک‌پوینت برای ازسرگیری
       await sleep(600)   // نرخِ کندتر تا دیوار زیرِ فشار آگهی‌ها را رد نکند (fetchDivarPost خودش retry هم دارد)
     }
-    rows.push({ post: p, title, desc, cand: extractSignature(title, desc, name) })
+    rows.push({ post: p, title, desc, cand: extractSignature(title, desc, name), addr: addressTokens(`${title}\n${desc}`) })
     try { opts.onProgress?.(i + 1, maxDetails) } catch {}
   }
 
@@ -229,11 +197,16 @@ export async function buildAgencyRoster(
   // مصرف می‌شد، پس هر آگهی حتی با نامِ آموخته باز به AI می‌رفت. حالا: نامِ تثبیت‌شده (وزن≥۲،
   // یعنی حداقل دوبار دیده/تأییدشده) که در متنِ آگهی باشد، آن آگهی را قطعی نسبت می‌دهد و از AI
   // حذف می‌کند. با هر اجرا مشاورهای پایدار تثبیت می‌شوند → فراخوانِ AI کم و کمتر می‌شود.
-  const learned = await knownNames(1)                 // برای تطبیقِ موضعِ امضا (گیت‌شده با candKeys)
+  // فاز ۲۷۵ — واژه‌نامهٔ آموخته یک‌بار در هر پروسه از اسم‌های آشغالِ گذشته پاک می‌شود (خودترمیمی؛
+  // نسخهٔ زندهٔ تولید «لوکیشن/منطقه/دوخواب/…» را با وزنِ بالا یاد گرفته بود و هر اجرا بازتولید می‌کرد).
+  if (!lexiconPruned) { lexiconPruned = true; try { const p = await pruneLearned(); if (p.length) console.log(`[roster] ML lexicon pruned: ${p.length} junk names (${p.slice(0, 8).join('، ')})`) } catch {} }
+  // نام‌های آموخته هم از همان دروازهٔ اعتبار رد می‌شوند (اگر prune به هر دلیل نرسیده باشد).
+  const learned = (await knownNames(1)).filter(l => !!validName(l.name))   // تطبیقِ موضعِ امضا (گیت‌شده با candKeys)
   const trusted = learned.filter(l => l.weight >= 2)  // فقط تثبیت‌شده‌ها مجازند AI را short-circuit کنند
   const resolved: Record<number, string> = {}
   rows.forEach((r, idx) => {
-    const m = validName(lexiconMatch(`${r.title}\n${r.desc}`, trusted), name)
+    // نامِ آموخته هرجای متن پذیرفته می‌شود جز آن‌جا که توکنِ آدرسِ همین آگهی است.
+    const m = validName(lexiconMatch(`${r.title}\n${r.desc}`, trusted), name, r.addr)
     if (m) resolved[idx] = m
   })
 
@@ -281,15 +254,16 @@ export async function buildAgencyRoster(
   const unnamed: { tokens: string[]; posts: BrandPost[] } = { tokens: [], posts: [] }
   rows.forEach((r, idx) => {
     // کاندیداهای «موضعِ امضا»یِ همین آگهی (heuristic) — تنها جایی که یک اسم واقعاً امضای مشاور است.
-    const cand = r.cand.map(c => validName(c, name)).filter(Boolean)
+    const cand = r.cand.map(c => validName(c, name, r.addr)).filter(Boolean)
     const candKeys = new Set(cand.map(c => keyOf(c)))
-    const lexRaw = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), name)
+    const lexRaw = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), name, r.addr)
     // lexicon فقط وقتی معتبر است که نامِ آموخته‌شده در موضعِ امضایِ همین آگهی باشد (جزوِ cand)،
     // نه هر جای متن — وگرنه «ایران/ایرانی» در آدرس، آگهیِ مشاورِ دیگری («لشگری») را می‌دزدد.
     const lex = lexRaw && candKeys.has(keyOf(lexRaw)) ? lexRaw : ''
     // استثنا: نامِ کاملِ چندکلمه‌ای («علی رضایی») هرجای متن هم تقریباً حتماً امضاست (تصادفِ ناچیز).
     const lexFull = (!lex && lexRaw && lexRaw.includes(' ')) ? lexRaw : ''
-    const ai = validName(aiMap[idx] || '', name)
+    // نامِ AI هم از همان فیلترها رد می‌شود: واژهٔ ملکی/نوفه و توکنِ آدرسِ همین آگهی هرگز اسم نیست.
+    const ai = validName(aiMap[idx] || '', name, r.addr)
     const res = resolved[idx] || ''   // نامِ مورد اعتمادِ ML که پیش از AI این آگهی را نسبت داد
     // اولویت: AIِ متن‌آگاه (اگر پرسیده شد) → نامِ مورد اعتمادِ ML → lexiconِ موضعِ امضا → heuristic → نامِ کامل.
     const chosen = ai || res || lex || cand[0] || lexFull
@@ -339,7 +313,7 @@ export async function debugRoster(slugOrUrl: string, n = 30): Promise<any> {
   const { posts, name, reason } = await fetchDivarProfileTokens(slug)
   if (!posts.length) return { ok: false, error: reason || 'آگهی‌ای یافت نشد', gapModel }
 
-  const learned = await knownNames(1)
+  const learned = (await knownNames(1)).filter(l => !!validName(l.name))
   const rows: { i: number; token: string; title: string; desc: string }[] = []
   for (let i = 0; i < Math.min(n, posts.length); i++) {
     const p = posts[i]; let title = p.title || '', desc = ''
@@ -361,13 +335,16 @@ export async function debugRoster(slugOrUrl: string, n = 30): Promise<any> {
 
   let emptyDesc = 0, byAI = 0, byHeur = 0, byLex = 0, unnamed = 0
   const evaluated = rows.map(r => {
-    const lex = lexiconMatch(`${r.title}\n${r.desc}`, learned)
+    // دقیقاً همان دروازه‌های تولید (فاز ۲۷۵): توکنِ آدرسِ همین آگهی برای هر سه منبع ممنوع است،
+    // و اولویت مثلِ خوشه‌بندیِ واقعی AI → lexicon → heuristic است (نه lexicon اول).
+    const addr = addressTokens(`${r.title}\n${r.desc}`)
+    const lex = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), name, addr)
     const heur = extractSignature(r.title, r.desc, name)[0] || ''
-    const ai = aiMap[r.i] || ''
-    const chosen = validName(lex || ai || heur || '', name)
+    const ai = validName(aiMap[r.i] || '', name, addr)
+    const chosen = ai || lex || heur
     if (!r.desc) emptyDesc++
-    if (chosen) { if (lex) byLex++; else if (ai && validName(ai, name)) byAI++; else byHeur++ } else unnamed++
-    return { token: r.token, title: r.title.slice(0, 70), descLen: r.desc.length, desc: r.desc.replace(/\s+/g, ' '), ai, heuristic: heur, lexicon: lex, chosen: chosen || '' }
+    if (chosen) { if (ai) byAI++; else if (lex) byLex++; else byHeur++ } else unnamed++
+    return { token: r.token, title: r.title.slice(0, 70), descLen: r.desc.length, desc: r.desc.replace(/\s+/g, ' '), ai, heuristic: heur, lexicon: lex, address: [...addr].slice(0, 8), chosen }
   })
   // نمونهٔ کاملِ بی‌نام‌ها (تا ۱۲ تا) — با متنِ کامل تا ببینیم چرا اسم پیدا نشد.
   const unnamedSamples = evaluated.filter(e => !e.chosen).slice(0, 12)

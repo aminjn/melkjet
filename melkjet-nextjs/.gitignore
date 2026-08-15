@@ -108,6 +108,7 @@ next-env.d.ts
 .*-store.json
 .reos-*.json
 .empire-*.json
+.agency-roster-cache.json
 
 # فاز ۱۳۱ — ضربانِ کارگرِ صفِ اسکرپ (فایلِ حالتِ runtime، مثل .advisor-divar-jobs.json)
 .cron-heartbeat.json

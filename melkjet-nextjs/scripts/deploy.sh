@@ -11,6 +11,16 @@ set -euo pipefail
 APP_DIR="${MELKJET_APP_DIR:-/var/www/melkjet/melkjet-nextjs}"
 cd "$APP_DIR"
 
+# قفلِ مشترک با auto-deploy.sh (کرون): دو build هم‌زمان `.next` را خراب می‌کند و اینستنس‌ها را
+# به چانک‌های حذف‌شده وصل می‌کند — همان کرش‌لوپی که در CLAUDE.md مستند است. این‌جا (برخلافِ کرون)
+# منتظر می‌مانیم تا نوبت برسد، چون این اجرا عمدیِ آدم است و نباید بی‌صدا رد شود.
+LOCK="/tmp/melkjet-deploy.lock"
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  echo "→ یک دیپلویِ دیگر (کرون) در حالِ اجراست — منتظر می‌مانم تا تمام شود…"
+  flock 9
+fi
+
 echo "→ کدِ فعلیِ روی سرور:"
 git log -1 --oneline 2>/dev/null || true
 

@@ -14,14 +14,21 @@ exec 9>"$LOCK"
 flock -n 9 || { echo "$(date) قفل گرفته‌شده، رد شد"; exit 0; }
 
 cd "$APP_DIR"
-git fetch origin main --quiet
+
+# fetch ممکن است شکست بخورد (پروکسیِ گیت‌هاب در محیطِ کرون نیست/قطع است). با `set -e` این یعنی
+# مرگِ بی‌صدا هر ۲ دقیقه — دقیقاً همان «کارِ بی‌صدا مرده»ی قانونِ شمارهٔ یک. پس بلند گزارش می‌کنیم.
+if ! timeout 60 git fetch origin main --quiet; then
+  echo "$(date) ✗ fetch نشد (پروکسی/شبکه؟) — دیپلوی این دور رد شد. چک: cd $APP_DIR && proxy-on && git fetch origin main"
+  exit 0
+fi
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/main)
 if [ "$LOCAL" = "$REMOTE" ]; then exit 0; fi   # چیزی تغییر نکرده
 
 echo "$(date) → پوش جدید: $REMOTE  — دیپلوی شروع شد"
 git pull origin main --quiet
-NODE_OPTIONS="--max-old-space-size=2048" npm run build
+# nice/ionice مثلِ deploy.sh: build تمامِ ۴ هسته را نمی‌بلعد و سایت وسطِ دیپلویِ خودکار ۵۰۴ نمی‌دهد.
+NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build
 pm2 reload ecosystem.config.js --update-env
 
 # چکِ سلامت: اگر اینستنسی ۲۰۰ نداد، در لاگ فریاد بزن (ولی خروجی را غیرصفر نکن تا کرون هی هشدار نفرستد).
