@@ -1,7 +1,7 @@
 import { fetchDivarProfileTokens, fetchDivarPost, divarProfileSlug, type BrandPost } from './divar-post'
 import { aiFor, resolveAgent } from './gapgpt'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
-import { keyOf, deEmoji, addressTokens, validName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
+import { keyOf, deEmoji, addressTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // ── خوشه‌بندیِ آگهی‌های یک آژانسِ دیوار به تفکیکِ مشاور، از روی «امضای» داخلِ آگهی ──
@@ -61,6 +61,9 @@ const SIG_LINE = /(کارشناسِ?\s*فروش|مشاورِ?\s*فروش|کار�
 const RE_TITLED = /(?:سرکار\s+)?(?:خانم|آقای?|جناب|مهندس|دکتر|حاج|حاجی|استاد)\s+([ء-ی]{2,15}(?:\s+[ء-ی]{2,15})?)/g
 const RE_AFTER_KEY = /(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|کارشناس|مشاور|فروشنده|امضا|با\s*احترام)(?![ء-ی])\s*[:：.\-]*\s*([A-Za-zء-ی][A-Za-zء-ی]{1,15}(?:\s+[A-Za-zء-ی]{2,15})?)/g
 const RE_TAIL = /(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|جهتِ?\s*راهنمایی|جهتِ?\s*هماهنگی|هماهنگی|راهنمایی|جهتِ?\s*تماس|با\s*احترام|امضا)([ء-ی\s]{1,45})/g
+// امضای «معرفیِ خود»: نام *پیش از* کلیدواژه می‌آید — «محمد پرنده هستم مشاور و امین شما عزیزان».
+// بدونِ این الگو، امضای این سبک اصلاً دیده نمی‌شد (همهٔ الگوهای دیگر نامِ پس از کلیدواژه را می‌گیرند).
+const RE_SELF = /([ء-ی]{2,15}(?:\s+[ء-ی]{2,15})?)\s+(?:هستم|هستیم|در\s*خدمتم|در\s*خدمتتونم)/g
 
 export function extractSignature(title: string, desc: string, agencyName = ''): string[] {
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
@@ -75,6 +78,7 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   // (الف) نام روی خودِ خطِ امضا — هر سه الگوی امضا، ولی محدود به همان خط.
   lines.forEach((line, i) => {
     if (!isSig[i]) return
+    for (const m of line.matchAll(RE_SELF)) push(m[1])       // «محمد پرنده هستم مشاور…» — اولویت با معرفیِ خود
     for (const m of line.matchAll(RE_TITLED)) push(m[1])
     for (const m of line.matchAll(RE_AFTER_KEY)) push(m[1])
     for (const m of line.matchAll(RE_TAIL)) {
@@ -201,7 +205,7 @@ export async function buildAgencyRoster(
   // نسخهٔ زندهٔ تولید «لوکیشن/منطقه/دوخواب/…» را با وزنِ بالا یاد گرفته بود و هر اجرا بازتولید می‌کرد).
   if (!lexiconPruned) { lexiconPruned = true; try { const p = await pruneLearned(); if (p.length) console.log(`[roster] ML lexicon pruned: ${p.length} junk names (${p.slice(0, 8).join('، ')})`) } catch {} }
   // نام‌های آموخته هم از همان دروازهٔ اعتبار رد می‌شوند (اگر prune به هر دلیل نرسیده باشد).
-  const learned = (await knownNames(1)).filter(l => !!validName(l.name))   // تطبیقِ موضعِ امضا (گیت‌شده با candKeys)
+  const learned = (await knownNames(1)).filter(l => !!strictName(l.name))   // تطبیقِ موضعِ امضا (گیت‌شده با candKeys)
   const trusted = learned.filter(l => l.weight >= 2)  // فقط تثبیت‌شده‌ها مجازند AI را short-circuit کنند
   const resolved: Record<number, string> = {}
   rows.forEach((r, idx) => {
@@ -313,7 +317,7 @@ export async function debugRoster(slugOrUrl: string, n = 30): Promise<any> {
   const { posts, name, reason } = await fetchDivarProfileTokens(slug)
   if (!posts.length) return { ok: false, error: reason || 'آگهی‌ای یافت نشد', gapModel }
 
-  const learned = (await knownNames(1)).filter(l => !!validName(l.name))
+  const learned = (await knownNames(1)).filter(l => !!strictName(l.name))
   const rows: { i: number; token: string; title: string; desc: string }[] = []
   for (let i = 0; i < Math.min(n, posts.length); i++) {
     const p = posts[i]; let title = p.title || '', desc = ''

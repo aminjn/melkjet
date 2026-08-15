@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
-import { validName } from './agency-name-lexicon'
+import { validName, strictName } from './agency-name-lexicon'
 
 // ── مدلِ یادگیرندهٔ «اسمِ مشاور» ──────────────────────────────────────────────
 // هدف: تشخیصِ نامِ مشاور از متنِ آگهی، و «یادگیریِ تدریجی» تا کم‌کم مستقل از AI شود.
@@ -38,7 +38,7 @@ export async function learnName(name: string, teacher: 'ai' | 'admin' = 'ai', bu
   // فاز ۲۷۵ — دروازهٔ ورود: نامی که از واژه‌نامه رد شود (واژهٔ ملکی/نوفه/آدرس) هرگز آموخته نمی‌شود.
   // وگرنه یک حدسِ خرابِ AI («لوکیشن») وزن می‌گیرد و از آن به بعد قطعی و بدونِ AI بازتولید می‌شود.
   // تأییدِ ادمین (ساختِ حساب برای مشاورِ واقعی) استثناست — انسان دیده و تأیید کرده.
-  if (teacher !== 'admin' && !validName(n)) return
+  if (teacher !== 'admin' && !strictName(n)) return
   const k = nameKey(n)
   await mutate(db => {
     if (db.negatives[k]) delete db.negatives[k]   // اگر قبلاً منفی بود، تأییدِ جدید آزادش می‌کند
@@ -64,7 +64,7 @@ export async function pruneLearned(): Promise<string[]> {
     const dropped: string[] = []
     for (const [k, r] of Object.entries(db.names)) {
       if (r.teacher === 'admin') continue
-      if (validName(r.name)) continue
+      if (strictName(r.name)) continue
       dropped.push(r.name); delete db.names[k]
     }
     return dropped
