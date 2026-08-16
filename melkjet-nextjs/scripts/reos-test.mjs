@@ -3132,10 +3132,12 @@ console.log('\n── REOS: آگهی‌های مشابه — kindOf/pickSimilar 
   const ids8 = r8.map(x => x.id)
   ok('کلنگی/مغازه/اجاره/روزانه/مشهد هرگز در خروجی نیستند (وتوی سخت)', !ids8.includes('c') && !ids8.includes('e') && !ids8.includes('d') && !ids8.includes('i') && !ids8.includes('f'))
   const simOf = (id) => r8.find(x => x.id === id)?.sim ?? -1
-  ok('رتبه‌بندی: هم‌محله+متراژِ نزدیک اول، بعد هم‌محلهٔ شمولی، بعد صرفِ هم‌شهری', JSON.stringify(ids8) === JSON.stringify(['a', 'h', 'b', 'g']))
+  // فاز ۲۸۵ — قراردادِ سخت‌تر (فیدبکِ زنده: «نه منطقه نه قیمت ربط ندارد»): قیمتِ ~۲برابر (b)
+  // و متراژ/قیمتِ خارج از باند (g) دیگر «هرگز» نمی‌آیند، حتی برای پُرکردنِ ظرفیت.
+  ok('رتبه‌بندی: فقط هم‌محله‌های باندِ تنگ — قیمتِ ۲برابر و خارج‌ازباند هرگز', JSON.stringify(ids8) === JSON.stringify(['a', 'h']))
   ok('simPct پخش‌شده و صادق (نه «۸۵٪ برای همه»)', simOf('a') >= 0.8 && simOf('b') <= 0.7 && simOf('a') - simOf('b') >= 0.15 && simOf('g') <= 0.45)
   ok('وقتی باندِ ±۴۰٪ خودش k را پر می‌کند، خارج‌ازباند نمی‌آید', !pickSimilar(target, all, 3).some(x => x.id === 'g'))
-  ok('قحطی: فقط باندِ متراژ شل می‌شود — کلنگی حتی در قحطی هم نمی‌آید', JSON.stringify(pickSimilar(target, [cB, cC, cG], 6).map(x => x.id)) === JSON.stringify(['b', 'g']))
+  ok('قحطی: خالی بهتر از بی‌ربط — کلنگی/قیمتِ دوبرابر/خارج‌ازباند حتی در قحطی هم نمی‌آیند (بخشِ UI پنهان می‌شود)', pickSimilar(target, [cB, cC, cG], 6).length === 0)
   const rU = pickSimilar(target, [cA, { id: 'u', title: 'ملک در جنت‌آباد', location: 'تهران، جنت‌آباد', meta: { 'شهر': 'تهران', 'محله': 'جنت‌آباد' } }], 8)
   ok('kindِ نامعلوم وتو نمی‌شود ولی کفِ مخرجِ 0.75 امتیازِ دروغین نمی‌دهد', rU.length === 2 && rU[0].id === 'a' && rU[1].id === 'u' && rU[1].sim < 0.6)
   ok('خودِ target و idهای تکراری حذف؛ خروجی قطعی است', JSON.stringify(pickSimilar(target, [{ ...target }, cA, { ...cA, title: 'کپی' }], 8).map(x => x.id)) === JSON.stringify(['a']) && JSON.stringify(pickSimilar(target, all, 8)) === JSON.stringify(r8))

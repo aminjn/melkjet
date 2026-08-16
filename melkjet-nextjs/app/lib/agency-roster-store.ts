@@ -564,7 +564,8 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
 // ── graduate: به یک مشاورِ کشف‌شده شمارهٔ موبایل بده → حسابِ واقعی بساز و آگهی‌ها را منتقل کن ──
 export async function graduateAdvisor(id: string, key: string, phone: string, role = 'advisor'): Promise<{ ok: boolean; error?: string; moved?: number }> {
   const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
-  if (!/^09\d{9}$/.test(p)) return { ok: false, error: 'شمارهٔ موبایل معتبر نیست (۰۹...)' }
+  // مسیرِ graduate همیشه پشتِ گاردِ سوپرادمین/staff است ⇒ ثابت (۰۲۱xxxxxxxx) هم مجاز؛ پیامکی هم نمی‌فرستد.
+  if (!/^0\d{10}$/.test(p)) return { ok: false, error: 'شمارهٔ معتبر نیست (موبایل ۰۹… یا ثابت با کدِ شهر)' }
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد' }
   const isAgency = key === '__agency__'
@@ -642,7 +643,8 @@ export async function removeAdvisor(id: string, key: string): Promise<{ ok: bool
 // در حالِ اجرا رقابت می‌کند) به صفِ اینستنسِ ۰ می‌رود تا درخواست ۶۰ثانیه‌ای تایم‌اوت نشود.
 export async function enqueueGraduate(id: string, key: string, phone: string, role = 'advisor'): Promise<{ ok: boolean; error?: string; queued?: boolean }> {
   const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
-  if (!/^09\d{9}$/.test(p)) return { ok: false, error: 'شمارهٔ موبایل معتبر نیست (۰۹...)' }
+  // هم‌قاعده با graduateAdvisor: مسیرِ ادمین ⇒ ثابت هم پذیرفته می‌شود (پیامکی در کار نیست).
+  if (!/^0\d{10}$/.test(p)) return { ok: false, error: 'شمارهٔ معتبر نیست (موبایل ۰۹… یا ثابت با کدِ شهر)' }
   return mutate(db => {
     const s = db.scrapes[id]; if (!s) return { ok: false, error: 'اسکرپ یافت نشد' }
     const isAgency = key === '__agency__'

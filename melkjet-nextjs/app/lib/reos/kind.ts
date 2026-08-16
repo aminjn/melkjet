@@ -8,6 +8,7 @@
 // درمان: معیارهای تعیین‌کننده «فیلترِ سخت»اند (وتو، نه وزن) و امتیاز فقط بینِ بازمانده‌ها
 // از شواهدِ واقعی (متراژ/قیمتِ هر متر/محله/متن) ساخته می‌شود تا simPct صادق و پخش‌شده باشد.
 import { dealOf, cityMatch } from '../listing-filter'
+import { similarity, DUP_THRESHOLD } from '../listing-similarity'
 import { fieldsOf, ptypeClassOf, norm } from '../listing-similarity'
 import { tokenize, embedTokens, cosine } from './features'
 import type { Vector } from './types'
@@ -43,6 +44,7 @@ interface SimView {
   hood: string
   region: string
   area: number
+  price: number    // قیمتِ کل — برای وتوی بودجه (خریدارِ ۱۸ میلیاردی با فایلِ ۹۷ میلیاردی کاری ندارد)
   ppm: number      // قیمتِ هر متر (فقط وقتی قیمت و متراژ هر دو معلوم‌اند)
   vec: Vector      // بردارِ توکنیِ تازه‌محاسبه (نه بردارِ کهنهٔ استور — کهنگی همان باگ را برمی‌گرداند)
 }
@@ -60,28 +62,40 @@ function viewOf(it: SimilarItemLike): SimView {
   const ptxt = it.meta?.['نوع ملک'] || it.category || ''
   return {
     deal: dealOf(it), kind: kindOf(it), city: f.city, cityCands, hood: squash(f.hood), region: squash(it.meta?.['منطقه']),
-    area: f.area, ppm: f.price && f.area ? f.price / f.area : 0,
+    area: f.area, price: f.price, ppm: f.price && f.area ? f.price / f.area : 0,
     vec: embedTokens([...tokenize(ptxt), ...tokenize(it.location), ...tokenize(it.title), ...feats.flatMap(t => tokenize(t))]),
   }
 }
 
-// وتوهای سخت + پلهٔ باندِ متراژ. خروجی: 0 = باندِ ±۴۰٪ (یا متراژِ نامعلوم)، 1 = ±۷۰٪،
-// 2 = خارج از باند، Infinity = هرگز (نوعِ معامله/نوعِ ملک/شهرِ متفاوت — این سه هیچ‌وقت شل نمی‌شوند).
+// وتوهای سخت + پله‌های شل‌شدنی. خروجی: 0 = «واقعاً مشابه» (باندِ تنگِ متراژ/قیمت + هم‌محله)،
+// 1 = فقط برای پُرکردنِ ظرفیت، Infinity = هرگز.
+// فاز ۲۸۵ (فیدبکِ زنده: ۷۳متریِ ۱۸.۵B در تهرانپارس، «مشابه»هایش ۲۲۰متریِ ۹۷B پونک و ۱۲۵متریِ
+// ۳۲.۶B جنت‌آباد بود): سه ریشه بسته شد —
+//   (۱) پلهٔ «بدونِ قیدِ متراژ» حذف شد: خارج از ±۷۰٪ یعنی هرگز، حتی اگر نتیجه خالی بماند.
+//   (۲) قیمتِ کل حالا وتو دارد (±۴۰٪ تنگ، تا ±۹۰٪ فقط پُرکننده، بیشتر هرگز).
+//   (۳) محله/منطقه دیگر صرفاً امتیاز نیست: غیرهم‌محله فقط پُرکننده است.
+// «خالی بهتر از بی‌ربط» — UI بخشِ مشابه را وقتی چیزی نیست پنهان می‌کند.
 function vetoLevel(base: SimView, candIt: SimilarItemLike, cand: SimView): number {
-  // DealKindِ چهارگانهٔ خام مقایسه می‌شود، نه دوتاییِ sale/rentِ itemToProperty —
-  // فاز ۲۳۰: اجارهٔ روزانه فقط با روزانه، وگرنه سوئیتِ شبی‌فلان کنارِ اجارهٔ عادی می‌نشیند.
   if (cand.deal !== base.deal) return Infinity
-  // کلاسِ معلومِ متفاوت = حذفِ قطعی (آپارتمان هرگز با کلنگی/مغازه)؛ کلاسِ نامعلوم حذف نمی‌شود
-  // چون «اثباتِ تفاوت» نداریم — امتیازِ پایینش خودش او را از top-k بیرون می‌گذارد.
   if (base.kind && cand.kind && cand.kind !== base.kind) return Infinity
   if (base.cityCands.length && !base.cityCands.some(c => cityMatch(candIt, c))) return Infinity
+  let lvl = 0
   if (base.area && cand.area) {
     const r = Math.abs(cand.area - base.area) / base.area
-    if (r <= 0.4) return 0
-    if (r <= 0.7) return 1
-    return 2
+    if (r > 0.7) return Infinity
+    if (r > 0.4) lvl = 1
+  } else if (base.area) lvl = 1            // متراژِ نامعلومِ کاندید = شواهدِ ضعیف → فقط پُرکننده
+  if (base.price && cand.price) {
+    const r = Math.abs(cand.price - base.price) / base.price
+    if (r > 0.9) return Infinity
+    if (r > 0.4) lvl = 1
   }
-  return 0
+  if (base.hood) {
+    const hoodMatch = cand.hood && (base.hood === cand.hood || base.hood.includes(cand.hood) || cand.hood.includes(base.hood))
+    const regionMatch = base.region && cand.region && base.region === cand.region
+    if (!hoodMatch && !regionMatch) lvl = 1
+  }
+  return lvl
 }
 
 // امتیازِ ترکیبی ۰..۱ روی بازمانده‌های فیلترِ سخت — وزن‌ها فقط برای شواهدِ موجود جمع می‌شوند
@@ -107,18 +121,27 @@ function scoreOf(base: SimView, cand: SimView): number {
 export function pickSimilar(target: SimilarItemLike, candidates: SimilarItemLike[], k = 8): { id: string; sim: number }[] {
   const base = viewOf(target)
   const seen = new Set<string>([target.id])
-  const byLevel: { id: string; v: SimView }[][] = [[], [], []]
+  const byLevel: { id: string; it: SimilarItemLike; v: SimView }[][] = [[], []]
   for (const c of candidates) {
     if (!c?.id || seen.has(c.id)) continue
     seen.add(c.id)
     const v = viewOf(c)
     const lvl = vetoLevel(base, c, v)
-    if (lvl !== Infinity) byLevel[lvl].push({ id: c.id, v })
+    if (lvl !== Infinity) byLevel[lvl].push({ id: c.id, it: c, v })
   }
   const pool = [...byLevel[0]]
   if (pool.length < k) pool.push(...byLevel[1])
-  if (pool.length < k) pool.push(...byLevel[2])
-  return pool.map(p => ({ id: p.id, sim: scoreOf(base, p.v) }))
-    .sort((a, b) => b.sim - a.sim || (a.id < b.id ? -1 : 1))
-    .slice(0, k)
+  const ranked = pool.map(p => ({ ...p, sim: scoreOf(base, p.v) })).sort((a, b) => b.sim - a.sim || (a.id < b.id ? -1 : 1))
+  // فاز ۲۸۵ — هم‌ملک‌زدایی بینِ خودِ نتایج: دو نسخهٔ یک فایل (همان ۱۲۵متریِ جنت‌آباد که دوبار
+  // کنارِ هم نشسته بود) با همان موتورِ twin (similarity ≥ DUP_THRESHOLD) به یکی فرو می‌ریزند.
+  const out: { id: string; sim: number }[] = []
+  const pickedF: ReturnType<typeof fieldsOf>[] = []
+  for (const r of ranked) {
+    const f = fieldsOf(r.it)
+    if (pickedF.some(pf => similarity(pf, f) >= DUP_THRESHOLD)) continue
+    pickedF.push(f)
+    out.push({ id: r.id, sim: r.sim })
+    if (out.length >= k) break
+  }
+  return out
 }

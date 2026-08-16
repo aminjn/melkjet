@@ -1970,7 +1970,8 @@ function AgencyRosterPanel() {
   const remove = async (id: string) => { if (!confirm('این اسکرپ حذف شود؟ (حساب‌ها و فایل‌های ساخته‌شده می‌مانند)')) return; await post({ action: 'remove', id }); load() }
   const graduate = async (id: string, key: string) => {
     const ph = (phones[`${id}:${key}`] || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
-    if (!/^09\d{9}$/.test(ph)) { setMsg('❌ شمارهٔ موبایلِ ۰۹... معتبر وارد کن'); return }
+    // مسیرِ ادمین: ثابت (۰۲۱xxxxxxxx) هم مجاز است — فقط ۱۱ رقم با صفرِ اول کافی است.
+    if (!/^0\d{10}$/.test(ph)) { setMsg('❌ شمارهٔ معتبر وارد کن (موبایل ۰۹… یا ثابت با کدِ شهر)'); return }
     const j = await post({ action: 'graduate', id, key, phone: ph })
     if (j.ok) { setMsg('⏳ در صفِ ساختِ حساب — انتقالِ فایل‌ها روی سرور انجام می‌شود (تا ۱–۲ دقیقه)'); load() } else setMsg('❌ ' + (j.error || 'خطا')) }
   const removeAdvisor = async (id: string, key: string, name: string) => {
@@ -2070,7 +2071,7 @@ function AgencyRosterPanel() {
                         ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {a.phone}</span>
                         : a.graduating
                           ? <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>⏳ در حالِ ساختِ حساب…</span>
-                          : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
+                          : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="۰۹… یا ثابت ۰۲۱…" value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
                             <button onClick={() => graduate(s.id, a.key)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب</button></>}
                       <button onClick={() => removeAdvisor(s.id, a.key, a.name)} title="حذف از فهرست" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: '#e06666', fontSize: 11.5, cursor: 'pointer' }}>حذف</button>
                     </div>
@@ -2083,7 +2084,7 @@ function AgencyRosterPanel() {
                     <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(s.lastUnnamed || 0)} فایل</span>
                     {s.agencyPhone
                       ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {s.agencyPhone}</span>
-                      : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:__agency__`] || ''} onChange={e => setPhone(`${s.id}:__agency__`, e.target.value)} />
+                      : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="۰۹… یا ثابت ۰۲۱…" value={phones[`${s.id}:__agency__`] || ''} onChange={e => setPhone(`${s.id}:__agency__`, e.target.value)} />
                         <button onClick={() => graduate(s.id, '__agency__')} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب آژانس</button></>}
                   </div>
                   <DivarLinks tokens={s.unnamedTokens} />
@@ -4920,7 +4921,8 @@ function CreateUserPopup({ roles, plans, onClose, onCreated }: { roles: IdName[]
   const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '11px 13px', color: 'var(--text)', fontSize: 13.5, fontFamily: 'inherit', outline: 'none' }
   const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 6, display: 'block', fontWeight: 600 }
   const submit = async () => {
-    setError(''); if (!/^09\d{9}$/.test(phone)) { setError('شمارهٔ موبایلِ معتبر وارد کنید (۰۹...)'); return }
+    // ساختِ کاربر از پنلِ ادمین: ثابت (۰۲۱xxxxxxxx) هم پذیرفته می‌شود — ثبت‌نامِ عمومی موبایل‌فقط می‌ماند.
+    setError(''); if (!/^0\d{10}$/.test(phone)) { setError('شمارهٔ معتبر وارد کنید (موبایل ۰۹… یا ثابت با کدِ شهر)'); return }
     setBusy(true)
     try {
       const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, role, plan }) })
@@ -4938,7 +4940,7 @@ function CreateUserPopup({ roles, plans, onClose, onCreated }: { roles: IdName[]
         </div>
         <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>فقط شمارهٔ موبایل را وارد کنید. <b>اطلاعاتِ هویتی و پروفایلِ کاربر، در اولین ورودِ خودش با احرازِ شاهکار به‌صورتِ خودکار کامل می‌شود.</b></div>
-          <div><label style={lab}>شماره موبایل *</label><input style={{ ...inp, direction: 'ltr', textAlign: 'right' }} placeholder="۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={e => setPhone(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 11))} autoFocus /></div>
+          <div><label style={lab}>شماره (موبایل یا ثابت) *</label><input style={{ ...inp, direction: 'ltr', textAlign: 'right' }} placeholder="۰۹… یا ثابت ۰۲۱…" value={phone} onChange={e => setPhone(e.target.value.replace(FA_DIGITS, faDigit).replace(/\D/g, '').slice(0, 11))} autoFocus /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div><label style={lab}>نقش (اختیاری)</label><select style={inp} value={role} onChange={e => setRole(e.target.value)}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
             <div><label style={lab}>پلن (اختیاری)</label><select style={inp} value={plan} onChange={e => setPlan(e.target.value)}><option value="">بدون پلن</option>{planOptions(plans)}</select></div>

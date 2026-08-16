@@ -5,6 +5,16 @@ import { useEffect } from 'react'
 // جایگزینِ صفحهٔ پیش‌فرضِ «Something went wrong!» با نسخهٔ فارسیِ برندشده.
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
+    // فاز ۲۸۵ — «chunkِ کهنه» پس از دیپلوی: تبِ باز HTMLِ قبل را دارد و buildِ جدید آن chunk را
+    // حذف کرده (Failed to load chunk …). یک رفرشِ خودکارِ یک‌باره کاربر را نجات می‌دهد؛ گاردِ
+    // زمانی جلوی حلقهٔ رفرش را می‌گیرد (اگر بعدِ رفرش هم خطا بود، همان UI خطا می‌ماند).
+    const msg = String(error?.message || '')
+    if (/failed to load chunk|loading chunk|chunkloaderror/i.test(msg)) {
+      try {
+        const last = Number(sessionStorage.getItem('mj_chunk_reload_at') || 0)
+        if (Date.now() - last > 30_000) { sessionStorage.setItem('mj_chunk_reload_at', String(Date.now())); location.reload(); return }
+      } catch { /* حالتِ خصوصی مرورگر */ }
+    }
     try { console.error('[app/global-error]', error) } catch {}
     try {
       fetch('/api/client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,

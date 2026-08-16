@@ -162,14 +162,13 @@ export default function PropertyClient({ id, initial, originality }: { id: strin
       // پیش‌بینیِ قیمت (مدلِ رگرسیونیِ یادگیریِ ماشین روی دادهٔ واقعی؛ اگر دادهٔ محله نبود، قیمتِ همین ملک مبنا)
       const fq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || it.location || '', price: it.price || '', area: it.meta?.['متراژ'] || '', title: it.title || '' })
       fetch(`/api/market/forecast?${fq}`).then(r => r.ok ? r.json() : null).then(d => setForecast(d?.forecast || null)).catch(() => {})
-      // آگهی‌های مشابه — اول با شباهتِ برداریِ REOS (embedding cosine)، بعد fallback به آخرین‌ها.
-      const fallbackSimilar = () => fetch(`/api/content?type=listing&limit=12`).then(r => r.ok ? r.json() : { items: [] })
-        .then(s => setSimilar((s.items || []).filter((x: Item) => x.id !== it.id).slice(0, 3))).catch(() => {})
+      // آگهی‌های مشابه — فقط نتایجِ واقعیِ REOS. فاز ۲۸۵ (فیدبک: «نه منطقه نه قیمت ربط ندارد»):
+      // fallbackِ «آخرین آگهی‌ها» حذف شد — وقتی مشابهِ واقعی نیست، بخش پنهان می‌ماند؛
+      // بی‌ربط بدتر از خالی است. حتی ۱–۲ نتیجهٔ مرتبط هم نمایش داده می‌شود.
       fetch(`/api/reos/similar?propertyId=${it.id}&k=6`).then(r => r.ok ? r.json() : null).then(d => {
         const sim = (d?.similar || []).filter(Boolean)
-        if (sim.length >= 3) setSimilar(sim.slice(0, 6).map((x: { id: string; title?: string; price?: string; location?: string; image?: string; simPct?: number }) => ({ id: x.id, title: x.title, price: x.price, location: x.location, image: x.image, matchPct: x.simPct })))
-        else fallbackSimilar()
-      }).catch(fallbackSimilar)
+        setSimilar(sim.slice(0, 6).map((x: { id: string; title?: string; price?: string; location?: string; image?: string; simPct?: number }) => ({ id: x.id, title: x.title, price: x.price, location: x.location, image: x.image, matchPct: x.simPct })))
+      }).catch(() => setSimilar([]))
       // غنی‌سازی فقط یک‌بار (هنگامِ اسکرپ) ساخته و در دیتابیس ذخیره می‌شود؛ این‌جا فقط از کش خوانده می‌شود.
       // اگر آگهیِ قدیمی هنوز غنی نشده باشد، سرور در پس‌زمینه گرمش می‌کند و یک‌بار دوباره از دیتابیس می‌خوانیم.
       const loadEnrich = (retry = false) => {

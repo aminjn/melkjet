@@ -145,7 +145,9 @@ export function activePlan(phone: string): { plan: string; expiresAt?: number } 
 // ساختِ کاربر توسطِ سوپرادمین (دستی) — با هویتِ شاهکار (اختیاری) و وضعیتِ تأیید
 export function createAccount(phone: string, patch: { name?: string; role?: string; plan?: string; identity?: Idy; verified?: boolean }): { ok: boolean; error?: string; account?: Account } {
   const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
-  if (!/^09\d{9}$/.test(p)) return { ok: false, error: 'شمارهٔ موبایل معتبر نیست (۰۹...)' }
+  // فقط مسیرِ ادمین/سوپرادمین به این‌جا می‌رسد ⇒ شمارهٔ ثابت (۰۲۱xxxxxxxx) هم پذیرفته می‌شود؛
+  // ثبت‌نام/OTPِ عمومی مسیرِ جدا دارد و موبایل‌فقط می‌ماند (به ثابت نمی‌شود پیامک زد).
+  if (!/^0\d{10}$/.test(p)) return { ok: false, error: 'شمارهٔ معتبر نیست (موبایل ۰۹… یا ثابت با کدِ شهر)' }
   return mutateDb(db => {
     if (db[p]) return { ok: false, error: 'این کاربر از قبل وجود دارد' }
     const idy = patch.identity
