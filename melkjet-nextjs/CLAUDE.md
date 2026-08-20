@@ -400,6 +400,28 @@ was rejected by the user (consent-per-ad model + they say it's down) → **direc
 اولین کار: بیلد با GitHub Actions یا Android Studio و بستنِ خطاهای کامپایل.
 
 
+
+### ⚠️ کرش‌لوپِ اینستنسِ ۰ — حل شد (ریشه‌ای)
+**نشانه:** هر ۱–۲ ساعت همهٔ اسکرپ‌ها/تلگرام می‌ایستاد و ریلودِ دستی لازم بود. `pm2 jlist`
+نشان می‌داد `status=waiting restart`, `restarts=4414`, `mem=0MB`.
+**ریشه:** `max_memory_restart: 1200M` برای **همهٔ** اینستنس‌ها یکسان بود، ولی اینستنسِ ۰
+کارگرِ دسته‌ای است (آموزشِ ۳ مدلِ ML + `syncGraphFromEvents(5000)` +
+`dedupeListings` که **O(n²)** روی ۲۷هزار آگهی است + اسنپ‌شات‌ها + سایت‌مپ، همه در یک تیک).
+اوجِ مصرفش ۱.۳۵–۱.۵۵GB بود → pm2 هر ۱ دقیقه می‌کشتش
+(`pm2.log`: `restarted because it exceeds --max-memory-restart`) → کار هرگز تمام نمی‌شد →
+بک‌لاگ رشد می‌کرد → تیکِ بعدی سنگین‌تر → **مارپیچِ مرگ**. `max_restarts: 15` هم بی‌اثر بود
+چون پروسه بیش از `min_uptime: 10s` زنده می‌ماند و «ناپایدار» شمرده نمی‌شد.
+**فیکس:** در `ecosystem.config.js` → `max_memory_restart: idx === 0 ? '2200M' : '1200M'`.
+**تأیید با داده:** restarts ثابت ماند و بک‌لاگِ enrich شروع کرد به **کم‌شدن**
+(۷۰۸۲ → ۶۵۲۷ در ۲۰ دقیقه) — قبلاً زیاد می‌شد.
+**پایش:** `/usr/local/bin/melkjet-trend.sh` (هر ۵ دقیقه → `/var/log/melkjet-trend.log`)
+و `/usr/local/bin/melkjet-heal.sh` (اگر غیرonline شد ری‌استارت، اگر کارِ گیرکرده بود reload).
+**ریسکِ باقی‌مانده:** `dedupeListings` با O(n²) با رشدِ آگهی‌ها دوباره خطرناک می‌شود —
+باید تکه‌تکه/ایندکس‌محور شود. سقف را قبل از آن پایین نیاور.
+**سه کشِ بی‌سقف** (`_fileCache`/`_derivedCache` در persiansaze-store و `cache` در json-file)
+پایهٔ ~۵۵۰MB می‌سازند — نشتی نیست، هزینهٔ عمدیِ سرعت است؛ در سقف لحاظش کن.
+
+
 ## Conventions
 - **Persistence = file-based JSON stores** in `process.cwd()`, all gitignored (`.*-data.json`).
   Mirror the style of `app/lib/scraper-store.ts` / `crm-store.ts` for any new store.

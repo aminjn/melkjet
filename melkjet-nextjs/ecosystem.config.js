@@ -37,7 +37,7 @@ function instance(port, idx) {
       WARM_PORTS: '3000,3001,3002,3003',
     },
     autorestart: true,
-    max_memory_restart: '1200M',
+    max_memory_restart: idx === 0 ? '2200M' : '1200M',   // اینستنسِ ۰ کارگرِ دسته‌ای است، نه سرورِ وب
     // اگر هنگامِ بوت خطا داد، به‌جای crash-loopِ بی‌نهایت بعد از ۱۵ تلاش بایستد.
     min_uptime: '10s',
     max_restarts: 15,
