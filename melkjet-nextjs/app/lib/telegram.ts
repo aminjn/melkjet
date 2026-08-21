@@ -5,10 +5,16 @@ import { proxiedRequest, proxiedGetBinary } from './proxy-fetch'
 import { getAdminData } from './admin-store'
 
 const TOKEN = () => process.env.TELEGRAM_BOT_TOKEN || ''
+// تلگرام از داخلِ ایران «همیشه» فیلتر است (DNS به 10.10.34.35 می‌رود) → همیشه پروکسی لازم دارد.
+// پروکسیِ اختصاصیِ خودش را دارد و دیگر از divar.proxyUrl قرض نمی‌گیرد: وقتی دیوار به اتصالِ
+// مستقیم سوییچ کرد آن فیلد خالی شد و تلگرام چند روز بی‌صدا مرد (ECONNREFUSED). پیش‌فرض =
+// پروکسیِ محلیِ سرور، چون مسیرِ مستقیم هرگز جواب نمی‌دهد.
 const PROXY = () =>
+  process.env.TELEGRAM_PROXY ||
   getAdminData().divar?.proxyUrl ||
   process.env.HTTPS_PROXY || process.env.https_proxy ||
-  process.env.HTTP_PROXY || process.env.http_proxy || undefined
+  process.env.HTTP_PROXY || process.env.http_proxy ||
+  'http://127.0.0.1:1080'
 
 export const tgConfigured = () => !!TOKEN()
 
@@ -29,7 +35,7 @@ export async function tgApi<T = any>(method: string, params: Record<string, unkn
     if (!j.ok) { console.warn('[tg]', method, 'failed:', j.description || r.status); return null }
     return j.result as T
   } catch (e) {
-    console.warn('[tg]', method, 'error:', (e as Error).message)
+    console.warn('[tg]', method, 'error:', (e as Error).message || String(e), '| proxy:', PROXY())
     return null
   }
 }
