@@ -1,5 +1,6 @@
 import { fetchDivarProfileTokens, fetchDivarPost, divarProfileSlug, type BrandPost } from './divar-post'
 import { aiFor, resolveAgent } from './gapgpt'
+import { nameProbSync, NAME_THRESHOLD } from './roster-name-model'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
 import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
@@ -70,7 +71,16 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   // «فلاحی» در «بین فلاحی ۴۱ و ۴۳» و «کسری» در «کسری بودجه» → هرگز اسم نمی‌شوند
   const banned = new Set([...addressTokens(raw), ...contextNoiseTokens(raw)])
   const out: string[] = []
-  const push = (s?: string) => { const v = validName(s || '', agencyName, banned); if (v && !out.includes(v)) out.push(v) }
+  const push = (s?: string) => {
+    const v = validName(s || '', agencyName, banned)
+    if (!v || out.includes(v)) return
+    // دروازهٔ دوم: دسته‌بندِ خودمان. فهرستِ سیاه «غریب» و «متمدن» را می‌کشت و
+    // «سالن اجتماعات» را رد می‌کرد؛ مدل هر دو را درست تشخیص می‌دهد.
+    // null = مدل هنوز آموزش ندیده → رفتار دقیقاً مثلِ قبل می‌ماند.
+    const p = nameProbSync(v)
+    if (p !== null && p < NAME_THRESHOLD) return
+    out.push(v)
+  }
 
   // خط‌ها روی متنِ بدونِ اموجی/بولت (▪ و ✅ به فاصله تبدیل می‌شوند، ولی مرزِ خط حفظ می‌شود).
   const lines = deEmoji(raw).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)

@@ -315,6 +315,8 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
 
 // ── سینکِ کاملِ یک اسکرپِ آژانس: خوشه‌بندی + ایمپورتِ هر خوشه زیرِ ownerِ درست ──
 export async function syncRoster(id: string, onProgress?: (done: number, total: number) => void, opts196?: { budgetMs?: number; f?: { profileTokens?: any; post?: any; ai?: any }; fetchPost?: any }): Promise<{ ok: boolean; error?: string; advisors: number; total: number; unnamed: number }> {
+  // مدل و پیکرهٔ دسته‌بندِ نام را یک‌بار به حافظه بیاور (اگر نبود، بی‌صدا رد می‌شود).
+  try { const { primeNameModel } = await import('./roster-name-model'); await primeNameModel() } catch {}
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد', advisors: 0, total: 0, unnamed: 0 }
   // فاز ۱۹۲ (فیدبک: «ده بار زدم، هر بار نیمه‌کاره ماند») — runRequested دیگر در «شروع» پاک نمی‌شود؛
