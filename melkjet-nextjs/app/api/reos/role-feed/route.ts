@@ -31,7 +31,7 @@ const disp = (it: Item) => ({
 
 /** اولین باری که آگهی دیده شده. scrapedAt در هر به‌روزرسانی ریست می‌شود، پس تنها
  *  وقتی «تازگی» معنا دارد که مهرِ اولین‌بار موجود باشد. */
-const firstSeen = (it: Item): number => Number(it.meta?.__firstSeenAt) || 0
+const firstSeen = (it: Item): number => Number(it.firstSeenAt) || 0
 
 export async function GET(req: NextRequest) {
   const s = await getSession()

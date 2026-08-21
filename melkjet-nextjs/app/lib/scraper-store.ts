@@ -73,6 +73,9 @@ export interface Item {
   aiScore?: number                // امتیاز کیفیت/اعتبار ۰-۱۰۰
   moderatedAt?: number
   scrapedAt: number
+  /** اولین باری که این فایل دیده شد. برخلافِ scrapedAt در هر به‌روزرسانی ریست نمی‌شود،
+   *  پس تنها مبنای درستِ «تازگی» و «رَوندِ قیمت» است. */
+  firstSeenAt?: number
   status: ItemStatus
   expiresAt?: number              // آگهی‌های کاربر ۳۰ روزه‌اند و منقضی می‌شوند
 }
@@ -609,7 +612,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
       const item: Item = {
         id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
         category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
-        ...r, location: loc, ownerId,
+        ...r, location: loc, ownerId, firstSeenAt: Date.now(),
       }
       db.items.unshift(item)
       existingByKey.set(key, item)
@@ -676,7 +679,7 @@ function addUserListingCore(db: DB, raw: UserListingRaw, twinIdx: TwinIndex<Item
     title: raw.title, price: raw.price, location: raw.location, image: raw.image,
     excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner, url: raw.url, ownerId,
     meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
-    scrapedAt: Date.now(),
+    scrapedAt: Date.now(), firstSeenAt: Date.now(),
     status: twin ? 'duplicate' : 'pending',
     aiReason: twin ? `تکراری در لحظهٔ ثبت — هم‌ملکِ «${twin.title.slice(0, 60)}»` : undefined,
     expiresAt: Date.now() + LISTING_TTL,
@@ -861,7 +864,7 @@ export async function addArticle(raw: ArticleInput): Promise<Item> {
       id: id(), sourceId: 'cms', sourceName: raw.source || meta.author, type: 'article',
       category: raw.category, title, image: raw.image, excerpt: raw.body,
       tags: raw.tags && raw.tags.length ? raw.tags : undefined,
-      meta, scrapedAt: Date.now(), status: 'approved',
+      meta, scrapedAt: Date.now(), firstSeenAt: Date.now(), status: 'approved',
     }
     db.items.unshift(item)
     return item
@@ -931,7 +934,7 @@ export async function addItemManual(raw: {
       category: raw.category, title: raw.title, price: raw.price, location: raw.location,
       image: raw.image, url: raw.url, excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner,
       meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
-      scrapedAt: Date.now(), status: 'approved', edited: true,
+      scrapedAt: Date.now(), firstSeenAt: Date.now(), status: 'approved', edited: true,
     }
     db.items.unshift(item)
     return item
