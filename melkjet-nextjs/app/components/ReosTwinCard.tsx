@@ -8,6 +8,7 @@ type Twin = {
   /** false = هنوز بازدید/تماسِ کافی نیست؛ سنجه‌های وابسته به تقاضا نمایش داده نمی‌شوند.
       (کپیِ محلیِ تایپِ سرور در app/lib/reos/digital-twin.ts — هر تغییری باید در هر دو اعمال شود.) */
   dataReady?: boolean
+  market?: { comps: number; cheaperThanPct: number; p25PerM: number; p75PerM: number; targetPerM: number } | null
   deal?: 'sale' | 'rent'
   valuation: { estimate: number; low: number; high: number; confidence: number; pricePerM: number }
   demand: number; liquidity: number; daysToSell: number; saleProbability: number
@@ -81,19 +82,25 @@ export default function ReosTwinCard({ propertyId }: { propertyId: string }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 10 }}>
             {/* تا وقتی بازدید/تماسِ کافی ثبت نشده، این سه سنجه ادعا نمی‌شوند —
                 عددِ ساخته‌شده از دادهٔ نداشته، از نبودِ عدد بدتر است. */}
-            {d.dataReady === false ? (
+            {/* جایگاهِ بازار — از قیمتِ واقعیِ فایل‌های مشابهِ همین محله. همیشه معتبر است. */}
+            {d.market ? (
               <>
-                {tile('احتمالِ فروش (۴۵ روز)', 'در حالِ جمع‌آوری', 'var(--muted)', 'هنوز بازدید/تماسِ کافی ثبت نشده')}
-                {tile('زمانِ تخمینیِ فروش', '—', 'var(--muted)', 'نیازمندِ دادهٔ تقاضا')}
-                {tile('نقدشوندگی', '—', 'var(--muted)', 'نیازمندِ دادهٔ تقاضا')}
+                {tile('جایگاهِ قیمت', 'ارزان‌تر از ' + fa(d.market.cheaperThanPct) + '٪',
+                  d.market.cheaperThanPct >= 60 ? '#34d399' : d.market.cheaperThanPct >= 35 ? '#e7a14a' : '#e74c3c',
+                  'در میانِ ' + fa(d.market.comps) + ' فایلِ مشابهِ محله')}
+                {tile('بازهٔ قیمتِ محله', fa(Math.round(d.market.p25PerM / 1e6)) + ' تا ' + fa(Math.round(d.market.p75PerM / 1e6)) + ' م/متر',
+                  'var(--text)', 'نیمهٔ میانیِ بازار')}
+                {tile('عرضهٔ محله', fa(d.market.comps) + ' فایل', '#60a5fa', 'فایلِ فعالِ قابلِ مقایسه')}
               </>
-            ) : (
+            ) : null}
+            {/* سنجه‌های وابسته به رفتارِ کاربر فقط با دادهٔ واقعیِ بازدید/تماس نشان داده می‌شوند. */}
+            {d.dataReady !== false ? (
               <>
                 {tile('احتمالِ فروش (۴۵ روز)', fa(d.saleProbability) + '٪', d.saleProbability >= 60 ? '#34d399' : d.saleProbability >= 35 ? '#e7a14a' : '#e74c3c')}
                 {tile('زمانِ تخمینیِ فروش', fa(d.daysToSell) + ' روز')}
                 {tile('نقدشوندگی', fa(d.liquidity) + '/۱۰', '#60a5fa')}
               </>
-            )}
+            ) : null}
             {tile('نسبت به بازار', (d.priceVsMarket > 0 ? '+' : '') + fa(d.priceVsMarket) + '٪', d.priceVsMarket > 8 ? '#e74c3c' : d.priceVsMarket < -5 ? '#34d399' : 'var(--text)', d.priceVsMarket > 8 ? 'بالاتر از بازار' : d.priceVsMarket < -5 ? 'زیرِ بازار' : 'نزدیکِ بازار')}
             {tile('ریسک', d.risk.level, riskColor, d.risk.factors[0])}
             {tile('روندِ منطقه', trendTxt.t, trendTxt.c)}

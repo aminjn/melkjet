@@ -4,7 +4,7 @@
 import { getItemById, candidateListings, type Item } from '../scraper-store'
 import { forIds } from '../listing-stats-store'
 import { itemToProperty } from './data'
-import { valuate } from './avm'
+import { valuate, marketPosition, type MarketPosition } from './avm'
 import { getMarketIntel } from './market-intel'
 import { demandScore, demandMeasured, parseFaNum, rentPartsOf, clamp01 } from './features'
 import { rentalYield } from './investor'
@@ -66,6 +66,8 @@ export interface Twin {
   demand: number; liquidity: number; daysToSell: number; saleProbability: number
   /** false = هنوز بازدید/تماسِ کافی نداریم؛ سنجه‌های وابسته به تقاضا معتبر نیستند. */
   dataReady?: boolean
+  /** جایگاهِ فایل در بازارِ واقعیِ محله (مستقل از تقاضا). */
+  market?: MarketPosition | null
   priceVsMarket: number; rentalYield: number | null
   risk: { score: number; level: string; factors: string[] }
   aiConfidence: number; trend: 'up' | 'down' | 'flat'; note: string
@@ -92,6 +94,7 @@ export async function buildTwin(propertyId: string): Promise<Twin | null> {
 
   const demand = demandScore(p)
   const measured = demandMeasured(p)
+  const mkt = await marketPosition(propertyId).catch(() => null)
   const actualPerM = p.area && p.price ? p.price / p.area : 0
   const fairPerM = avm?.pricePerM || 0
   const priceVsMarket = actualPerM && fairPerM ? (actualPerM - fairPerM) / fairPerM : 0
@@ -112,6 +115,7 @@ export async function buildTwin(propertyId: string): Promise<Twin | null> {
     priceVsMarket: Math.round(priceVsMarket * 1000) / 10,   // درصد
     rentalYield: monthlyRent && p.price ? rentalYield(monthlyRent * 12, p.price) : null,
     dataReady: measured,
+    market: mkt,
     risk: riskProfile({ priceVsMarket, demand, completeness, demandMeasured: measured, ageDays: p.createdAt ? (Date.now() - p.createdAt) / 864e5 : 0 }),
     aiConfidence: aiConfidence(avm?.comps || 0, completeness),
     trend: intel?.trend || 'flat',

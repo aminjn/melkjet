@@ -37,23 +37,30 @@ function perMeterOf(it: Item, deal: string, area: number): { perM: number; depos
 
 interface Bucket { perM: number[]; area: number[]; deposit: number[] }
 
+/** سلول و قیمتِ متریِ یک آگهی — همان منطقِ آمار، برای مصرفِ بیرونی (پنلِ پیشنهادها). */
+export function itemCell(it: Item): { city: string; hood: string; deal: string; ptype: string; area: number; perM: number; deposit?: number } | null {
+  const meta = it.meta || {}
+  const city = String(meta['شهر'] || '').trim()
+  const hood = String(meta['محله'] || '').trim()
+  const deal = String(meta['نوع معامله'] || '').trim()
+  const ptype = String(meta['نوع ملک'] || '').trim()
+  if (!hood || !deal || !ptype) return null
+  const area = parseFaNum(String(meta['متراژ'] || ''))
+  if (!(area > 0)) return null
+  const v = perMeterOf(it, deal, area)
+  if (!v || !(v.perM > 0)) return null
+  return { city, hood, deal, ptype, area, perM: v.perM, deposit: v.deposit }
+}
+
 function cellsOf(items: Item[]): Map<string, Bucket> {
   const m = new Map<string, Bucket>()
   for (const it of items) {
-    const meta = it.meta || {}
-    const city = String(meta['شهر'] || '').trim()
-    const hood = String(meta['محله'] || '').trim()
-    const deal = String(meta['نوع معامله'] || '').trim()
-    const ptype = String(meta['نوع ملک'] || '').trim()
-    if (!hood || !deal || !ptype) continue
-    const area = parseFaNum(String(meta['متراژ'] || ''))
-    if (!(area > 0)) continue
-    const v = perMeterOf(it, deal, area)
-    if (!v || !(v.perM > 0)) continue
-    const k = KEY(city, hood, deal, ptype)
+    const c = itemCell(it)
+    if (!c) continue
+    const k = KEY(c.city, c.hood, c.deal, c.ptype)
     const g = m.get(k) || { perM: [], area: [], deposit: [] }
-    g.perM.push(v.perM); g.area.push(area)
-    if (v.deposit != null && v.deposit > 0) g.deposit.push(v.deposit)
+    g.perM.push(c.perM); g.area.push(c.area)
+    if (c.deposit != null && c.deposit > 0) g.deposit.push(c.deposit)
     m.set(k, g)
   }
   return m
@@ -73,9 +80,9 @@ function toCell(k: string, g: Bucket): AreaCell {
 }
 
 /** سلول‌های دارای نمونهٔ کافی. `hoods` = محدودکردن به محله‌های یک مشاور. */
-export async function areaCells(opts?: { hoods?: string[]; city?: string; minSamples?: number }): Promise<AreaCell[]> {
+export async function areaCells(opts?: { hoods?: string[]; city?: string; minSamples?: number; items?: Item[] }): Promise<AreaCell[]> {
   const min = opts?.minSamples ?? 5
-  const items = await listItems('listing', { publicOnly: true })
+  const items = opts?.items ?? await listItems('listing', { publicOnly: true })
   const want = opts?.hoods?.length ? new Set(opts.hoods.map(h => h.trim()).filter(Boolean)) : null
   const city = (opts?.city || '').trim()
   const out: AreaCell[] = []

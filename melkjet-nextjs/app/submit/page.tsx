@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import PriceGuideHint from '@/app/components/PriceGuideHint';
 import Nav from '@/app/components/Nav';
 import Footer from '@/app/components/Footer';
 import LocationPicker from '@/app/components/LocationPicker';
@@ -79,8 +80,6 @@ export default function SubmitPage() {
   });
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
-  const [priceSuggest, setPriceSuggest] = useState<{ min: number; max: number; count: number } | null>(null);  // برآوردِ واقعیِ قیمت
-  const [priceLoading, setPriceLoading] = useState(false);
   const [geo, setGeo] = useState<GeoProvince[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ status: string; reason: string } | null>(null);
@@ -124,26 +123,8 @@ export default function SubmitPage() {
     return x === y || (x.length > 1 && (x.includes(y) || y.includes(x)));
   };
 
-  // برآوردِ واقعیِ قیمت از آمارِ معاملاتِ همان محله (دادهٔ اسکرپ‌شده) × متراژ — نه عددِ ثابت.
-  useEffect(() => {
-    const area = Number(String(form.area).replace(/[^\d.]/g, '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
-    const district = form.district || form.neighborhood || '';
-    if (!area || (!district && !form.city)) { setPriceSuggest(null); return; }
-    setPriceLoading(true);
-    const q = new URLSearchParams({ city: form.city || '', district });
-    fetch(`/api/market/stats?${q}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        const s = d?.stats;
-        const ppm = s?.median || s?.avg;
-        if (s && s.count > 0 && ppm) {
-          const mid = ppm * area;
-          setPriceSuggest({ min: Math.round(mid * 0.93), max: Math.round(mid * 1.08), count: s.count });
-        } else setPriceSuggest(null);
-      })
-      .catch(() => setPriceSuggest(null))
-      .finally(() => setPriceLoading(false));
-  }, [form.area, form.city, form.district, form.neighborhood]);
+  // متراژ به عدد — ارقامِ فارسی قبل از حذفِ غیررقم تبدیل می‌شوند.
+  const areaNum = Number(String(form.area).replace(/[\u06f0-\u06f9]/g, (d) => String('\u06f0\u06f1\u06f2\u06f3\u06f4\u06f5\u06f6\u06f7\u06f8\u06f9'.indexOf(d))).replace(/[^\d.]/g, '')) || 0;
 
   // اگر مقدارِ پرشده از نقشه در فهرستِ ژئو نبود، همان را به‌عنوان گزینه نشان بده تا در دراپ‌داون دیده شود.
   const extraOpt = (val: string, names: string[]) => (val && !names.includes(val)) ? <option value={val}>{val}</option> : null;
@@ -190,7 +171,7 @@ export default function SubmitPage() {
     const feats = [form.parking === 'yes' && 'پارکینگِ اختصاصی', form.elevator === 'yes' && 'آسانسور', form.storage === 'yes' && 'انباری'].filter(Boolean);
     const loc = form.neighborhood ? `محدودهٔ خوش‌نامِ ${form.neighborhood}` : (form.city || 'موقعیتی مناسب');
     return [
-      `🏠 ${form.propertyType || 'ملکی'} ${form.dealType === 'rent' ? 'برای اجاره' : 'برای فروش'}${form.area ? ` با متراژِ ${form.area} متر` : ''} در ${loc}`,
+      `🏠 ${form.propertyType || 'ملکی'} ${form.dealType === 'اجاره' ? 'برای اجاره' : 'برای فروش'}${form.area ? ` با متراژِ ${form.area} متر` : ''} در ${loc}`,
       `این ملکِ دلباز و خوش‌نقشه${form.rooms && Number(form.rooms) > 0 ? ` با ${form.rooms} اتاقِ خواب` : ''}${form.floor ? ` در طبقهٔ ${form.floor}` : ''}، در موقعیتی عالی و با دسترسیِ آسان به امکاناتِ شهری، مغازه‌ها و حمل‌ونقلِ عمومی قرار گرفته است. ✨`,
       feats.length ? `از امکاناتِ این ملک می‌توان به ${feats.join('، ')} اشاره کرد. 🚗` : '',
       form.buildingAge ? `سنِ بنا حدودِ ${form.buildingAge} سال و در وضعیتِ بسیار مطلوبی است.` : '',
@@ -483,31 +464,13 @@ export default function SubmitPage() {
         <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 14 }}>
           بر اساس قیمتِ واقعیِ هر مترمربعِ همین محله (از معاملاتِ ثبت‌شده) × متراژِ ملکِ شما:
         </p>
-        {priceLoading ? (
-          <p style={{ color: 'var(--muted)', fontSize: 13 }}>در حال محاسبه بر اساس دادهٔ واقعیِ منطقه…</p>
-        ) : priceSuggest ? (
-          <>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <div style={{ flex: 1, background: 'var(--bg2)', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>حداقل پیشنهادی</div>
-                <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15 }}>{priceSuggest.min.toLocaleString('fa-IR')}</div>
-                <div style={{ color: 'var(--faint)', fontSize: 11 }}>تومان</div>
-              </div>
-              <div style={{ flex: 1, background: 'var(--bg2)', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>حداکثر پیشنهادی</div>
-                <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15 }}>{priceSuggest.max.toLocaleString('fa-IR')}</div>
-                <div style={{ color: 'var(--faint)', fontSize: 11 }}>تومان</div>
-              </div>
-            </div>
-            <p style={{ color: 'var(--faint)', fontSize: 12, marginTop: 12, margin: '12px 0 0' }}>
-              ✦ بر اساس {priceSuggest.count.toLocaleString('fa-IR')} آگهیِ واقعیِ ثبت‌شده در همین محله محاسبه شده است.
-            </p>
-          </>
-        ) : (
-          <p style={{ color: 'var(--faint)', fontSize: 13 }}>
-            برای برآوردِ قیمت، «متراژ» و «محله/منطقه» را کامل کنید. اگر هنوز دادهٔ کافی از این محله نداریم، برآورد نمایش داده نمی‌شود.
-          </p>
-        )}
+        <PriceGuideHint
+          city={form.city}
+          hood={form.neighborhood || form.district}
+          deal={form.dealType}
+          ptype={form.propertyType}
+          area={areaNum}
+        />
       </div>
     </div>
   );

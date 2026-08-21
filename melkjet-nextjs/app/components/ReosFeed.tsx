@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 type Listing = { title: string; price?: string; image?: string; location?: string; deal?: string; href: string; promoted?: string }
 type Card = { id: string; score: number; matchPct: number; reasons: string[]; why: string[]; listing: Listing | null }
 type Feed = { forYou: Card[]; hotInArea: Card[]; freshMatches: Card[]; priceDrops: Card[]; investment: Card[] }
-type RenderSection = { key: string; label: string; icon: string; cards: Card[] }
+type RenderSection = { key: string; label: string; icon: string; cards: Card[]; pctSuffix?: string }
 
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const SECTIONS: { key: keyof Feed; label: string; icon: string }[] = [
@@ -52,6 +52,7 @@ function Cards({ cards, pctSuffix }: { cards: Card[]; pctSuffix: string }) {
 // role="…" → فیدِ نقش‌محورِ REOS v2 (بخش‌های مخصوصِ هر نقش).
 export default function ReosFeed({ compact = false, silent = false, role }: { compact?: boolean; silent?: boolean; role?: string }) {
   const [sections, setSections] = useState<RenderSection[] | null>(null)
+  const [note, setNote] = useState('')   // وقتی سبدی نیست، دلیلش گفته می‌شود — نه صفحهٔ خالی
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   useEffect(() => {
@@ -61,6 +62,7 @@ export default function ReosFeed({ compact = false, silent = false, role }: { co
       .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d)))
       .then(d => {
         if (!on) return
+        setNote(String(d.note || ''))
         if (role && Array.isArray(d.sections)) setSections(d.sections as RenderSection[])
         else if (d.feed) { const f = d.feed as Feed; setSections(SECTIONS.map(s => ({ key: s.key, label: s.label, icon: s.icon, cards: f[s.key] || [] }))) }
         else setSections([])
@@ -77,6 +79,10 @@ export default function ReosFeed({ compact = false, silent = false, role }: { co
   // در حالتِ silent، اگر هیچ کارتی نبود چیزی نشان نده (خانهٔ عمومی شلوغ نشود).
   if (silent && !nonEmpty.length) return null
 
+  if (!nonEmpty.length && note) return silent ? null : (
+    <div style={{ fontSize: 12.5, color: 'var(--muted)', fontFamily: FONT, lineHeight: 2, padding: '6px 2px' }}>{note}</div>
+  )
+
   const shown = compact ? (nonEmpty.length ? nonEmpty.slice(0, role ? 2 : 1) : sections.slice(0, 1)) : sections
   const pctSuffix = role ? '٪ امتیاز' : '٪ مناسب'
   return (
@@ -90,11 +96,11 @@ export default function ReosFeed({ compact = false, silent = false, role }: { co
               <span style={{ fontSize: 14.5, fontWeight: 800 }}>{sec.label}</span>
               <span style={{ fontSize: 11, color: 'var(--faint)' }}>({sec.cards.length.toLocaleString('fa-IR')})</span>
             </div>
-            <Cards cards={sec.cards} pctSuffix={pctSuffix} />
+            <Cards cards={sec.cards} pctSuffix={sec.pctSuffix || pctSuffix} />
           </div>
         )
       })}
-      <div style={{ fontSize: 10.5, color: 'var(--faint)', textAlign: 'center' }}>✦ رتبه‌بندی با موتورِ REOS — از رفتارِ شما و بازارِ زنده یاد می‌گیرد.</div>
+      <div style={{ fontSize: 10.5, color: 'var(--faint)', textAlign: 'center' }}>{role ? '✦ از قیمتِ واقعیِ فایل‌های همین محله‌ها حساب شده — نه از سنجهٔ رفتاری.' : '✦ رتبه‌بندی با موتورِ REOS.'}</div>
     </div>
   )
 }
