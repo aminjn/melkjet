@@ -70,6 +70,17 @@ export function agentVector(a: AgentEntity): AgentVector {
 }
 
 // ── امتیازِ تقاضای ملک (۰..۱): بازدید/تماس/سیو + تازگی ──
+// ── کفایتِ دادهٔ تقاضا ──────────────────────────────────────────────────────────
+// ریشهٔ باگ: آگهیِ نو با ۰ یا ۱ بازدید، demand≈۰ می‌گرفت و سیستم آن را «تقاضای پایین»
+// گزارش می‌کرد — یعنی «نمی‌دانم» را «بد» ترجمه می‌کرد.
+export const DEMAND_MIN_VIEWS = 20
+export const DEMAND_MIN_AGE_DAYS = 3
+export function demandMeasured(p: PropertyEntity): boolean {
+  const v = p.views || 0, c = p.contacts || 0, s = p.saves || 0
+  const ageDays = p.createdAt ? (Date.now() - p.createdAt) / 864e5 : 999
+  return (v >= DEMAND_MIN_VIEWS || c >= 1 || s >= 1) && ageDays >= DEMAND_MIN_AGE_DAYS
+}
+
 export function demandScore(p: PropertyEntity): number {
   const v = p.views || 0, c = p.contacts || 0, s = p.saves || 0
   // تماس و سیو سیگنالِ قوی‌تر از بازدید

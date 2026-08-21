@@ -5,6 +5,9 @@ import { useEffect, useState } from 'react'
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
 type Twin = {
+  /** false = هنوز بازدید/تماسِ کافی نیست؛ سنجه‌های وابسته به تقاضا نمایش داده نمی‌شوند.
+      (کپیِ محلیِ تایپِ سرور در app/lib/reos/digital-twin.ts — هر تغییری باید در هر دو اعمال شود.) */
+  dataReady?: boolean
   deal?: 'sale' | 'rent'
   valuation: { estimate: number; low: number; high: number; confidence: number; pricePerM: number }
   demand: number; liquidity: number; daysToSell: number; saleProbability: number
@@ -58,7 +61,9 @@ export default function ReosTwinCard({ propertyId }: { propertyId: string }) {
             {(d.rent?.samples || 0) > 0 && d.rent?.rentPerM ? tile('اجاره نسبت به محله', (d.priceVsMarket > 0 ? '+' : '') + fa(d.priceVsMarket) + '٪', d.priceVsMarket > 12 ? '#e74c3c' : d.priceVsMarket < -8 ? '#34d399' : 'var(--text)', d.priceVsMarket > 12 ? 'بالاتر از میانه' : d.priceVsMarket < -8 ? 'زیرِ میانه' : 'نزدیکِ میانه') : null}
             {/* فاز ۲۰۶ (فیدبک: «نقدشوندگی یعنی چی؟ باید منطبق بر اجاره باشه») — نقدشوندگی سنجهٔ فروش است؛
                 برای اجاره «تقاضا» از بازدید/تماسِ واقعیِ همین فایل معنی دارد */}
-            {tile('تقاضای اجاره', fa(Math.round(d.demand * 10)) + '/۱۰', '#60a5fa', 'از بازدید و تماسِ واقعیِ این فایل')}
+            {d.dataReady === false
+              ? tile('تقاضای اجاره', 'در حالِ جمع‌آوری', 'var(--muted)', 'هنوز بازدید/تماسِ کافی ثبت نشده')
+              : tile('تقاضای اجاره', fa(Math.round(d.demand * 10)) + '/۱۰', '#60a5fa', 'از بازدید و تماسِ واقعیِ این فایل')}
             {tile('ریسکِ اجاره', d.risk.level, riskColor, d.risk.factors[0])}
             {tile('روندِ منطقه', trendTxt.t, trendTxt.c)}
           </div>
@@ -74,9 +79,21 @@ export default function ReosTwinCard({ propertyId }: { propertyId: string }) {
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 10 }}>
-            {tile('احتمالِ فروش (۴۵ روز)', fa(d.saleProbability) + '٪', d.saleProbability >= 60 ? '#34d399' : d.saleProbability >= 35 ? '#e7a14a' : '#e74c3c')}
-            {tile('زمانِ تخمینیِ فروش', fa(d.daysToSell) + ' روز')}
-            {tile('نقدشوندگی', fa(d.liquidity) + '/۱۰', '#60a5fa')}
+            {/* تا وقتی بازدید/تماسِ کافی ثبت نشده، این سه سنجه ادعا نمی‌شوند —
+                عددِ ساخته‌شده از دادهٔ نداشته، از نبودِ عدد بدتر است. */}
+            {d.dataReady === false ? (
+              <>
+                {tile('احتمالِ فروش (۴۵ روز)', 'در حالِ جمع‌آوری', 'var(--muted)', 'هنوز بازدید/تماسِ کافی ثبت نشده')}
+                {tile('زمانِ تخمینیِ فروش', '—', 'var(--muted)', 'نیازمندِ دادهٔ تقاضا')}
+                {tile('نقدشوندگی', '—', 'var(--muted)', 'نیازمندِ دادهٔ تقاضا')}
+              </>
+            ) : (
+              <>
+                {tile('احتمالِ فروش (۴۵ روز)', fa(d.saleProbability) + '٪', d.saleProbability >= 60 ? '#34d399' : d.saleProbability >= 35 ? '#e7a14a' : '#e74c3c')}
+                {tile('زمانِ تخمینیِ فروش', fa(d.daysToSell) + ' روز')}
+                {tile('نقدشوندگی', fa(d.liquidity) + '/۱۰', '#60a5fa')}
+              </>
+            )}
             {tile('نسبت به بازار', (d.priceVsMarket > 0 ? '+' : '') + fa(d.priceVsMarket) + '٪', d.priceVsMarket > 8 ? '#e74c3c' : d.priceVsMarket < -5 ? '#34d399' : 'var(--text)', d.priceVsMarket > 8 ? 'بالاتر از بازار' : d.priceVsMarket < -5 ? 'زیرِ بازار' : 'نزدیکِ بازار')}
             {tile('ریسک', d.risk.level, riskColor, d.risk.factors[0])}
             {tile('روندِ منطقه', trendTxt.t, trendTxt.c)}
