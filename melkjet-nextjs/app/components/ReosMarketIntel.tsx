@@ -1,54 +1,91 @@
 'use client'
 import { useEffect, useState } from 'react'
 
-// هوشِ بازار (REOS Market Intelligence): سالم‌ترین مناطق با شاخصِ تقاضا/عرضه/نقدشوندگی/روند.
-const FONT = 'Vazirmatn, system-ui, sans-serif'
-const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
-type Area = { area: string; demandIndex: number; supplyIndex: number; liquidityIndex: number; competition: number; trend: 'up' | 'down' | 'flat'; healthScore: number; listings: number }
-// آیکونِ روند با فلشِ یونیکدِ رنگی (به‌جای ایموجی که روی همهٔ فونت‌ها رندر نمی‌شود).
-function Trend({ t }: { t: string }) {
-  if (t === 'up') return <span style={{ color: '#34d399', fontWeight: 900, fontSize: 13 }}>▲ صعودی</span>
-  if (t === 'down') return <span style={{ color: '#e74c3c', fontWeight: 900, fontSize: 13 }}>▼ نزولی</span>
-  return <span style={{ color: 'var(--faint)', fontWeight: 700, fontSize: 12 }}>— ثابت</span>
+// هوشِ بازار — فقط محله‌هایی که خودِ کاربر در آن‌ها فایل دارد، و فقط سنجه‌هایی که
+// از آگهی‌های واقعی محاسبه می‌شوند. ستون‌های «تقاضا/نقدشوندگی/سلامت» حذف شدند:
+// ۸۰٪ نمرهٔ سلامت روی demand بنا بود و demand از بازدید می‌آمد که ثبت نمی‌شود.
+type Cell = {
+  city: string; hood: string; deal: string; ptype: string
+  listings: number; medianPerM: number; p25PerM: number; p75PerM: number
+  medianArea: number; medianDeposit?: number
 }
-const bar = (v: number, c: string) => <div style={{ height: 5, background: 'var(--bg2)', borderRadius: 99, overflow: 'hidden' }}><div style={{ width: `${Math.max(2, Math.round(v * 100))}%`, height: 5, background: c, borderRadius: 99 }} /></div>
+const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
+const m = (n: number) => fa(Math.round((n || 0) / 1e6))
+const k = (n: number) => fa(Math.round((n || 0) / 1e3))
 
-export default function ReosMarketIntel({ title = 'هوشِ بازار (REOS)' }: { title?: string }) {
-  const [areas, setAreas] = useState<Area[] | null>(null)
+export default function ReosMarketIntel({ title }: { title?: string } = {}) {
+  const [cells, setCells] = useState<Cell[] | null>(null)
+  const [scoped, setScoped] = useState(true)
+  const [all, setAll] = useState(false)
   const [loading, setLoading] = useState(true)
+
   useEffect(() => {
     let on = true
-    fetch('/api/reos/market-intel', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
-      .then(d => { if (on) { setAreas(d?.areas || []); setLoading(false) } }).catch(() => { if (on) setLoading(false) })
+    setLoading(true)
+    fetch('/api/reos/area-stats' + (all ? '?all=1' : ''))
+      .then(r => r.json())
+      .then(d => { if (on) { setCells(d?.cells || []); setScoped(!!d?.scoped); setLoading(false) } })
+      .catch(() => { if (on) setLoading(false) })
     return () => { on = false }
-  }, [])
+  }, [all])
 
-  if (loading) return null
+  const byHood = new Map<string, Cell[]>()
+  for (const c of cells || []) {
+    const key = c.city ? `${c.city} · ${c.hood}` : c.hood
+    byHood.set(key, [...(byHood.get(key) || []), c])
+  }
+
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18, fontFamily: FONT, direction: 'rtl' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-        <span style={{ fontSize: 16 }}>🌆</span><span style={{ fontSize: 15, fontWeight: 800 }}>{title}</span>
-        <span style={{ fontSize: 11, color: 'var(--faint)' }}>سالم‌ترین مناطق</span>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 15, fontWeight: 800 }}>{title || 'هوشِ بازار'}</span>
+        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+          {scoped && !all ? 'محله‌هایی که در آن‌ها فایل دارید' : 'کلِ بازار'}
+        </span>
+        <button
+          onClick={() => setAll(v => !v)}
+          style={{ marginInlineStart: 'auto', fontSize: 11.5, background: 'transparent',
+            border: '1px solid var(--line)', borderRadius: 8, padding: '4px 10px',
+            color: 'var(--muted)', cursor: 'pointer' }}
+        >{all ? 'فقط محله‌های من' : 'دیدنِ کلِ بازار'}</button>
       </div>
-      {!areas || !areas.length ? (
-        <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>هنوز داده‌ای نیست — با انباشتِ آگهی/تعامل هر ۶ ساعت خودکار محاسبه می‌شود.</div>
+
+      {loading ? (
+        <div style={{ color: 'var(--muted)', fontSize: 12.5, padding: '18px 0' }}>در حالِ محاسبه…</div>
+      ) : !byHood.size ? (
+        <div style={{ color: 'var(--muted)', fontSize: 12.5, padding: '18px 0' }}>
+          هنوز فایلی ثبت نکرده‌اید — با «دیدنِ کلِ بازار» می‌توانید آمارِ کلی را ببینید.
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 0.6fr 0.5fr', gap: 8, fontSize: 10.5, color: 'var(--faint)', padding: '0 4px 4px' }}>
-            <span>منطقه</span><span>تقاضا</span><span>نقدشوندگی</span><span>سلامت</span><span>روند</span>
+        <div style={{ overflowX: 'auto' }}>
+          {[...byHood.entries()].map(([hood, list]) => (
+            <div key={hood} style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{hood}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto auto', gap: 8,
+                fontSize: 11.5, color: 'var(--muted)', paddingBottom: 4, borderBottom: '1px solid var(--line)' }}>
+                <span>نوعِ ملک</span><span>معامله</span><span>فایل</span><span>میانه</span><span>بازه</span>
+              </div>
+              {list.map(c => (
+                <div key={c.ptype + c.deal} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto auto',
+                  gap: 8, fontSize: 12.5, padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+                  <span>{c.ptype}</span>
+                  <span style={{ color: 'var(--muted)' }}>{c.deal}</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fa(c.listings)}</span>
+                  <span style={{ color: 'var(--gold)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    {c.deal === 'اجاره' ? `${k(c.medianPerM)} هزار/متر` : `${m(c.medianPerM)} م/متر`}
+                  </span>
+                  <span style={{ color: 'var(--faint)', fontVariantNumeric: 'tabular-nums' }}>
+                    {c.deal === 'اجاره'
+                      ? `${k(c.p25PerM)}–${k(c.p75PerM)}${c.medianDeposit ? ` · ودیعه ${m(c.medianDeposit)}م` : ''}`
+                      : `${m(c.p25PerM)}–${m(c.p75PerM)}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))}
+          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 12 }}>
+            همهٔ اعداد از آگهی‌های واقعیِ ثبت‌شده محاسبه می‌شوند · «میانه» یعنی نصفِ فایل‌ها بالاتر و نصف پایین‌تر
           </div>
-          {areas.slice(0, 10).map(a => {
-            const hood = a.area.split('|').filter(Boolean).pop() || a.area
-            return (
-              <a key={a.area} href={`/search?q=${encodeURIComponent(hood)}`} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 0.6fr 0.7fr', gap: 8, alignItems: 'center', padding: '9px 4px', borderTop: '1px solid var(--line)', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.area.replace('|', ' · ')}</span>
-                <span title={'تقاضا ' + fa(Math.round(a.demandIndex * 100)) + '٪'}>{bar(a.demandIndex, '#e7a14a')}</span>
-                <span title={'نقدشوندگی ' + fa(Math.round(a.liquidityIndex * 100)) + '٪'}>{bar(a.liquidityIndex, '#60a5fa')}</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: a.healthScore >= 60 ? '#34d399' : a.healthScore >= 40 ? '#e7a14a' : '#e74c3c' }}>{fa(a.healthScore)}</span>
-                <Trend t={a.trend} />
-              </a>
-            )
-          })}
         </div>
       )}
     </div>
