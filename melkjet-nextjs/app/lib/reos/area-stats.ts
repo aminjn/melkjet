@@ -3,6 +3,7 @@
 // قابلِ اندازه‌گیری نیست، و عددِ ساختگی از نبودِ عدد بدتر است.
 import { listItems, type Item } from '../scraper-store'
 import { parseFaNum, rentPartsOf } from './features'
+import { RENT_CONVERT } from './area-insight'
 
 export const DEAL_SALE = 'فروش'
 export const DEAL_RENT = 'اجاره'
@@ -29,8 +30,12 @@ function perMeterOf(it: Item, deal: string, area: number): { perM: number; depos
   if (deal === DEAL_RENT) {
     const parts = rentPartsOf(it.price)
     const monthly = parts?.monthly || 0
-    if (!(monthly > 0)) return null
-    return { perM: monthly / area, deposit: parts?.deposit || 0 }
+    const deposit = parts?.deposit || 0
+    // اجارهٔ مؤثر: ودیعه با نرخِ عرفی به اجاره تبدیل می‌شود، وگرنه «رهنِ کامل» با
+    // اجارهٔ اسمیِ ۱۰ هزار تومان «۱۰۰٪ زیرِ میانه» می‌شد و ۶۴۲ فایل کلاً حذف می‌شدند.
+    const eff = monthly + deposit * RENT_CONVERT
+    if (!(eff > 0)) return null
+    return { perM: eff / area, deposit }
   }
   return null   // اجارهٔ کوتاه‌مدت واحدِ دیگری دارد (شبانه) — قاطی نمی‌شود
 }

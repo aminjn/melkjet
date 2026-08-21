@@ -70,7 +70,7 @@ export default function PriceGuideHint(
               {rent ? `${K(g.suggested)} هزار` : `${M(g.suggested)} م`}
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
-              {rent ? 'اجارهٔ متناسبِ این متراژ' : 'قیمتِ متناسبِ این متراژ'}
+              {rent ? 'اجارهٔ مؤثرِ این متراژ' : 'قیمتِ متناسبِ این متراژ'}
             </div>
             {rent && g.suggestedDeposit ? (
               <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>ودیعهٔ رایج {M(g.suggestedDeposit)}م</div>

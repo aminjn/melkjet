@@ -27,7 +27,9 @@ REMOTE=$(git rev-parse origin/main)
 # دورهای بعدیِ کرون بی‌صدا رد می‌شدند و سرور برای همیشه روی buildِ خرابِ نیمه‌کاره می‌ماند
 # (قانونِ شمارهٔ یک). مارکر این حالت را زنده نگه می‌دارد تا خودکار دوباره تلاش شود.
 FAILED_MARK="$APP_DIR/.deploy-failed"
-if [ "$LOCAL" = "$REMOTE" ]; then
+# فقط وقتی ریموت جلوتر است دیپلوی کن. شرطِ قبلی «نابرابری» بود، و کامیتِ محلیِ
+# پوش‌نشده هر ۲ دقیقه یک بیلدِ کامل راه می‌انداخت — حلقهٔ خودتخریبی که سایت را دو بار پایین آورد.
+if git merge-base --is-ancestor "$REMOTE" "$LOCAL" 2>/dev/null; then
   [ -f "$FAILED_MARK" ] || exit 0                       # واقعاً چیزی تغییر نکرده
   echo "$(date) ↻ دیپلویِ قبلی ناتمام مانده بود — تلاشِ دوباره روی همان کامیت ($LOCAL)"
 else
@@ -50,7 +52,9 @@ if ! build; then
   fi
   echo "$(date) ✓ تلاشِ دوم پس از پاک‌کردنِ .next موفق شد"
 fi
-pm2 reload ecosystem.config.js --update-env
+# restart نه reload: سرورِ زندهٔ Next فایل‌های .next را باز نگه می‌دارد و بعد از
+# جایگزینیِ بیلد، reload خطای «client reference manifest does not exist» می‌دهد.
+pm2 restart ecosystem.config.js --update-env
 rm -f "$FAILED_MARK"                                     # از این‌جا به بعد دیپلوی تمام‌شده است
 
 # چکِ سلامت: اگر اینستنسی ۲۰۰ نداد، در لاگ فریاد بزن (ولی خروجی را غیرصفر نکن تا کرون هی هشدار نفرستد).

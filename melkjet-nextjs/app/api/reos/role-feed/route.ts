@@ -70,7 +70,8 @@ export async function GET(req: NextRequest) {
 
   // ── زیرِ قیمتِ محله: تنها سنجهٔ فرصت که دادهٔ واقعی پشتش هست.
   const value: Card[] = pool
-    .filter(x => x.delta !== null && x.delta <= -0.05)
+    // زیرِ ۶۰٪ تخفیف تقریباً همیشه خطای دادهٔ قیمت است، نه فرصت.
+    .filter(x => x.delta !== null && x.delta <= -0.05 && x.delta >= -0.6)
     .sort((a, b) => (a.delta as number) - (b.delta as number))
     .slice(0, 12)
     .map(x => {
