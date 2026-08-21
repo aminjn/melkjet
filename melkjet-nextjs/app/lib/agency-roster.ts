@@ -77,9 +77,18 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
     // دروازهٔ دوم: دسته‌بندِ خودمان. فهرستِ سیاه «غریب» و «متمدن» را می‌کشت و
     // «سالن اجتماعات» را رد می‌کرد؛ مدل هر دو را درست تشخیص می‌دهد.
     // null = مدل هنوز آموزش ندیده → رفتار دقیقاً مثلِ قبل می‌ماند.
-    const p = nameProbSync(v)
-    if (p !== null && p < NAME_THRESHOLD) return
-    out.push(v)
+    // VARIANT — «وامین» = «و امین» چسبیده. به‌جای فهرستِ سیاه، هر دو صورت را به مدل
+    // می‌دهیم و بالاترین نمره برنده می‌شود. اگر نام واقعاً با «و» شروع شود (وحید،
+    // وزیری) صورتِ کامل نمرهٔ بالاتری می‌گیرد و دست‌نخورده می‌ماند.
+    let best = v, bp = nameProbSync(v)
+    if (/^و[\u0621-\u06cc]{4,}$/.test(v)) {
+      const alt = validName(v.slice(1), agencyName, banned)
+      const ap = alt ? nameProbSync(alt) : null
+      if (alt && ap !== null && bp !== null && ap > bp) { best = alt; bp = ap }
+    }
+    if (bp !== null && bp < NAME_THRESHOLD) return
+    if (out.includes(best)) return
+    out.push(best)
   }
 
   // خط‌ها روی متنِ بدونِ اموجی/بولت (▪ و ✅ به فاصله تبدیل می‌شوند، ولی مرزِ خط حفظ می‌شود).
