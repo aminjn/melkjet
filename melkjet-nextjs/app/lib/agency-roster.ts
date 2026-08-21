@@ -70,6 +70,9 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
   // «فلاحی» در «بین فلاحی ۴۱ و ۴۳» و «کسری» در «کسری بودجه» → هرگز اسم نمی‌شوند
   const banned = new Set([...addressTokens(raw), ...contextNoiseTokens(raw)])
+  // PHRASE_TRAP — «مشاور و امینِ شما»: «امین» اینجا صفت است، نه نام. قاعدهٔ بافتاری
+  // است نه فهرستِ سیاه: همان واژه در «کارشناس فروش امین رضایی» آزاد می‌ماند.
+  for (const m of raw.matchAll(/و\s*([\u0621-\u06cc]{3,15})\s*(?:ی|ِ)?\s*شما/g)) banned.add(keyOf(m[1]))
   const out: string[] = []
   const push = (s?: string) => {
     const v = validName(s || '', agencyName, banned)
