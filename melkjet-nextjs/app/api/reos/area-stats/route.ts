@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { areaCells, priceGuide } from '@/app/lib/reos/area-stats'
+import { hoodInsights } from '@/app/lib/reos/area-insight'
 import { listListings } from '@/app/lib/advisor-store'
 import { getAgency } from '@/app/lib/agency-store'
 
@@ -38,8 +39,11 @@ export async function GET(req: NextRequest) {
   // اگر کاربر هنوز فایلی ندارد، به‌جای صفحهٔ خالی کلِ بازار را می‌دهیم و صریح اعلام می‌کنیم.
   const scoped = !wantAll && mine.hoods.length > 0
   const cells = await areaCells(scoped ? { hoods: mine.hoods, minSamples: 5 } : { minSamples: 8 })
+  const insights = await hoodInsights(scoped
+    ? { hoods: mine.hoods, cities: mine.cities, minSamples: 5, limit: 24 }
+    : { minSamples: 12, limit: 24 })
   return NextResponse.json(
-    { ok: true, scoped, myHoods: mine.hoods, myCities: mine.cities, cells: cells.slice(0, 120) },
+    { ok: true, scoped, myHoods: mine.hoods, myCities: mine.cities, insights, cells: cells.slice(0, 120) },
     { headers: { 'Cache-Control': 'no-store, private' } },
   )
 }
