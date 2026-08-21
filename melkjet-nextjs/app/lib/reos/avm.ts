@@ -35,22 +35,55 @@ const areaKey = (it: { meta?: Record<string, string>; location?: string }) => {
 }
 
 // ارزش‌گذاریِ یک آگهیِ واقعی: comparablesِ هم‌منطقه‌ی فروشی با قیمت+متراژ.
+
+// ── فایل‌های مشابهِ همان محله — مبنای مشترکِ AVM و «جایگاهِ بازار» ──────────────
+// یک منبع، تا این دو هرگز از هم جدا نیفتند.
+async function compsFor(propertyId: string): Promise<{ area: number; comps: Comp[]; targetPerM: number } | null> {
+  const it = await getItemById(propertyId)
+  if (!it) return null
+  const p = itemToProperty(it)
+  if (!p.area) return null
+  const tArea = areaKey(it)
+  // سقفِ ۶۰۰ باعث می‌شد AVM فقط بخشی از فایل‌های محله را ببیند و میانه را جابه‌جا کند
+  // (جاهدشهر: ۱۲۱ م/متر به‌جای ۹۹ که میانهٔ واقعیِ ۵۳۹ فایل است). فهرست کش‌شده است.
+  const items = await candidateListings(20000)
+  const comps: Comp[] = []
+  for (const x of items) {
+    if (x.id === propertyId) continue
+    if (areaKey(x) !== tArea) continue
+    if (x.meta?.['نوع معامله'] === 'اجاره') continue
+    const price = parseFaNum(x.price), m = parseFaNum(String(x.meta?.['متراژ'] || ''))
+    if (price > 0 && m > 0) comps.push({ id: x.id, perM: price / m, sim: 1 })
+  }
+  const own = parseFaNum(it.price)
+  return { area: p.area, comps, targetPerM: own > 0 ? own / p.area : 0 }
+}
+
+/** جایگاهِ این فایل در بازارِ واقعیِ محله — همه از دادهٔ ثبت‌شده، بدونِ هیچ تخمینِ رفتاری. */
+export interface MarketPosition {
+  comps: number; cheaperThanPct: number; p25PerM: number; p75PerM: number; targetPerM: number
+}
+export async function marketPosition(propertyId: string): Promise<MarketPosition | null> {
+  const c = await compsFor(propertyId)
+  if (!c || c.comps.length < 5 || !c.targetPerM) return null   // زیرِ ۵ نمونه، ادعا نمی‌کنیم
+  const arr = c.comps.map(x => x.perM).sort((a, b) => a - b)
+  const dearer = arr.filter(v => v > c.targetPerM).length
+  const q = (f: number) => arr[Math.min(arr.length - 1, Math.max(0, Math.floor(f * (arr.length - 1))))]
+  return {
+    comps: arr.length,
+    cheaperThanPct: Math.round((dearer / arr.length) * 100),
+    p25PerM: Math.round(q(0.25)), p75PerM: Math.round(q(0.75)),
+    targetPerM: Math.round(c.targetPerM),
+  }
+}
+
 export async function valuate(propertyId: string): Promise<AvmResult & { targetArea?: number }> {
   const it = await getItemById(propertyId)
   if (!it) return { ...empty(), note: 'ملک یافت نشد' }
   const p = itemToProperty(it)
   if (!p.area) return { ...empty(), note: 'متراژِ ملک نامشخص است' }
-  const tArea = areaKey(it)
-  const items = await candidateListings(600)
-  const comps: Comp[] = []
-  for (const x of items) {
-    if (x.id === propertyId) continue
-    if (areaKey(x) !== tArea) continue
-    const price = parseFaNum(x.price), m = parseFaNum(String(x.meta?.['متراژ'] || ''))
-    const deal = x.meta?.['نوع معامله']
-    if (deal === 'اجاره') continue
-    if (price > 0 && m > 0) comps.push({ id: x.id, perM: price / m, sim: 1 })
-  }
+  const c = await compsFor(propertyId)
+  const comps: Comp[] = c?.comps || []
   const res = avmFromComps(p.area, comps, p.views || p.contacts ? clamp01((p.contacts || 0) / 10 + 0.3) : 0.5)
   return { ...res, targetArea: p.area }
 }
