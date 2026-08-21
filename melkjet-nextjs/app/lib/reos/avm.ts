@@ -11,14 +11,24 @@ export interface AvmResult { estimate: number; low: number; high: number; confid
 export function avmFromComps(targetAreaM: number, comps: Comp[], demand = 0.5): AvmResult {
   const valid = comps.filter(c => c.perM > 0)
   if (valid.length < 1 || !targetAreaM) return { estimate: 0, low: 0, high: 0, confidence: 0, pricePerM: 0, comps: valid.length, method: 'insufficient', note: 'دادهٔ کافی برای ارزش‌گذاری نیست' }
-  const wSum = valid.reduce((a, c) => a + Math.max(0.05, c.sim), 0)
-  const perM = valid.reduce((a, c) => a + c.perM * Math.max(0.05, c.sim), 0) / wSum
-  // پراکندگی (ضریبِ تغییرات) برای بازه و اطمینان
-  const mean = valid.reduce((a, c) => a + c.perM, 0) / valid.length
-  const variance = valid.reduce((a, c) => a + (c.perM - mean) ** 2, 0) / valid.length
+  // میانهٔ وزنی + حذفِ دُم‌ها. قیمتِ ملک توزیعِ چوله دارد: چند فایلِ خیلی گران، میانگین را
+  // بالا می‌کشد (جاهدشهر: ۱۱۶ م/متر با میانگین، در حالی که میانهٔ ۵۸۷ فایل ۹۹ است).
+  // میانه استانداردِ ارزش‌گذاریِ املاک است.
+  const sorted = [...valid].sort((a, b) => a.perM - b.perM)
+  const trim = sorted.length >= 20 ? Math.floor(sorted.length * 0.05) : 0
+  const core = trim ? sorted.slice(trim, sorted.length - trim) : sorted
+  const total = core.reduce((a, c) => a + Math.max(0.05, c.sim), 0)
+  let acc = 0
+  let perM = core[core.length - 1].perM
+  for (const c of core) { acc += Math.max(0.05, c.sim); if (acc >= total / 2) { perM = c.perM; break } }
+  // پراکندگی روی همان مجموعهٔ تمیزشده — تا چند پرت، اطمینان را بی‌دلیل صفر نکند
+  const mean = core.reduce((a, c) => a + c.perM, 0) / core.length
+  const variance = core.reduce((a, c) => a + (c.perM - mean) ** 2, 0) / core.length
   const cv = mean ? Math.sqrt(variance) / mean : 0.5
-  // تعدیلِ تقاضا: تقاضای بالا کمی قیمت را بالا می‌برد (±۵٪).
-  const adjPerM = perM * (1 + (clamp01(demand) - 0.5) * 0.1)
+  // تعدیلِ تقاضا حذف شد: از بازدید/تماس می‌آمد که عملاً ثبت نمی‌شود؛ یک بازدیدِ تصادفی
+  // ارزشِ چند میلیاردی را ۲٪ جابه‌جا می‌کرد. تا وقتی سیگنالِ واقعی نباشد، قیمت دست‌نخورده می‌ماند.
+  void demand
+  const adjPerM = perM
   const estimate = Math.round(adjPerM * targetAreaM)
   const band = Math.min(0.25, 0.05 + cv)
   const confidence = Math.round(clamp01(Math.min(1, valid.length / 8) * (1 - Math.min(0.8, cv))) * 100)
