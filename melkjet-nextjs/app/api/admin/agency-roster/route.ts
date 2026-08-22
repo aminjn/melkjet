@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule } from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor} from '@/app/lib/agency-roster-store'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { logAudit } from '@/app/lib/audit-store'
 
@@ -57,10 +57,39 @@ export async function POST(req: NextRequest) {
   }
   if (action === 'graduate') {
     if (!b.id || !b.key || !b.phone) return NextResponse.json({ error: 'id/key/phone لازم است' }, { status: 400 })
+    // یکتاییِ شماره: اگر به مشاورِ دیگری با نامِ ناسازگار داده شده، جلویش گرفته می‌شود.
+    // مسدود نمی‌شود، معلق می‌شود — تصمیمِ نهایی با مدیر است (force).
+    if (!b.force) {
+      const cf = await phoneConflict(String(b.phone), String(b.id), String(b.key))
+      if (cf) return NextResponse.json({
+        error: `این شماره از قبل به «${cf.name}» در آژانسِ ${cf.slug} داده شده. اگر همان شخص است، دوباره با تأیید بزنید.`,
+        conflict: cf,
+      }, { status: 409 })
+    }
     const r = await enqueueGraduate(String(b.id), String(b.key), String(b.phone), b.role ? String(b.role) : undefined)
     if (r.ok) { const sc = await getScrape(String(b.id)); logAudit(who(s), 'درخواستِ ساختِ حسابِ مشاور از آژانس', `${sc?.slug || ''} · ${b.key} → ${b.phone}`) }
     return NextResponse.json(r, { status: r.ok ? 200 : 400 })
   }
+  if (action === 'edit-advisor') {
+    if (!b.id || !b.key) return NextResponse.json({ error: 'id/key لازم است' }, { status: 400 })
+    if (b.phone && !b.force) {
+      const cf = await phoneConflict(String(b.phone), String(b.id), String(b.key))
+      if (cf) return NextResponse.json({
+        error: `این شماره از قبل به «${cf.name}» در آژانسِ ${cf.slug} داده شده.`, conflict: cf,
+      }, { status: 409 })
+    }
+    const r = await editAdvisor(String(b.id), String(b.key), {
+      name: b.name != null ? String(b.name) : undefined,
+      phone: b.phone != null ? String(b.phone) : undefined,
+    })
+    if (r.ok) logAudit(who(s), 'ویرایشِ مشاورِ آژانس', `${b.key} → ${b.name || ''} ${b.phone || ''} (${r.moved || 0} فایل منتقل شد)`)
+    return NextResponse.json(r, { status: r.ok ? 200 : 400 })
+  }
+
+  if (action === 'conflicts') {
+    return NextResponse.json({ ok: true, conflicts: await phoneConflicts() })
+  }
+
   if (action === 'remove-advisor') {
     if (!b.id || !b.key) return NextResponse.json({ error: 'id/key لازم است' }, { status: 400 })
     const r = await removeAdvisor(String(b.id), String(b.key))

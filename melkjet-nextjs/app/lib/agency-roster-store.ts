@@ -712,3 +712,94 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
   } finally { clearInterval(beat) }
 }
 export async function hasGraduateJobs(): Promise<boolean> { return ((await load()).graduateQueue || []).length > 0 }
+
+// ── یکتاییِ شماره و ویرایشِ مشاور (۲۱ آگوست) ────────────────────────────────
+// چرا لازم شد: `graduateAdvisor` وقتی شماره از قبل حساب داشت، بی‌هیچ هشداری همان
+// حساب را برمی‌داشت. نتیجه: «لطفی» و «مهران خسروی» هر دو 09380857896 گرفتند و
+// فایل‌های دو نفر زیرِ یک حساب رفت. ۱۷ مورد از ۲۰۸ تخصیص این‌طور بود.
+//
+// ولی مسدودکردنِ کاملِ تکرار هم غلط است: ۱۲ مورد از آن ۱۷ تا مشروع بودند —
+// یک نفر با دو صورتِ نام («زارع پور» و «رسول زارع پور»). پس معیار از خودِ نام می‌آید.
+
+/** یک نفرند اگر توکن‌های نامِ کوتاه‌تر زیرمجموعهٔ نامِ بلندتر باشد. */
+export function nameCompatible(a: string, b: string): boolean {
+  const T = (s: string) => new Set(String(s || '').replace(/\u200c/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک')
+    .split(/\s+/).map(x => x.trim()).filter(Boolean))
+  const A = T(a), B = T(b)
+  if (!A.size || !B.size) return false
+  const small = A.size <= B.size ? A : B, big = A.size <= B.size ? B : A
+  for (const t of small) if (!big.has(t)) return false
+  return true
+}
+
+export interface PhoneConflict { id: string; slug: string; key: string; name: string }
+
+/** آیا این شماره به مشاورِ دیگری با نامِ ناسازگار تعلق دارد؟ */
+export async function phoneConflict(phone: string, exceptId: string, exceptKey: string): Promise<PhoneConflict | null> {
+  const p = String(phone).replace(/[۰-۹٠-٩]/g, d => String(d.charCodeAt(0) >= 0x06f0 ? d.charCodeAt(0) - 0x06f0 : d.charCodeAt(0) - 0x0660)).replace(/\D/g, '')
+  if (!p) return null
+  const self = (await getScrape(exceptId))?.advisors.find(a => a.key === exceptKey)?.name || ''
+  for (const sc of await listScrapes()) {
+    const full = await getScrape(sc.id)
+    for (const a of (full?.advisors || [])) {
+      if (!a.phone || String(a.phone) !== p) continue
+      if (sc.id === exceptId && a.key === exceptKey) continue
+      if (self && nameCompatible(self, a.name)) continue      // همان شخص با نامِ کوتاه/کامل
+      return { id: sc.id, slug: sc.slug || sc.id, key: a.key, name: a.name }
+    }
+  }
+  return null
+}
+
+/** گزارشِ همهٔ تعارض‌های موجود، با تفکیکِ «مشروع» و «خطا». */
+export async function phoneConflicts(): Promise<{ phone: string; legit: boolean; who: PhoneConflict[] }[]> {
+  const by = new Map<string, PhoneConflict[]>()
+  for (const sc of await listScrapes()) {
+    const full = await getScrape(sc.id)
+    for (const a of (full?.advisors || [])) {
+      if (!a.phone) continue
+      const k = String(a.phone)
+      const g = by.get(k) || []; g.push({ id: sc.id, slug: sc.slug || sc.id, key: a.key, name: a.name }); by.set(k, g)
+    }
+  }
+  const out: { phone: string; legit: boolean; who: PhoneConflict[] }[] = []
+  for (const [phone, who] of by) {
+    if (who.length < 2) continue
+    const legit = who.every((x, i) => i === 0 || nameCompatible(who[0].name, x.name))
+    out.push({ phone, legit, who })
+  }
+  return out.sort((a, b) => Number(a.legit) - Number(b.legit))
+}
+
+/** ویرایشِ مشاور بدونِ حذف‌وساخت — حذف سابقهٔ فایل‌ها را از بین می‌برد. */
+export async function editAdvisor(id: string, key: string, patch: { name?: string; phone?: string }): Promise<{ ok: boolean; error?: string; moved?: number }> {
+  const scrape = await getScrape(id)
+  if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد' }
+  const rec = scrape.advisors.find(a => a.key === key)
+  if (!rec) return { ok: false, error: 'مشاور یافت نشد' }
+
+  let newPhone: string | undefined
+  if (patch.phone != null) {
+    newPhone = String(patch.phone).replace(/[۰-۹٠-٩]/g, d => String(d.charCodeAt(0) >= 0x06f0 ? d.charCodeAt(0) - 0x06f0 : d.charCodeAt(0) - 0x0660)).replace(/\D/g, '')
+    if (newPhone && !/^0\d{10}$/.test(newPhone)) return { ok: false, error: 'شمارهٔ معتبر نیست (۱۱ رقم، با ۰ شروع شود)' }
+  }
+  const oldPhone = rec.phone || ''
+  let moved = 0
+  if (newPhone !== undefined && oldPhone && newPhone !== oldPhone) {
+    try {
+      const { reassignListingOwnerPhone } = await import('./scraper-store')
+      moved = await reassignListingOwnerPhone(oldPhone, newPhone || rec.owner)
+    } catch { /* انتقالِ مالکیت اختیاری است */ }
+  }
+  const advisors = scrape.advisors.map(a => a.key !== key ? a : {
+    ...a,
+    name: patch.name != null && patch.name.trim() ? patch.name.trim() : a.name,
+    phone: newPhone !== undefined ? (newPhone || undefined) : a.phone,
+    owner: newPhone ? newPhone : a.owner,
+  })
+  await patchScrape(id, { advisors } as any)
+  if (newPhone) {
+    try { await updateAdvisorProfile(newPhone, { name: patch.name || rec.name, phone: newPhone, agency: scrape.agencyName }) } catch {}
+  }
+  return { ok: true, moved }
+}

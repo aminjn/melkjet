@@ -1972,8 +1972,30 @@ function AgencyRosterPanel() {
     const ph = (phones[`${id}:${key}`] || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     // مسیرِ ادمین: ثابت (۰۲۱xxxxxxxx) هم مجاز است — فقط ۱۱ رقم با صفرِ اول کافی است.
     if (!/^0\d{10}$/.test(ph)) { setMsg('❌ شمارهٔ معتبر وارد کن (موبایل ۰۹… یا ثابت با کدِ شهر)'); return }
-    const j = await post({ action: 'graduate', id, key, phone: ph })
+    let j = await post({ action: 'graduate', id, key, phone: ph })
+    // ۴۰۹ = این شماره به مشاورِ دیگری داده شده. مسدود نمی‌کنیم، می‌پرسیم.
+    if (j?.conflict) {
+      if (!confirm(`${j.error}\n\nاگر واقعاً همان شخص است تأیید کن؛ وگرنه لغو کن و شمارهٔ درست را بزن.`)) { setMsg('لغو شد'); return }
+      j = await post({ action: 'graduate', id, key, phone: ph, force: true })
+    }
     if (j.ok) { setMsg('⏳ در صفِ ساختِ حساب — انتقالِ فایل‌ها روی سرور انجام می‌شود (تا ۱–۲ دقیقه)'); load() } else setMsg('❌ ' + (j.error || 'خطا')) }
+
+  // ویرایشِ نام و شماره بدونِ حذف‌وساخت — حذف سابقهٔ فایل‌ها را از بین می‌برد.
+  const editAdvisorUi = async (id: string, key: string, cur: any) => {
+    const nm = prompt('نامِ مشاور:', cur.name || '')
+    if (nm === null) return
+    const raw = prompt('شمارهٔ موبایل (خالی بگذار تا شماره برداشته شود):', cur.phone || '')
+    if (raw === null) return
+    const ph = String(raw).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+    if (ph && !/^0\d{10}$/.test(ph)) { setMsg('❌ شمارهٔ معتبر نیست (۱۱ رقم، با ۰)'); return }
+    let j = await post({ action: 'edit-advisor', id, key, name: nm, phone: ph })
+    if (j?.conflict) {
+      if (!confirm(`${j.error}\n\nاگر همان شخص است تأیید کن.`)) { setMsg('لغو شد'); return }
+      j = await post({ action: 'edit-advisor', id, key, name: nm, phone: ph, force: true })
+    }
+    if (j.ok) { setMsg(`✅ ذخیره شد${j.moved ? ` — ${fa(j.moved)} فایل منتقل شد` : ''}`); load() }
+    else setMsg('❌ ' + (j.error || 'خطا'))
+  }
   const removeAdvisor = async (id: string, key: string, name: string) => {
     if (!confirm(`«${name}» از این فهرست حذف شود؟ (اگر حساب ساخته شده، خودِ حساب و فایل‌هایش می‌مانند)`)) return
     const j = await post({ action: 'remove-advisor', id, key })
@@ -2073,6 +2095,7 @@ function AgencyRosterPanel() {
                           ? <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>⏳ در حالِ ساختِ حساب…</span>
                           : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="۰۹… یا ثابت ۰۲۱…" value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
                             <button onClick={() => graduate(s.id, a.key)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب</button></>}
+                      <button onClick={() => editAdvisorUi(s.id, a.key, a)} title="ویرایشِ نام و شماره" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: 'var(--gold)', fontSize: 11.5, cursor: 'pointer' }}>ویرایش</button>
                       <button onClick={() => removeAdvisor(s.id, a.key, a.name)} title="حذف از فهرست" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: '#e06666', fontSize: 11.5, cursor: 'pointer' }}>حذف</button>
                     </div>
                     <DivarLinks tokens={a.tokens} />
