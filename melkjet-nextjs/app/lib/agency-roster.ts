@@ -1,6 +1,7 @@
 import { fetchDivarProfileTokens, fetchDivarPost, divarProfileSlug, type BrandPost } from './divar-post'
 import { aiFor, resolveAgent } from './gapgpt'
-import { nameProbSync, NAME_THRESHOLD } from './roster-name-model'
+import { nameProbSync, NAME_THRESHOLD, corpusCount } from './roster-name-model'
+import { bestName } from './roster-ner'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
 import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
@@ -67,13 +68,25 @@ const RE_TAIL = /(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|جهت
 const RE_SELF = /([ء-ی]{2,15}(?:\s+[ء-ی]{2,15})?)\s+(?:هستم|هستیم|در\s*خدمتم|در\s*خدمتتونم)/g
 
 export function extractSignature(title: string, desc: string, agencyName = ''): string[] {
+  // مسیرِ اصلی: برچسب‌زنِ توکن (roster-ner). روی دادهٔ کنارگذاشته ۸۷.۹٪ درست بود.
+  // الگوهای زیر فقط وقتی اجرا می‌شوند که مدل بارگذاری نشده باشد — پس در تولید
+  // تصمیم با مدل است، نه با قاعده.
+  const ner = bestName(title, desc)
+  if (ner) {
+    const v = validName(ner.name, agencyName)
+    if (v) return [v]
+  }
+
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
   // «فلاحی» در «بین فلاحی ۴۱ و ۴۳» و «کسری» در «کسری بودجه» → هرگز اسم نمی‌شوند
   const banned = new Set([...addressTokens(raw), ...contextNoiseTokens(raw)])
   // PHRASE_TRAP — «مشاور و امینِ شما»: «امین» اینجا صفت است، نه نام. قاعدهٔ بافتاری
   // است نه فهرستِ سیاه: همان واژه در «کارشناس فروش امین رضایی» آزاد می‌ماند.
-  for (const m of raw.matchAll(/و\s*([\u0621-\u06cc]{3,15})\s*(?:ی|ِ)?\s*شما/g)) banned.add(keyOf(m[1]))
+  // TRAP_V2 — شرطِ «و» را برداشتم: «امینِ شما» بدونِ «و» هم می‌آید. هر واژه‌ای که
+  // بلافاصله پیش از «شما» بنشیند در جایگاهِ صفت است، نه نام.
+  for (const m of raw.matchAll(/([\u0621-\u06cc]{3,15})\s*(?:ی|ِ)?\s*شما/g)) banned.add(keyOf(m[1]))
   const out: string[] = []
+  const scores = new Map<string, number>()
   const push = (s?: string) => {
     const v = validName(s || '', agencyName, banned)
     if (!v || out.includes(v)) return
@@ -84,6 +97,8 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
     // می‌دهیم و بالاترین نمره برنده می‌شود. اگر نام واقعاً با «و» شروع شود (وحید،
     // وزیری) صورتِ کامل نمرهٔ بالاتری می‌گیرد و دست‌نخورده می‌ماند.
     let best = v, bp = nameProbSync(v)
+    // «وامین» وقتی «امین» ممنوعِ همین آگهی است، خودش هم ممنوع است.
+    if (/^و[\u0621-\u06cc]{4,}$/.test(v) && banned.has(keyOf(v.slice(1)))) return
     if (/^و[\u0621-\u06cc]{4,}$/.test(v)) {
       const alt = validName(v.slice(1), agencyName, banned)
       const ap = alt ? nameProbSync(alt) : null
@@ -91,6 +106,7 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
     }
     if (bp !== null && bp < NAME_THRESHOLD) return
     if (out.includes(best)) return
+    scores.set(best, bp == null ? 0.5 : bp)
     out.push(best)
   }
 
@@ -133,7 +149,40 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   //     چون بدونِ کلیدواژهٔ امضا کم‌اطمینان‌ترین سیگنال است. خطِ عنوان (i=0) شمرده نمی‌شود.
   lines.forEach((line, i) => { if (i > 0 && !isSig[i]) push(bareNameLine(line, 2, agencyName, banned)) })
 
-  return out
+  // FREE_CANDIDATES — الگوهای ثابت هر جمله‌بندیِ تازه را از دست می‌دهند:
+  // «کارشناس املاک : مرادی» را هیچ‌کدام نگرفت، چون بینِ کلیدواژه و نام یک واژهٔ
+  // دیگر بود. به‌جای افزودنِ الگوی تازه (که فردا هم می‌شکند)، همهٔ تک‌واژه‌ها و
+  // دوواژه‌های خطِ امضا کاندیدا می‌شوند و انتخاب با مدل است.
+  const free = new Set<string>()
+  lines.forEach((line, i) => {
+    if (!isSig[i] && i < lines.length - 3) return
+    // SEG_BOUNDARY — «کارشناس املاک : مرادی» و «پونک ... حلمی»: دوواژه نباید از روی
+    // نشانه‌گذاری رد شود، وگرنه «پونک حلمی» و «تهران مرداد» ساخته می‌شوند.
+    for (const seg of line.split(/[:：،؛,\-–—|/()\[\]«»]+/)) {
+      const ws = seg.split(/[^\u0621-\u06ccA-Za-z]+/).filter(w => w.length > 1)
+      for (let j = 0; j < ws.length; j++) {
+        free.add(ws[j])
+        if (j + 1 < ws.length) free.add(ws[j] + ' ' + ws[j + 1])
+      }
+    }
+  })
+  for (const c of free) push(c)
+
+  // بالاترین نمرهٔ مدل اول. کاندیداهای الگویی نمرهٔ پایهٔ ۰.۵ می‌گیرند وقتی مدل نیست،
+  // پس در نبودِ مدل ترتیب دقیقاً مثلِ قبل می‌ماند.
+  // زیرعبارت حذف می‌شود: اگر «رها زمانی» پذیرفته شده، «رها» نامِ جداگانه نیست.
+  // انتخابِ بینِ دوواژه و تک‌واژه با پیکره، نه با نمرهٔ مدل: مدل به عبارتِ کمیاب
+  // («پونک حلمی» که یک‌بار آمده) نمرهٔ بالا می‌دهد چون بسامدش صفر است.
+  const sub = (a: string, b: string) => b !== a && b.split(' ').length > a.split(' ').length &&
+    (b.startsWith(a + ' ') || b.endsWith(' ' + a))
+  const full = out.filter(a => {
+    // دوواژهٔ کمیاب که تک‌واژه‌اش هم کاندیداست → دوواژه کنار می‌رود
+    if (a.includes(' ') && corpusCount(a) < 2 && out.some(x => sub(x, a))) return false
+    // تک‌واژه‌ای که دوواژهٔ دیده‌شده‌ای شاملش است → تک‌واژه کنار می‌رود
+    if (out.some(b => sub(a, b) && corpusCount(b) >= 2)) return false
+    return true
+  })
+  return full.sort((a, b) => (scores.get(b) ?? 0) - (scores.get(a) ?? 0))
 }
 
 // (اختیاری) پالایشِ AI: نامِ کانونیِ مشاورِ هر آگهی را برمی‌گرداند (فارسی؛ خالی اگر امضا نبود).

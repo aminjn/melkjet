@@ -173,3 +173,15 @@ export function nameProbSync(name: string): number | null {
   if (!CORPUS || !CACHE) return null
   return score(featurize(name, CORPUS), CACHE.w)
 }
+
+/** چند بار این عبارت در پیکره دیده شده. صفر یعنی «کمیاب» — و مدل به کمیاب
+ *  نمرهٔ بالا می‌دهد چون بسامد و پراکندگی‌اش صفر است. برای همین در انتخابِ بینِ
+ *  دوواژه و تک‌واژه، این عدد داور است نه نمرهٔ مدل. */
+export function corpusCount(name: string): number {
+  if (!CORPUS) return 0
+  const st = CORPUS.get(norm(name))
+  return st ? st.b + st.s + st.k : 0
+}
+
+/** دسترسی به پیکرهٔ بارگذاری‌شده برای ماژولِ برچسب‌زنِ توکن. */
+export function getCorpus(): Corpus | null { return CORPUS }
