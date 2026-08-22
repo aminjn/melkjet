@@ -5028,7 +5028,11 @@ function UsersView() {
     )) return
     const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, changePhone: to }) })
     const d = await r.json().catch(() => ({} as any))
-    if (r.ok) alert(`✅ شماره تغییر کرد.\nفایل ${fa(d.advisorListings || 0)} · آگهیِ عمومی ${fa(d.publicListings || 0)} · لید ${fa((d.advisorLeads || 0) + (d.leads || 0))} · وظیفه ${fa(d.tasks || 0)}`)
+    if (r.ok) alert('✅ شماره تغییر کرد.\n' +
+      `فایل ${(d.advisorListings || 0).toLocaleString('fa-IR')} · ` +
+      `آگهیِ عمومی ${(d.publicListings || 0).toLocaleString('fa-IR')} · ` +
+      `لید ${((d.advisorLeads || 0) + (d.leads || 0)).toLocaleString('fa-IR')} · ` +
+      `وظیفه ${(d.tasks || 0).toLocaleString('fa-IR')}`)
     else alert('❌ ' + (d.error || 'خطا'))
     load()
   }
