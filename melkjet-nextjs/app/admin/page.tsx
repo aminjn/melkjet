@@ -5013,6 +5013,26 @@ function UsersView() {
     if (!r.ok) { const d = await r.json().catch(() => ({} as any)); alert(d.error || 'ذخیره نشد — خطای سرور') }
     load()
   }
+  // تغییرِ شمارهٔ حساب = تغییرِ کلیدِ ورود. تأییدیه عمداً صریح است، نه یک «مطمئنی؟».
+  const changePhoneUi = async (phone: string, name?: string) => {
+    const raw = prompt(`شمارهٔ جدیدِ «${name || phone}»:`, phone)
+    if (raw === null) return
+    const to = String(raw).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+    if (!/^0\d{10}$/.test(to)) { alert('شمارهٔ معتبر نیست (۱۱ رقم، با ۰)'); return }
+    if (to === phone) return
+    if (!confirm(
+      `شمارهٔ این حساب از ${phone} به ${to} تغییر کند؟\n\n` +
+      `شمارهٔ حساب کلیدِ ورود است: بعد از این، ورود با شمارهٔ قدیمی ممکن نیست و هرکس ` +
+      `شمارهٔ جدید را در اختیار داشته باشد می‌تواند واردِ این حساب شود.\n\n` +
+      `فایل‌ها، لیدها، وظایف و پروفایل منتقل می‌شوند و حسابِ قدیمی تعلیق می‌شود (حذف نمی‌شود).`
+    )) return
+    const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, changePhone: to }) })
+    const d = await r.json().catch(() => ({} as any))
+    if (r.ok) alert(`✅ شماره تغییر کرد.\nفایل ${fa(d.advisorListings || 0)} · آگهیِ عمومی ${fa(d.publicListings || 0)} · لید ${fa((d.advisorLeads || 0) + (d.leads || 0))} · وظیفه ${fa(d.tasks || 0)}`)
+    else alert('❌ ' + (d.error || 'خطا'))
+    load()
+  }
+
   const delOne = async (phone: string) => {
     if (!confirm(`کاربر ${phone} حذف شود؟`)) return
     setUsers(us => us.filter(u => u.phone !== phone)); setSel(s => { const n = new Set(s); n.delete(phone); return n })
@@ -5191,6 +5211,7 @@ function UsersView() {
                       <td style={{ ...td, color: 'var(--muted)', fontSize: 12 }}>{timeAgo(u.lastLogin || null)}</td>
                       <td style={{ ...td, textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <button title="مشاهدهٔ کامل" onClick={() => setViewUser(u)} style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '4px 11px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, marginInlineEnd: 6 }}>مشاهده</button>
+                        <button title="ویرایشِ شمارهٔ حساب" onClick={() => changePhoneUi(u.phone, u.name)} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--gold)', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>✎</button>
                         <button title="حذف" onClick={() => delOne(u.phone)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>×</button>
                       </td>
                     </tr>

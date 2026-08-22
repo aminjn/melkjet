@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 import { getSession } from '@/app/lib/session'
-import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount, setSuspended, setCap, setPlan, isProtectedAccount } from '@/app/lib/account-store'
+import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount, setSuspended, setCap, setPlan, isProtectedAccount , getAccount, accountExists} from '@/app/lib/account-store'
 import { saveProfile, getProfile, completeness } from '@/app/lib/profile-store'
 import { listRoles, dashForRoleId } from '@/app/lib/role-store'
 import { listPlans, getPlan } from '@/app/lib/plan-store'
@@ -82,6 +83,30 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, adminSections: a115.adminSections || [] })
   }
   // فاز ۱۴۲ (فیدبک: «دیوار احراز نمی‌کند؛ یک نفر دو شماره/دو حساب دارد») — ادغامِ دو حساب.
+  // ── تغییرِ شمارهٔ یک حساب (۲۱ آگوست) ──────────────────────────────────────
+  // شماره کلیدِ حساب است، پس «ویرایش» یعنی مهاجرت: حسابِ مقصد ساخته می‌شود و
+  // همه‌چیز با همان مسیرِ آزمودهٔ mergeUserAccounts منتقل می‌شود. حسابِ قدیمی
+  // تعلیق می‌شود نه حذف — تاریخچه می‌ماند.
+  if (b.changePhone !== undefined) {
+    const norm = (x: unknown) => String(x || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+    const from = norm(b.phone), to = norm(b.changePhone)
+    if (!/^0\d{10}$/.test(to)) return NextResponse.json({ error: 'شمارهٔ جدید معتبر نیست (۱۱ رقم، با ۰)' }, { status: 400 })
+    if (!from || from === to) return NextResponse.json({ error: 'شماره تغییری نکرده' }, { status: 400 })
+    const acc = getAccount(from)
+    if (!acc) return NextResponse.json({ error: 'حسابِ مبدأ پیدا نشد' }, { status: 404 })
+    if (isProtectedAccount(from) && s.role !== 'super_admin')
+      return NextResponse.json({ error: 'این حساب محافظت‌شده است' }, { status: 403 })
+    if (accountExists(to))
+      return NextResponse.json({ error: 'این شماره از قبل حساب دارد — به‌جای تغییرِ شماره از «ادغامِ دو حساب» استفاده کن.', existing: true }, { status: 409 })
+    const cr = createAccount(to, { name: acc.name, role: acc.role, plan: acc.plan })
+    if (!cr.ok) return NextResponse.json({ error: cr.error }, { status: 400 })
+    const { mergeUserAccounts: mergeFn } = await import('@/app/lib/account-merge')
+    const r = await mergeFn(to, from)
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
+    logAudit(s.phone, 'تغییرِ شمارهٔ حساب', `${from} → ${to} (فایل ${r.advisorListings ?? 0}، آگهیِ عمومی ${r.publicListings ?? 0}، لید ${(r.advisorLeads ?? 0) + (r.leads ?? 0)}، وظیفه ${r.tasks ?? 0})`)
+    return NextResponse.json({ ...r, ok: true, from, to })
+  }
+
   // b.phone = حسابِ اصلی (می‌ماند)، b.mergeFrom = حسابِ دوم (داده‌اش منتقل و خودش تعلیق می‌شود).
   if (b.mergeFrom !== undefined) {
     if (s.role !== 'super_admin') return NextResponse.json({ error: 'ادغامِ حساب فقط کارِ سوپرادمین است' }, { status: 403 })
