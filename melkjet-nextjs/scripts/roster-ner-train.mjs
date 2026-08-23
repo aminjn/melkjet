@@ -69,7 +69,7 @@ for (const sc of await rs.listScrapes()) {
     /(?:با\s*تشکر|موفق\s*باشید|ارادتمند)[\s,،:]*([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/,
   ]
   const seen = new Set(docs.map(d => String(d.desc).slice(0, 120)))
-  let anchored = 0, spread = 0
+  let anchored = 0, spread = 0, negs = 0
   for (const sc of await rs.listScrapes()) {
     const rc = await kvGet('agency_roster_cache:' + sc.id, {})
     const full = await rs.getScrape(sc.id)
@@ -104,33 +104,22 @@ for (const sc of await rs.listScrapes()) {
       seen.add(key); spread++
       docs.push({ title: r.title || '', desc: r.desc, name: hits[0], parts: new Set(hits[0].split(' ').filter(Boolean)), src: 'spread' })
     }
-  }
-  console.log('لنگر (لقب/معرفی/پایان‌بندی):', anchored, '| انتشارِ درون‌آژانسی:', spread)
-}
-
-// NEGDOCS — سندِ منفی: آگهی‌هایی که هیچ کلیدواژهٔ امضایی در سه خطِ پایانی ندارند.
-// بدونِ اینها مدل هرگز یاد نمی‌گیرد «اینجا نامی نیست» و در هر آگهیِ بی‌امضا با
-// اطمینان یک واژهٔ تصادفی را نام اعلام می‌کند — دقیقاً باگی که در پنل دیده شد.
-{
-  const SIGW = /(کارشناس|مشاور|فروشنده|املاک|مسکن|امضا|احترام|تشکر|هماهنگی|راهنمایی|تماس|هستم|خدمتم)/
-  const seen = new Set(docs.map(d => String(d.desc).slice(0, 120)))
-  const pool = []
-  for (const sc of await rs.listScrapes()) {
-    const rc = await kvGet('agency_roster_cache:' + sc.id, {})
-    for (const r of Object.values(rc || {})) {
-      if (!r?.desc) continue
+    // NEG_V2 — منفیِ درست: آگهیِ همین آژانس که هیچ لنگری در ناحیهٔ امضا ندارد.
+    // تعریفِ قبلی («کلیدواژهٔ امضا نداشته باشد») آگهی‌های «برای اطلاعات بیشتر … تماس
+    // بگیرید» را کنار می‌گذاشت — دقیقاً همان‌هایی که مشاورِ جعلیِ «بیشتر» را ساختند.
+    for (const r of rows) {
       const key = String(r.desc).slice(0, 120)
       if (seen.has(key)) continue
       const lines = String(r.desc).split(/[\n\r]+/).map(x => x.trim()).filter(Boolean)
-      if (lines.slice(-3).some(l => SIGW.test(l))) continue     // شاید امضا داشته باشد → منفیِ مطمئن نیست
-      pool.push({ title: r.title || '', desc: r.desc, name: '', parts: new Set(), src: 'neg' })
-      seen.add(key)
+      const tail = lines.slice(-4).join(' ')
+      if ([...solid].some(k => tail.includes(k))) continue
+      seen.add(key); negs++
+      docs.push({ title: r.title || '', desc: r.desc, name: '', parts: new Set(), src: 'neg' })
     }
   }
-  const want = Math.min(pool.length, Math.round(docs.length * 0.5))
-  for (let i = 0; i < want; i++) docs.push(pool[Math.floor(i * pool.length / want)])
-  console.log('سندِ منفی (بی‌امضا):', want, 'از', pool.length, 'موجود')
+  console.log('لنگر:', anchored, '| انتشار:', spread, '| سندِ منفی:', negs)
 }
+
 console.log('آگهیِ برچسب‌دار:', docs.length)
 if (docs.length < 100) { console.log('کم است — آموزش انجام نشد'); process.exit(0) }
 
