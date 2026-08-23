@@ -1996,6 +1996,18 @@ function AgencyRosterPanel() {
     if (j.ok) { setMsg(`✅ ذخیره شد${j.moved ? ` — ${fa(j.moved)} فایل منتقل شد` : ''}`); load() }
     else setMsg('❌ ' + (j.error || 'خطا'))
   }
+  // انتخابِ گروهی: پاک‌سازیِ مشاورانِ جعلی نباید ۲۰ بار کلیک و تأیید باشد.
+  const [selAdv, setSelAdv] = useState<Set<string>>(new Set())
+  const toggleAdv = (k: string) => setSelAdv(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const removeSelected = async (id: string) => {
+    const keys = [...selAdv].filter(k => k.startsWith(id + ':')).map(k => k.slice(id.length + 1))
+    if (!keys.length) return
+    if (!confirm(`${keys.length.toLocaleString('fa-IR')} مشاور از این فهرست حذف شود؟ فایل‌هایشان به «بی‌نام (خودِ آژانس)» برمی‌گردد.`)) return
+    for (const key of keys) await post({ action: 'remove-advisor', id, key })
+    setSelAdv(p => { const n = new Set(p); keys.forEach(k => n.delete(id + ':' + k)); return n })
+    setMsg(`✅ ${keys.length.toLocaleString('fa-IR')} مشاور حذف شد`); load()
+  }
+
   const removeAdvisor = async (id: string, key: string, name: string) => {
     if (!confirm(`«${name}» از این فهرست حذف شود؟ (اگر حساب ساخته شده، خودِ حساب و فایل‌هایش می‌مانند)`)) return
     const j = await post({ action: 'remove-advisor', id, key })
@@ -2084,9 +2096,18 @@ function AgencyRosterPanel() {
             </div>
             {open === s.id && (
               <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[...selAdv].filter(k => k.startsWith(s.id + ':')).length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: 'rgba(231,103,74,.08)', border: '1px solid rgba(231,103,74,.3)', borderRadius: 8 }}>
+                    <span style={{ fontSize: 12.5 }}>{[...selAdv].filter(k => k.startsWith(s.id + ':')).length.toLocaleString('fa-IR')} مشاور انتخاب شده</span>
+                    <button onClick={() => removeSelected(s.id)} style={{ background: '#e7674a', border: 'none', borderRadius: 8, padding: '5px 12px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>حذفِ انتخاب‌شده‌ها</button>
+                    <button onClick={() => setSelAdv(p => new Set([...p].filter(k => !k.startsWith(s.id + ':'))))} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '5px 10px', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>لغو</button>
+                  </div>
+                )}
                 {(s.advisors || []).map((a: any) => (
                   <div key={a.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 8px', background: 'var(--bg2)', borderRadius: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {!a.phone && <input type="checkbox" checked={selAdv.has(`${s.id}:${a.key}`)}
+                        onChange={() => toggleAdv(`${s.id}:${a.key}`)} style={{ width: 16, height: 16, cursor: 'pointer' }} />}
                       <span style={{ fontWeight: 700, fontSize: 13 }}>{a.name}</span>
                       <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(a.listingCount)} فایل</span>
                       {a.phone
