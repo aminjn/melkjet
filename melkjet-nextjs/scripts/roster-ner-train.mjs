@@ -107,6 +107,30 @@ for (const sc of await rs.listScrapes()) {
   }
   console.log('لنگر (لقب/معرفی/پایان‌بندی):', anchored, '| انتشارِ درون‌آژانسی:', spread)
 }
+
+// NEGDOCS — سندِ منفی: آگهی‌هایی که هیچ کلیدواژهٔ امضایی در سه خطِ پایانی ندارند.
+// بدونِ اینها مدل هرگز یاد نمی‌گیرد «اینجا نامی نیست» و در هر آگهیِ بی‌امضا با
+// اطمینان یک واژهٔ تصادفی را نام اعلام می‌کند — دقیقاً باگی که در پنل دیده شد.
+{
+  const SIGW = /(کارشناس|مشاور|فروشنده|املاک|مسکن|امضا|احترام|تشکر|هماهنگی|راهنمایی|تماس|هستم|خدمتم)/
+  const seen = new Set(docs.map(d => String(d.desc).slice(0, 120)))
+  const pool = []
+  for (const sc of await rs.listScrapes()) {
+    const rc = await kvGet('agency_roster_cache:' + sc.id, {})
+    for (const r of Object.values(rc || {})) {
+      if (!r?.desc) continue
+      const key = String(r.desc).slice(0, 120)
+      if (seen.has(key)) continue
+      const lines = String(r.desc).split(/[\n\r]+/).map(x => x.trim()).filter(Boolean)
+      if (lines.slice(-3).some(l => SIGW.test(l))) continue     // شاید امضا داشته باشد → منفیِ مطمئن نیست
+      pool.push({ title: r.title || '', desc: r.desc, name: '', parts: new Set(), src: 'neg' })
+      seen.add(key)
+    }
+  }
+  const want = Math.min(pool.length, Math.round(docs.length * 0.5))
+  for (let i = 0; i < want; i++) docs.push(pool[Math.floor(i * pool.length / want)])
+  console.log('سندِ منفی (بی‌امضا):', want, 'از', pool.length, 'موجود')
+}
 console.log('آگهیِ برچسب‌دار:', docs.length)
 if (docs.length < 100) { console.log('کم است — آموزش انجام نشد'); process.exit(0) }
 
@@ -116,7 +140,7 @@ if (docs.length < 100) { console.log('کم است — آموزش انجام نش
 const tr = [], te = []
 let gi = 0
 for (const d of docs) {
-  const gold = d.src === 'grad' || d.src === 'title'
+  const gold = d.src === 'grad' || d.src === 'title' || d.src === 'neg'
   if (gold && (gi++ % 5 === 0)) te.push(d); else tr.push(d)
 }
 const cnt = docs.reduce((m, d) => (m[d.src] = (m[d.src] || 0) + 1, m), {})
@@ -188,7 +212,8 @@ if (process.argv.includes('--sparse')) {
     const ts = N.titleTokens(d.title)
     const sc2 = toks.map((_, i) => N.dotSparse(N.sparseFeats(toks, i, nLines, nDoc, ts, corpus), W))
     let bi = 0; for (let i = 1; i < sc2.length; i++) if (sc2[i] > sc2[bi]) bi = i
-    if (sc2[bi] < 0.55) { no++; continue }
+    if (sc2[bi] < 0.55) { if (d.src === 'neg') ex++; else no++; continue }
+    if (d.src === 'neg') { wr++; if (miss.length < 12) miss.push('باید خالی می‌ماند: ' + M.norm(toks[bi].w)); continue }
     const pred = M.norm(toks[bi].w)
     if (pred === d.name || spn(pred) === spn(d.name)) ex++
     else if (d.parts.has(pred) || (spn(d.name).includes(spn(pred)) && spn(pred).length >= 4)) pa++
