@@ -15,6 +15,9 @@ import { getCorpus, norm, type Corpus } from './roster-name-model'
 export const NER_KV = 'roster_ner_model'
 const KEYW = /(کارشناس|مشاور|فروشنده|املاک|مسکن|امضا|احترام|تشکر|هماهنگی|راهنمایی|تماس)/
 const SUFFIX = /(?:زاده|نژاد|پور|یان|فرد|منش|مهر|راد|نیا|لو|فر|مند|خواه|طلب|دوست|بخش|ی)$/
+// صورتِ فعلی: «بزارید» از «شماره‌تون رو بزارید»، «بگیرید» از «تماس بگیرید».
+// نامِ آدم پیشوندِ ب/می/ن با پایانِ ید/ند/یم ندارد. ویژگی است، نه دروازه.
+const VERBISH = /^(?:ب|می|نمی|ن)[\u0621-\u06cc]{2,}(?:ید|ند|یم)$|(?:ایید|یید|مایید)$/
 
 export interface Tok { w: string; line: number; iDoc: number; iLine: number; keyDist: number; sigLine: boolean }
 
@@ -44,7 +47,7 @@ export function tokenize(desc: string): { toks: Tok[]; nLines: number; nDoc: num
 export const NER_FEATURES = [
   'bias', 'logB', 'logS', 'sigRatio', 'agSpread', 'afterKey', 'afterAddr',
   'keyNear', 'inSigLine', 'posDoc', 'lineFromEnd', 'prevKey',
-  'nextB', 'nextSig', 'prevSig', 'suffix', 'lenNorm', 'inTitle', 'repeat', 'noiseWord',
+  'nextB', 'nextSig', 'prevSig', 'suffix', 'lenNorm', 'inTitle', 'repeat', 'noiseWord', 'verbish',
 ] as const
 
 const ST = (c: Corpus | null, w: string) => c?.get(norm(w)) || { b: 0, s: 0, ag: 0, k: 0, a: 0 }
@@ -81,6 +84,7 @@ export function featsOf(
     titleSet.has(keyOf(t.w)) ? 1 : 0,                       // نام در عنوان نمی‌آید
     Math.min(1, rep / 3),
     isNoiseWord(t.w) ? 1 : 0,                               // ویژگی است، نه دروازه
+    VERBISH.test(t.w) ? 1 : 0,
   ]
 }
 

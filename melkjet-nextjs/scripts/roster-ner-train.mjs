@@ -24,16 +24,103 @@ for (const sc of await rs.listScrapes()) {
     const parts = new Set(M.norm(a.name).split(' ').filter(Boolean))
     for (const t of a.tokens) {
       const r = rc[t]
-      if (r?.desc) docs.push({ title: r.title || '', desc: r.desc, name: M.norm(a.name), parts })
+      if (r?.desc) docs.push({ title: r.title || '', desc: r.desc, name: M.norm(a.name), parts, src: 'grad' })
     }
   }
+}
+
+// TITLE_LABELS — منبعِ دومِ برچسب، کاملاً خودکار: لقب یا دونقطه پیش از نام.
+// «مشاور و امین شما خانم رگبار» و «کارشناس فروش: محمدی» جوابِ قطعی‌اند.
+// با هر اسکرپِ جدید این منبع خودش بزرگ‌تر می‌شود — بدونِ دخالتِ انسان.
+{
+  const { validName } = await import('../app/lib/agency-name-lexicon.ts')
+  const TITLE = /(?:سرکار\s+)?(?:خانمِ?|آقای|اقای|جناب|مهندس|دکتر|حاج)\s+([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/
+  const COLON = /(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|کارشناس|مشاور|فروشنده)\s*[:：]\s*([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/
+  const seen = new Set(docs.map(d => d.desc.slice(0, 120)))
+  let added = 0
+  for (const sc of await rs.listScrapes()) {
+    const rc = await kvGet('agency_roster_cache:' + sc.id, {})
+    const full = await rs.getScrape(sc.id)
+    for (const r of Object.values(rc || {})) {
+      if (!r?.desc) continue
+      if (seen.has(String(r.desc).slice(0, 120))) continue
+      const m = String(r.desc).match(TITLE) || String(r.desc).match(COLON)
+      if (!m) continue
+      const raw = (m[1] + ' ' + (m[2] || '')).trim()
+      const nm = validName(raw, full?.agencyName || '')
+      if (!nm || nm.length < 3) continue
+      const parts = new Set(M.norm(nm).split(' ').filter(Boolean))
+      docs.push({ title: r.title || '', desc: r.desc, name: M.norm(nm), parts, src: 'title' })
+      added++
+    }
+  }
+  console.log('برچسبِ خودکار از لقب/دونقطه:', added)
+}
+
+// PROPAGATE — لنگرگیری و انتشارِ درون‌آژانسی. سه منبعِ لنگر: لقب/دونقطه، معرفیِ خود
+// («… هستم»)، و پایان‌بندی («با تشکر …»). سپس هر آگهیِ دیگرِ همان آژانس که آن نام را
+// در ناحیهٔ امضا دارد، برچسب می‌گیرد. یک مشاور شاید فقط در ۳ آگهی از ۲۰تا لقب بنویسد.
+{
+  const { validName } = await import('../app/lib/agency-name-lexicon.ts')
+  const PATS = [
+    /(?:سرکار\s+)?(?:خانمِ?|آقای|اقای|جناب|مهندس|دکتر|حاج)\s+([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/,
+    /(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|کارشناس|مشاور|فروشنده)\s*[:：]\s*([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/,
+    /([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?\s+(?:هستم|هستیم|در\s*خدمتم|در\s*خدمتتونم)/,
+    /(?:با\s*تشکر|موفق\s*باشید|ارادتمند)[\s,،:]*([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/,
+  ]
+  const seen = new Set(docs.map(d => String(d.desc).slice(0, 120)))
+  let anchored = 0, spread = 0
+  for (const sc of await rs.listScrapes()) {
+    const rc = await kvGet('agency_roster_cache:' + sc.id, {})
+    const full = await rs.getScrape(sc.id)
+    const rows = Object.values(rc || {}).filter(r => r?.desc)
+    const anchors = new Map()                       // نامِ نرمال → تعداد
+    const labeled = []
+    for (const r of rows) {
+      let nm = ''
+      for (const re of PATS) { const m = String(r.desc).match(re); if (m) { nm = validName((m[1] + ' ' + (m[2] || '')).trim(), full?.agencyName || ''); if (nm) break } }
+      if (!nm || nm.length < 3) continue
+      const k = M.norm(nm)
+      anchors.set(k, (anchors.get(k) || 0) + 1)
+      labeled.push({ r, nm: k })
+    }
+    // لنگرِ معتبر: دستِ‌کم دوبار در همین آژانس دیده شده (یک‌بار می‌تواند تصادفی باشد)
+    for (const a of (full?.advisors || [])) if (a.phone) anchors.set(M.norm(a.name), 99)
+    const solid = new Set([...anchors.entries()].filter(([, c]) => c >= 2).map(([k]) => k))
+    for (const { r, nm } of labeled) {
+      const key = String(r.desc).slice(0, 120)
+      if (seen.has(key)) continue
+      seen.add(key); anchored++
+      docs.push({ title: r.title || '', desc: r.desc, name: nm, parts: new Set(nm.split(' ').filter(Boolean)), src: 'anchor' })
+    }
+    if (!solid.size) continue
+    for (const r of rows) {
+      const key = String(r.desc).slice(0, 120)
+      if (seen.has(key)) continue
+      const lines = String(r.desc).split(/[\n\r]+/).map(x => x.trim()).filter(Boolean)
+      const tail = lines.slice(-4).join(' ')
+      const hits = [...solid].filter(k => tail.includes(k))
+      if (hits.length !== 1) continue                 // ابهام = برچسب نمی‌زنیم
+      seen.add(key); spread++
+      docs.push({ title: r.title || '', desc: r.desc, name: hits[0], parts: new Set(hits[0].split(' ').filter(Boolean)), src: 'spread' })
+    }
+  }
+  console.log('لنگر (لقب/معرفی/پایان‌بندی):', anchored, '| انتشارِ درون‌آژانسی:', spread)
 }
 console.log('آگهیِ برچسب‌دار:', docs.length)
 if (docs.length < 100) { console.log('کم است — آموزش انجام نشد'); process.exit(0) }
 
 // تقسیم بر اساسِ *آگهی* نه توکن، وگرنه نشتِ داده رخ می‌دهد
+// آزمون فقط روی برچسبِ مطمئن (حسابِ تأییدشده + لقب/دونقطه). آموزش روی همه.
+// وگرنه برچسبِ نویزیِ تازه هم می‌شود «حقیقتِ زمینی» و عدد بی‌معنا می‌شود.
 const tr = [], te = []
-docs.forEach((d, i) => (i % 5 === 0 ? te : tr).push(d))
+let gi = 0
+for (const d of docs) {
+  const gold = d.src === 'grad' || d.src === 'title'
+  if (gold && (gi++ % 5 === 0)) te.push(d); else tr.push(d)
+}
+const cnt = docs.reduce((m, d) => (m[d.src] = (m[d.src] || 0) + 1, m), {})
+console.log('منابعِ برچسب:', JSON.stringify(cnt), '| آموزش:', tr.length, '| آزمونِ طلایی:', te.length)
 const build = set => {
   const X = [], y = []
   for (const d of set) {
@@ -67,9 +154,11 @@ for (const d of te) {
   const sc = toks.map((_, i) => N.dot(N.featsOf(toks, i, nLines, nDoc, ts, corpus), w))
   let bi = 0; for (let i = 1; i < sc.length; i++) if (sc[i] > sc[bi]) bi = i
   if (sc[bi] < 0.55) { none++; continue }
+  // مقایسهٔ بی‌فاصله: برچسبِ «محمدپرنده» و متنِ «محمد پرنده» یک چیزند.
+  const sp = (x) => M.norm(x).replace(/\s+/g, '')
   const pred = M.norm(toks[bi].w)
-  if (pred === d.name) exact++
-  else if (d.parts.has(pred)) partial++
+  if (pred === d.name || sp(pred) === sp(d.name)) exact++
+  else if (d.parts.has(pred) || sp(d.name).includes(sp(pred)) && sp(pred).length >= 4) partial++
   else { wrong++; if (misses.length < 12) misses.push(pred + ' ≠ ' + d.name) }
 }
 const tot = te.length
