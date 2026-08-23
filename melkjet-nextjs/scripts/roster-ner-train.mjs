@@ -166,6 +166,44 @@ console.log('\nآگهی‌محور →  دقیق', exact, '| بخشی', partial,
 console.log('  نرخِ درست (دقیق+بخشی):', (((exact + partial) / tot) * 100).toFixed(1) + '%')
 console.log('  نمونهٔ خطا:', misses.join(' · '))
 
+
+// ── مدلِ خلوت: همان داده، همان تقسیم، ویژگی‌های واژه‌ای و زیرواژه‌ای ──────────
+if (process.argv.includes('--sparse')) {
+  const XS = [], ys = []
+  for (const d of tr) {
+    const { toks, nLines, nDoc } = N.tokenize(d.desc)
+    const ts = N.titleTokens(d.title)
+    toks.forEach((t, i) => { XS.push(N.sparseFeats(toks, i, nLines, nDoc, ts, corpus)); ys.push(d.parts.has(M.norm(t.w)) ? 1 : 0) })
+  }
+  console.log('\nنمونهٔ خلوت:', XS.length, '| بُعد:', N.SPARSE_DIM)
+  const t0 = Date.now()
+  const W = N.trainSparse(XS, ys, { epochs: 12, lr: 0.25, l2: 1e-6 })
+  console.log('زمانِ آموزش:', ((Date.now() - t0) / 1000).toFixed(1), 'ثانیه')
+
+  const spn = (x) => M.norm(x).replace(/\s+/g, '')
+  let ex = 0, pa = 0, wr = 0, no = 0; const miss = []
+  for (const d of te) {
+    const { toks, nLines, nDoc } = N.tokenize(d.desc)
+    if (!toks.length) { no++; continue }
+    const ts = N.titleTokens(d.title)
+    const sc2 = toks.map((_, i) => N.dotSparse(N.sparseFeats(toks, i, nLines, nDoc, ts, corpus), W))
+    let bi = 0; for (let i = 1; i < sc2.length; i++) if (sc2[i] > sc2[bi]) bi = i
+    if (sc2[bi] < 0.55) { no++; continue }
+    const pred = M.norm(toks[bi].w)
+    if (pred === d.name || spn(pred) === spn(d.name)) ex++
+    else if (d.parts.has(pred) || (spn(d.name).includes(spn(pred)) && spn(pred).length >= 4)) pa++
+    else { wr++; if (miss.length < 12) miss.push(pred + ' ≠ ' + d.name) }
+  }
+  const tot2 = te.length
+  console.log('\n[خلوت] دقیق', ex, '| بخشی', pa, '| اشتباه', wr, '| بی‌نام', no, '| کل', tot2)
+  console.log('  نرخِ درست:', (((ex + pa) / tot2) * 100).toFixed(1) + '%')
+  console.log('  نمونهٔ خطا:', miss.join(' · '))
+  if (process.argv.includes('--save')) {
+    const nz = await N.saveSparse(W, { n: XS.length, metrics: { exact: ex, partial: pa, wrong: wr, none: no, total: tot2 } })
+    console.log('SPARSE SAVED — وزنِ ناصفر:', nz)
+  }
+}
+
 if (process.argv.includes('--save')) {
   await N.saveNer({ w, trainedAt: Date.now(), n: Xtr.length,
     metrics: { exact, partial, wrong, none, total: tot } })
