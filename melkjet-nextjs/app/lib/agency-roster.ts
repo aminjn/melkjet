@@ -351,7 +351,11 @@ export async function buildAgencyRoster(
     const ai = validName(aiMap[idx] || '', name, r.addr)
     const res = resolved[idx] && candKeys.has(keyOf(resolved[idx])) ? resolved[idx] : ''
     // اولویت: AIِ متن‌آگاه → نامِ تثبیت‌شدهٔ ML (در موضعِ امضا) → lexiconِ موضعِ امضا → heuristic.
-    const chosen = ai || res || lex || cand[0]
+    // ترتیب عوض شد: استخراجِ متن (که حالا برچسب‌زنِ توکن است) بر واژه‌نامهٔ آموخته
+    // مقدم شد. تا امروز `res`/`lex` بالاتر بودند، پس مدل هرگز نوبتش نمی‌رسید و هر سینک
+    // همان نام‌های آموختهٔ قدیمی («رگبار»، «کارگزاری») را دوباره می‌چسباند.
+    // نقشِ درستِ واژه‌نامه پرکردنِ جای خالی است، نه نقضِ چیزی که از متن خوانده شده.
+    const chosen = ai || cand[0] || res || lex
     if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); unnamedIdx.push(idx); return }
     const k = keyOf(chosen)
     // «سیگنالِ قوی» = نامِ آموختهٔ تثبیت‌شده در موضعِ امضا، یا توافقِ مستقلِ AI و heuristic.
