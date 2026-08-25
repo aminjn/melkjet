@@ -198,22 +198,26 @@ export const SPARSE_KV = 'roster_ner_sparse'
 export interface SparseModel { i: number[]; w: number[]; dim: number; trainedAt: number; n: number; metrics?: Record<string, number> }
 
 let SP: Float64Array | null = null
+let SPat = 0                     // زمانِ آخرین بارگذاری
+const SP_TTL = 5 * 60_000        // هر ۵ دقیقه دوباره از KV خوانده می‌شود
 export function hasSparse(): boolean { return !!SP }
 
-export async function loadSparse(): Promise<boolean> {
-  if (SP) return true
+// کشِ دائمی باگ بود: مدلِ بازآموزی‌شده تا ری‌استارتِ پروسه هرگز دیده نمی‌شد،
+// پس بازآموزیِ شبانه عملاً بی‌اثر بود. حالا با TTL خودش تازه می‌شود.
+export async function loadSparse(force = false): Promise<boolean> {
+  if (SP && !force && Date.now() - SPat < SP_TTL) return true
   const m = await kvGet<SparseModel | null>(SPARSE_KV, null)
   if (!m || !Array.isArray(m.i) || !Array.isArray(m.w)) return false
   const a = new Float64Array(m.dim || SPARSE_DIM)
   for (let k = 0; k < m.i.length; k++) a[m.i[k]] = m.w[k]
-  SP = a
+  SP = a; SPat = Date.now()
   return true
 }
 /** فقط وزنِ ناصفر ذخیره می‌شود — بیشترِ ۳۲۷۶۸ خانه هرگز دیده نمی‌شوند. */
 export async function saveSparse(w: Float64Array, meta: { n: number; metrics?: Record<string, number> }) {
   const i: number[] = [], v: number[] = []
   for (let k = 0; k < w.length; k++) if (w[k] !== 0) { i.push(k); v.push(Number(w[k].toFixed(5))) }
-  SP = w
+  SP = w; SPat = Date.now()
   await kvSet(SPARSE_KV, { i, w: v, dim: w.length, trainedAt: Date.now(), ...meta })
   return i.length
 }
