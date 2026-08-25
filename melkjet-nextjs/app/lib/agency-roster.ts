@@ -1,7 +1,7 @@
 import { fetchDivarProfileTokens, fetchDivarPost, divarProfileSlug, type BrandPost } from './divar-post'
 import { aiFor, resolveAgent } from './gapgpt'
 import { nameProbSync, NAME_THRESHOLD, corpusCount } from './roster-name-model'
-import { bestName } from './roster-ner'
+import { bestName, hasSparse as hasSparseModel } from './roster-ner'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
 import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
@@ -71,10 +71,14 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   // مسیرِ اصلی: برچسب‌زنِ توکن (roster-ner). روی دادهٔ کنارگذاشته ۸۷.۹٪ درست بود.
   // الگوهای زیر فقط وقتی اجرا می‌شوند که مدل بارگذاری نشده باشد — پس در تولید
   // تصمیم با مدل است، نه با قاعده.
+  // MODEL_AUTHORITATIVE — وقتی مدل بارگذاری شده، حرفِ آخر با اوست: چه نام بدهد چه
+  // سکوت کند. تا امروز سکوتِ مدل باعث می‌شد الگوهای regexِ زیر اجرا شوند و برای
+  // آگهیِ بی‌امضا نامِ جعلی بسازند («چت دیوار»، «درختان میوه»، «گیر کمد»).
+  // همین یک بازگشت، همهٔ بهبودهای مدل را در آگهی‌های بی‌امضا خنثی می‌کرد.
   const ner = bestName(title, desc)
-  if (ner) {
-    const v = validName(ner.name, agencyName)
-    if (v) return [v]
+  if (hasSparseModel() || ner) {
+    const v = ner ? validName(ner.name, agencyName) : ''
+    return v ? [v] : []
   }
 
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
