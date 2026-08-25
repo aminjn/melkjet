@@ -75,8 +75,15 @@ for (const sc of await rs.listScrapes()) {
     ...(process.env.NER_NO_PHRASE ? [] : [/(?:مشاورِ?|کارشناسِ?|همراهِ?)\s*شما\s*[:،.\-]?\s*(?:(?:خانم|آقای|آقا|جناب|سرکار|مهندس|دکتر)\s+)?([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/]),
     /(?:با\s*تشکر|موفق\s*باشید|ارادتمند)[\s,،:]*([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/,
   ]
+  // واژهٔ دوم را کورکورانه نچسبان. «زارع هستم» از همین می‌آمد و بعد به‌عنوانِ
+  // حقیقتِ زمینی به مدل داده می‌شد. پیکره خودش می‌داند: هستم ag=69 b=949، در حالی
+  // که نامِ واقعی ag یک‌رقمی و b کوچک دارد. معیار از داده می‌آید، نه از فهرستِ دستی.
+  const CO = (() => { try { return M.getCorpus && M.getCorpus() } catch (e) { return null } })()
+  const cstat = w => { try { return typeof CO?.get === 'function' ? CO.get(w) : CO?.[w] } catch (e) { return null } }
+  const BARE_AG = Number(process.env.BARE_AG || 18)
+  const nameLike = w => { const e = cstat(w); if (!e) return true; return e.b <= 200 && (e.s + 1) / (e.s + e.b + 1) >= 0.25 }
   const seen = new Set(docs.map(d => String(d.desc).slice(0, 120)))
-  let anchored = 0, spread = 0, negs = 0
+  let anchored = 0, spread = 0, negs = 0, bare = 0
   // پیش‌پاس: شمارشِ واژه‌های ناحیهٔ امضا، هم به تفکیکِ آژانس هم سراسری
   const tailLocal = new Map(), tailGlobal = new Map()
   for (const sc of await rs.listScrapes()) {
@@ -99,7 +106,7 @@ for (const sc of await rs.listScrapes()) {
     const labeled = []
     for (const r of rows) {
       let nm = ''
-      for (const re of PATS) { const m = String(r.desc).match(re); if (m) { nm = validName((m[1] + ' ' + (m[2] || '')).trim(), full?.agencyName || ''); if (nm) break } }
+      for (const re of PATS) { const m = String(r.desc).match(re); if (m) { const two = (m[2] && nameLike(m[2])) ? ' ' + m[2] : ''; nm = validName((m[1] + two).trim(), full?.agencyName || ''); if (nm) break } }
       if (!nm || nm.length < 3) continue
       const k = M.norm(nm)
       anchors.set(k, (anchors.get(k) || 0) + 1)
@@ -137,6 +144,36 @@ for (const sc of await rs.listScrapes()) {
       seen.add(key); spread++
       docs.push({ title: r.title || '', desc: r.desc, name: hits[0], parts: new Set(hits[0].split(' ').filter(Boolean)), src: 'spread' })
     }
+    // امضای برهنه — نام تنها روی خطِ آخر، بدونِ هیچ کلیدواژه‌ای: «محمد امین»،
+    // «کارن»، «مهدی». این خانواده نه‌تنها برچسبی نداشت، بلکه به‌عنوانِ سندِ منفی به
+    // مدل داده می‌شد؛ یعنی صریحاً یادش می‌دادیم رویشان ساکت بماند. سه سنجه، هر سه
+    // از داده: خطِ کوتاه (≤۲ توکن)، پراکندگیِ آژانسیِ پایین (واژهٔ عمومی مثل «هستم»
+    // ag=69 و «توضیحات» ag=88 می‌افتد) و حذفِ کشیده که «شمـاره همـراه» را رد می‌کرد.
+    // توکنِ پرپراکنش تنها حذف می‌شود نه کلِ خط، پس «پوریا هستم» می‌شود «پوریا».
+    if (!process.env.NER_NO_BARE) {
+      const bareOf = (desc) => {
+        const lines = String(desc).replace(/\u0640/g, '').split(/[\n\r]+/).map(x => x.trim()).filter(Boolean)
+        for (const ln of lines.slice(-3).reverse()) {
+          const raw = ln.split(/[^\u0621-\u06cc]+/).filter(x => x.length > 2)
+          if (!raw.length || raw.length > 2) continue
+          if (raw.some(t => !validName(t, full?.agencyName || ''))) continue
+          const keep = raw.filter(t => { const e = cstat(M.norm(t)); return !e || e.ag < BARE_AG })
+          if (!keep.length) continue
+          return M.norm(keep.join(' '))
+        }
+        return ''
+      }
+      const loc = new Map()
+      for (const r of rows) { const nm = bareOf(r.desc); if (nm) loc.set(nm, (loc.get(nm) || 0) + 1) }
+      for (const r of rows) {
+        const key = String(r.desc).slice(0, 120)
+        if (seen.has(key)) continue
+        const nm = bareOf(r.desc)
+        if (!nm || (loc.get(nm) || 0) < 2) continue
+        seen.add(key); bare++
+        docs.push({ title: r.title || '', desc: r.desc, name: nm, parts: new Set(nm.split(' ').filter(Boolean)), src: 'bare' })
+      }
+    }
     // NEG_V2 — منفیِ درست: آگهیِ همین آژانس که هیچ لنگری در ناحیهٔ امضا ندارد.
     // تعریفِ قبلی («کلیدواژهٔ امضا نداشته باشد») آگهی‌های «برای اطلاعات بیشتر … تماس
     // بگیرید» را کنار می‌گذاشت — دقیقاً همان‌هایی که مشاورِ جعلیِ «بیشتر» را ساختند.
@@ -150,7 +187,7 @@ for (const sc of await rs.listScrapes()) {
       docs.push({ title: r.title || '', desc: r.desc, name: '', parts: new Set(), src: 'neg' })
     }
   }
-  console.log('لنگر:', anchored, '| انتشار:', spread, '| سندِ منفی:', negs)
+  console.log('لنگر:', anchored, '| انتشار:', spread, '| امضای برهنه:', bare, '| سندِ منفی:', negs)
 }
 
 console.log('آگهیِ برچسب‌دار:', docs.length)
