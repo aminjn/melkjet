@@ -5,8 +5,9 @@ import { buildAgencyRoster } from './agency-roster'
 import { importDivarToken } from './advisor-divar-import'
 import { warmEnrichment } from './enrich-warm'
 import { getEnrichment, patchEnrichment } from './enrich-store'
+import { parseFaNum, rentPartsOf } from './reos/features'
 import { getDivar, recordImport, clearImports } from './advisor-divar-store'
-import { getAdvisor, addListing, publishListingsBatch, deleteListing, setListingStatus, updateAdvisorProfile, type Listing } from './advisor-store'
+import { getAdvisor, addListing, publishListingsBatch, deleteListing, setListingStatus, updateAdvisorProfile, type Listing , updateListing} from './advisor-store'
 import { createAccount, accountExists } from './account-store'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
@@ -246,15 +247,59 @@ export async function patchScrape(id: string, patch: Partial<RosterScrape>): Pro
 // رفعِ باگِ «تکراری + فروخته‌شده»: «رفته» بر اساسِ listingIdِ لمس‌شده در همین دور محاسبه می‌شود،
 // نه توکن. پس آگهیِ بازنشرشده (توکنِ جدید) که موتورِ شباهت روی همان فایل می‌نشاندش، «رفته» حساب
 // نمی‌شود و اشتباهاً «فروخته» نمی‌خورد؛ و چون dedupِ محتوایی نسخهٔ دوم نمی‌سازد، تکراری هم رخ نمی‌دهد.
-async function importClusterTokens(owner: string, tokens: string[], sourceId: string, opts193?: { deadline?: number; onEach?: () => void; fetchPost?: any; shouldStop?: () => Promise<boolean> }): Promise<{ live: number; sold: number; aborted?: boolean; stopped?: boolean }> {
+
+/** به‌روزرسانیِ آگهیِ موجود از پاسخِ فهرستِ پروفایل — بدونِ هیچ درخواستِ اضافه.
+ *  `brand-landing` عنوان و قیمت و تصویر را می‌دهد، پس آگهیِ تکراری لازم نیست
+ *  دوباره دانلود شود ولی قیمتش هم کهنه نمی‌ماند. هر دو نسخه به‌روز می‌شوند:
+ *  نسخهٔ مشاور (پنل) و نسخهٔ عمومی (نمایش و آمارِ بازار). */
+async function refreshFromBrandPost(
+  owner: string, l: { id: string; title?: string; price?: number; rentMonthly?: number; deal?: string; images?: string[]; publicId?: string },
+  post: { title?: string; price?: string; image?: string },
+): Promise<void> {
+  const patch: Record<string, unknown> = {}
+  if (post.title && post.title !== l.title) patch.title = post.title
+  if (post.image && (!l.images?.length || l.images[0] !== post.image)) patch.images = [post.image, ...(l.images || []).slice(1)]
+  if (post.price) {
+    if (l.deal === 'rent') {
+      const r = rentPartsOf(post.price)
+      if (r?.deposit && r.deposit !== l.price) patch.price = r.deposit
+      if (r?.monthly && r.monthly !== l.rentMonthly) patch.rentMonthly = r.monthly
+    } else {
+      const v = parseFaNum(post.price)
+      if (v > 0 && v !== l.price) patch.price = v
+    }
+  }
+  if (!Object.keys(patch).length) return
+  try { await updateListing(owner, l.id, patch as never) } catch {}
+  if (l.publicId) {
+    try {
+      const { updateItem } = await import('./scraper-store')
+      const pub: Record<string, unknown> = {}
+      if (post.title) pub.title = post.title
+      if (post.price) pub.price = post.price
+      if (post.image) pub.image = post.image
+      await updateItem(l.publicId, pub as never)
+    } catch { /* نسخهٔ عمومی اختیاری است */ }
+  }
+}
+
+async function importClusterTokens(owner: string, tokens: string[], sourceId: string, opts193?: { deadline?: number; onEach?: () => void; fetchPost?: any; shouldStop?: () => Promise<boolean>; posts?: { token: string; title?: string; price?: string; image?: string }[] }): Promise<{ live: number; sold: number; aborted?: boolean; stopped?: boolean }> {
   const liveIds = new Set<string>()
   // فاز ۱۹۶ج (فیدبک: «تعدادِ آگهی‌ها هی می‌رود از اول») — واردهٔ تازه «پیش‌محاسبه» و آنی skip می‌شود:
   // یک خواندنِ store به‌جای ۲۰۰ خواندنِ تک‌تک؛ شمارنده در چند ثانیه به نقطهٔ ازسرگیری می‌پرد و
   // فقط باقی‌مانده واقعاً از دیوار گرفته می‌شود. (فیکسِ atِ فاز ۱۹۶ تازگی را تضمین می‌کند.)
-  const FRESH_MS = 20 * 3600_000
+  // اسکرپِ افزایشی: آگهی‌ای که از قبل داریم دوباره از دیوار گرفته نمی‌شود.
+  // با ۲۰ ساعتِ قبلی، هر سینکِ شبانه همان ۲۵۰ آگهیِ تکراری را کامل دانلود می‌کرد و
+  // ۴۵ دقیقه طول می‌کشید؛ نتیجه‌اش این بود که هر آژانس هفته‌ای یک‌بار هم نوبتش نمی‌رسید.
+  // فهرستِ پروفایل (یک درخواست) خودش می‌گوید کدام آگهی هنوز هست؛ نبودنش = فروخته/اجاره‌رفته.
+  // پس فقط آگهیِ «تازه» جزئیات می‌خواهد. توکنِ ردشده همچنان در liveIds می‌ماند، پس
+  // مهرِ فروش دست‌نخورده کار می‌کند.
+  const FRESH_MS = Math.max(1, Number(process.env.ROSTER_FRESH_H) || 168) * 3600_000
   const dvPre = getDivar(owner)
   const advPre = await getAdvisor(owner)
   const listingIdsPre = new Set((advPre.listings || []).map(l => l.id))
+  const postByToken = new Map((opts193?.posts || []).map(x => [x.token, x]))
+  const listingById = new Map((advPre.listings || []).map(l => [l.id, l]))
   const freshByToken = new Map(dvPre.imports.filter(i => i.at && Date.now() - i.at < FRESH_MS && listingIdsPre.has(i.listingId)).map(i => [i.token, i.listingId]))
   // فاز ۲۵۸ — واکشیِ موازی (استخرِ N کارگر) به‌جای تک‌تک. علتِ کندیِ فاجعه‌بار (~۲۸ث/آگهی):
   // حلقه پشتِ‌سرِهم بود و backoffِ rate-limitِ دیوار تا ۳۰ث بالا می‌رفت. fetchDivarPost بیرونِ
@@ -271,7 +316,13 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
       const myIdx = cursor++; if (myIdx >= tokens.length) return
       const token = tokens[myIdx]
       const freshId = freshByToken.get(token)
-      if (freshId) { liveIds.add(freshId); try { opts193?.onEach?.() } catch {}; continue }
+      if (freshId) {
+        liveIds.add(freshId)
+        const bp = postByToken.get(token), lg = listingById.get(freshId)
+        if (bp && lg) await refreshFromBrandPost(owner, lg as never, bp)
+        try { opts193?.onEach?.() } catch {}
+        continue
+      }
       // فاز ۱۹۳ — بودجهٔ زمانیِ ران: از سقف گذشت → توقفِ تمیز (دادهٔ ناقص، ادامهٔ خودکار)
       if (opts193?.deadline && Date.now() > opts193.deadline) { abortedAll = true; return }
       if (opts193?.shouldStop && await opts193.shouldStop()) { abortedAll = true; stoppedAll = true; return }
@@ -279,7 +330,7 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
         // مالکِ موقتِ رُستر: آگهی وارد می‌شود ولی عمومی نمی‌شود تا کاربر ساخته شود (graduate).
         const t0 = Date.now()
         const res = await Promise.race([
-          importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: 20 * 3600_000, fetchPost: opts193?.fetchPost }),
+          importDivarToken(owner, token, undefined, sourceId, { publish: false, skipFreshMs: FRESH_MS, fetchPost: opts193?.fetchPost }),
           new Promise<{ ok: false; reason: string }>(r => setTimeout(() => r({ ok: false, reason: 'timeout 2min — رد شد' }), 120_000)),   // فاز ۱۹۵
         ])
         const ms = Date.now() - t0
@@ -415,9 +466,9 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     if (orphaned.length) console.log(`[roster] pruning ${orphaned.length} stale clusters (freeing their listings)`)
 
     // owner→tokens: هر مشاور آگهی‌های خودش؛ رکوردهای قدیمیِ غایب → توکنِ خالی (همه‌شان «رفته»)؛ آژانس → بی‌نام‌ها.
-    const jobs: { rec?: RosterAdvisor; owner: string; tokens: string[] }[] = []
-    for (const rec of recs) { const f = freshByKey.get(rec.key); jobs.push({ rec, owner: rec.owner, tokens: f ? f.tokens : [] }) }
-    jobs.push({ owner: scrape.agencyOwner, tokens: roster.unnamed.tokens })
+    const jobs: { rec?: RosterAdvisor; owner: string; tokens: string[]; posts?: any[] }[] = []
+    for (const rec of recs) { const f = freshByKey.get(rec.key); jobs.push({ rec, owner: rec.owner, tokens: f ? f.tokens : [], posts: f ? f.posts : [] }) }
+    jobs.push({ owner: scrape.agencyOwner, tokens: roster.unnamed.tokens, posts: roster.unnamed.posts })
     // خوشه‌های هرس‌شده با فهرستِ توکنِ خالی از همان مسیرِ آشنا تخلیه می‌شوند (کدِ تازه‌ای لازم نیست).
     for (const o of orphaned) jobs.push({ owner: o, tokens: [] })
 
@@ -435,7 +486,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     const deadline193 = Date.now() + (opts196?.budgetMs ?? 45 * 60_000)   // بودجهٔ زمانیِ هر ران؛ ادامه در رانِ بعد (خودکار، فاز ۱۹۲)
     let budgetHit = false
     for (const j of jobs) {
-      const r = await importClusterTokens(j.owner, j.tokens, scrape.id, { deadline: deadline193, onEach: impTick, fetchPost: opts196?.fetchPost, shouldStop })
+      const r = await importClusterTokens(j.owner, j.tokens, scrape.id, { deadline: deadline193, onEach: impTick, fetchPost: opts196?.fetchPost, shouldStop, posts: j.posts })
       if (j.rec) j.rec.listingCount = r.live
       if (r.aborted) { budgetHit = true; break }
     }
