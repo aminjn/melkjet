@@ -71,10 +71,26 @@ for (const sc of await rs.listScrapes()) {
     // ROLE_AFTER — «گوهری | مشاور تخصصی…» و «رضایی - کارشناس فروش»: نام پیش از
     // واژهٔ نقش، با جداکنندهٔ صریح. بدونِ جداکننده اضافه نمی‌شود تا مبهم نباشد.
     /([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?\s*[|\uff5c\u2013\u2014\u2015-]\s*(?:مشاور|کارشناس|املاک|مسکن)/,
+    // «مشاور شما فرهنگ» / «کارشناس شما کریمیان» — نام پس از «شما».
+    ...(process.env.NER_NO_PHRASE ? [] : [/(?:مشاورِ?|کارشناسِ?|همراهِ?)\s*شما\s*[:،.\-]?\s*(?:(?:خانم|آقای|آقا|جناب|سرکار|مهندس|دکتر)\s+)?([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/]),
     /(?:با\s*تشکر|موفق\s*باشید|ارادتمند)[\s,،:]*([\u0621-\u06cc]{3,15})(?:\s+([\u0621-\u06cc]{3,15}))?/,
   ]
   const seen = new Set(docs.map(d => String(d.desc).slice(0, 120)))
   let anchored = 0, spread = 0, negs = 0
+  // پیش‌پاس: شمارشِ واژه‌های ناحیهٔ امضا، هم به تفکیکِ آژانس هم سراسری
+  const tailLocal = new Map(), tailGlobal = new Map()
+  for (const sc of await rs.listScrapes()) {
+    const rc = await kvGet('agency_roster_cache:' + sc.id, {})
+    const local = new Map()
+    for (const r of Object.values(rc || {})) {
+      if (!r?.desc) continue
+      const tail = String(r.desc).split(/[\n\r]+/).map(x => x.trim()).filter(Boolean).slice(-2).join(' ')
+      for (const w of new Set(tail.split(/[^\u0621-\u06cc]+/).filter(x => x.length > 2 && validName(x))))
+        local.set(w, (local.get(w) || 0) + 1)
+    }
+    tailLocal.set(sc.id, local)
+    for (const [w, c] of local) tailGlobal.set(w, (tailGlobal.get(w) || 0) + c)
+  }
   for (const sc of await rs.listScrapes()) {
     const rc = await kvGet('agency_roster_cache:' + sc.id, {})
     const full = await rs.getScrape(sc.id)
@@ -88,6 +104,18 @@ for (const sc of await rs.listScrapes()) {
       const k = M.norm(nm)
       anchors.set(k, (anchors.get(k) || 0) + 1)
       labeled.push({ r, nm: k })
+    }
+    // RATIO_MINER — لنگر بدونِ هیچ عبارتی: واژه‌ای که در ناحیهٔ امضای دستِ‌کم ۳ آگهیِ
+    // همین آژانس بیاید و بیش از نیمی از کلِ ظهورهایش در همین آژانس باشد، نامِ مشاورِ
+    // همین‌جاست. «گوناگون» و «واسه» در همهٔ آژانس‌ها پخش‌اند، پس سهمشان پایین می‌آید.
+    // با این، هر جمله‌بندیِ تازه‌ای هم پوشش داده می‌شود چون معیار تکرار است نه عبارت.
+    // خاموش. ممیزی نشان داد ~۴۰٪ لنگرهایش نام نیست: «گوناگون»، «واسه»،
+    // «کارگزاری»، «ترافیک» و محله‌هایی مثل «الهیه» و «زعفرانیه». معیارِ نسبتی
+    // نمی‌تواند «نامی که فقط این آژانس دارد» را از «واژه‌ای که فقط این آژانس
+    // زیاد به کار می‌برد» جدا کند، و محلهٔ تخصصیِ هر آژانس ذاتاً همین رفتار را
+    // دارد. با NER_RATIO=1 روشن می‌شود.
+    if (process.env.NER_RATIO) for (const [w, c] of (tailLocal.get(sc.id) || new Map())) {
+      if (c >= 3 && c / (tailGlobal.get(w) || c) >= 0.5) anchors.set(M.norm(w), Math.max(anchors.get(M.norm(w)) || 0, c))
     }
     // لنگرِ معتبر: دستِ‌کم دوبار در همین آژانس دیده شده (یک‌بار می‌تواند تصادفی باشد)
     for (const a of (full?.advisors || [])) if (a.phone) anchors.set(M.norm(a.name), 99)
@@ -132,10 +160,12 @@ if (docs.length < 100) { console.log('کم است — آموزش انجام نش
 // آزمون فقط روی برچسبِ مطمئن (حسابِ تأییدشده + لقب/دونقطه). آموزش روی همه.
 // وگرنه برچسبِ نویزیِ تازه هم می‌شود «حقیقتِ زمینی» و عدد بی‌معنا می‌شود.
 const tr = [], te = []
-let gi = 0
+// عضویتِ آزمون تابعِ خودِ سند است، نه ترتیبِ پیمایش. وگرنه هر تغییری در استخراج،
+// چیدمانِ آزمون را هم جابه‌جا می‌کند و دو اجرا قابلِ مقایسه نمی‌مانند.
+const h5 = t => { let x = 2166136261; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619) } return (x >>> 0) % 5 }
 for (const d of docs) {
   const gold = d.src === 'grad' || d.src === 'title' || d.src === 'neg'
-  if (gold && (gi++ % 5 === 0)) te.push(d); else tr.push(d)
+  if (gold && h5(String(d.desc)) === 0) te.push(d); else tr.push(d)
 }
 const cnt = docs.reduce((m, d) => (m[d.src] = (m[d.src] || 0) + 1, m), {})
 console.log('منابعِ برچسب:', JSON.stringify(cnt), '| آموزش:', tr.length, '| آزمونِ طلایی:', te.length)
@@ -200,22 +230,30 @@ if (process.argv.includes('--sparse')) {
 
   const spn = (x) => M.norm(x).replace(/\s+/g, '')
   let ex = 0, pa = 0, wr = 0, no = 0; const miss = []
+  let gOk = 0, gBad = 0
   for (const d of te) {
     const { toks, nLines, nDoc } = N.tokenize(d.desc)
-    if (!toks.length) { no++; continue }
+    const neg = d.src === 'neg'
+    if (!toks.length) { if (neg) gOk++; else no++; continue }
     const ts = N.titleTokens(d.title)
     const sc2 = toks.map((_, i) => N.dotSparse(N.sparseFeats(toks, i, nLines, nDoc, ts, corpus), W))
     let bi = 0; for (let i = 1; i < sc2.length; i++) if (sc2[i] > sc2[bi]) bi = i
-    if (sc2[bi] < 0.55) { if (d.src === 'neg') ex++; else no++; continue }
-    if (d.src === 'neg') { wr++; if (miss.length < 12) miss.push('باید خالی می‌ماند: ' + M.norm(toks[bi].w)); continue }
+    if (sc2[bi] < 0.55) { if (neg) gOk++; else no++; continue }
+    if (neg) { gBad++; if (miss.length < 12) miss.push('باید خالی می‌ماند: ' + M.norm(toks[bi].w)); continue }
     const pred = M.norm(toks[bi].w)
     if (pred === d.name || spn(pred) === spn(d.name)) ex++
     else if (d.parts.has(pred) || (spn(d.name).includes(spn(pred)) && spn(pred).length >= 4)) pa++
     else { wr++; if (miss.length < 12) miss.push(pred + ' ≠ ' + d.name) }
   }
-  const tot2 = te.length
-  console.log('\n[خلوت] دقیق', ex, '| بخشی', pa, '| اشتباه', wr, '| بی‌نام', no, '| کل', tot2)
-  console.log('  نرخِ درست:', (((ex + pa) / tot2) * 100).toFixed(1) + '%')
+  // دو معیارِ جدا. «نام» روی سندهای نام‌دار که تعدادشان با تغییرِ استخراج ثابت
+  // می‌ماند، و «سکوت» روی منفی‌ها. عددِ درهم با نسبتِ منفی‌ها بالا و پایین می‌رفت
+  // و در جهتِ عکسِ کیفیت حرکت می‌کرد — بینِ دو اجرا بی‌معنا بود.
+  const nTot = ex + pa + wr + no, gTot = gOk + gBad, tot2 = te.length
+  console.log('\n[نام]   دقیق', ex, '| بخشی', pa, '| اشتباه', wr, '| بی‌نام', no, '| کل', nTot)
+  console.log('  نرخِ نام:', nTot ? (((ex + pa) / nTot) * 100).toFixed(1) + '%' : '—')
+  console.log('[سکوت] درست', gOk, '| مثبتِ کاذب', gBad, '| کل', gTot)
+  console.log('  نرخِ سکوت:', gTot ? ((gOk / gTot) * 100).toFixed(1) + '%' : '—')
+  console.log('  نرخِ درهم (قدیمی):', (((ex + pa + gOk) / tot2) * 100).toFixed(1) + '%')
   console.log('  نمونهٔ خطا:', miss.join(' · '))
   if (process.argv.includes('--save')) {
     const nz = await N.saveSparse(W, { n: XS.length, metrics: { exact: ex, partial: pa, wrong: wr, none: no, total: tot2 } })
