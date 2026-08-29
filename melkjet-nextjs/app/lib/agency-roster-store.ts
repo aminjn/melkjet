@@ -692,6 +692,38 @@ export async function removeAdvisor(id: string, key: string): Promise<{ ok: bool
   return r
 }
 
+// ── جارویِ ترمیمِ انتشارِ یتیم ────────────────────────────────────────────────
+// فایلِ فعالِ بدونِ publicId یعنی انتقال انجام شده ولی چانکِ انتشار نیمه‌کاره مانده
+// (کیل شدنِ اینستنس وسطِ flush). مسیرِ ترمیمِ داخلِ reassignListings فقط با graduateِ
+// دوباره فعال می‌شود، و آن هم برای مشاورِ دارای حساب مسدود است — پس این فایل‌ها هیچ
+// راهِ برگشتی نداشتند. ۲۹ اوت ۲۰۲۶: ۲۸۳۶ فایل در ۱۹۴ حساب این‌طور یتیم مانده بود.
+// unpublishedAt رعایت می‌شود: آنچه مشاور عمداً از انتشار درآورده دوباره منتشر نمی‌شود.
+// مکان‌نمای چرخشی تا یک حسابِ پرفایل بقیه را گرسنه نگذارد.
+let _orphanCursor = 0
+export async function repairOrphanPublishes(limit = 10): Promise<number> {
+  const phones: string[] = []
+  for (const s of await listScrapes()) for (const r of (s.advisors || [])) if (r.phone) phones.push(r.phone)
+  if (!phones.length) return 0
+  for (let n = 0; n < phones.length; n++) {
+    const p = phones[(_orphanCursor + n) % phones.length]
+    const ids = ((await getAdvisor(p)).listings || [])
+      .filter(l => l.status === 'active' && !l.publicId && !l.unpublishedAt)
+      .slice(0, limit).map(l => l.id)
+    if (!ids.length) continue
+    _orphanCursor = (_orphanCursor + n + 1) % phones.length
+    try {
+      const done = await publishListingsBatch(p, ids)
+      console.log(`[roster] orphan-publish phone=${p} n=${done.length}`)
+      return done.length
+    } catch (e) {
+      console.log(`[roster] orphan-publish failed phone=${p}: ${String((e as Error).message).slice(0, 80)}`)
+      return 0
+    }
+  }
+  _orphanCursor = 0
+  return 0
+}
+
 // ── صفِ «ساختِ حساب» (graduate) — سبک روی درخواستِ ادمین، سنگین روی اینستنسِ ۰ ──
 // اعتبارسنجی فوری است؛ انتقالِ فایل‌ها (که برای مشاورِ پرفایل چند دقیقه طول می‌کشد و با سینکِ
 // در حالِ اجرا رقابت می‌کند) به صفِ اینستنسِ ۰ می‌رود تا درخواست ۶۰ثانیه‌ای تایم‌اوت نشود.

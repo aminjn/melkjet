@@ -228,8 +228,13 @@ async function queueTick(): Promise<void> {
       graduateRunning = true
       ;(async () => {
         try {
-          const { processGraduateQueue } = await import('./agency-roster-store')
+          const { processGraduateQueue, repairOrphanPublishes } = await import('./agency-roster-store')
           for (let i = 0; i < 10; i++) { const g = await processGraduateQueue(); if (!g.ran) break }
+          // ترمیمِ انتشارِ یتیم — داخلِ همین قفل تا هرگز هم‌زمان با انتقال‌ها نرود
+          // (رقابتِ دیتابیسی همان چیزی بود که به statement timeout ختم می‌شد).
+          // هر تیک یک حساب و حداکثر ۱۰ فایل: اگر بار زیاد شود ترمیم آهسته‌تر پیش
+          // می‌رود، ولی سایت کند نمی‌شود.
+          await repairOrphanPublishes(10)
         } catch { /* کارِ بعدی در تیکِ بعد */ } finally { graduateRunning = false }
       })()
     }
