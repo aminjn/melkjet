@@ -679,7 +679,9 @@ function addUserListingCore(db: DB, raw: UserListingRaw, twinIdx: TwinIndex<Item
     title: raw.title, price: raw.price, location: raw.location, image: raw.image,
     excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner, url: raw.url, ownerId,
     meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
-    scrapedAt: Date.now(), firstSeenAt: Date.now(),
+    // firstSeenAt فقط وقتی «حالا» است که فایل واقعاً تازه باشد. مسیرِ انتشار تاریخِ
+    // ثبتِ اصلی را پاس می‌دهد. (تبدیلِ نوعِ محلی چون UserListingRaw این فیلد را اعلام نکرده.)
+    scrapedAt: Date.now(), firstSeenAt: (raw as { firstSeenAt?: number }).firstSeenAt || Date.now(),
     status: twin ? 'duplicate' : 'pending',
     aiReason: twin ? `تکراری در لحظهٔ ثبت — هم‌ملکِ «${twin.title.slice(0, 60)}»` : undefined,
     expiresAt: Date.now() + LISTING_TTL,

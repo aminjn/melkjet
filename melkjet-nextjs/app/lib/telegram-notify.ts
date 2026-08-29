@@ -88,7 +88,14 @@ export async function seedChannel(limit = 5): Promise<number> {
 
 export async function notifyNewListings(items: Item[]) {
   const now = Date.now()
-  const fresh = items.filter(it => it.type === 'listing' && (!it.scrapedAt || now - it.scrapedAt < 6 * 3600 * 1000))
+  // «تازگی» تابعِ تاریخِ ثبتِ فایل است، نه تاریخِ آخرین نوشتن. scrapedAt در هر
+  // به‌روزرسانی ریست می‌شود، پس آگهیِ سه‌ماهه‌ای که دوباره منتشر شود از این گارد
+  // رد می‌شد و به‌عنوانِ «جدید» به کانال می‌رفت — ۲۹ اوت ۲۰۲۶، ترمیمِ انتشار.
+  const fresh = items.filter(it => {
+    if (it.type !== 'listing') return false
+    const born = it.firstSeenAt || it.scrapedAt
+    return !born || now - born < 6 * 3600 * 1000
+  })
   if (!fresh.length) return
   await postToChannel(fresh)               // فاز ۲۵۵ — پستِ کانال (مستقل از آلارم‌ها)
   const subs = await allSubs()

@@ -384,7 +384,9 @@ function publicPayload(l: Listing, advisorName: string, ownerPhone?: string) {
   if (typeof l.lat === 'number' && typeof l.lng === 'number') { meta['__lat'] = String(l.lat); meta['__lng'] = String(l.lng) }
   // شناسهٔ مالک (شمارهٔ حساب) برای تطبیقِ مطمئنِ «آگهی‌های من» در سایت‌ساز — مستقل از نام
   if (ownerPhone) meta['__ownerPhone'] = ownerPhone
-  return { title: l.title, price, location: loc, image: l.images?.[0], excerpt: l.description, phone: l.phone, owner: advisorName, meta }
+  // تاریخِ ثبتِ خودِ فایل همراهِ داده می‌رود تا آیتمِ عمومی «تازگی»اش را از آن بگیرد.
+  // بدونِ این، هر بازانتشار (ترمیم، مهاجرت، بازممیزی) آگهیِ ماه‌ها پیش را «جدید» می‌کرد.
+  return { title: l.title, price, location: loc, image: l.images?.[0], excerpt: l.description, phone: l.phone, owner: advisorName, meta, firstSeenAt: l.createdAt }
 }
 export async function publishListing(o: string, fid: string): Promise<Listing | null> {
   const a0 = await getAdvisor(o)
