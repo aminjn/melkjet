@@ -39,7 +39,16 @@ fi
 echo "$REMOTE" > "$FAILED_MARK"   # تا وقتی build+reload موفق نشده، «ناتمام» حساب می‌شود
 
 # nice/ionice مثلِ deploy.sh: build تمامِ ۴ هسته را نمی‌بلعد و سایت وسطِ دیپلویِ خودکار ۵۰۴ نمی‌دهد.
-build() { NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build; }
+# هرسِ کشِ اجراییِ ISR پیش از بیلد. سایت زنده است و خزنده‌ها مدام زیرِ
+# .next/server/app فایل می‌سازند؛ اگر فقط فایل‌ها پاک شوند پوشه‌های خالی
+# می‌مانند و next build با ENOTEMPTY روی rmdir شکست می‌خورد.
+# ۲۹ اوت ۲۰۲۶: دو بیلدِ پشتِ سرِ هم به همین دلیل شکست خوردند.
+prune_isr() {
+  [ -f "$APP_DIR/.next/BUILD_ID" ] || return 0
+  find "$APP_DIR/.next/server/app" -type f -newer "$APP_DIR/.next/BUILD_ID" -delete 2>/dev/null || true
+  find "$APP_DIR/.next/server/app" -depth -type d -empty -delete 2>/dev/null || true
+}
+build() { prune_isr; NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build; }
 # ENOTEMPTY (`rmdir … not empty`) گلیچِ `.next`ِ کهنهٔ توربوپک است، نه ایرادِ کد — درمانش پاک‌کردنِ
 # `.next` و buildِ دوباره است. پس خودمان یک‌بار همین کار را می‌کنیم به‌جای مردن.
 if ! build; then
