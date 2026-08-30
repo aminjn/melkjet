@@ -2,7 +2,7 @@
 // هر فراخوانیِ واقعیِ مدل (متن/بینایی/تصویر) در «یک» نقطهٔ خفگی (gapgpt) ثبت می‌شود:
 // روز × منبعِ صدازننده (فایلِ کد، خودکار از stack) × مدل × نوع → تعدادِ تماس/توکن/خطا/مدت.
 // dual-mode مثلِ بقیه (kv «ai_usage» / فایل)؛ روزهای قدیمی‌تر از ۴۵ روز هرس می‌شوند.
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 

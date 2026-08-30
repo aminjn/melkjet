@@ -6,7 +6,7 @@
 // • شاخص‌ها (فصل ۱۲)، رتبهٔ صندوق (فصل ۱۷) و روان‌شناسیِ بازار (فصل ۱۶) قطعی از دادهٔ واقعی‌اند.
 // اگر داده کافی نیست → صندوق/شاخص اصلاً عرضه نمی‌شود (صادقانه)، نه عددِ ساختگی.
 import { pgEnabled, pgTx } from './db'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { parseFaNum } from './reos/features'
@@ -135,7 +135,7 @@ const EMPTY: MarketState = { funds: [], pools: {}, vol: { buys: 0, sells: 0, buy
 
 const FILE = join(process.cwd(), '.empire-market.json')
 function fileLoad(): MarketState { if (existsSync(FILE)) { try { return { ...EMPTY, ...JSON.parse(readFileSync(FILE, 'utf-8')) } } catch {} } return JSON.parse(JSON.stringify(EMPTY)) }
-function fileSave(d: MarketState) { try { writeFileSync(FILE, JSON.stringify(d)) } catch {} }
+function fileSave(d: MarketState) { try { writeFileSync(FILE, JSON.stringify(d)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) } }
 let ready = false
 async function ensure() { if (ready) return; await pgTx(c => c.query(`CREATE TABLE IF NOT EXISTS reos_empire_market (id text PRIMARY KEY, data jsonb NOT NULL, at bigint NOT NULL)`)); ready = true }
 

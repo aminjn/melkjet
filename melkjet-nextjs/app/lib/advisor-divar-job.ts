@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 
 // وضعیتِ کارِ همگام‌سازیِ دیوار (پس‌زمینه) — تا UI پیشرفت را بپاید و با ترکِ صفحه متوقف نشود.
@@ -20,7 +20,7 @@ const EMPTY: DivarJob = { running: false, total: 0, done: 0, imported: 0, update
 
 type DB = Record<string, DivarJob>
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
-function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch {} }
+function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) } }
 
 // فهرستِ کارهای «هولدشده» که آگهیِ باقی‌مانده دارند — برای ادامهٔ خودکار توسطِ کرون.
 // فاز ۱۳۴: کول‌داونِ ۶۰ثانیه‌ای — هولدی که همین الان هولد شده، تیکِ بعدی دوباره اسلات نگیرد.
@@ -82,7 +82,7 @@ export function appendJobLog(o: string, line: string): void {
 // پنلِ تشخیص از رویش می‌فهمد کارگر زنده است یا نه (ریشهٔ رایجِ «هیچ اتفاقی نمی‌افتد»).
 const HEARTBEAT_FILE = join(process.cwd(), '.cron-heartbeat.json')
 export function touchQueueHeartbeat(): void {
-  try { writeFileSync(HEARTBEAT_FILE, JSON.stringify({ queueTickAt: Date.now(), instance: process.env.NODE_APP_INSTANCE ?? '' }), 'utf-8') } catch {}
+  try { writeFileSync(HEARTBEAT_FILE, JSON.stringify({ queueTickAt: Date.now(), instance: process.env.NODE_APP_INSTANCE ?? '' }), 'utf-8') } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) }
 }
 export function queueHeartbeat(): { at: number; instance: string } | null {
   try { if (existsSync(HEARTBEAT_FILE)) { const d = JSON.parse(readFileSync(HEARTBEAT_FILE, 'utf-8')); return { at: Number(d.queueTickAt) || 0, instance: String(d.instance ?? '') } } } catch {}

@@ -3,7 +3,7 @@
 // چهار نوع ارزش (فصل ۶): XP (غیرقابل‌خرید)، Melk Coin (ارزِ داخلی)، Real Asset (تومان)، Reputation (از REOS trust).
 // ذخیره dual-mode: PG (جدولِ reos_empire، هر کاربر یک ردیف) یا فایلِ ‎.empire-data.json‎.
 import { pgEnabled, pgTx, kvGet, kvSet } from './db'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes, createHash } from 'crypto'
 import { config } from './reos/reos-config'
@@ -972,7 +972,7 @@ export function dreamSentence(picks: string[]): string {
 // ══════════ ذخیره (dual-mode) ══════════
 const FILE = join(process.cwd(), '.empire-data.json')
 function fileLoad(): Record<string, EmpireData> { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
-function fileSave(d: unknown) { try { writeFileSync(FILE, JSON.stringify(d)) } catch {} }
+function fileSave(d: unknown) { try { writeFileSync(FILE, JSON.stringify(d)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) } }
 let ready = false
 async function ensure() { if (ready) return; await pgTx(c => c.query(`CREATE TABLE IF NOT EXISTS reos_empire (user_id text PRIMARY KEY, no integer NOT NULL, data jsonb NOT NULL, at bigint NOT NULL)`)); ready = true }
 
@@ -3426,7 +3426,7 @@ export interface DailyBrief { id: string; userId: string; day: number; summary: 
 export const dayNumberOf = (ts: number) => Math.floor(ts / 864e5)
 const BRIEF_FILE = join(process.cwd(), '.empire-briefs.json')
 function briefLoad(): Record<string, DailyBrief> { if (existsSync(BRIEF_FILE)) { try { return JSON.parse(readFileSync(BRIEF_FILE, 'utf-8')) } catch {} } return {} }
-function briefSave(d: unknown) { try { writeFileSync(BRIEF_FILE, JSON.stringify(d)) } catch {} }
+function briefSave(d: unknown) { try { writeFileSync(BRIEF_FILE, JSON.stringify(d)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) } }
 const briefKey = (u: string, day: number) => u + '|' + day
 let briefReady = false
 async function ensureBrief() { if (briefReady) return; await pgTx(c => c.query(`CREATE TABLE IF NOT EXISTS reos_daily_brief (user_id text NOT NULL, day integer NOT NULL, data jsonb NOT NULL, at bigint NOT NULL, PRIMARY KEY (user_id, day))`)); briefReady = true }

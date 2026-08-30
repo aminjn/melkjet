@@ -2,7 +2,7 @@
 //   ۱) دفترِ مالکیتِ انحصاری: هر آگهیِ واقعی فقط یک مالکِ بازیکن دارد — کمیابیِ واقعی.
 //   ۲) اتحاد (کلن): ساخت/پیوستن/گفت‌وگو — هزینهٔ ثبت → خزانه؛ ظرفیت و سطحِ ورود knob ادمین.
 // ذخیره dual-mode: kv اتمیک (FOR UPDATE) روی PG، وگرنه فایلِ dev. هیچ دادهٔ ساختگی — همه از بازیکنانِ واقعی.
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
@@ -23,7 +23,7 @@ async function mutate<T, R>(key: string, fallback: T, fn: (d: T) => R): Promise<
   let d = fallback
   try { d = JSON.parse(fs.readFileSync(files[key], 'utf-8')) } catch {}
   const r = fn(d)
-  try { fs.writeFileSync(files[key], JSON.stringify(d)) } catch {}
+  try { fs.writeFileSync(files[key], JSON.stringify(d)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) }
   return r
 }
 

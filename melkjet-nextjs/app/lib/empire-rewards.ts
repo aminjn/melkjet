@@ -7,7 +7,7 @@
 //  ۲) نردبان: آستانه‌ها هندسی تند بالا می‌روند (thresholdGrowth×) ولی جایزه‌ها کند (rewardGrowth×،
 //     با سقف) — «همه نباید خیلی زود به مراحلِ بعد برسند». هر مرحله برای هر بازیکن فقط یک‌بار.
 // پرداخت فقط با تأییدِ انسانیِ سوپرادمین (پولِ واقعی = صفِ بررسی؛ اسنپ‌شاتِ متریک‌ها برای تشخیصِ تقلب).
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { randomBytes } from 'crypto'

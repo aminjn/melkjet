@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 

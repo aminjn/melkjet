@@ -1,7 +1,7 @@
 // شمارندهٔ مصرفِ ماهانهٔ پلن (فاز ۵۲) — برای سهمیه‌های «مصرفی» که موجودیِ قابلِ‌شمارش در store ندارند:
 // پیامک/ایمیل/کمپین، ایمپورتِ دیوار، درخواستِ AI، تماسِ آشکارشده و… . سطلِ ماهانه (YYYY-MM) per کاربر.
 // dual-mode مثلِ بقیه: PG (kv «plan_usage» — اتمیک) وگرنه فایلِ مشترک. سقف‌ها همیشه از خودِ پلن می‌آیند.
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { resolveAccess, quotaCapOf, QUOTA_LABEL } from './plan-gate'

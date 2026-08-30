@@ -1,7 +1,7 @@
 // 💬 فاز ۱۱۱ — گفت‌وگوی سراسریِ شهر (فصل‌های ۸/۱۰) + ماژولِ نظارت (بلاکرِ قبلیِ همین قابلیت).
 // polling سبک (سازگار با ۴ فورکِ pm2 — همان الگوی گفتگوی دوستانِ فاز ۱۰۲)؛ ذخیره dual-mode (kv اتمیک روی PG).
 // ضدِ اسپم: کول‌داون + سقفِ طول + فیلترِ واژهٔ ممنوع (قانون ۳) + گیتِ سطح (در API) + سکوتِ ادمین.
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
@@ -22,7 +22,7 @@ async function mutate<R>(fn: (d: ChatDb) => R): Promise<R> {
   let d: ChatDb = { msgs: [], mutes: {} }
   try { d = JSON.parse(fs.readFileSync(FILE, 'utf-8')) } catch {}
   const r = fn(d)
-  try { fs.writeFileSync(FILE, JSON.stringify(d)) } catch {}
+  try { fs.writeFileSync(FILE, JSON.stringify(d)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) }
   return r
 }
 

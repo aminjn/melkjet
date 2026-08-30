@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { materialPriceIndex } from './materials-store'
 

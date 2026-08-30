@@ -1,4 +1,4 @@
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { bulkCreate, listAccounts } from './account-store'
 import { listRoles } from './role-store'
@@ -128,7 +128,7 @@ export function getMeta(): { lastSync?: string; totalProjects: number; totalBuil
   // self-heal: یک‌بار از فایلِ بزرگ بخوان و متای کوچک را بنویس
   const d = getData()
   const meta = { lastSync: d.lastSync, totalProjects: (d.projects || []).length || d.totalProjects || 0, totalBuilders: (d.builders || []).length || d.totalBuilders || 0 }
-  try { fs.writeFileSync(META_FILE, JSON.stringify(meta)) } catch {}
+  try { fs.writeFileSync(META_FILE, JSON.stringify(meta)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) }
   return meta
 }
 

@@ -3,7 +3,7 @@
 // اینستنسِ A می‌فرستاد و ذخیره می‌کرد، تأیید به اینستنسِ B (پشتِ nginx) می‌رسید که کدی نداشت → invalid.
 // حالا: PG (kv «otp» — اتمیک با FOR UPDATE) وگرنه فایلِ مشترکِ ‎.otp-data.json‎ (cwd مشترکِ pm2).
 // + محدودیتِ ارسالِ مجددِ «سمتِ سرور»: رفرشِ صفحه دیگر تایمر را دور نمی‌زند — سرور تا پایانِ مهلت، پیامکِ تازه نمی‌فرستد.
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 

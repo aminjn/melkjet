@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete } from './db'
 import { buildAgencyRoster } from './agency-roster'

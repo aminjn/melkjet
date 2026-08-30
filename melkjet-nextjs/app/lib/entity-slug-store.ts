@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { slugify, uniqueSlug } from './slugify'

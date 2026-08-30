@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 
@@ -12,7 +12,7 @@ export interface Contact { viewerPhone: string; viewerName?: string; projectHash
 type DB = Record<string, Contact[]>
 
 function fileLoad(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
-function fileSave(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch {} }
+function fileSave(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) } }
 
 async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, {}) : fileLoad() }
 async function mutate<R>(fn: (db: DB) => R): Promise<R> {

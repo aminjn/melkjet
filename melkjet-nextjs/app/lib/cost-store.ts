@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 
 // هزینهٔ واقعیِ مدل‌های AI (از تأمین‌کننده مثلِ GapGPT) + نرخِ تبدیل → قیمتِ فروشِ توکن/تصویر.

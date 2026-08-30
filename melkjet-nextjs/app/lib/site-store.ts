@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { DEFAULT_SITE, type SiteConfig, type SitePage, type SiteFooter, type SiteContact } from './site-defaults'
 

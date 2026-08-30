@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
@@ -21,7 +21,7 @@ export interface Ticket {
 
 type DB = { tickets: Ticket[] }
 function fileLoad(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return { tickets: [] } }
-function fileSave(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch {} }
+function fileSave(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) } }
 
 async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, { tickets: [] }) : fileLoad() }
 async function mutate<R>(fn: (db: DB) => R): Promise<R> {

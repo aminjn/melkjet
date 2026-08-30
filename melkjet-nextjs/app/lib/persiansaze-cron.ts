@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import fs from 'node:fs'
+import fs from './fs-atomic'
 import path from 'node:path'
 import { getConfig, getReveals, getMeta, createBuilderAccounts } from './persiansaze-store'
 

@@ -1,7 +1,7 @@
 // گزینه‌های استانداردِ پروفایلِ کسب‌وکار (تخصص‌ها / خدمات) — قابل‌مدیریت در سوپرادمین.
 // دلیل: ورودیِ آزادِ متنی برای ML قابل‌اندازه‌گیری نیست؛ لیستِ استاندارد = دادهٔ ساخت‌یافته.
 // الگوی فایل‌محورِ config-مانند (مثل role/account) — کم‌تغییر و تک‌نویسنده.
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 
 export interface ProfileOptions { specialties: string[]; services: string[] }
@@ -41,6 +41,6 @@ export function setProfileOptions(patch: Partial<ProfileOptions>): ProfileOption
     specialties: patch.specialties !== undefined ? clean(patch.specialties) : cur.specialties,
     services: patch.services !== undefined ? clean(patch.services) : cur.services,
   }
-  try { writeFileSync(FILE, JSON.stringify(next)) } catch {}
+  try { writeFileSync(FILE, JSON.stringify(next)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) }
   return next
 }

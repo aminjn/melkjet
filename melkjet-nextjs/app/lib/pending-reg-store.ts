@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 
 // ثبت‌نامِ نیمه‌کاره — پس از تأییدِ شاهکار و قبل از تأییدِ OTP. کلید: شماره موبایل.

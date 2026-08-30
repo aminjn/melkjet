@@ -1,6 +1,6 @@
 // 📞 فاز ۱۱۶/۱۲۳ — CRM مرکزیِ پرسنل: پرونده‌های مشتریان (اکانت‌های واقعیِ سایت) + وظایفِ تیمی.
 // dual-mode (kv اتمیک روی PG، وگرنه فایل) — چند پرسنلِ همزمان امن. مهاجرتِ خودکار از شکلِ قدیمی (flat).
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
@@ -70,7 +70,7 @@ async function mutate<R>(fn: (d: Db) => R): Promise<R> {
   let d: Db = { customers: {}, tasks: [] }
   try { d = normalize(JSON.parse(fs.readFileSync(FILE, 'utf-8'))) } catch {}
   const r = fn(d)
-  try { fs.writeFileSync(FILE, JSON.stringify(d)) } catch {}
+  try { fs.writeFileSync(FILE, JSON.stringify(d)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) }
   return r
 }
 

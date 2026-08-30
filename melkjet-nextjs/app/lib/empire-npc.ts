@@ -5,7 +5,7 @@
 // به همان قیمتِ آگهی واگذار می‌کنند (بدونِ سورپرایزِ قیمتی — قانونِ ۴ سؤال).
 // پولِ شرکت‌های NPC یک حلقهٔ کاملاً بسته است — هیچ ریالی از/به اقتصادِ بازیکنان ساخته یا نابود نمی‌شود.
 import { createHash } from 'crypto'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { config } from './reos/reos-config'

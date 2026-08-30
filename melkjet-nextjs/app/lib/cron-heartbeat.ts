@@ -1,5 +1,5 @@
 import { pgEnabled, kvGet, kvMutate } from './db'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 
 // ضربانِ کرون: هر تیکِ queueTick (اینستنسِ ۰) این را می‌زند. یک اسکریپتِ بیرونی می‌تواند بخواند و
@@ -21,7 +21,7 @@ function fileLoad(): CronBeat { if (existsSync(FILE)) { try { return JSON.parse(
 export async function touchCron(patch: Partial<CronBeat> = {}): Promise<void> {
   const apply = (b: CronBeat) => { b.at = Date.now(); b.ticks = (b.ticks || 0) + 1; Object.assign(b, patch) }
   if (pgEnabled()) { await kvMutate<CronBeat, void>(KV, empty(), apply); return }
-  const b = fileLoad(); apply(b); try { writeFileSync(FILE, JSON.stringify(b), 'utf-8') } catch {}
+  const b = fileLoad(); apply(b); try { writeFileSync(FILE, JSON.stringify(b), 'utf-8') } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) }
 }
 export async function getCronBeat(): Promise<CronBeat> {
   return pgEnabled() ? await kvGet<CronBeat>(KV, empty()) : fileLoad()

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { upsertScraped, pruneSourceCategories, productsNeedingChart, setProductPriceHistory, applyLogoToScraped, type CatalogSpec } from './catalog-store'
 const SITE_LOGO = '/icon-512.png'
@@ -65,7 +65,7 @@ export interface ScrapeJob {
 }
 const EMPTY: ScrapeJob = { running: false, total: 0, done: 0, added: 0, updated: 0, categories: 0 }
 function loadJob(source: string): ScrapeJob { const f = jobFile(source); if (existsSync(f)) { try { return { ...EMPTY, ...JSON.parse(readFileSync(f, 'utf-8')) } } catch {} } return { ...EMPTY } }
-function saveJob(source: string, j: ScrapeJob) { try { writeFileSync(jobFile(source), JSON.stringify(j)) } catch {} }
+function saveJob(source: string, j: ScrapeJob) { try { writeFileSync(jobFile(source), JSON.stringify(j)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) } }
 export function getJob(source: string): ScrapeJob {
   const j = loadJob(source)
   if (j.running) { const last = j.lastProgressAt || j.startedAt || 0; if (!last || Date.now() - last > 4 * 60 * 1000) { j.running = false; j.error = j.error || 'اسکرپ متوقف شد (هنگ یا ری‌استارتِ سرور).'; saveJob(source, j) } }

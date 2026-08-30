@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 
 // وضعیتِ اجرایِ هر گردش‌کار (جدا از تعریفِ آن): آخرین اجرا + شناسهٔ رویدادهای پردازش‌شده.

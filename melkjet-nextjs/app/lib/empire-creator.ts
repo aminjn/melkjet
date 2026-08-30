@@ -1,7 +1,7 @@
 // 🎨 فروشگاهِ سازندگان (فاز ۱۰۷ — سند ۲۲ Creator Store): بازیکنان خودشان قاب/نشانِ ظاهری طراحی می‌کنند؛
 // پس از تأییدِ انسانیِ ادمین در فروشگاهِ ظاهری فروخته می‌شود و سهمِ سازنده (knob) به کوینِ او واریز می‌شود.
 // مثل همهٔ آیتم‌های ظاهری: صفر اثرِ اقتصادی/رقابتی (No P2W) — فقط دیده‌شدن. ذخیره dual-mode (kv اتمیک روی PG، وگرنه فایل).
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
@@ -34,7 +34,7 @@ async function mutate<R>(fn: (d: CreatorDb) => R): Promise<R> {
   let d: CreatorDb = { items: [] }
   try { d = JSON.parse(fs.readFileSync(FILE, 'utf-8')) } catch {}
   const r = fn(d)
-  try { fs.writeFileSync(FILE, JSON.stringify(d)) } catch {}
+  try { fs.writeFileSync(FILE, JSON.stringify(d)) } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) }
   return r
 }
 

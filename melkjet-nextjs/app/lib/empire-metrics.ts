@@ -4,7 +4,7 @@
 // از این تاریخچه: تورم/رکود، روندِ DAU، تمرکزِ سرمایه و هشدارهای سلامتِ اقتصاد (Part 06) درمی‌آید —
 // همه از دادهٔ واقعی؛ تا دو اسنپ‌شات نداشته باشیم، هیچ روندی ادعا نمی‌شود (empty state صادقانه).
 // ذخیره dual-mode: kv('empire_metrics') روی PG وگرنه ‎.empire-metrics-data.json‎ — سقفِ ۴۰۰ روز.
-import fs from 'fs'
+import fs from './fs-atomic'
 import path from 'path'
 import { pgEnabled, kvGet, kvSet } from './db'
 import { listEmpiresPublic, netWorthOf, dayNumberOf, type EmpireData } from './empire-store'

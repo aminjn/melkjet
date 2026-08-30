@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { aiFor, agentModel, agentProvider } from './gapgpt'
 const { chatCompleteSafe } = aiFor('غنی‌سازیِ سازنده‌ها')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
@@ -24,7 +24,7 @@ export interface PSEnrich {
 
 type DB = Record<string, PSEnrich>
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
-function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch {} }
+function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch (e) { console.error('[fs] نوشتن ناموفق:', (e as Error).message) } }
 
 export function getPSEnrich(hashId: string): PSEnrich | null {
   const e = load()[hashId]

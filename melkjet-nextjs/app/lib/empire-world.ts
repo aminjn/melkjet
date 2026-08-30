@@ -6,7 +6,7 @@
 //  • شایعاتِ منصفانه (Rumor System): قطعی از هشِ هفته + دادهٔ واقعیِ محله؛ منبع + اعتبارِ ٪ + ارزیابیِ
 //    بعد از ۷ روز با میانهٔ «واقعیِ» رصدخانه — بازیکن یاد می‌گیرد به کدام منبع اعتماد کند.
 import { createHash } from 'crypto'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { config } from './reos/reos-config'
