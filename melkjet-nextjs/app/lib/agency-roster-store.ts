@@ -701,8 +701,13 @@ export async function removeAdvisor(id: string, key: string): Promise<{ ok: bool
 // مکان‌نمای چرخشی تا یک حسابِ پرفایل بقیه را گرسنه نگذارد.
 let _orphanCursor = 0
 export async function repairOrphanPublishes(limit = 10): Promise<number> {
+  const scrapes = await listScrapes()
+  // وقتی سینکِ رُستر در جریان است کنار می‌کشیم — همان قاعده‌ای که جارویِ غنی‌سازی
+  // در فاز ۱۹۵ گرفت. هر دو از یک استخرِ اتصال می‌خورند و هم‌زمانی‌شان اشباعش می‌کند:
+  // شبِ ۳۰ اوت ۵۷ پاسِ رُستر با «timeout exceeded when trying to connect» شکست خورد.
+  if (scrapes.some(s => s.running)) return 0
   const phones: string[] = []
-  for (const s of await listScrapes()) for (const r of (s.advisors || [])) if (r.phone) phones.push(r.phone)
+  for (const s of scrapes) for (const r of (s.advisors || [])) if (r.phone) phones.push(r.phone)
   if (!phones.length) return 0
   for (let n = 0; n < phones.length; n++) {
     const p = phones[(_orphanCursor + n) % phones.length]
