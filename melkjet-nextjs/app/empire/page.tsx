@@ -452,10 +452,12 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
   const phase: DayPhase = vis.dayNight === false ? 'night' : dayPhaseOf(new Date().getHours())
   // فاز ۱۶۳: آسمانِ چندپرده با باندِ گرمِ افق — به سبکِ سیتی‌بیلدرهای بزرگ
   const sky: Record<DayPhase, string> = {
-    dawn: 'linear-gradient(180deg,#2e2a63 0%,#b3589e 45%,#ff9a6b 74%,#ffd9a8 100%)',
-    day: 'linear-gradient(180deg,#2f9df0 0%,#66c1f5 48%,#a9e0f9 76%,#ffe9c4 100%)',
-    dusk: 'linear-gradient(180deg,#3a2f77 0%,#8a4ab0 45%,#ff7e5f 78%,#ffc98e 100%)',
-    night: 'linear-gradient(180deg,#151238 0%,#241a4a 52%,#3d2a6d 82%,#4a3560 100%)',
+    // آسمانِ روز از سندِ بازطراحی — چهار توقف، یکسان در همهٔ فازها چون کلِ رابط روزانه شد.
+    // پیش از این هر فاز آسمانِ بنفش/نارنجیِ خودش را داشت و هنرِ کرم‌رنگِ اسپرایت‌ها را می‌کشت.
+    dawn: 'linear-gradient(180deg, #7fc6e4 0%, #bfe2ee 30%, #efe4c9 58%, #e6d9bd 100%)',
+    day: 'linear-gradient(180deg, #7fc6e4 0%, #bfe2ee 30%, #efe4c9 58%, #e6d9bd 100%)',
+    dusk: 'linear-gradient(180deg, #7fc6e4 0%, #bfe2ee 30%, #efe4c9 58%, #e6d9bd 100%)',
+    night: 'linear-gradient(180deg, #7fc6e4 0%, #bfe2ee 30%, #efe4c9 58%, #e6d9bd 100%)',
   }
   const skyIcon = phase === 'day' ? '☀️' : phase === 'dawn' ? '🌅' : phase === 'dusk' ? '🌇' : '🌙'
   const fx = vis.weatherFx === false ? null : weatherFxOf(wx?.icon)
@@ -550,7 +552,7 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
     return { spot, floors, stk, geo, fh, bwC, wrapLeft, wrapTop, wrapW, wrapH, zIdx, tipC, padHC }
   }
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: sky[phase], overflow: 'hidden' }}>
+    <div className="empStage" style={{ position: 'fixed', inset: 0, zIndex: 40, background: sky[phase], overflow: 'hidden' }}>
       {phase === 'night' && ['8%', '22%', '38%', '57%', '72%', '88%'].map((left, i) => (
         <span key={i} style={{ position: 'absolute', top: `${6 + (i % 3) * 4}%`, left, fontSize: 9, color: '#cfd6ff', animation: `empTwinkle ${2 + i * 0.6}s ease-in-out infinite` }}>✦</span>
       ))}
@@ -760,7 +762,7 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
                 style={{ position: 'absolute', top: -52, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 800, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.82)', border: '1px solid rgba(255,215,106,.45)', borderRadius: 999, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', pointerEvents: 'auto' }}>⚔️ محله‌ها</button>}
               {!cv.ok && <span style={{ position: 'absolute', top: -52, left: '50%', transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700, color: '#e8e4f5', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.8)', border: '1px solid rgba(255,255,255,.16)', borderRadius: 9, padding: '2px 8px', pointerEvents: 'none' }}>🔒 در سطحِ {fa(cv.need)} باز می‌شود</span>}
               {cv.ok && civicHint && <button type="button" onClick={cv.onOpen} aria-label={`بازکردنِ ${cv.label}`} className="empPulse"
-                style={{ position: 'absolute', top: -52 - k * 34, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 800, color: '#1a1503', whiteSpace: 'nowrap', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: 'none', borderRadius: 999, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit', zIndex: 6 + k, pointerEvents: 'auto' }}>{cv.label} — لمس کن</button>}
+                style={{ position: 'absolute', top: -52 - k * 34, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 800, color: '#22283a', whiteSpace: 'nowrap', background: 'rgba(255,255,255,.92)', border: '1px solid #cfc6b0', borderRadius: 999, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', zIndex: 6 + k, pointerEvents: 'auto' }}>{cv.label}</button>}
               {/* پدِ لمسِ پایهٔ بنای مدنی — قفل‌بودن = پدِ خاموش */}
               <button type="button" className="empTowerPad" title={g.tipC} aria-label={g.tipC}
                 onClick={cv.ok ? cv.onOpen : undefined} disabled={!cv.ok}
@@ -1487,6 +1489,13 @@ export default function EmpirePage() {
         .empXpBar{transition:width .6s ease}
         @keyframes empGhostPulse{0%,100%{opacity:.35}50%{opacity:.8}}
         .empGhostXp{animation:empGhostPulse 1.8s ease-in-out infinite}
+        .empSide{display:none}
+        @media (min-width: 980px){
+          .empSide{display:flex;position:fixed;top:0;right:0;bottom:0;width:232px;z-index:52;background:#22283a;padding:20px 14px;flex-direction:column;gap:8px;overflow-y:auto}
+          .empStage{right:232px!important}
+          .empNavWrap{display:none!important}
+          .empHud{right:242px!important}
+        }
         .empRoot>*{animation:empUp .45s ease both}
         .empRoot>*:nth-child(2){animation-delay:.05s}.empRoot>*:nth-child(3){animation-delay:.1s}
         .empRoot>*:nth-child(4){animation-delay:.15s}.empRoot>*:nth-child(5){animation-delay:.2s}
@@ -5239,6 +5248,28 @@ export default function EmpirePage() {
         </div>
       )
     })()}
+    <aside className="empSide">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '2px 6px 16px' }}>
+        <span style={{ width: 30, height: 30, borderRadius: 9, background: 'linear-gradient(140deg,#f5dc9b,#c9a96a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>◆</span>
+        <span><span style={{ display: 'block', fontFamily: DISPLAY, fontSize: 18, color: '#fff', lineHeight: 1 }}>ملک‌جت</span><span style={{ display: 'block', fontSize: 10.5, color: '#c3c9d8', marginTop: 2 }}>امپراتوری</span></span>
+      </div>
+      {([
+        ['city', '🏙', 'شهر', () => { setGtab('city'); setCitySheet('') }, gtab === 'city' && citySheet !== 'map'],
+        ['map', '🗺', 'نقشهٔ شهر', () => { setGtab('city'); setCitySheet('map') }, citySheet === 'map'],
+        ['missions', '🎯', 'مأموریت‌ها', () => setGtab('missions'), gtab === 'missions'],
+        ['portfolio', '💼', 'پرتفوی', () => setGtab('portfolio'), gtab === 'portfolio'],
+        ['hoods', '⚔️', 'محله‌ها', () => setGtab('hoods'), gtab === 'hoods'],
+        ['market', '🏪', 'بازارِ شهر', () => setGtab('market'), gtab === 'market'],
+        ['ranks', '🏆', 'تالارِ افتخار', () => setGtab('ranks'), gtab === 'ranks'],
+        ['world', '🌍', 'دنیا', () => setGtab('world'), gtab === 'world'],
+      ] as Array<[string, string, string, () => void, boolean]>).map(([k, ic, l, go, on]) => (
+        <button key={k} onClick={() => { setTowerSel(null); go(); try { window.scrollTo({ top: 0 }) } catch {} }}
+          style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 12px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, textAlign: 'right', width: '100%',
+            background: on ? 'linear-gradient(180deg,#f5dc9b,#c9a96a)' : 'transparent', color: on ? '#3a2c0c' : '#c3c9d8', fontWeight: on ? 800 : 500 }}>
+          <span style={{ fontSize: 17 }}>{ic}</span>{l}
+        </button>
+      ))}
+    </aside>
     <BottomSheet open={more} onClose={() => setMore(false)} title="بیشتر">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {([['hoods', '⚔️', 'محله‌ها', 'قلمرو و فرمانروایان'], ['market', '🏪', 'بازارِ شهر', 'سرمایه، صندوق‌ها، فروشگاه'], ['world', '🌍', 'دنیا', 'روزنامه، شایعات، تاریخ']] as const).map(([k, ic, t, sub]) => (
@@ -5254,7 +5285,7 @@ export default function EmpirePage() {
         ))}
       </div>
     </BottomSheet>
-    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', justifyContent: 'center', padding: '8px 10px calc(10px + env(safe-area-inset-bottom))', pointerEvents: 'none' }}>
+    <div className="empNavWrap" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', justifyContent: 'center', padding: '8px 10px calc(10px + env(safe-area-inset-bottom))', pointerEvents: 'none' }}>
       {/* 🎨 نوارِ تبِ شناورِ tycoon: شیشهٔ تیرهٔ بنفش + تبِ فعال با نشانِ دایره‌ایِ طلایی */}
       <div className="empNavLight" style={{ display: 'flex', justifyContent: 'space-around', width: '100%', maxWidth: 560, margin: '0 10px', background: '#fff', border: '1px solid #e2dbc9', borderRadius: 24, padding: '7px 8px', boxShadow: '0 4px 0 #e6dfcd, 0 14px 34px -16px rgba(40,32,10,.4)', pointerEvents: 'auto' }}>
         {([
