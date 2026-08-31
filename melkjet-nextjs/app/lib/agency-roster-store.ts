@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
+import { cacheRemote } from './listing-image'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete } from './db'
 import { buildAgencyRoster } from './agency-roster'
@@ -258,7 +259,10 @@ async function refreshFromBrandPost(
 ): Promise<void> {
   const patch: Record<string, unknown> = {}
   if (post.title && post.title !== l.title) patch.title = post.title
-  if (post.image && (!l.images?.length || l.images[0] !== post.image)) patch.images = [post.image, ...(l.images || []).slice(1)]
+  // عکس محلی می‌شود؛ و مقایسه با همان نسخهٔ محلی انجام می‌شود — وگرنه چون images[0]
+  // محلی است و post.image راه‌دور، هر شب نامساوی می‌ماند و بی‌دلیل بازنویسی می‌شد.
+  const wantImg = post.image ? ((await cacheRemote(post.image)) || post.image) : ''
+  if (wantImg && (!l.images?.length || (l.images[0] !== wantImg && l.images[0] !== post.image))) patch.images = [wantImg, ...(l.images || []).slice(1)]
   if (post.price) {
     if (l.deal === 'rent') {
       const r = rentPartsOf(post.price)
@@ -277,7 +281,7 @@ async function refreshFromBrandPost(
       const pub: Record<string, unknown> = {}
       if (post.title) pub.title = post.title
       if (post.price) pub.price = post.price
-      if (post.image) pub.image = post.image
+      if (wantImg) pub.image = wantImg
       await updateItem(l.publicId, pub as never)
     } catch { /* نسخهٔ عمومی اختیاری است */ }
   }

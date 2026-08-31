@@ -1,4 +1,5 @@
 import { fetchDivarPost, divarToken, divarProfileSlug, fetchDivarProfileTokens, type BrandPost } from './divar-post'
+import { cacheRemote } from './listing-image'
 import { addListing, updateListing, publishListing, setListingStatus, deleteListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
 import { findNeighborhoodInGeo } from './geo-store'
 import { warmEnrichment } from './enrich-warm'
@@ -59,7 +60,11 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
 
   // عنوانِ واقعیِ آگهی از hint (فهرستِ پروفایل) مقدّم بر post.title است که گاهی «املاک» می‌دهد.
   const realTitle = (hint?.title && hint.title.trim()) || (post.title && post.title.trim() && post.title.trim() !== 'املاک' ? post.title.trim() : '') || 'آگهی واردشده از دیوار'
-  const images = (post.images && post.images.length) ? post.images : (hint?.image ? [hint.image] : [])
+  const rawImages = (post.images && post.images.length) ? post.images : (hint?.image ? [hint.image] : [])
+  // عکسِ کارت محلی می‌شود: آدرسِ CDN دیوار پایدار نیست و آگهی بعد از مدتی بی‌عکس
+  // می‌ماند. فقط اولی — بیست عکس در هر آگهی یعنی صدها هزار فایل، و آنچه در فهرست و
+  // نتایجِ جست‌وجو دیده می‌شود همین یکی است. اگر کش نشد، آدرسِ راه‌دور باقی می‌ماند.
+  const images = rawImages.length ? [(await cacheRemote(rawImages[0])) || rawImages[0], ...rawImages.slice(1)] : []
   const advisorPhone = (await getAdvisor(o)).profile.phone || ''
 
   const payload: Partial<Listing> = {
