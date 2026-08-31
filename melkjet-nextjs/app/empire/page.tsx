@@ -117,7 +117,7 @@ const qBar = (progress: number, target: number, done: boolean) => (
   </div>
 )
 // قرصِ منابعِ HUD (فاز ۱۵۸ — tycoon): چیپِ گردِ براق با گرادیانِ داخلیِ ظریف — طلایی برای کوین
-const pill = (gold = false): React.CSSProperties => ({ fontSize: 11, padding: '4px 11px', borderRadius: 99, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4, background: (gold ? 'linear-gradient(180deg,rgba(255,215,106,.24),rgba(212,175,55,.08))' : 'linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.03))') + ', linear-gradient(rgba(12,10,34,.8),rgba(12,10,34,.8))', border: `1px solid ${gold ? 'rgba(212,175,55,.5)' : 'rgba(255,255,255,.16)'}`, color: gold ? '#f0d47a' : 'var(--text)', fontWeight: gold ? 700 : 500, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' })
+const pill = (gold = false): React.CSSProperties => ({ fontSize: 11.5, padding: '5px 11px', borderRadius: 99, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4, background: gold ? 'linear-gradient(180deg,#f5dc9b,#dcbc6d)' : 'rgba(255,255,255,.9)', border: `1px solid ${gold ? '#a8873f' : '#e0d9c8'}`, color: gold ? '#3a2c0c' : '#22283a', fontWeight: gold ? 800 : 700, boxShadow: '0 2px 6px -3px rgba(30,40,60,.3)' })
 
 // ملک‌جت — دستیارِ هوشمندِ همراه؛ گفت‌وگوها متنِ قطعیِ سند است.
 // شمارشِ متحرکِ اعداد (جلد ۵۶ «پول فقط عدد نیست») — تغییرِ ارزش دیده می‌شود، نه فقط جایگزین.
@@ -818,7 +818,7 @@ function BottomSheet({ open, onClose, title, children }: { open: boolean; onClos
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 58 }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(8,6,24,.55)', backdropFilter: 'blur(2px)' }} />
-      <div className="empSheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, margin: '0 auto', maxWidth: 860, maxHeight: '80vh', overflowY: 'auto', background: '#1b1440', border: '1px solid rgba(255,255,255,.1)', borderBottom: 'none', borderRadius: '22px 22px 0 0', padding: '8px 16px calc(24px + env(safe-area-inset-bottom))', boxShadow: '0 -18px 60px rgba(0,0,0,.6)' }}>
+      <div className="empSheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, margin: '0 auto', maxWidth: 860, maxHeight: '80vh', overflowY: 'auto', background: '#ffffff', border: '1px solid #e0d9c8', borderBottom: 'none', borderRadius: '22px 22px 0 0', padding: '8px 16px calc(24px + env(safe-area-inset-bottom))', boxShadow: '0 -18px 60px rgba(0,0,0,.6)' }}>
         <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.25)', margin: '4px auto 10px' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <b style={{ fontSize: 15, flex: 1 }}>{title}</b>
@@ -1433,8 +1433,18 @@ export default function EmpirePage() {
   const wrap = (children: React.ReactNode) => (
     <main dir="rtl" className="empRoot" style={{ maxWidth: 860, margin: '0 auto', padding: '24px 16px 80px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* 🎨 فاز ۱۵۸ — پس‌زمینهٔ tycoon: بنفشِ عمیق → ماژنتا-سرمه‌ای؛ ثابت (شب‌پایه) — آسمانِ داخلِ کارتِ شهر خودش روز/شب دارد */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: -1, background: 'radial-gradient(1200px 600px at 50% -10%, #3d2a6d 0%, #241a4a 45%, #17123a 100%)' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: -1, background: '#f7f4ed' }} />
       <style>{`
+        /* پالتِ روز — بازطراحیِ ۳۱ اوت ۲۰۲۶. هنرِ ایزومتریکِ بازی روشن و کرم‌رنگ است و
+           روی پوستهٔ بنفشِ تیرهٔ قبلی رنگش می‌مُرد. متغیرها فقط اینجا بازتعریف می‌شوند،
+           پس هیچ صفحهٔ دیگری از ملک‌جت عوض نمی‌شود. */
+        .empRoot{
+          --paper:#f7f4ed; --bg:#f7f4ed; --bg2:#ffffff; --surface:#ffffff;
+          --line:#e0d9c8; --line2:#cfc6b0; --goldDim:#e0d9c8;
+          --text:#22283a; --muted:#79809a; --faint:#a8a08c;
+          --gold:#c9a96a; --gold2:#f5dc9b;
+          color:#22283a;
+        }
         @keyframes empUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
         @keyframes empBurst{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.35);opacity:0}}
         @keyframes empTwinkle{0%,100%{opacity:.25}50%{opacity:.9}}
@@ -1734,23 +1744,22 @@ export default function EmpirePage() {
       : { position: 'sticky' as const, top: 8, zIndex: 40, background: 'rgba(23,16,58,.85)', border: '1px solid rgba(255,255,255,.08)', backdropFilter: 'blur(8px)', boxShadow: '0 12px 34px -12px rgba(0,0,0,.6), 0 0 0 1px rgba(212,175,55,.12)' }) }}>
       {/* 🎨 HUD پوستهٔ جدید (پروتوتایپِ کامل): آواتار با حلقهٔ طلاییِ گرادیانی + قرص‌های منابع */}
       {(() => { const ic = (st.cosmetics?.items || []).find((i: any) => i.id === st.cosmetics?.frame)?.icon; return (
-        <div className="empHudAv" style={{ width: 50, height: 50, borderRadius: '50%', padding: 2, background: 'linear-gradient(135deg,#d4af37,#f4e7bd,#8a6d1f)', flex: 'none', position: 'relative' }}>
-          <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#1a2030', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{e.persona || '🏛'}</div>
+        <div className="empHudAv" style={{ width: 42, height: 42, borderRadius: '50%', padding: 2, background: 'linear-gradient(140deg,#f5dc9b,#c9a96a)', flex: 'none', position: 'relative' }}>
+          <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#22283a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{e.persona || '🏛'}</div>
           {ic && <span style={{ position: 'absolute', top: -7, left: -7, fontSize: 15 }}>{ic}</span>}
         </div>) })()}
-      <div className="empHudInfo" style={{ flex: 1, minWidth: 180, ...(hudFloat ? { background: 'rgba(12,10,34,.8)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 16, padding: '7px 12px', backdropFilter: 'blur(6px)' } : {}) }}>
+      <div className="empHudInfo" style={{ flex: 1, minWidth: 180, ...(hudFloat ? { background: 'rgba(255,255,255,.92)', border: '1px solid #e0d9c8', borderRadius: 20, padding: '8px 12px', boxShadow: '0 6px 18px -8px rgba(30,40,60,.35)' } : {}) }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span className="empHudName" style={{ fontWeight: 800, fontSize: 16, fontFamily: DISPLAY }}>{e.name}</span>
+          <span className="empHudName" style={{ fontWeight: 400, fontSize: 19, fontFamily: DISPLAY, lineHeight: 1 }}>{e.name}</span>
           {(() => { const ic = (st.cosmetics?.items || []).find((i: any) => i.id === st.cosmetics?.flair)?.icon; return ic ? <span title="نشانِ ظاهری">{ic}</span> : null })()}
           <span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span>
           <span className="empHudChip" style={{ fontSize: 9.5, color: '#f0d47a', border: '1px solid rgba(212,175,55,.45)', borderRadius: 99, padding: '1px 8px', whiteSpace: 'nowrap' }}>✦ {lv.titleFa}</span>
           {e.title && <span className="empHudChip" style={{ fontSize: 10, padding: '1px 8px', borderRadius: 99, border: '1px solid rgba(212,175,55,.45)', color: '#f0d47a' }}>👑 {e.title}</span>}
         </div>
-        <div className="empHudMeta" style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{e.profile?.title} · DNA: {e.dna} · دستیار: {e.mentor}</div>
         <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: '#f0d47a', fontWeight: 700, whiteSpace: 'nowrap' }}>سطح {fa(lv.level || 1)}</span>
-          <div className="empXpWrap" style={{ flex: 1, height: 10, background: 'rgba(255,255,255,.09)', borderRadius: 99, overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,.4)', position: 'relative' }}>
-            <div className="empXpBar" style={{ width: `${(lv.progress || 0) * 100}%`, height: '100%', borderRadius: 99, background: 'linear-gradient(90deg,#ffd76a,#ff9d2e)', boxShadow: '0 0 10px rgba(255,183,77,.6)' }} />
+          <span style={{ fontSize: 11, color: '#3a2c0c', fontWeight: 800, whiteSpace: 'nowrap' }}>سطح {fa(lv.level || 1)}</span>
+          <div className="empXpWrap" style={{ flex: 1, height: 8, background: '#e6e0d2', borderRadius: 99, overflow: 'hidden', position: 'relative' }}>
+            <div className="empXpBar" style={{ width: `${(lv.progress || 0) * 100}%`, height: '100%', borderRadius: 99, background: 'linear-gradient(90deg,#f2d68f,#c9a96a)' }} />
             {/* ☀️ فاز ۱۶۷ — سگمنتِ شبح: «اگر مأموریت‌های امروز را بزنی تا اینجا می‌رسی» — اندازه از potentialXp واقعی نسبت به بازهٔ سطح؛ pct=0 ⇒ هیچ شبحی */}
             {(() => {
               const tp = st.todayPath
