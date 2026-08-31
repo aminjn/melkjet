@@ -895,6 +895,7 @@ export default function EmpirePage() {
   const [peek, setPeek] = useState<any>(null)                    // پروفایلِ عمومیِ یک امپراتوریِ دیگر (سند ۱۷)
   const [gtab, setGtab] = useState<'city' | 'world' | 'portfolio' | 'missions' | 'market' | 'ranks' | 'hoods'>('city')   // منوی اصلی (Visual Pass · فاز ۱۶۸: + برگهٔ محله‌ها)
   // فاز ۷۲ (پایانِ اسکرولِ بی‌پایان): هر تب زیرصفحه‌های کوتاه دارد — هر لحظه فقط یک موضوع روی صفحه است
+  const [more, setMore] = useState(false)   // برگهٔ «بیشتر» (موبایل) — سه مقصدی که در نوارِ شش‌تایی جا نمی‌شوند
   const [cityV, setCityV] = useState<'today' | 'deals' | 'lands' | 'events' | 'map'>('today')
   // فاز ۱۵۹ (شهرِ تمام‌صفحه): برگهٔ بازِ روی صحنه + برجِ لمس‌شده — فقط حالتِ نمایشی؛ صفر منطقِ تازه
   const [citySheet, setCitySheet] = useState<'' | 'brief' | 'events' | 'deals' | 'lands' | 'map'>('')
@@ -1846,10 +1847,10 @@ export default function EmpirePage() {
       return (
         <button onClick={() => openCivic('hoods')} className="empHoodTicker"
           title="تابلوی محله‌ها — چه کسی فرمانروای کدام محله است؟"
-          style={{ position: 'fixed', top: hasEv ? 156 : 118, left: '50%', transform: 'translateX(-50%)', zIndex: 47, display: 'flex', alignItems: 'center', gap: 6, maxWidth: 'min(92vw, 420px)', background: 'rgba(12,10,34,.82)', color: '#e8e4f5', border: '1px solid rgba(255,215,106,.4)', borderRadius: 999, padding: '5px 13px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', backdropFilter: 'blur(6px)', boxShadow: '0 6px 20px rgba(0,0,0,.45)', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+          style={{ position: 'fixed', top: hasEv ? 156 : 118, left: '50%', transform: 'translateX(-50%)', zIndex: 47, display: 'flex', alignItems: 'center', gap: 6, maxWidth: 'min(92vw, 420px)', background: 'rgba(255,255,255,.92)', color: '#22283a', border: '1px solid #cfc6b0', borderRadius: 999, padding: '6px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 6px 18px -8px rgba(30,40,60,.35)', whiteSpace: 'nowrap', overflow: 'hidden' }}>
           <span aria-hidden>⚔️</span>
           <span key={hbTick % rows.length} className="empUpOnce" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            <b style={{ color: '#ffe9a3' }}>{s.hood}</b>{': '}
+            <b style={{ color: '#9c7a3c' }}>{s.hood}</b>{': '}
             {s.king
               ? s.king.isMe
                 ? <>👑 فرمانروا تویی با {fa(s.king.count)} ملک</>
@@ -1872,16 +1873,16 @@ export default function EmpirePage() {
       return (
         <div className="empRail" style={{ position: 'fixed', right: 10, top: '36%', zIndex: 45, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {rail.map(([ic, lbl, n, key]) => (
-            <button key={key} title={lbl} aria-label={lbl} onClick={() => setCitySheet(key)} className="empChunkyDark"
-              style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(180deg, rgba(48,38,96,.92), rgba(20,14,48,.92))', backdropFilter: 'blur(6px)', fontSize: 20, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+            <button key={key} title={lbl} aria-label={lbl} onClick={() => setCitySheet(key)} className="empRailLight"
+              style={{ position: 'relative', width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,.92)', border: '1px solid #cfc6b0', boxShadow: '0 3px 0 #e6dfcd, 0 8px 18px -10px rgba(30,40,60,.4)', fontSize: 19, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
               {ic}
               {n > 0 && <span style={{ position: 'absolute', top: -4, left: -4, minWidth: 17, height: 17, borderRadius: 9, background: 'linear-gradient(135deg,#ff5f4d,#e02f2f)', color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', boxShadow: '0 2px 8px rgba(224,47,47,.6)' }}>{fa(n)}</span>}
             </button>
           ))}
           {/* 🏰 فاز ۱۸۶ب — اتحاد از ریلِ اصلی (خواستهٔ مستقیم: «اتحاد رو پیدا نمی‌کنم»)؛ زیرِ سطحِ لازم = 🔒 و پیامِ سطح داخلِ برگه */}
           {st.unlocks?.clan?.enabled !== false && (
-            <button title="اتحاد" aria-label="اتحاد" onClick={openClanSheet} className="empChunkyDark"
-              style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(180deg, rgba(48,38,96,.92), rgba(20,14,48,.92))', backdropFilter: 'blur(6px)', fontSize: 20, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+            <button title="اتحاد" aria-label="اتحاد" onClick={openClanSheet} className="empRailLight"
+              style={{ position: 'relative', width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,.92)', border: '1px solid #cfc6b0', boxShadow: '0 3px 0 #e6dfcd, 0 8px 18px -10px rgba(30,40,60,.4)', fontSize: 19, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
               🏰
               {!st.unlocks?.clan?.ok && <span aria-hidden style={{ position: 'absolute', bottom: -3, left: -3, fontSize: 11, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.6))' }}>🔒</span>}
             </button>
@@ -1896,7 +1897,7 @@ export default function EmpirePage() {
       const ready = tut.steps.filter((s2: any) => s2.done && !s2.claimed).length
       return (
         <button onClick={() => setTutOpen(true)} title="راهنمای شروع" aria-label="راهنمای شروع" className={ready > 0 ? 'empPulse empChunkyDark' : 'empChunkyDark'}
-          style={{ position: 'fixed', left: 10, top: '36%', zIndex: 45, width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: '2px solid rgba(90,60,10,.55)', boxShadow: '0 3px 0 #8a6d1f, 0 8px 20px rgba(255,215,106,.35)', fontSize: 21, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+          style={{ position: 'fixed', left: 10, top: '36%', zIndex: 45, width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(180deg,#f2d68f,#c9a96a)', border: '1px solid #a8873f', boxShadow: '0 3px 0 #9c7a3c, 0 8px 20px -10px rgba(160,120,40,.5)', fontSize: 21, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
           🧭
           {ready > 0
             ? <span style={{ position: 'absolute', top: -5, right: -5, minWidth: 18, height: 18, borderRadius: 9, background: 'linear-gradient(135deg,#ff5f4d,#e02f2f)', color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', boxShadow: '0 2px 8px rgba(224,47,47,.6)' }}>{fa(ready)}</span>
@@ -5180,16 +5181,16 @@ export default function EmpirePage() {
       const chestBtn = chestOk ? (
         <button title="صندوقچهٔ امروزت منتظر است — باز کن" className="empPulse empChunky" disabled={busy}
           onClick={async () => { const d = await doChest(); if (d?.reward) fireCityCeleb(d.reward.kind === 'coins' ? Number(d.reward.amount) || 0 : 0) }}
-          style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(255,215,106,.6)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', fontSize: 19, cursor: 'pointer', flex: 'none', boxShadow: '0 6px 18px rgba(255,215,106,.4)', padding: 0 }}>🎁</button>
+          style={{ width: 34, height: 34, borderRadius: '50%', border: '1px solid #a8873f', background: 'linear-gradient(180deg,#f5dc9b,#dcbc6d)', fontSize: 16, cursor: 'pointer', flex: 'none', boxShadow: '0 3px 0 #9c7a3c', padding: 0 }}>🎁</button>
       ) : null
       {/* فاز ۱۶۹ (ج): پیش‌فرض نوارِ باریکِ یک‌خطی — شهرِ پشتش کلیک‌خور می‌ماند؛ لمس = بازشدنِ فرمِ کامل */}
       if (!dq.claimed && !heroFull) return (
         <div style={{ position: 'fixed', bottom: 'calc(76px + env(safe-area-inset-bottom))', left: 0, right: 0, zIndex: 49, display: 'flex', justifyContent: 'center', padding: '0 10px', pointerEvents: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 560, width: '100%', background: 'linear-gradient(180deg, rgba(26,20,58,.94), rgba(12,10,34,.94))', border: '1px solid rgba(255,215,106,.4)', borderRadius: 999, padding: 6, boxShadow: '0 10px 30px -8px rgba(0,0,0,.6)', backdropFilter: 'blur(8px)', pointerEvents: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 560, width: '100%', background: '#fff', border: '1px solid #e0d9c8', borderRadius: 999, padding: 6, boxShadow: '0 3px 0 #e6dfcd, 0 14px 30px -16px rgba(40,32,10,.45)', pointerEvents: 'auto' }}>
             <button onClick={() => setHeroFull(true)} title="جزئیاتِ مأموریتِ امروز" aria-label="بازکردنِ جزئیاتِ مأموریتِ امروز"
               style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12, cursor: 'pointer', padding: '2px 6px', textAlign: 'right' }}>
               <span aria-hidden style={{ fontSize: 15 }}>🎯</span>
-              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><b style={{ color: '#ffd76a' }}>مأموریتِ امروز:</b> {dq.title} — {fa(dq.progress)} از {fa(dq.target)}</span>
+              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><b style={{ color: '#9c7a3c' }}>مأموریتِ امروز:</b> {dq.title} — {fa(dq.progress)} از {fa(dq.target)}</span>
               <span aria-hidden style={{ color: 'var(--faint)', fontSize: 10 }}>▲</span>
             </button>
             {dq.done
@@ -5201,16 +5202,16 @@ export default function EmpirePage() {
       )
       if (!dq.claimed) return (
         <div style={{ position: 'fixed', bottom: 'calc(76px + env(safe-area-inset-bottom))', left: 0, right: 0, zIndex: 49, display: 'flex', justifyContent: 'center', padding: '0 10px', pointerEvents: 'none' }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, maxWidth: 560, width: '100%', background: 'linear-gradient(180deg, rgba(26,20,58,.94), rgba(12,10,34,.94))', border: '2px solid rgba(255,215,106,.4)', borderRadius: 20, padding: '12px 14px', boxShadow: '0 4px 0 rgba(60,42,8,.7), 0 16px 44px -8px rgba(0,0,0,.7)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, maxWidth: 560, width: '100%', background: '#fff', border: '1px solid #e0d9c8', borderRadius: 22, padding: '12px 14px', boxShadow: '0 4px 0 #e6dfcd, 0 18px 34px -18px rgba(40,32,10,.5)', pointerEvents: 'auto' }}>
             <button onClick={() => setHeroFull(false)} aria-label="جمع‌کردنِ کارتِ مأموریت" title="جمع کن"
-              style={{ position: 'absolute', top: 6, left: 8, width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.14)', color: 'var(--muted)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>▼</button>
+              style={{ position: 'absolute', top: 6, left: 8, width: 26, height: 26, borderRadius: '50%', background: '#f7f4ed', border: '1px solid #e0d9c8', color: '#79809a', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>▼</button>
             <span style={{ ...iconSq('#ffd76a'), width: 52, height: 52, fontSize: 26 }}>🎯</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: '#ffd76a' }}>مأموریتِ امروز{(st.streak?.streak || 0) > 0 ? <span style={{ color: 'var(--muted)', fontWeight: 500 }}> · 🔥 روزِ {fa(st.streak.streak)}</span> : null}</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#9c7a3c' }}>مأموریتِ امروز{(st.streak?.streak || 0) > 0 ? <span style={{ color: 'var(--muted)', fontWeight: 500 }}> · 🔥 روزِ {fa(st.streak.streak)}</span> : null}</div>
               <div style={{ fontSize: 14, fontWeight: 900, marginTop: 2 }}>{dq.title}</div>
               {qBar(dq.progress, dq.target, !!dq.done)}
               {/* ☀️ فاز ۱۶۷ — «مسیرِ امروز»: مأموریت = موتورِ پیشرفت؛ عددِ صادق از st.todayPath (منحنیِ واقعیِ سطح) */}
-              {(st.todayPath?.pct || 0) > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: '#ffd76a', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {(st.todayPath?.pct || 0) > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: '#9c7a3c', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span aria-hidden>🚀</span> این مأموریت‌ها {fa(st.todayPath.pct)}٪ از راهِ سطحِ بعد را می‌دهند
               </div>}
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
@@ -5228,25 +5229,47 @@ export default function EmpirePage() {
       )
       return (
         <div style={{ position: 'fixed', bottom: 'calc(76px + env(safe-area-inset-bottom))', left: 0, right: 0, zIndex: 49, display: 'flex', justifyContent: 'center', padding: '0 10px', pointerEvents: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: 560, width: '100%', background: 'rgba(12,10,34,.82)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 18, padding: '8px 12px', boxShadow: '0 10px 30px -8px rgba(0,0,0,.65)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
-          <span style={{ fontSize: 12, fontWeight: 800, color: '#7ee0b8' }}>✅ مأموریتِ امروز انجام شد</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: 560, width: '100%', background: '#fff', border: '1px solid #e0d9c8', borderRadius: 18, padding: '8px 12px', boxShadow: '0 3px 0 #e6dfcd, 0 14px 30px -16px rgba(40,32,10,.45)', pointerEvents: 'auto' }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#2f7d5b' }}>✅ مأموریتِ امروز انجام شد</span>
             {(st.streak?.streak || 0) > 0 && <span style={{ fontSize: 11, color: 'var(--muted)' }}>🔥 روزِ {fa(st.streak.streak)}</span>}
             <span style={{ flex: 1 }} />
-            {chestReward && <span style={{ fontSize: 10.5, color: '#ffd76a' }}>صندوقچه باز شد: {chestReward.kind === 'coins' ? `🪙 ${fa(chestReward.amount)}` : chestReward.kind === 'xp' ? `⚡ ${fa(chestReward.amount)}` : `🤖 ${fa(chestReward.amount)}`}</span>}
+            {chestReward && <span style={{ fontSize: 10.5, color: '#9c7a3c' }}>صندوقچه باز شد: {chestReward.kind === 'coins' ? `🪙 ${fa(chestReward.amount)}` : chestReward.kind === 'xp' ? `⚡ ${fa(chestReward.amount)}` : `🤖 ${fa(chestReward.amount)}`}</span>}
             {chestBtn}
           </div>
         </div>
       )
     })()}
+    <BottomSheet open={more} onClose={() => setMore(false)} title="بیشتر">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {([['hoods', '⚔️', 'محله‌ها', 'قلمرو و فرمانروایان'], ['market', '🏪', 'بازارِ شهر', 'سرمایه، صندوق‌ها، فروشگاه'], ['world', '🌍', 'دنیا', 'روزنامه، شایعات، تاریخ']] as const).map(([k, ic, t, sub]) => (
+          <button key={k} onClick={() => { setGtab(k); setMore(false); try { window.scrollTo({ top: 0 }) } catch {} }}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px', borderRadius: 15, background: '#f7f4ed', border: '1px solid #e6dfcd', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right', width: '100%' }}>
+            <span style={{ fontSize: 19 }}>{ic}</span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: '#22283a' }}>{t}</span>
+              <span style={{ display: 'block', fontSize: 11, color: '#79809a', marginTop: 2 }}>{sub}</span>
+            </span>
+            <span style={{ color: '#a8a08c' }}>‹</span>
+          </button>
+        ))}
+      </div>
+    </BottomSheet>
     <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', justifyContent: 'center', padding: '8px 10px calc(10px + env(safe-area-inset-bottom))', pointerEvents: 'none' }}>
       {/* 🎨 نوارِ تبِ شناورِ tycoon: شیشهٔ تیرهٔ بنفش + تبِ فعال با نشانِ دایره‌ایِ طلایی */}
-      <div style={{ display: 'flex', gap: 4, margin: '0 10px', background: 'linear-gradient(180deg, rgba(30,23,68,.92), rgba(16,12,42,.92))', border: '2px solid rgba(0,0,0,.45)', borderRadius: 22, padding: '6px 8px', boxShadow: '0 3px 0 rgba(5,3,20,.9), 0 14px 44px -8px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.08)', backdropFilter: 'blur(10px)', pointerEvents: 'auto' }}>
-        {([['city', '🏙', 'شهر'], ['missions', '🎯', 'مأموریت‌ها'], ['portfolio', '💼', 'پرتفوی']] as const).map(([k, ic, l]) => (
-          <button key={k} onClick={() => { setGtab(k); try { window.scrollTo({ top: 0 }) } catch {} }}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 48, padding: '4px 7px 6px', borderRadius: 16, border: 'none', cursor: 'pointer', position: 'relative', background: gtab === k ? 'linear-gradient(180deg,rgba(255,215,106,.26),rgba(212,175,55,.10))' : 'transparent', color: gtab === k ? '#ffe9a3' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500, boxShadow: gtab === k ? 'inset 0 0 0 1px rgba(212,175,55,.45)' : 'none' }}>
-            <span className={gtab === k ? 'empTabActive' : undefined} style={gtab === k
-              ? { fontSize: 16, width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg,#ffe085,#d4af37)', border: '2px solid rgba(90,60,10,.55)', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.45)', transform: 'translateY(-6px)', marginBottom: -6 }
-              : { fontSize: 17 }}>{ic}</span>{l}
+      <div className="empNavLight" style={{ display: 'flex', justifyContent: 'space-around', width: '100%', maxWidth: 560, margin: '0 10px', background: '#fff', border: '1px solid #e2dbc9', borderRadius: 24, padding: '7px 8px', boxShadow: '0 4px 0 #e6dfcd, 0 14px 34px -16px rgba(40,32,10,.4)', pointerEvents: 'auto' }}>
+        {([
+          ['city', '🏙', 'شهر', () => { setGtab('city'); setCitySheet('') }, gtab === 'city' && citySheet !== 'map' && !more],
+          ['map', '🗺', 'نقشه', () => { setGtab('city'); setCitySheet('map') }, citySheet === 'map' && !more],
+          ['missions', '🎯', 'مأموریت‌ها', () => setGtab('missions'), gtab === 'missions' && !more],
+          ['portfolio', '💼', 'پرتفوی', () => setGtab('portfolio'), gtab === 'portfolio' && !more],
+          ['ranks', '🏆', 'تالار', () => setGtab('ranks'), gtab === 'ranks' && !more],
+          ['more', '⋯', 'بیشتر', () => setMore(true), more],
+        ] as Array<[string, string, string, () => void, boolean]>).map(([k, ic, l, go, on]) => (
+          <button key={k} onClick={() => { if (k !== 'more') { setMore(false); setTowerSel(null) } go(); try { window.scrollTo({ top: 0 }) } catch {} }}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 44, padding: '4px 3px 5px', borderRadius: 14, border: 'none', cursor: 'pointer', position: 'relative', background: 'transparent', color: on ? '#3a2c0c' : '#79809a', fontFamily: 'inherit', fontSize: 9.5, fontWeight: on ? 800 : 600 }}>
+            <span className={on ? 'empTabActive' : undefined} style={on
+              ? { fontSize: 15, width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg,#f5dc9b,#c9a96a)', border: '1px solid #a8873f', boxShadow: '0 3px 0 #9c7a3c', transform: 'translateY(-7px)', marginBottom: -7 }
+              : { fontSize: 16 }}>{ic}</span>{l}
             {/* ⏱ فاز ۱۸۷ب — یادآورِ جایزهٔ نقدیِ آماده: badge قرمز روی «مأموریت‌ها» (همان الگوی badge ریل) */}
             {k === 'missions' && st.quests?.hourly?.done && !st.quests.hourly.claimed && (
               <span style={{ position: 'absolute', top: -3, left: -3, minWidth: 17, height: 17, borderRadius: 9, background: 'linear-gradient(135deg,#ff5f4d,#e02f2f)', color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', boxShadow: '0 2px 8px rgba(224,47,47,.6)' }}>۱</span>
