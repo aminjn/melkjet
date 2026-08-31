@@ -88,6 +88,11 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
+        {/* کروم beforeinstallprompt را قبل از hydration شلیک می‌کند و دوباره پخشش
+            نمی‌کند. چون PWAInstall با dynamic و ssr:false دیر سوار می‌شود، رویداد
+            همیشه از دست می‌رفت و نوارِ نصب هرگز نمی‌آمد. اینجا زودتر از همه گرفته
+            و روی window نگه داشته می‌شود. */}
+        <script dangerouslySetInnerHTML={{ __html: "window.__bip=null;addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__bip=e;dispatchEvent(new Event('bip'))});addEventListener('appinstalled',function(){try{localStorage.setItem('pwa-installed','1')}catch(x){}});" }} />
         <SessionKeeper />
         <LocationDetector />
         <Tracker />

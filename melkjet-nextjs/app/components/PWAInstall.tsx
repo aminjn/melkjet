@@ -9,6 +9,7 @@ interface BeforeInstallPromptEvent extends Event {
 export default function PWAInstall() {
   const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [show, setShow] = useState(false)
+  const [ios, setIos] = useState(false)
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -17,15 +18,37 @@ export default function PWAInstall() {
         .catch(() => {})
     }
 
-    if (window.matchMedia('(display-mode: standalone)').matches) return
-
-    const handler = (e: Event) => {
-      e.preventDefault()
-      setPrompt(e as BeforeInstallPromptEvent)
-      if (!localStorage.getItem('pwa-dismissed')) setShow(true)
+    // display-mode فقط داخلِ خودِ اپِ نصب‌شده درست است و در تبِ مرورگر همیشه false —
+    // پس نصب‌بودن با رویدادِ appinstalled ثبت می‌شود (در layout).
+    const installed = () => {
+      try { if (localStorage.getItem('pwa-installed')) return true } catch {}
+      return window.matchMedia('(display-mode: standalone)').matches
+        || (navigator as unknown as { standalone?: boolean }).standalone === true
     }
-    window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+    // بستنِ نوار دیگر همیشگی نیست: هفت روز بعد دوباره پیشنهاد می‌شود، چون تا وقتی
+    // کاربر نصب نکرده باید ببیندش.
+    const snoozed = () => { try { return Number(localStorage.getItem('pwa-snooze') || 0) > Date.now() } catch { return false } }
+    if (installed() || snoozed()) return
+
+    // سافاریِ آی‌اواس هرگز beforeinstallprompt نمی‌دهد؛ آنجا راهنمای دستی می‌آید.
+    if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent)) {
+      setIos(true); setShow(true); return
+    }
+
+    // رویداد را layout قبل از hydration گرفته و روی window نگه داشته است.
+    const w = window as unknown as { __bip?: BeforeInstallPromptEvent | null }
+    const take = () => { if (w.__bip) { setPrompt(w.__bip); setShow(true) } }
+    take()
+    const onDirect = (e: Event) => { e.preventDefault(); setPrompt(e as BeforeInstallPromptEvent); setShow(true) }
+    const onInstalled = () => { setShow(false); try { localStorage.setItem('pwa-installed', '1') } catch {} }
+    window.addEventListener('bip', take)
+    window.addEventListener('beforeinstallprompt', onDirect)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('bip', take)
+      window.removeEventListener('beforeinstallprompt', onDirect)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
   }, [])
 
   const install = async () => {
@@ -38,7 +61,7 @@ export default function PWAInstall() {
 
   const dismiss = () => {
     setShow(false)
-    localStorage.setItem('pwa-dismissed', '1')
+    try { localStorage.setItem('pwa-snooze', String(Date.now() + 7 * 86400000)) } catch {}
   }
 
   if (!show) return null
@@ -86,13 +109,13 @@ export default function PWAInstall() {
       <div style={{ flex: 1, marginRight: 4 }}>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>نصب اپلیکیشن ملک‌جت</div>
         <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-          برای دسترسی سریع‌تر به صفحه اصلی اضافه کن
+          {ios ? 'دکمهٔ اشتراک‌گذاری ← افزودن به صفحهٔ اصلی' : 'برای دسترسی سریع‌تر به صفحه اصلی اضافه کن'}
         </div>
       </div>
 
       {/* Install button */}
       <button
-        onClick={install}
+        onClick={ios ? dismiss : install}
         style={{
           padding: '9px 16px',
           borderRadius: 10,
@@ -105,7 +128,7 @@ export default function PWAInstall() {
           flexShrink: 0,
         }}
       >
-        افزودن
+        {ios ? 'باشه' : 'افزودن'}
       </button>
     </div>
   )

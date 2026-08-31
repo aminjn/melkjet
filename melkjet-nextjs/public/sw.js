@@ -23,8 +23,26 @@ self.addEventListener('activate', e => {
   )
 })
 
-// عمداً هیچ 'fetch' handlerای نیست: مرورگر ناوبری و دارایی‌ها را مثلِ حالتِ عادی
-// مستقیم از شبکه می‌گیرد (چانک‌های /_next/static خودشان immutable و کش‌شده‌اند).
+// هندلرِ fetch لازم است وگرنه کروم اصلاً beforeinstallprompt نمی‌دهد و نوارِ نصب
+// هرگز نمی‌آید. ولی کشِ نسخهٔ قبلی برنمی‌گردد: اینجا هیچ پاسخی ذخیره نمی‌شود، فقط
+// وقتی شبکه کاملاً قطع است یک صفحهٔ آفلاینِ درون‌خطی برگردانده می‌شود. چون چیزی
+// ذخیره نمی‌شود، هیچ نسخهٔ کهنه یا خرابی نمی‌تواند سِرو شود.
+const OFFLINE = '<!doctype html><html lang=fa dir=rtl><meta charset=utf-8>'
+  + '<meta name=viewport content="width=device-width,initial-scale=1">'
+  + '<title>آفلاین</title><body style="margin:0;display:grid;place-items:center;height:100vh;'
+  + 'background:#0f0e0c;color:#e8e3d8;font-family:system-ui,sans-serif;text-align:center">'
+  + '<div><div style="font-size:44px">📡</div>'
+  + '<h1 style="font-size:17px;margin:12px 0 6px">اتصال اینترنت قطع است</h1>'
+  + '<p style="font-size:13px;color:#9a938a;margin:0">وصل که شدید، صفحه را دوباره باز کنید.</p></div>'
+
+self.addEventListener('fetch', e => {
+  if (e.request.mode !== 'navigate') return
+  e.respondWith(
+    fetch(e.request).catch(() => new Response(OFFLINE, {
+      status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    }))
+  )
+})
 
 // ── پوش‌نوتیفیکیشن (حتی وقتی PWA/مرورگر بسته است) ──
 self.addEventListener('push', e => {
