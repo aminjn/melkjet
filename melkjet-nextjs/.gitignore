@@ -122,3 +122,4 @@ next-env.d.ts
 INSTALLATION_COMPLETE
 .deploy-failed
 .next-build
+.next.prev
