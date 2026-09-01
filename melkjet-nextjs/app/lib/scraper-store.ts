@@ -505,8 +505,8 @@ export async function setItemStatus(itemId: string, status: ItemStatus) {
 }
 
 export async function updateItem(itemId: string, patch: EditableItem) {
-  return mutate(db => {
-    const it = db.items.find(i => i.id === itemId)
+  return mutateSome([itemId], ({ items }) => {
+    const it = items.find(i => i.id === itemId)
     if (!it) return null
     const allowed: (keyof EditableItem)[] = ['title', 'price', 'location', 'image', 'url', 'excerpt', 'phone', 'category', 'status', 'featured']
     for (const k of allowed) {
@@ -533,8 +533,8 @@ export async function setItemCoords(itemId: string, lat: number, lng: number) {
 // وضعیتِ معاملهٔ آگهیِ عمومی (فروخته‌شده/اجاره‌رفته) روی خودِ آیتم مهر می‌خورد تا در صفحه/کارت‌ها دیده شود.
 // status = '' یعنی برگشت به «فعال» (مهر برداشته می‌شود).
 export async function setItemDealStatus(itemId: string, status: 'sold' | 'rented' | '') {
-  return mutate(db => {
-    const it = db.items.find(i => i.id === itemId)
+  return mutateSome([itemId], ({ items }) => {
+    const it = items.find(i => i.id === itemId)
     if (!it) return
     it.meta = it.meta || {}
     // فاز ۱۵۳ — مهرِ زمانِ معامله: بدونِ این، «فروشِ ماهانه/زمانِ فروش» در تحلیلِ بازار
@@ -843,8 +843,8 @@ export async function reassignListingOwnerPhone(from: string, to: string): Promi
 
 // تمدیدِ آگهی برای ۳۰ روزِ دیگر
 export async function renewListing(itemId: string): Promise<Item | null> {
-  return mutate(db => {
-    const it = db.items.find(i => i.id === itemId); if (!it) return null
+  return mutateSome([itemId], ({ items }) => {
+    const it = items.find(i => i.id === itemId); if (!it) return null
     it.expiresAt = Date.now() + LISTING_TTL; return it
   })
 }

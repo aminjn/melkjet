@@ -31,14 +31,14 @@ export function isCached(url: string): boolean {
   try { return existsSync(join(DIR, localName(url))) } catch { return false }
 }
 
-/** مسیرِ فایلِ کش‌شده برای مسیرِ سِرو — نام اعتبارسنجی می‌شود تا از عبور از پوشه جلوگیری شود. */
+// مسیرِ فایلِ کش‌شده برای مسیرِ سِرو — نام اعتبارسنجی می‌شود تا از عبور از پوشه جلوگیری شود.
 export function cachedPath(name: string): string | null {
   if (!/^[a-f0-9]{20}\.(jpg|png|webp|gif)$/.test(name)) return null
   const p = join(DIR, name)
   try { return existsSync(p) ? p : null } catch { return null }
 }
 
-/** یک‌بار می‌گیرد و محلی می‌کند. خروجی: آدرسِ محلی، یا رشتهٔ خالی اگر نشد. */
+// یک‌بار می‌گیرد و محلی می‌کند. خروجی: آدرسِ محلی، یا رشتهٔ خالی اگر نشد.
 export async function cacheRemote(url: string): Promise<string> {
   if (!/^https?:\/\//i.test(url)) return ''
   const name = localName(url)
