@@ -173,6 +173,12 @@ function MJ({ children }: { children: React.ReactNode }) {
 // 🧮 فاز ۱۶۲ — هشِ قطعی از شناسهٔ واقعیِ دارایی: الگوی پنجره‌های روشن را بدونِ هیچ تصادفی تعیین می‌کند
 const seedOf = (id: any) => { const s = String(id ?? ''); let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h }
 
+// محله‌ها باید از هم تشخیص داده شوند. فامِ هر محله از هشِ نامِ خودش می‌آید — قطعی و پایدار،
+// پس یک محله همیشه یک رنگ دارد و دو محله عملا هم‌رنگ نمی‌شوند. هیچ Math.random.
+const hoodHueOf = (hood?: string) => hood ? (seedOf('hood:' + hood) % 360) : -1
+const hoodColorOf = (hood?: string) => { const h = hoodHueOf(hood); return h < 0 ? '' : `hsla(${h},68%,58%,.34)` }
+const hoodSolidOf = (hood?: string) => { const h = hoodHueOf(hood); return h < 0 ? 'rgba(30,36,54,.85)' : `hsla(${h},58%,40%,.92)` }
+
 // 🏘 فاز ۱۶۳ — گونهٔ بصریِ ساختمان از دادهٔ واقعیِ همان دارایی (kind ذخیره‌شده + کلاس‌بندیِ کانونیِ عنوان)
 type BKind = 'apt' | 'shop' | 'villa' | 'office'
 const bkindOf = (a: any): BKind => {
@@ -375,6 +381,38 @@ function FountainSvg() {
     </svg>
   )
 }
+// عابرِ پیاده — همان مقیاسِ ایزوی خودرو، فقط ریزتر. شهر بدونِ آدم مرده به‌نظر می‌رسد.
+function PersonSvg({ dir, tone, skin }: { dir: 1 | -1; tone: string; skin: string }) {
+  return (
+    <svg width="10" height="17" viewBox="0 0 10 17" aria-hidden style={{ display: 'block', transform: dir === -1 ? 'scaleX(-1)' : undefined }}>
+      <ellipse cx="5" cy="16" rx="3.2" ry="1.1" fill="rgba(0,0,0,.22)" />
+      <rect x="3.4" y="11.4" width="1.4" height="4" rx=".7" fill="#2f3547" />
+      <rect x="5.2" y="11.4" width="1.4" height="4" rx=".7" fill="#3b4256" />
+      <rect x="2.9" y="6.3" width="4.2" height="5.8" rx="1.7" fill={tone} />
+      <circle cx="5" cy="4.2" r="2.3" fill={skin} />
+      <path d="M2.6 3.6a2.4 2.4 0 0 1 4.8 0z" fill="#2b2f3a" />
+    </svg>
+  )
+}
+
+// جرثقیلِ برجی — اثرِ دیداریِ یک رویدادِ واقعیِ داده‌ای: تا وقتی construction.done نشده،
+// جرثقیل روی همان ساختمان می‌ایستد و چراغِ سرش چشمک می‌زند. پروژه که تمام شد، برمی‌دارد.
+function CraneSvg({ k }: { k: number }) {
+  const H = Math.max(30, Math.round(64 * k))
+  return (
+    <svg width={Math.round(56 * k)} height={H + 14} viewBox={'0 0 56 ' + (H + 14)} aria-hidden style={{ display: 'block', overflow: 'visible' }}>
+      <rect x="25" y="9" width="4" height={H} fill="#e8b23d" stroke="rgba(90,60,10,.45)" strokeWidth=".6" />
+      <rect x="7" y="6" width="43" height="3.4" rx="1.2" fill="#f0c15a" stroke="rgba(90,60,10,.45)" strokeWidth=".6" />
+      <rect x="4" y="4.6" width="8.6" height="5.8" rx="1.4" fill="#d99a2b" />
+      <line x1="41" y1="9.4" x2="41" y2={Math.round(H * 0.45)} stroke="rgba(40,30,10,.55)" strokeWidth=".9" />
+      <rect x="38.4" y={Math.round(H * 0.45)} width="5.2" height="3.4" rx="1" fill="#8a6d1f" />
+      <circle cx="27" cy="4.6" r="2.1" fill="#ff6a4d">
+        <animate attributeName="opacity" values="1;.2;1" dur="1.4s" repeatCount="indefinite" />
+      </circle>
+    </svg>
+  )
+}
+
 function BillboardSvg({ win }: { win: string }) {
   return (
     <svg width="30" height="26" viewBox="0 0 30 26" aria-hidden style={{ display: 'block' }}>
@@ -433,8 +471,10 @@ function CityCelebration({ seed, coins }: { seed: number; coins: number }) {
 // 🏙 فاز ۱۵۸→۱۵۹ — IsoCity «تمام‌صفحه»: کلِ صفحه صحنهٔ شهرِ ایزومتریکِ زنده است (سبکِ tycoon) — CSS خالص، صفر تصویر.
 // بازیکن، آسمان = ساعتِ واقعی، جلوه = هوای واقعیِ Open-Meteo، شلوغیِ خیابان = شمارِ دارایی‌ها. هیچ عددِ ساختگی.
 // سبزینهٔ حاشیه صرفاً تزئینی و قطعی است (خانه‌های خالیِ همان مارپیچِ چیدمان) — هیچ ادعای داده‌ای ندارد.
-function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
+function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint, empireName, festive }: {
   assets: any[]; wx: any; visual: any
+  empireName?: string
+  festive?: boolean
   onTower?: (a: any) => void
   bubbleOf?: (a: any) => { icon: string; bounce?: boolean; title: string; onClick: () => void } | null
   // فاز ۱۶۵ — بناهای مدنیِ ناوبری روی نقشه (تالارِ شهر/بازارِ شهر/تالارِ افتخار): ok=false → قفل با چیپِ سطح
@@ -468,6 +508,18 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
   const max = Math.max(1, ...vals)
   // فاز ۱۶۳ (شلوغی‌زدایی): برچسبِ ارزش فقط برای ۲ داراییِ باارزش‌تر همیشه روشن است؛ بقیه با hover/لمس
   const labelIdx = new Set(vals.map((v, i) => [v, i] as const).sort((p, q) => q[0] - p[0]).slice(0, 2).map(p => p[1]))
+  // نامِ محله فقط روی باارزش‌ترین داراییِ همان محله می‌نشیند — محله‌بندیِ خوانا بدونِ شلوغیِ برچسب
+  const hoodLeadIdx = new Set<number>()
+  {
+    const best = new Map<string, number>()
+    assets.forEach((a: any, i: number) => {
+      const h = String(a?.hood || '')
+      if (h === '') return
+      const b = best.get(h)
+      if (b === undefined || vals[i] > vals[b]) best.set(h, i)
+    })
+    best.forEach(i => hoodLeadIdx.add(i))
+  }
   // فاز ۱۶۶ — قابِ پر و تراکم: شبکهٔ حداقل ۷×۷ قواره؛ خانهٔ هر دارایی همچنان قطعی و پایدار (مارپیچ از مرکز).
   // قواره‌های خالی «محتوای محیطیِ» قطعی می‌گیرند (پایین‌تر) — شهرِ پر، نه شطرنجیِ خالی.
   const usedN = assets.length + 4 + (civic?.length || 0)
@@ -532,8 +584,8 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
   const civicGeoOf = (cv: any, k: number) => {
     const spot = spots[assets.length + 4 + k]
     if (!spot) return null
-    const floors = cv.key === 'market' ? 1 : 2
-    const stk = sprite ? pickStack(man!, (cv.key === 'world' || cv.key === 'hoods' ? 'landmark' : cv.key === 'market' ? 'shop' : 'office') as BuildingKind, 'civic:' + cv.key) : null
+    const floors = cv.floors || (cv.key === 'market' ? 1 : 2)
+    const stk = sprite ? pickStack(man!, (cv.key === 'hq' || cv.key === 'world' || cv.key === 'hoods' ? 'landmark' : cv.key === 'market' ? 'shop' : 'office') as BuildingKind, 'civic:' + cv.key) : null
     const geo = man?.geo || { bodyW: 99, step: 34, lift: 10, roofOverlap: 24 }
     const T2 = 132 * kSp
     const tx = cx + (wOf(spot.col) - wOf(spot.row)) * T2 / 2 - T2 / 2
@@ -553,6 +605,10 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
   }
   return (
     <div className="empStage" style={{ position: 'fixed', inset: 0, zIndex: 40, background: sky[phase], overflow: 'hidden' }}>
+      {/* رویدادِ زندهٔ واقعی اثرِ دیداری دارد: شهر چراغانی می‌شود. رویدادِ صفر = هیچ چیزی رندر نمی‌شود. */}
+      {festive && ['12%', '26%', '40%', '54%', '68%', '82%'].map((l, i) => (
+        <span key={'fl' + i} aria-hidden style={{ position: 'absolute', top: '13%', left: l, fontSize: 15, zIndex: 36, pointerEvents: 'none', animation: `empTwinkle ${2.2 + (i % 3) * 0.5}s ease-in-out infinite`, filter: 'drop-shadow(0 0 8px rgba(255,180,90,.75))' }}>🏮</span>
+      ))}
       {phase === 'night' && ['8%', '22%', '38%', '57%', '72%', '88%'].map((left, i) => (
         <span key={i} style={{ position: 'absolute', top: `${6 + (i % 3) * 4}%`, left, fontSize: 9, color: '#cfd6ff', animation: `empTwinkle ${2 + i * 0.6}s ease-in-out infinite` }}>✦</span>
       ))}
@@ -661,11 +717,17 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
           const spot = spots[i]
           if (!spot) return null
           const pal = vis.facades === false ? towerPaletteOf('') : towerPaletteOf(a.facade || a.construction?.facade || '')
-          const floors = towerFloorsOf(vals[i], max)
+          const floors0 = towerFloorsOf(vals[i], max)
           const building = a.construction && !a.construction.done
           const crown = vals[i] === max && assets.length > 1 && !building
           const seed = seedOf(a.id)
           const bkind = bkindOf(a)
+          const hoodCol = hoodColorOf(a.hood)
+          // نردبانِ بصریِ پنج‌پله: ویلا → آپارتمان → تجاری → برجِ اداری → لندمارک.
+          // پیش از این ارتفاع فقط از ارزش می‌آمد، پس یک ویلای گران ۶ طبقه می‌شد و پله‌ها در هم
+          // می‌رفتند. حالا هر پله سقفِ ارتفاعِ خودش را دارد و گونهٔ ملک از روی فرم شناخته می‌شود.
+          const tierCap = bkind === 'villa' ? 2 : bkind === 'shop' ? 2 : bkind === 'apt' ? 5 : 6
+          const floors = crown ? Math.max(6, Math.min(7, floors0 + 1)) : Math.max(1, Math.min(floors0, tierCap))
           // فاز ۱۶۳: تنوعِ گونه — مغازه پهن و کوتاه‌قد، ویلا جمع‌وجور، آپارتمان با پهنای متغیرِ قطعی، اداری برجِ شیشه‌ای
           const fh = bkind === 'villa' || bkind === 'shop' ? 18 : 22
           const bw = bkind === 'shop' ? Math.round(tile * 0.92) : bkind === 'villa' ? Math.round(tile * 0.7) : Math.round(tile * (0.72 + ((seed >> 4) % 3) * 0.05))
@@ -696,13 +758,28 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
             <div key={a.id} className="empTower"
               title={tip}
               style={{ position: 'absolute', left: wrapLeft, top: wrapTop, width: wrapW, height: wrapH, zIndex: zIdx, opacity: building ? .6 : 1, animationDelay: `${i * 70}ms`, pointerEvents: 'none' }}>
+              {/* هالهٔ زمینیِ رنگِ محله — از فاصله هم پیداست کدام بلوک مالِ کدام محله است */}
+              {hoodCol && <div aria-hidden style={{ position: 'absolute', left: '50%', bottom: -4, width: stk ? 150 * kSp : bw * 1.5, height: stk ? 56 * kSp : bw * 0.55, transform: 'translateX(-50%)', background: `radial-gradient(closest-side, ${hoodCol}, transparent 74%)`, filter: 'blur(4px)', pointerEvents: 'none', zIndex: -2 }} />}
+              {/* پروژهٔ در حالِ ساخت = جرثقیل؛ پروژهٔ تازه‌تحویل‌شده = درخشش */}
+              {building && <span aria-hidden style={{ position: 'absolute', left: '50%', top: -10, transform: 'translateX(-60%)', zIndex: 5, pointerEvents: 'none' }}><CraneSvg k={sprite ? Math.max(0.55, kSp) : 0.8} /></span>}
+              {building !== true && a.construction?.done === true && <span aria-hidden style={{ position: 'absolute', left: '50%', top: -8, transform: 'translateX(-50%)', zIndex: 5, fontSize: 14, pointerEvents: 'none', animation: 'empTwinkle 1.8s ease-in-out infinite' }}>✨</span>}
+              {hoodLeadIdx.has(i) && a.hood && <span aria-hidden style={{ position: 'absolute', left: '50%', bottom: -17, transform: 'translateX(-50%)', fontSize: 9, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', background: hoodSolidOf(a.hood), border: '1px solid rgba(255,255,255,.35)', borderRadius: 999, padding: '1px 8px', pointerEvents: 'none', zIndex: 9, textShadow: '0 1px 2px rgba(0,0,0,.45)' }}>{String(a.hood).slice(0, 14)}</span>}
               {/* سایهٔ ریختهٔ نرم به‌سمتِ پایین-راست (فقط حالتِ SVG — کاشیِ اسپرایت پایهٔ خودش را دارد) */}
               {!stk && <div aria-hidden style={{ position: 'absolute', left: '58%', top: H + bw / 4 + 4, width: bw * 1.7, height: bw * 0.55, transform: 'translate(-50%,-50%)', background: 'radial-gradient(closest-side, rgba(0,0,0,.3), transparent 72%)', filter: 'blur(2.5px)', pointerEvents: 'none' }} />}
               {/* فاز ۱۶۶ — هالهٔ گرمِ پای برجِ بازیکن: تمایزِ فوری از ساختمان‌های محیطیِ کم‌رنگ */}
-              {stk && <div aria-hidden style={{ position: 'absolute', left: '50%', bottom: -6 * kSp, width: 190 * kSp, height: 70 * kSp, transform: 'translateX(-50%)', background: 'radial-gradient(closest-side, rgba(255,214,120,.5), transparent 72%)', filter: 'blur(5px)', pointerEvents: 'none', zIndex: -1 }} />}
+              {stk && <div aria-hidden style={{ position: 'absolute', left: '50%', bottom: -6 * kSp, width: 190 * kSp, height: 70 * kSp, transform: 'translateX(-50%)', background: `radial-gradient(closest-side, rgba(255,214,120,${phase === 'night' ? (crown ? 0.85 : 0.6) : phase === 'dusk' ? 0.55 : 0.5}), transparent 72%)`, filter: 'blur(5px)', pointerEvents: 'none', zIndex: -1 }} />}
               {/* برچسبِ ارزش = چیپِ تیرهٔ خوانا؛ فقط ۲ داراییِ برتر همیشه روشن، بقیه با hover/لمس */}
-              {vals[i] > 0 && <span className={'empValTag' + (labelOn ? ' empValOn' : '')} style={{ position: 'absolute', top: crown ? -34 : -21, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 700, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.72)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, padding: '2px 7px', backdropFilter: 'blur(2px)', zIndex: 4 }}>{building ? '🏗 ' : ''}{faB(vals[i])}</span>}
-              {showCrown && <span className="empCrownFloat" style={{ position: 'absolute', top: -34, left: '50%', transform: 'translateX(-50%)', fontSize: 16, filter: 'drop-shadow(0 0 6px rgba(255,215,106,.85))', zIndex: 5 }}>👑</span>}
+              {vals[i] > 0 && !showCrown && <span className={'empValTag' + (labelOn ? ' empValOn' : '')} style={{ position: 'absolute', top: crown ? -34 : -21, left: '50%', transform: 'translateX(-50%)', fontSize: 9.5, fontWeight: 700, color: '#ffe9a3', whiteSpace: 'nowrap', background: 'rgba(12,10,34,.72)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, padding: '2px 7px', backdropFilter: 'blur(2px)', zIndex: 4 }}>{building ? '🏗 ' : ''}{faB(vals[i])}</span>}
+              {/* هویتِ مالک روی پایتخت: تاج + تابلوی نامِ امپراتوری. فقط روی برجِ نگین،
+    تا شهر پر از برچسب نشود — قاعدهٔ «حداکثر یک نشانگر بر هر بنا». */}
+              {showCrown && <span className="empCrownFloat" aria-hidden style={{ position: 'absolute', top: -52, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, zIndex: 5, pointerEvents: 'none' }}>
+                <span style={{ fontSize: 16, filter: 'drop-shadow(0 0 6px rgba(255,215,106,.85))' }}>👑</span>
+                {empireName && <span style={{ fontSize: 9.5, fontWeight: 800, color: '#3a2c0c', whiteSpace: 'nowrap', background: 'linear-gradient(180deg,#f5dc9b,#dcbc6d)', border: '1px solid #a8873f', borderRadius: 999, padding: '2px 10px', boxShadow: '0 2px 0 #9c7a3c', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>{empireName}</span>}
+              </span>}
+              {/* پرچمِ بام — نشانِ کوچکِ مالکیت روی پایتخت */}
+              {showCrown && <span aria-hidden style={{ position: 'absolute', top: Math.round(3 * kSp), left: '66%', width: Math.max(1, Math.round(1.5 * kSp)), height: Math.max(9, Math.round(16 * kSp)), background: '#8a6d1f', zIndex: 4, pointerEvents: 'none' }}>
+                <span style={{ position: 'absolute', top: 0, insetInlineStart: Math.max(1, Math.round(1.5 * kSp)), width: Math.max(6, Math.round(11 * kSp)), height: Math.max(4, Math.round(7 * kSp)), background: 'linear-gradient(180deg,#f5dc9b,#c9a96a)', border: '1px solid #a8873f' }} />
+              </span>}
               {/* حبابِ اقدامِ شناور — فقط از وضعیتِ واقعیِ همین دارایی (نبود = هیچ حبابی) */}
               {bub && <button title={bub.title} className={bub.bounce ? 'empBounce' : undefined} onClick={ev => { ev.stopPropagation(); bub.onClick() }}
                 style={{ position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', width: 26, height: 26, borderRadius: '50%', border: '2px solid rgba(90,60,10,.55)', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 13, fontWeight: 900, cursor: 'pointer', boxShadow: '0 3px 0 #8a6d1f, 0 6px 14px rgba(255,215,106,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 5, pointerEvents: 'auto' }}>{bub.icon}</button>}
@@ -714,6 +791,30 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
                 ))}
                 <img src={`/empire/sprites/${stk.roof.file}`} alt="" width={stk.roof.w * kSp} height={stk.roof.h * kSp} draggable={false}
                   style={{ position: 'absolute', left: ((geo.bodyW - stk.roof.w) / 2) * kSp, top: 0, pointerEvents: 'none', userSelect: 'none' }} />
+                {/* نورِ پنجره در غروب و شب. الگوی روشن/خاموش از seedِ همین ساختمان می‌آید،
+                    پس هر برج امضای نوریِ ثابتِ خودش را دارد و بینِ رفرش‌ها تکان نمی‌خورد.
+                    برجِ نگین پنجرهٔ بیشتر و نورِ پررنگ‌تر می‌گیرد — از دور معلوم است کدام مهم است. */}
+                {(phase === 'night' || phase === 'dusk') && Array.from({ length: floors }, (_, f) => {
+                  const wCount = crown ? 3 : 2
+                  const bodyW = stk.body.w * kSp
+                  const x0 = ((geo.bodyW - stk.body.w) / 2) * kSp
+                  const yTop = ((floors - 1 - f) * geo.step + geo.roofOverlap) * kSp
+                  return Array.from({ length: wCount }, (_, w) => {
+                    const bit = (seed >> ((f * 3 + w) % 27)) & 7
+                    if (bit < (crown ? 2 : 3)) return null
+                    return <span key={'nw' + f + '_' + w} aria-hidden className="empNightWin" style={{
+                      position: 'absolute',
+                      left: x0 + bodyW * (0.24 + w * (0.5 / Math.max(1, wCount - 1))),
+                      top: yTop + geo.step * kSp * 0.4,
+                      width: Math.max(2, Math.round(3 * kSp)),
+                      height: Math.max(2, Math.round(4 * kSp)),
+                      borderRadius: 1,
+                      background: phase === 'night' ? '#ffd98a' : 'rgba(255,217,138,.55)',
+                      boxShadow: `0 0 ${Math.max(3, 7 * kSp)}px rgba(255,214,120,${phase === 'night' ? 0.85 : 0.4})`,
+                      pointerEvents: 'none', zIndex: 3,
+                    }} />
+                  })
+                })}
               </> : <BuildingSvg w={bw} floors={floors} fh={fh} pal={pal} seed={seed} building={building} kind={bkind} landmark={crown} />}
               {building && <span aria-hidden style={{ position: 'absolute', top: -7, left: '60%', fontSize: 13, filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))', pointerEvents: 'none' }}>🏗</span>}
               {/* فاز ۱۸۱ب — تابلوی «سپرده به مشاور» روی خودِ برج: فقط از دادهٔ واقعیِ sale (نبود = هیچ) */}
@@ -777,7 +878,35 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
           </div>
         )}
         {/* زندگیِ خیابان (فاز ۱۶۳): خودروهای SVG «روی خودِ خیابان‌ها» — فقط در حالتِ SVG (با اسپرایت ناهم‌سبک بود) */}
-        {!sprite && cars > 0 && Array.from({ length: cars }, (_, i) => {
+        {/* زندگیِ خیابان. پیش‌تر فقط در حالتِ SVG بود چون ماشینِ تمام‌اندازه کنارِ
+            اسپرایت‌ها ناجور می‌شد؛ حالا در حالتِ اسپرایت کوچک‌تر و کم‌رنگ‌تر می‌آید
+            تا شهر حرکت داشته باشد بدونِ اینکه سبک بشکند. */}
+        {/* آدم‌ها — عابرهای پیاده کنارِ خیابان. تعداد با فازِ روز عوض می‌شود: روز شلوغ، شب تُنُک.
+            حرکت از همان کی‌فریمِ خودروها می‌آید (empCarIso) با مسیرِ کوتاه‌تر و سرعتِ خیلی کمتر،
+            پس هیچ CSS تازه‌ای لازم نیست. */}
+        {Array.from({ length: phase === 'night' ? Math.max(1, Math.round(cars * 0.6)) : cars + 2 }, (_, i) => {
+          const axis = i % 2
+          const lane = 1 + ((i >> 1) % Math.max(1, gridN - 1))
+          const side = (i % 4) < 2 ? 0.22 : -0.22
+          const u0 = lane - 0.5 - c + side
+          const R = gridN / 2 + 0.2
+          const bx = axis === 0 ? cx + u0 * tile / 2 : cx - u0 * tile / 2
+          const by = cy + u0 * tile / 4
+          const d = i % 3 === 0 ? -1 : 1
+          const pvars = (axis === 0
+            ? { '--cfx': `${Math.round(R * tile / 2) * d}px`, '--cfy': `${-Math.round(R * tile / 4) * d}px`, '--ctx': `${-Math.round(R * tile / 2) * d}px`, '--cty': `${Math.round(R * tile / 4) * d}px` }
+            : { '--cfx': `${-Math.round(R * tile / 2) * d}px`, '--cfy': `${-Math.round(R * tile / 4) * d}px`, '--ctx': `${Math.round(R * tile / 2) * d}px`, '--cty': `${Math.round(R * tile / 4) * d}px` }) as React.CSSProperties
+          const tones = ['#d95c5c', '#4f7fd9', '#e0b24a', '#5aa86e', '#8a6bd1', '#d9d3c4']
+          const skins = ['#f0c9a4', '#d9a778', '#b57f52', '#8c5a35']
+          return (
+            <span key={'ped' + i} aria-hidden className="empCarIso" style={{ position: 'absolute', left: bx - 5, top: by - 8, zIndex: 9, pointerEvents: 'none', animationDuration: `${34 + i * 5}s`, animationDelay: `${i * 2.1}s`, opacity: phase === 'night' ? 0.55 : 0.95, ...pvars }}>
+              <span style={{ display: 'block', transform: sprite ? 'scale(.8)' : undefined }}>
+                <PersonSvg dir={axis === 0 ? -1 : 1} tone={tones[i % 6]} skin={skins[i % 4]} />
+              </span>
+            </span>
+          )
+        })}
+        {cars > 0 && Array.from({ length: cars }, (_, i) => {
           const axis = i % 2
           const lane = 1 + ((i >> 1) % Math.max(1, gridN - 1))
           const u0 = lane - 0.5 - c
@@ -788,8 +917,12 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
             ? { '--cfx': `${Math.round(R * tile / 2)}px`, '--cfy': `${-Math.round(R * tile / 4)}px`, '--ctx': `${-Math.round(R * tile / 2)}px`, '--cty': `${Math.round(R * tile / 4)}px` }
             : { '--cfx': `${-Math.round(R * tile / 2)}px`, '--cfy': `${-Math.round(R * tile / 4)}px`, '--ctx': `${Math.round(R * tile / 2)}px`, '--cty': `${Math.round(R * tile / 4)}px` }) as React.CSSProperties
           return (
-            <span key={'car' + i} aria-hidden className="empCarIso" style={{ position: 'absolute', left: bx - 12, top: by - 10, zIndex: 8, pointerEvents: 'none', animationDuration: `${8 + i * 2.2}s`, animationDelay: `${i * 1.3}s`, ...cvars }}>
-              <CarSvg dir={axis === 0 ? -1 : 1} tone={['#e5533d', '#3d7ee5', '#e5b23d', '#58c26a', '#c4c9d4'][i % 5]} />
+            <span key={'car' + i} aria-hidden className="empCarIso empCarBlend" style={{ position: 'absolute', left: bx - 12, top: by - 10, zIndex: 8, pointerEvents: 'none', animationDuration: `${10 + i * 2.4}s`, animationDelay: `${i * 1.3}s`, opacity: sprite ? 0.92 : 1, ...cvars }}>
+              {/* مقیاس روی spanِ داخلی است: کی‌فریمِ empCarIso خودش transform را می‌گیرد، پس
+                  مقیاسی که روی همان عنصر بنشیند نادیده گرفته می‌شد. */}
+              <span style={{ display: 'block', transform: sprite ? 'scale(.6)' : undefined }}>
+                <CarSvg dir={axis === 0 ? -1 : 1} tone={['#e5533d', '#3d7ee5', '#e5b23d', '#58c26a', '#c4c9d4'][i % 5]} />
+              </span>
             </span>
           )
         })}
@@ -897,6 +1030,7 @@ export default function EmpirePage() {
   const [peek, setPeek] = useState<any>(null)                    // پروفایلِ عمومیِ یک امپراتوریِ دیگر (سند ۱۷)
   const [gtab, setGtab] = useState<'city' | 'world' | 'portfolio' | 'missions' | 'market' | 'ranks' | 'hoods'>('city')   // منوی اصلی (Visual Pass · فاز ۱۶۸: + برگهٔ محله‌ها)
   // فاز ۷۲ (پایانِ اسکرولِ بی‌پایان): هر تب زیرصفحه‌های کوتاه دارد — هر لحظه فقط یک موضوع روی صفحه است
+  const [hqOpen, setHqOpen] = useState(false)   // برگهٔ مقرِ امپراتوری — دروازهٔ خلاصهٔ امپراتوری روی نقشه
   const [more, setMore] = useState(false)   // برگهٔ «بیشتر» (موبایل) — سه مقصدی که در نوارِ شش‌تایی جا نمی‌شوند
   const [cityV, setCityV] = useState<'today' | 'deals' | 'lands' | 'events' | 'map'>('today')
   // فاز ۱۵۹ (شهرِ تمام‌صفحه): برگهٔ بازِ روی صحنه + برجِ لمس‌شده — فقط حالتِ نمایشی؛ صفر منطقِ تازه
@@ -1787,13 +1921,10 @@ export default function EmpirePage() {
       </div>
       <div className="empHudPills" style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 12, justifyContent: 'flex-end' }}>
         {pulseChip}
-        <span style={pill()} title="Empire Score">🏆 {fa(st.empireScore || 0)}</span>
         {/* 💵 فاز ۱۸۷ب — سرمایهٔ نقد در HUD: جایزهٔ نقدیِ مأموریتِ ساعتی همان لحظه بالا رفتنش دیده شود (CountUp موجود) */}
         <span style={pill()} title="سرمایهٔ نقد (تومان)">💵 <CountUp value={e.capital || 0} format={faB} /></span>
         <span style={pill(true)}>🪙 {fa(e.coins)}<span aria-hidden style={{ width: 14, height: 14, borderRadius: '50%', background: 'linear-gradient(135deg,#ffd76a,#d4af37)', color: '#1a1503', fontSize: 11, fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, boxShadow: '0 0 6px rgba(255,215,106,.5)' }}>＋</span></span>
         <span style={pill()}>🤖 {fa(e.aiTokens)}</span>
-        {st.streak && st.streak.streak > 0 && <span style={pill()} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
-        {(e.kudos || 0) > 0 && <span style={pill()} title="تحسینِ امپراتورهای واقعی">👏 {fa(e.kudos)}</span>}
         {/* 🔊 تنظیمِ صدا (سند ۲۱ Part 05): خاموش/روشن + حجم، ذخیره روی دستگاه، تغییرِ فوری با صدای تست */}
         {st.soundEnabled !== false && <span style={{ position: 'relative' }}>
           <button title="صدای بازخورد" onClick={() => setSndOpen(o => !o)} style={{ ...pill(), cursor: 'pointer', fontFamily: 'inherit' }}>{snd.on && snd.vol > 0 ? '🔊' : '🔇'}</button>
@@ -1815,7 +1946,7 @@ export default function EmpirePage() {
     {/* 🏙 فاز ۱۶۵ — معماریِ جدید: «شهر خودِ کلِ تجربه است» — صحنه همیشه سوار است؛ بخش‌ها برگه‌هایی روی آن */}
     <>
     {/* 🏙 فاز ۱۵۹ — نمای شهرِ تمام‌صفحه: کلِ صفحه صحنه است؛ زیرصفحه‌های قبلی بدونِ تغییرِ منطق داخلِ برگه‌های پایینی باز می‌شوند */}
-    <IsoCity assets={e.assets || []} wx={wx} visual={st.visual}
+    <IsoCity assets={e.assets || []} wx={wx} visual={st.visual} festive={(st.liveEvents || []).length > 0} empireName={e.name}
       civicHint={civicHint}
       civic={(() => {
         // فاز ۱۶۵ — بناهای مدنیِ ناوبری: قفل/بازشدن از knob واقعیِ سطح (st.unlocks.civic* از config)؛ فقط دیده‌شدن
@@ -1823,6 +1954,11 @@ export default function EmpirePage() {
         const u = st.unlocks || {}
         return [
           // ⚔️ فاز ۱۶۸ — بنای «محله‌ها»: پرکشش‌ترین بنای نقشه (رقابتِ واقعیِ قلمرو) — از روزِ اول باز است
+          // 👑 مرکزِ امپراتوری: بنایی که با سطحِ بازیکن رشد می‌کند — از دفترِ کوچک تا کاخ.
+          // لمسش خلاصهٔ کلِ امپراتوری را باز می‌کند؛ همان «این شهر منه» که شهر را از تختهٔ بازی جدا می‌کند.
+          { key: 'hq', icon: '👑', need: 1, ok: true, floors: lvN >= 20 ? 7 : lvN >= 10 ? 5 : lvN >= 5 ? 3 : 2,
+            label: lvN >= 20 ? 'کاخِ امپراتوری' : lvN >= 10 ? 'مقرِ امپراتوری' : lvN >= 5 ? 'دفترِ سرمایه‌گذاری' : 'دفترِ کوچک',
+            onOpen: () => { setHqOpen(true); setCivicHint(false) } },
           { key: 'hoods', icon: '⚔️', label: 'محله‌ها', need: 1, ok: true, onOpen: () => openCivic('hoods') },
           { key: 'world', icon: '🏛', label: 'تالارِ شهر', need: u.civicWorld?.need ?? 3, ok: u.civicWorld ? !!u.civicWorld.ok : lvN >= 3, onOpen: () => openCivic('world') },
           { key: 'market', icon: '🏪', label: 'بازارِ شهر', need: u.civicMarket?.need ?? 2, ok: u.civicMarket ? !!u.civicMarket.ok : lvN >= 2, onOpen: () => openCivic('market') },
@@ -5270,6 +5406,41 @@ export default function EmpirePage() {
         </button>
       ))}
     </aside>
+    <BottomSheet open={hqOpen} onClose={() => setHqOpen(false)} title={`👑 ${(lv.level || 1) >= 20 ? 'کاخِ امپراتوری' : (lv.level || 1) >= 10 ? 'مقرِ امپراتوری' : (lv.level || 1) >= 5 ? 'دفترِ سرمایه‌گذاری' : 'دفترِ کوچک'}`}>
+      {(() => {
+        const as = e.assets || []
+        const worth = as.reduce((n: number, a: any) => n + (Number(a.current ?? a.buyPrice) || 0), 0)
+        const building = as.filter((a: any) => a.construction && !a.construction.done).length
+        const cell = (label: string, val: string) => (
+          <div key={label} style={{ background: '#f7f4ed', border: '1px solid #e6dfcd', borderRadius: 14, padding: '11px 12px' }}>
+            <div style={{ fontSize: 10.5, color: '#79809a' }}>{label}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, marginTop: 3, color: '#22283a' }}>{val}</div>
+          </div>
+        )
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,150px),1fr))', gap: 9 }}>
+              {cell('ثروتِ خالص', faB(worth) + ' تومان')}
+              {cell('دارایی', fa(as.length) + ' ملک')}
+              {cell('در حالِ ساخت', fa(building) + ' پروژه')}
+              {cell('سطح', `${fa(lv.level || 1)} · ${lv.titleFa || ''}`)}
+              {cell('امتیازِ امپراتوری', fa(st.empireScore || 0))}
+              {cell('سرمایهٔ نقد', faB(e.capital || 0) + ' تومان')}
+              {(st.streak?.streak || 0) > 0 && cell('استریک', fa(st.streak.streak) + ' روز')}
+              {(e.kudos || 0) > 0 && cell('تحسین', fa(e.kudos))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="empChunky" style={{ ...btn, padding: '9px 18px', fontSize: 13, borderRadius: 999 }} onClick={() => { setHqOpen(false); setGtab('portfolio') }}>💼 پرتفوی</button>
+              <button className="empChunky" style={{ ...btnGhost, padding: '9px 18px', fontSize: 13, borderRadius: 999 }} onClick={() => { setHqOpen(false); setGtab('ranks') }}>🏆 تالارِ افتخار</button>
+              <button className="empChunky" style={{ ...btnGhost, padding: '9px 18px', fontSize: 13, borderRadius: 999 }} onClick={() => { setHqOpen(false); setGtab('world') }}>🌍 تاریخِ دنیا</button>
+            </div>
+            <div style={{ fontSize: 11, color: '#79809a', lineHeight: 1.9 }}>
+              با بالا رفتنِ سطح، این بنا بزرگ‌تر می‌شود: دفترِ کوچک → دفترِ سرمایه‌گذاری (سطح ۵) → مقرِ امپراتوری (سطح ۱۰) → کاخ (سطح ۲۰).
+            </div>
+          </div>
+        )
+      })()}
+    </BottomSheet>
     <BottomSheet open={more} onClose={() => setMore(false)} title="بیشتر">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {([['hoods', '⚔️', 'محله‌ها', 'قلمرو و فرمانروایان'], ['market', '🏪', 'بازارِ شهر', 'سرمایه، صندوق‌ها، فروشگاه'], ['world', '🌍', 'دنیا', 'روزنامه، شایعات، تاریخ']] as const).map(([k, ic, t, sub]) => (
