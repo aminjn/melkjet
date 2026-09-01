@@ -90,11 +90,14 @@ type St = any
 // فقط ظاهر — هیچ منطقی اینجا نیست.
 const DISPLAY = "'Markazi Text', Vazirmatn, serif"   // اگر فونت نبود، به Vazirmatn برمی‌گردد
 // 🎮 فاز ۱۶۳ — «پنلِ بازیِ» مشترکِ کلِ امپراتوری: پرکنندهٔ بنفشِ تیرهٔ گرادیانی، خطِ دورِ ۲px، لبهٔ پایینیِ برجسته
-const card: React.CSSProperties = { background: 'linear-gradient(180deg, rgba(44,34,92,.5), rgba(20,15,50,.55))', border: '2px solid rgba(255,255,255,.10)', borderRadius: 20, padding: 16, boxShadow: '0 3px 0 rgba(5,3,20,.5), 0 12px 28px -14px rgba(0,0,0,.55)' }
+// empLightTokens — پالتِ روز در خطِ ۱۵۷۹ متغیرها را روشن کرد ولی این ثابت‌ها تیره ماندند.
+// card بنفشِ نیمه‌شفاف بود: روی صفحهٔ تیره تیره دیده می‌شد، ولی داخلِ برگهٔ سفید، سفیدِ زیرش
+// از پشتش می‌زد بیرون و یاسیِ روشن می‌شد — و متن رویش خوانده نمی‌شد. حالا کدر و کاغذی است.
+const card: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, boxShadow: '0 1px 0 rgba(255,255,255,.85) inset, 0 10px 26px -18px rgba(30,40,60,.4)' }
 // دکمهٔ طلاییِ chunky (سبکِ موبایل‌گیم): گرادیانِ پر، دورخطِ تیره، بِوِلِ پایین
-const btn: React.CSSProperties = { background: 'linear-gradient(180deg,#ffe085,#d4af37)', color: '#1a1503', border: '2px solid rgba(90,60,10,.55)', borderRadius: 14, padding: '10px 18px', fontWeight: 900, cursor: 'pointer', fontSize: 14, boxShadow: '0 3px 0 #8a6d1f, 0 8px 20px rgba(212,175,55,.28)' }
-const btnGhost: React.CSSProperties = { background: 'linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03))', color: 'var(--text)', border: '2px solid rgba(255,255,255,.14)', borderRadius: 12, padding: '9px 17px', cursor: 'pointer', fontSize: 13.5, boxShadow: '0 2px 0 rgba(5,3,20,.45)' }
-const chip = (on: boolean): React.CSSProperties => ({ padding: '9px 16px', borderRadius: 99, border: `2px solid ${on ? 'rgba(212,175,55,.55)' : 'rgba(255,255,255,.12)'}`, background: on ? 'linear-gradient(180deg,rgba(255,215,106,.26),rgba(212,175,55,.1))' : 'rgba(255,255,255,.04)', color: on ? '#ffe9a3' : 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: on ? 800 : 400, boxShadow: on ? '0 2px 0 rgba(90,60,10,.5)' : '0 2px 0 rgba(5,3,20,.35)' })
+const btn: React.CSSProperties = { background: 'linear-gradient(180deg,#f5dc9b,#c9a96a)', color: '#33270a', border: '1px solid #a8873f', borderRadius: 12, padding: '10px 18px', fontWeight: 800, cursor: 'pointer', fontSize: 14, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.55), 0 2px 0 #9c7a3c, 0 8px 18px -10px rgba(160,120,40,.55)' }
+const btnGhost: React.CSSProperties = { background: '#ffffff', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 12, padding: '9px 17px', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, boxShadow: '0 1px 2px rgba(30,40,60,.07)' }
+const chip = (on: boolean): React.CSSProperties => ({ padding: '8px 15px', borderRadius: 999, border: `1px solid ${on ? '#a8873f' : 'var(--line)'}`, background: on ? 'linear-gradient(180deg,#f5dc9b,#dcbc6d)' : '#ffffff', color: on ? '#3a2c0c' : 'var(--muted)', cursor: 'pointer', fontSize: 13, fontWeight: on ? 800 : 600, boxShadow: on ? '0 2px 8px -4px rgba(160,120,40,.55)' : '0 1px 2px rgba(30,40,60,.06)' })
 
 // 🎮 فاز ۱۶۰ — پوستهٔ tycoon برای بقیهٔ تب‌ها (فقط ظاهر — صفر منطق):
 // سربرگِ بخش با چیپِ رنگی، چیپِ پاداش، مربعِ آیکنِ رنگی، چیپِ وضعیت، نوارِ پیشرفتِ کلفت. رنگ‌ها همیشه hex.
@@ -104,10 +107,10 @@ const qSection = (icon: string, label: string, color: string) => (
     <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.07)' }} />
   </div>
 )
-const rewardChip: React.CSSProperties = { fontSize: 10.5, fontWeight: 800, color: '#ffd76a', background: 'rgba(255,215,106,.1)', border: '1px solid rgba(255,215,106,.35)', borderRadius: 999, padding: '2px 9px', whiteSpace: 'nowrap' }
-const iconSq = (color: string): React.CSSProperties => ({ width: 46, height: 46, borderRadius: 14, background: `linear-gradient(145deg, ${color}33, ${color}0f)`, border: `1px solid ${color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flex: 'none' })
+const rewardChip: React.CSSProperties = { fontSize: 10.5, fontWeight: 800, color: '#7d5f14', background: '#fbf1d6', border: '1px solid #d9bd77', borderRadius: 999, padding: '2px 9px', whiteSpace: 'nowrap' }
+const iconSq = (color: string): React.CSSProperties => ({ width: 42, height: 42, borderRadius: 12, background: `linear-gradient(145deg, ${color}26, ${color}0d)`, border: `1px solid ${color}4d`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 21, flex: 'none' })
 const tagChip = (color: string): React.CSSProperties => ({ fontSize: 10, fontWeight: 700, padding: '2px 9px', borderRadius: 999, border: `1px solid ${color}55`, color, background: `${color}14`, whiteSpace: 'nowrap' })
-const statTile: React.CSSProperties = { ...card, textAlign: 'center', padding: '14px 10px', background: 'linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.07), 0 8px 24px -12px rgba(0,0,0,.5)' }
+const statTile: React.CSSProperties = { ...card, textAlign: 'center', padding: '16px 10px', borderRadius: 14, background: 'linear-gradient(180deg,#ffffff,#faf7f0)', border: '1px solid var(--line)', boxShadow: '0 2px 6px -4px rgba(30,40,60,.28)' }
 const qBar = (progress: number, target: number, done: boolean) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
     <div style={{ flex: 1, height: 10, background: 'rgba(255,255,255,.08)', borderRadius: 99, overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,.4)' }}>
@@ -1579,9 +1582,14 @@ export default function EmpirePage() {
           --paper:#f7f4ed; --bg:#f7f4ed; --bg2:#ffffff; --surface:#ffffff;
           --line:#e0d9c8; --line2:#cfc6b0; --goldDim:#e0d9c8;
           --text:#22283a; --muted:#79809a; --faint:#a8a08c;
-          --gold:#c9a96a; --gold2:#f5dc9b;
+          --gold:#c9a96a; --gold2:#f5dc9b; --goldText:#8a6a1e;
           color:#22283a;
         }
+        .empRoot button{transition:transform .12s ease,filter .14s ease,box-shadow .14s ease}
+        .empRoot button:not(:disabled):hover{filter:brightness(.97)}
+        .empRoot button:not(:disabled):active{transform:translateY(1px)}
+        .empRoot button:disabled{opacity:.45;cursor:not-allowed}
+        .empRoot button:focus-visible{outline:2px solid #a8873f;outline-offset:2px}
         @keyframes empUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
         @keyframes empBurst{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.35);opacity:0}}
         @keyframes empTwinkle{0%,100%{opacity:.25}50%{opacity:.9}}
@@ -2818,6 +2826,13 @@ export default function EmpirePage() {
                           const d = await api({ action: 'buy', listingId: li.id, negotiated: !!ng?.success })
                           if (d) { setSt(d); celebrate(); setHoodBuyOk({ id: li.id, hood: hoodBrowse }); setHb(null); const d2 = await api({ action: 'hoodListings', hood: hoodBrowse }); if (d2?.ok) setHoodL(d2) }
                         }}>{ng?.success ? `🛒 خرید با ${fa(ng.discountPct)}٪ تخفیف — ${faB(ng.finalPrice)} تومان` : '🛒 خرید'}</button>}
+                      {/* کنسرسیوم پیش از این فقط از یک نقطه قابلِ شروع بود و عملا پیدا نمی‌شد.
+                          حالا روی هر آگهیِ واقعیِ محله هم می‌شود خریدِ جمعی را باز کرد. */}
+                      <button style={{ ...btnGhost, padding: '5px 11px', fontSize: 11.5, fontFamily: 'inherit' }} disabled={busy} title="خریدِ جمعی با اتحاد — سهم‌ها و تقسیمِ سود شفاف"
+                        onClick={async () => {
+                          const d = await api({ action: 'clanProjectStart', listingId: li.id })
+                          if (d) { alert('کنسرسیوم روی این آگهی باز شد — در برگهٔ تالار، بخشِ اتحاد، سهم بگذار.'); loadClan() }
+                        }}>🏛 کنسرسیوم</button>
                       <a href={`/property/${li.id}`} target="_blank" rel="noopener" style={{ ...btnGhost, textDecoration: 'none', padding: '5px 11px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>↗ دیدنِ آگهی</a>
                     </div>
                   </div>
@@ -5210,6 +5225,8 @@ export default function EmpirePage() {
             <b style={{ fontSize: 14, color: '#c9a8f0' }}>🏰 {clanD.mine.name}</b>
             <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fa(clanD.mine.members.length)} عضو</span>
             <span style={{ fontSize: 11, color: 'var(--gold)' }}>🏦 خزانه: {faB(clanD.mine.treasury || 0)}</span>
+            {/* بدونِ این جمله، خزانه از دیدِ کاربر یک چاه بود: پول می‌رفت تو و معلوم نبود به چه کار می‌آید. */}
+            <span style={{ fontSize: 10, color: 'var(--muted)', flexBasis: '100%', lineHeight: 1.9 }}>سرمایهٔ مشترکِ اتحاد — بنیان‌گذار می‌تواند آن را روی کنسرسیوم بگذارد و سودِ فروشِ آن سهم به خودِ خزانه برمی‌گردد.</span>
             <span style={{ flex: 1 }} />
             <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11, color: '#e88', borderColor: '#644' }} disabled={busy}
               onClick={async () => { if (!confirm('از اتحاد خارج شوی؟')) return; const d = await api({ action: 'clanLeave' }); if (d) loadClan() }}>خروج</button>
@@ -5257,10 +5274,17 @@ export default function EmpirePage() {
                     const d = await api({ action: 'clanProjectJoin', projectId: pr.id, amount: amt })
                     if (d) { if (d.note) alert(d.note); if (d.completed) celebrate(); loadClan(); load() }
                   }}>+ سهم</button>}
+                  {pr.status === 'open' && clanD.mine.imOwner && (clanD.mine.treasury || 0) > 0 && <button style={{ ...btnGhost, padding: '2px 10px', fontSize: 10.5, fontFamily: 'inherit' }} disabled={busy} title="سهمِ خودِ اتحاد از خزانه — سودش هم به خزانه برمی‌گردد" onClick={async () => {
+                    const cap = Math.min(pr.price - pr.funded, clanD.mine.treasury || 0)
+                    const v = prompt(`از خزانه چقدر بگذارم؟ (تا ${cap.toLocaleString('fa-IR')} تومان)`); const amt = Number((v || '').replace(/[^\d]/g, ''))
+                    if (!amt) return
+                    const d = await api({ action: 'clanProjectJoin', projectId: pr.id, amount: amt, fromTreasury: true })
+                    if (d) { if (d.note) alert(d.note); if (d.completed) celebrate(); loadClan(); load() }
+                  }}>🏦 از خزانه</button>}
                   {pr.status === 'owned' && clanD.mine.imOwner && <button style={{ ...btnGhost, padding: '2px 10px', fontSize: 10.5 }} disabled={busy} onClick={async () => {
                     if (!confirm('به قیمتِ روزِ واقعیِ آگهی فروخته و نسبتی بینِ سهم‌داران تقسیم شود؟')) return
                     const d = await api({ action: 'clanProjectSell', projectId: pr.id })
-                    if (d) { alert(`فروخته شد: ${(d.soldFor || 0).toLocaleString('fa-IR')} تومان — سهم‌ها به سرمایهٔ اعضا برگشت`); loadClan(); load() }
+                    if (d) { alert(`فروخته شد: ${(d.soldFor || 0).toLocaleString('fa-IR')} تومان — سهم‌ها به سرمایهٔ اعضا برگشت${(d.toTreasury || 0) > 0 ? ` و ${(d.toTreasury).toLocaleString('fa-IR')} تومان به خزانهٔ اتحاد` : ''}`); loadClan(); load() }
                   }}>💰 فروش</button>}
                 </div>
               </div>

@@ -2449,12 +2449,17 @@ export async function POST(req: NextRequest) {
       const e = await getEmpire(userId)
       const amt = Math.round(Number(b.amount) || 0)
       if (!e || amt <= 0) return NextResponse.json({ error: 'مبلغ نامعتبر' }, { status: 400 })
-      const take = await moveCapital(userId, -amt, '🏗', 'سهم‌گذاری در کنسرسیومِ اتحاد')
-      if (!take.ok) return NextResponse.json({ error: take.reason }, { status: 400 })
-      const r = await clanProjectJoin(userId, { no: e.no, name: e.name }, String(b.projectId || ''), amt)
-      if (!r.ok) { await moveCapital(userId, amt, '↩️', 'برگشتِ سهمِ ناموفقِ کنسرسیوم'); return NextResponse.json({ error: r.reason }, { status: 400 }) }
+      // سهم یا از جیبِ خودِ عضو می‌آید یا از خزانهٔ اتحاد (فقط بنیان‌گذار). مسیرِ خزانه از
+      // سرمایهٔ شخصی چیزی کم نمی‌کند، پس نه moveCapital لازم دارد نه برگشتِ آن.
+      const fromTreasury = !!b.fromTreasury
+      if (!fromTreasury) {
+        const take = await moveCapital(userId, -amt, '🏗', 'سهم‌گذاری در کنسرسیومِ اتحاد')
+        if (!take.ok) return NextResponse.json({ error: take.reason }, { status: 400 })
+      }
+      const r = await clanProjectJoin(userId, { no: e.no, name: e.name }, String(b.projectId || ''), amt, fromTreasury)
+      if (!r.ok) { if (!fromTreasury) await moveCapital(userId, amt, '↩️', 'برگشتِ سهمِ ناموفقِ کنسرسیوم'); return NextResponse.json({ error: r.reason }, { status: 400 }) }
       // اگر فقط بخشی جا شد (سقفِ کنسرسیوم)، مابه‌التفاوت همین‌جا برمی‌گردد
-      if (r.reason && r.reason.includes('جا داشت')) {
+      if (!fromTreasury && r.reason && r.reason.includes('جا داشت')) {
         const m = r.reason.match(/[\d٬,]+/)
         const put = m ? Number(String(m[0]).replace(/[٬,]/g, '')) : amt
         if (put < amt) await moveCapital(userId, amt - put, '↩️', 'برگشتِ سرریزِ کنسرسیوم')
@@ -2478,7 +2483,7 @@ export async function POST(req: NextRequest) {
       for (const po of r.payouts || []) await moveCapital(po.userId, po.amount, '💰', `سهمِ فروشِ کنسرسیوم «${(r.title || '').slice(0, 40)}»`).catch(() => {})
       await releaseListing(r.listingId!, 'clan:' + clan.id).catch(() => {})
       appendWorldEvent({ icon: '💰', title: `اتحادِ «${clan.name}» کنسرسیومش را به قیمتِ روز فروخت`, kind: 'npc' }, dayNumberOf(Date.now())).catch(() => {})
-      return NextResponse.json({ ok: true, soldFor: live, payouts: r.payouts })
+      return NextResponse.json({ ok: true, soldFor: live, payouts: r.payouts, toTreasury: r.toTreasury || 0 })
     }
     // 🌌 فاز ۱۰۳ (جلد ۳): Prestige — بازتولد با امتیازِ مهارتِ دائمی + خرجِ درختِ مهارت
     case 'prestige': {

@@ -100,6 +100,10 @@ export interface ClanProject {
   createdAt: number
   soldPrice?: number
 }
+// سهمِ «خودِ اتحاد» در کنسرسیوم. پیش از این خزانه هیچ مصرفی نداشت: پول واریز می‌شد و فقط
+// بنیان‌گذار می‌توانست برداشت کند. حالا خزانه می‌تواند در کنسرسیوم سهم بگذارد و سودِ فروشِ آن
+// سهم به خودِ خزانه برمی‌گردد، نه به جیبِ هیچ‌کس. کلید عمدا شبیه userId نیست تا با کاربرِ واقعی اشتباه نشود.
+export const CLAN_SHARE_KEY = '__clan_treasury__'
 type ClansDb = { clans: Record<string, Clan> }
 const CLANS_FALLBACK: ClansDb = { clans: {} }
 const MSG_CAP = 60
@@ -367,7 +371,7 @@ export async function clanProjectStart(userId: string, listing: { id: string; ti
   })
 }
 // سهم‌گذاری — پولِ عضو قبلاً در API از سرمایه‌اش کم شده؛ اگر این‌جا رد شود، API برمی‌گرداند.
-export async function clanProjectJoin(userId: string, who: { no: number; name: string }, projectId: string, amount: number): Promise<{ ok: boolean; reason?: string; project?: ClanProject; completed?: boolean }> {
+export async function clanProjectJoin(userId: string, who: { no: number; name: string }, projectId: string, amount: number, fromTreasury = false): Promise<{ ok: boolean; reason?: string; project?: ClanProject; completed?: boolean }> {
   const amt = Math.round(Math.max(0, amount))
   if (!amt) return { ok: false, reason: 'مبلغ نامعتبر' }
   return mutate<ClansDb, { ok: boolean; reason?: string; project?: ClanProject; completed?: boolean }>('empire_clans', CLANS_FALLBACK, db => {
@@ -375,21 +379,27 @@ export async function clanProjectJoin(userId: string, who: { no: number; name: s
     const pr = c?.projects?.find(x => x.id === projectId)
     if (!c || !pr) return { ok: false, reason: 'کنسرسیوم پیدا نشد' }
     if (pr.status !== 'open') return { ok: false, reason: 'این کنسرسیوم دیگر باز نیست' }
+    if (fromTreasury) {
+      if (c.ownerId !== userId) return { ok: false, reason: 'فقط بنیان‌گذار می‌تواند از خزانه سهم بگذارد' }
+      if ((c.treasury || 0) < amt) return { ok: false, reason: 'موجودیِ خزانه کافی نیست' }
+    }
     const room = pr.price - pr.funded
     const put = Math.min(amt, room)
     if (put <= 0) return { ok: false, reason: 'سقفِ کنسرسیوم پر شده' }
-    const sh = pr.shares[userId] || (pr.shares[userId] = { no: who.no, name: who.name, amount: 0 })
+    const key = fromTreasury ? CLAN_SHARE_KEY : userId
+    const sh = pr.shares[key] || (pr.shares[key] = fromTreasury ? { no: 0, name: 'خزانهٔ اتحاد', amount: 0 } : { no: who.no, name: who.name, amount: 0 })
     sh.amount += put
     pr.funded += put
+    if (fromTreasury) c.treasury = Math.max(0, (c.treasury || 0) - put)
     const completed = pr.funded >= pr.price
     if (completed) pr.status = 'owned'
     return { ok: true, project: pr, completed, reason: put < amt ? `فقط ${put.toLocaleString('fa-IR')} جا داشت — بقیه برگشت` : undefined }
   })
 }
 // فروشِ کنسرسیوم به قیمتِ روزِ واقعیِ آگهی — تقسیمِ نسبتی؛ باقیماندهٔ رندشدن به بزرگ‌ترین سهم.
-export async function clanProjectSell(ownerId: string, projectId: string, livePrice: number): Promise<{ ok: boolean; reason?: string; payouts?: Array<{ userId: string; no: number; name: string; amount: number }>; title?: string; listingId?: string }> {
+export async function clanProjectSell(ownerId: string, projectId: string, livePrice: number): Promise<{ ok: boolean; reason?: string; payouts?: Array<{ userId: string; no: number; name: string; amount: number }>; title?: string; listingId?: string; toTreasury?: number }> {
   if (!(livePrice > 0)) return { ok: false, reason: 'قیمتِ روزِ معتبری برای این آگهی نیست — فروش فقط روی آگهیِ فعال' }
-  return mutate<ClansDb, { ok: boolean; reason?: string; payouts?: Array<{ userId: string; no: number; name: string; amount: number }>; title?: string; listingId?: string }>('empire_clans', CLANS_FALLBACK, db => {
+  return mutate<ClansDb, { ok: boolean; reason?: string; payouts?: Array<{ userId: string; no: number; name: string; amount: number }>; title?: string; listingId?: string; toTreasury?: number }>('empire_clans', CLANS_FALLBACK, db => {
     const c = Object.values(db.clans).find(x => x.ownerId === ownerId)
     const pr = c?.projects?.find(x => x.id === projectId)
     if (!c || !pr) return { ok: false, reason: 'فقط بنیان‌گذار می‌تواند بفروشد' }
@@ -405,8 +415,13 @@ export async function clanProjectSell(ownerId: string, projectId: string, livePr
     // باقیماندهٔ رند به بزرگ‌ترین سهم — جمعِ پرداختی دقیقاً = قیمتِ فروش (بقای پول)
     const rem = Math.round(livePrice) - paid
     if (rem > 0 && payouts.length) payouts.sort((a, b) => b.amount - a.amount)[0].amount += rem
+    // سهمِ خزانه به خزانه برمی‌گردد و از آرایهٔ پرداخت بیرون می‌آید — وگرنه لایهٔ API به یک
+    // «کاربرِ جعلی» با شناسهٔ CLAN_SHARE_KEY پول می‌داد. جمعِ خزانه + پرداختی‌ها = قیمتِ فروش.
+    let toTreasury = 0
+    const ti = payouts.findIndex(x => x.userId === CLAN_SHARE_KEY)
+    if (ti >= 0) { toTreasury = payouts[ti].amount; c.treasury = (c.treasury || 0) + toTreasury; payouts.splice(ti, 1) }
     pr.status = 'sold'
     pr.soldPrice = Math.round(livePrice)
-    return { ok: true, payouts, title: pr.title, listingId: pr.listingId }
+    return { ok: true, payouts, title: pr.title, listingId: pr.listingId, toTreasury }
   })
 }
