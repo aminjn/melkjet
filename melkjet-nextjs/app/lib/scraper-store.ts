@@ -279,6 +279,57 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   return r
 }
 
+/** نوشتنِ هدفمند — فقط ردیف‌هایی که شناسه‌شان داده شده.
+ *
+ *  چرا لازم است: mutate عمومی برای هر تغییر، حتی یک آگهی، کلِ جدول را می‌خواند
+ *  (۳۶٬۱۴۶ ردیف ≈ ۲٫۴ ثانیه) و همه را JSON.stringify می‌کند تا نقشهٔ «قبل» بسازد
+ *  (~۱ ثانیهٔ CPU) — و تمامِ این مدت قفلِ FOR UPDATE روی متادیتا را نگه می‌دارد.
+ *  روی ماشینِ تک‌هسته‌ای این حلقهٔ رویداد را می‌بندد و بقیهٔ درخواست‌ها با
+ *  «timeout exceeded when trying to connect» می‌میرند — ریشهٔ ۱۴۴ پاسِ شکست‌خوردهٔ
+ *  رُستر در شبِ ۳۱ اوت ۲۰۲۶. جدولِ نرمال دقیقاً برای همین ساخته شده بود، ولی مسیرِ
+ *  نوشتن هنوز مثلِ دورانِ تک‌بلاب رفتار می‌کرد.
+ *
+ *  fn می‌تواند آیتم‌ها را تغییر دهد یا آیتمِ تازه به آرایه push کند (درج می‌شود).
+ *  حذف پشتیبانی نمی‌شود — برای آن از mutate استفاده کنید.
+ */
+async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Partial<DB> }) => R): Promise<R> {
+  if (!pgEnabled()) {
+    const d = fileLoad()
+    const sub = d.items.filter(i => ids.includes(i.id))
+    const r = fn({ items: sub, meta: d })
+    for (const it of sub) if (!d.items.includes(it)) d.items.push(it)
+    fileSave(d); return r
+  }
+  await ensureMigrated()
+  let revOut = 0
+  const r = await pgTx(async (c) => {
+    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
+    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
+    const meta = (metaRow.rows[0]?.data || {}) as Partial<DB> & { __rev?: number }
+    const res = ids.length ? await c.query('SELECT data FROM listings WHERE id = ANY($1::text[])', [ids]) : { rows: [] as { data: Item }[] }
+    const items = res.rows.map(x => x.data as Item)
+    const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
+    const result = fn({ items, meta })
+    const rev = (meta.__rev || 0) + 1
+    revOut = rev
+    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...meta, __rev: rev })])
+    for (const it of items) {
+      const str = JSON.stringify(it)
+      if (before.get(it.id) !== str) {
+        await c.query(
+          `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
+           ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
+          [it.id, it.scrapedAt || 0, it.type, it.status, str],
+        )
+      }
+    }
+    return result
+  })
+  pgCache = null
+  try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled() && revOut) void rSetMax('scraper_rev', revOut) } catch {}
+  return r
+}
+
 export async function listSources(): Promise<Source[]> { return (await load()).sources }
 
 function categoriesOf(db: DB): string[] {
@@ -387,8 +438,8 @@ export async function setModeration(itemId: string, status: ItemStatus, reason: 
   // فاز ۲۶۰ — آلارمِ تلگرام باید در هر مسیرِ تأیید شلیک شود (نه فقط ممیزیِ دسته‌ای):
   // ثبتِ آگهی از سایت/تلگرام → moderateOne → setModeration؛ قبلاً این مسیر آلارم نمی‌فرستاد.
   let _tgNew: Item | null = null
-  const r = await mutate(db => {
-    const it = db.items.find(i => i.id === itemId)
+  const r = await mutateSome([itemId], ({ items }) => {
+    const it = items.find(i => i.id === itemId)
     if (it) {
       const wasApproved = it.status === 'approved'
       it.status = status; it.aiReason = reason; it.aiScore = score; it.moderatedAt = Date.now()
@@ -403,10 +454,10 @@ export async function setModeration(itemId: string, status: ItemStatus, reason: 
 export async function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[], opts?: { onlyPending?: boolean }) {
   if (!verdicts.length) return
   const _tgNew: Item[] = []
-  const _r = await mutate(db => {
+  const _r = await mutateSome(verdicts.map(v => v.id), ({ items }) => {
     const now = Date.now()
     const map = new Map(verdicts.map(v => [v.id, v]))
-    for (const it of db.items) {
+    for (const it of items) {
       const v = map.get(it.id)
       if (!v) continue
       // فاز ۱۵۶ (B2): حکمِ «خودکار» فقط روی آیتمی می‌نشیند که هنوز pending است — اگر ادمین
