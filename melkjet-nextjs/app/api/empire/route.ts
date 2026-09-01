@@ -55,7 +55,7 @@ import { forIds } from '@/app/lib/listing-stats-store'
 import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 import { ownerOfListing, allListingOwners, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
-import { sendDm, dmThread, createDuel, acceptDuel, resolveDuels, myDuels, markDuelRewarded, clanDeposit, clanWithdraw, clanProjectStart, clanProjectJoin, clanProjectSell } from '@/app/lib/empire-social'   // فاز ۱۰۲
+import { sendDm, dmThread, createDuel, acceptDuel, resolveDuels, myDuels, markDuelRewarded, clanDeposit, clanWithdraw, clanProjectStart, clanProjectJoin, clanProjectSell, clanProjectClaim, clanProjectRenovate, clanRentView } from '@/app/lib/empire-social'   // فاز ۱۰۲
 import { submitCreatorItem, myCreatorItems, approvedCreatorItems, recordCreatorSale, creatorIconOf, creatorShareOf, type CreatorCfg } from '@/app/lib/empire-creator'   // فاز ۱۰۷
 import { grantCoins } from '@/app/lib/empire-store'
 import { setAssetFacade } from '@/app/lib/empire-store'   // فاز ۱۰۹
@@ -2470,6 +2470,38 @@ export async function POST(req: NextRequest) {
         appendWorldEvent({ icon: '🏛', title: `اتحادی با کنسرسیوم «${r.project!.title.slice(0, 36)}» را خرید`, kind: 'npc' }, dayNumberOf(Date.now())).catch(() => {})
       }
       return NextResponse.json({ ok: true, project: r.project, completed: !!r.completed, note: r.reason })
+    }
+    // نرخ و سهمِ قابل‌برداشتِ هر کنسرسیوم. فقط خواندنی — هیچ چیزی را تغییر نمی‌دهد.
+    case 'clanRent': {
+      const clan = await myClanOf(userId)
+      if (!clan) return NextResponse.json({ ok: true, rent: [] })
+      const rt = await rentTable()
+      const rows = clanRentView(clan, userId, (h: string) => rt.byHood.get(h) || rt.global)
+      return NextResponse.json({ ok: true, rent: rows })
+    }
+    case 'clanProjectClaim': {
+      const clan = await myClanOf(userId)
+      if (!clan) return NextResponse.json({ error: 'عضوِ اتحادی نیستی' }, { status: 400 })
+      const pr = (clan.projects || []).find(x => x.id === String(b.projectId || ''))
+      if (!pr) return NextResponse.json({ error: 'کنسرسیوم پیدا نشد' }, { status: 404 })
+      const rt = await rentTable()
+      const monthly = rt.byHood.get(pr.hood) || rt.global
+      const r = await clanProjectClaim(userId, pr.id, monthly)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      if ((r.amount || 0) > 0) {
+        const mv = await moveCapital(userId, r.amount!, '🏘', `سهمِ اجارهٔ کنسرسیومِ «${pr.title.slice(0, 40)}»`)
+        if (!mv.ok) return NextResponse.json({ error: mv.reason || 'واریز نشد' }, { status: 400 })
+      }
+      return NextResponse.json({ ok: true, amount: r.amount || 0, toTreasury: r.toTreasury || 0, ...(await stateOf(userId, (await getEmpire(userId))!)) })
+    }
+    case 'clanProjectRenovate': {
+      const rn = config().empire.renovation
+      if (!rn || rn.enabled === false) return NextResponse.json({ error: 'بازسازی فعلا فعال نیست' }, { status: 403 })
+      const opt = (rn.options || {})[String(b.kind || '')]
+      if (!opt) return NextResponse.json({ error: 'گزینهٔ بازسازی نامعتبر' }, { status: 400 })
+      const r = await clanProjectRenovate(userId, String(b.projectId || ''), opt.costPct, opt.valuePct, rn.maxBoostPct || 25)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, cost: r.cost, boostPct: r.boostPct, treasury: r.treasury })
     }
     case 'clanProjectSell': {
       const clan = await myClanOf(userId)

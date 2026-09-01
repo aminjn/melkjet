@@ -99,6 +99,30 @@ export interface ClanProject {
   startedBy: string
   createdAt: number
   soldPrice?: number
+  ownedAt?: number                      // لحظهٔ کاملِ‌شدنِ سرمایه — مبدا محاسبهٔ اجاره
+  claimed?: Record<string, number>      // اجارهٔ برداشت‌شدهٔ هر سهم‌دار (به‌کلیدِ userId)
+  boostPct?: number                     // ارزش‌افزودهٔ بازسازی، دقیقا مثل renovBoostPctِ ملکِ شخصی
+}
+
+// اجارهٔ ملکِ کنسرسیوم «محاسباتی» است نه انباشته: از لحظهٔ مالکیت تا حالا، با میانهٔ اجارهٔ
+// واقعیِ همان محله (همان rentTable که ملکِ شخصی از آن می‌خواند). هیچ کارِ پس‌زمینه‌ای لازم
+// ندارد و drift هم نمی‌گیرد. ضریبِ مهارت/پرستیژ عمدا اعمال نمی‌شود، چون ملک مالِ یک نفر نیست.
+export function clanProjectAccrued(pr: ClanProject, monthlyRent: number, now = Date.now()): { days: number; accrued: number } {
+  if (pr.status !== 'owned' || !(monthlyRent > 0)) return { days: 0, accrued: 0 }
+  const days = Math.max(0, Math.floor((now - (pr.ownedAt || pr.createdAt)) / 864e5))
+  return { days, accrued: Math.round(monthlyRent * days / 30) }
+}
+export function clanRentView(c: Clan, meId: string, rentOf: (hood: string) => number, now = Date.now()) {
+  return (c.projects || []).filter(pr => pr.status === 'owned').map(pr => {
+    const monthlyRent = rentOf(pr.hood) || 0
+    const { days, accrued } = clanProjectAccrued(pr, monthlyRent, now)
+    const mine = pr.shares[meId]?.amount || 0
+    const total = pr.funded || 1
+    const claimable = Math.max(0, Math.floor(accrued * (mine / total)) - ((pr.claimed || {})[meId] || 0))
+    const tShare = pr.shares[CLAN_SHARE_KEY]?.amount || 0
+    const tClaimable = Math.max(0, Math.floor(accrued * (tShare / total)) - ((pr.claimed || {})[CLAN_SHARE_KEY] || 0))
+    return { id: pr.id, monthlyRent, dailyRent: Math.round(monthlyRent / 30), days, accrued, claimable, tClaimable, boostPct: pr.boostPct || 0 }
+  })
 }
 // سهمِ «خودِ اتحاد» در کنسرسیوم. پیش از این خزانه هیچ مصرفی نداشت: پول واریز می‌شد و فقط
 // بنیان‌گذار می‌توانست برداشت کند. حالا خزانه می‌تواند در کنسرسیوم سهم بگذارد و سودِ فروشِ آن
@@ -392,11 +416,52 @@ export async function clanProjectJoin(userId: string, who: { no: number; name: s
     pr.funded += put
     if (fromTreasury) c.treasury = Math.max(0, (c.treasury || 0) - put)
     const completed = pr.funded >= pr.price
-    if (completed) pr.status = 'owned'
+    if (completed) { pr.status = 'owned'; pr.ownedAt = Date.now() }
     return { ok: true, project: pr, completed, reason: put < amt ? `فقط ${put.toLocaleString('fa-IR')} جا داشت — بقیه برگشت` : undefined }
   })
 }
 // فروشِ کنسرسیوم به قیمتِ روزِ واقعیِ آگهی — تقسیمِ نسبتی؛ باقیماندهٔ رندشدن به بزرگ‌ترین سهم.
+// برداشتِ سهمِ اجاره. مبلغ اینجا فقط «ثبت» می‌شود؛ واریز به سرمایه در لایهٔ API انجام
+// می‌گیرد (همان الگوی accrueIncome). سهمِ خزانه در همین فراخوانی به خزانه تسویه می‌شود.
+export async function clanProjectClaim(userId: string, projectId: string, monthlyRent: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; amount?: number; toTreasury?: number }> {
+  return mutate<ClansDb, { ok: boolean; reason?: string; amount?: number; toTreasury?: number }>('empire_clans', CLANS_FALLBACK, db => {
+    const c = Object.values(db.clans).find(x => x.members.some(m => m.userId === userId))
+    const pr = c?.projects?.find(x => x.id === projectId)
+    if (!c || !pr) return { ok: false, reason: 'کنسرسیوم پیدا نشد' }
+    if (pr.status !== 'owned') return { ok: false, reason: 'این کنسرسیوم هنوز مالکِ ملک نیست' }
+    const { accrued } = clanProjectAccrued(pr, monthlyRent, now)
+    if (accrued <= 0) return { ok: false, reason: 'هنوز اجاره‌ای جمع نشده — یک روزِ کامل لازم است' }
+    pr.claimed = pr.claimed || {}
+    const total = pr.funded || 1
+    const mine = pr.shares[userId]?.amount || 0
+    const amount = Math.max(0, Math.floor(accrued * (mine / total)) - (pr.claimed[userId] || 0))
+    if (amount > 0) pr.claimed[userId] = (pr.claimed[userId] || 0) + amount
+    // سهمِ خزانه هر بار همین‌جا تسویه می‌شود تا خزانه هم درآمدِ خودش را بگیرد
+    const tShare = pr.shares[CLAN_SHARE_KEY]?.amount || 0
+    const toTreasury = Math.max(0, Math.floor(accrued * (tShare / total)) - (pr.claimed[CLAN_SHARE_KEY] || 0))
+    if (toTreasury > 0) { pr.claimed[CLAN_SHARE_KEY] = (pr.claimed[CLAN_SHARE_KEY] || 0) + toTreasury; c.treasury = (c.treasury || 0) + toTreasury }
+    if (amount <= 0 && toTreasury <= 0) return { ok: false, reason: 'سهمِ برداشت‌نشده‌ای نداری' }
+    return { ok: true, amount, toTreasury }
+  })
+}
+
+// بازسازی از خزانه — همان جدولِ ملکِ شخصی (costPct/valuePct و سقفِ maxBoostPct).
+// ارزش‌افزوده در قیمتِ فروش ضرب می‌شود، پس مسیرِ سود این است: بخر، بازساز، بفروش.
+export async function clanProjectRenovate(ownerId: string, projectId: string, costPct: number, valuePct: number, maxBoostPct: number): Promise<{ ok: boolean; reason?: string; cost?: number; boostPct?: number; treasury?: number }> {
+  return mutate<ClansDb, { ok: boolean; reason?: string; cost?: number; boostPct?: number; treasury?: number }>('empire_clans', CLANS_FALLBACK, db => {
+    const c = Object.values(db.clans).find(x => x.ownerId === ownerId)
+    const pr = c?.projects?.find(x => x.id === projectId)
+    if (!c || !pr) return { ok: false, reason: 'فقط بنیان‌گذار می‌تواند بازسازی کند' }
+    if (pr.status !== 'owned') return { ok: false, reason: 'این کنسرسیوم مالکِ ملک نیست' }
+    if ((pr.boostPct || 0) >= maxBoostPct) return { ok: false, reason: 'به سقفِ ارزش‌افزودهٔ بازسازی رسیده' }
+    const cost = Math.round(pr.price * costPct / 100)
+    if ((c.treasury || 0) < cost) return { ok: false, reason: `خزانه کافی نیست — ${cost.toLocaleString('fa-IR')} تومان لازم است` }
+    c.treasury = (c.treasury || 0) - cost
+    pr.boostPct = Math.min(maxBoostPct, (pr.boostPct || 0) + Math.max(0, valuePct))
+    return { ok: true, cost, boostPct: pr.boostPct, treasury: c.treasury }
+  })
+}
+
 export async function clanProjectSell(ownerId: string, projectId: string, livePrice: number): Promise<{ ok: boolean; reason?: string; payouts?: Array<{ userId: string; no: number; name: string; amount: number }>; title?: string; listingId?: string; toTreasury?: number }> {
   if (!(livePrice > 0)) return { ok: false, reason: 'قیمتِ روزِ معتبری برای این آگهی نیست — فروش فقط روی آگهیِ فعال' }
   return mutate<ClansDb, { ok: boolean; reason?: string; payouts?: Array<{ userId: string; no: number; name: string; amount: number }>; title?: string; listingId?: string; toTreasury?: number }>('empire_clans', CLANS_FALLBACK, db => {
@@ -404,16 +469,18 @@ export async function clanProjectSell(ownerId: string, projectId: string, livePr
     const pr = c?.projects?.find(x => x.id === projectId)
     if (!c || !pr) return { ok: false, reason: 'فقط بنیان‌گذار می‌تواند بفروشد' }
     if (pr.status !== 'owned') return { ok: false, reason: 'این کنسرسیوم مالکِ ملک نیست' }
+    // ارزش‌افزودهٔ بازسازی دقیقا مثل ملکِ شخصی در قیمتِ روز ضرب می‌شود
+    const gross = Math.round(livePrice * (1 + (pr.boostPct || 0) / 100))
     const entries = Object.entries(pr.shares)
     const total = pr.funded || 1
     let paid = 0
     const payouts = entries.map(([uid, sh]) => {
-      const amount = Math.floor((sh.amount / total) * livePrice)
+      const amount = Math.floor((sh.amount / total) * gross)
       paid += amount
       return { userId: uid, no: sh.no, name: sh.name, amount }
     })
     // باقیماندهٔ رند به بزرگ‌ترین سهم — جمعِ پرداختی دقیقاً = قیمتِ فروش (بقای پول)
-    const rem = Math.round(livePrice) - paid
+    const rem = gross - paid
     if (rem > 0 && payouts.length) payouts.sort((a, b) => b.amount - a.amount)[0].amount += rem
     // سهمِ خزانه به خزانه برمی‌گردد و از آرایهٔ پرداخت بیرون می‌آید — وگرنه لایهٔ API به یک
     // «کاربرِ جعلی» با شناسهٔ CLAN_SHARE_KEY پول می‌داد. جمعِ خزانه + پرداختی‌ها = قیمتِ فروش.
@@ -421,7 +488,7 @@ export async function clanProjectSell(ownerId: string, projectId: string, livePr
     const ti = payouts.findIndex(x => x.userId === CLAN_SHARE_KEY)
     if (ti >= 0) { toTreasury = payouts[ti].amount; c.treasury = (c.treasury || 0) + toTreasury; payouts.splice(ti, 1) }
     pr.status = 'sold'
-    pr.soldPrice = Math.round(livePrice)
+    pr.soldPrice = gross
     return { ok: true, payouts, title: pr.title, listingId: pr.listingId, toTreasury }
   })
 }

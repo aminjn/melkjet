@@ -1148,6 +1148,7 @@ export default function EmpirePage() {
   const [pmkt, setPmkt] = useState<any>(null)                  // عرضه‌ها و مشارکت‌های بازِ امپراتورهاِ دیگر
   const [bidIn, setBidIn] = useState<Record<string, string>>({})   // فاز ۶۴: پیشنهادِ من روی مزایدهٔ امپراتورها (میلیون)
   const [clanD, setClanD] = useState<any>(null)                // اتحادِ من / فهرستِ اتحادها
+  const [clanRent, setClanRent] = useState<any[]>([])          // نرخِ اجاره و سهمِ قابل‌برداشتِ هر کنسرسیوم
   const [fsIn, setFsIn] = useState<Record<string, string>>({}) // قیمتِ عرضه به امپراتورها (ورودی، به میلیون)
   const [jvIn, setJvIn] = useState<Record<string, { pct: string; amount: string }>>({})
   const [clanName, setClanName] = useState('')
@@ -1168,6 +1169,8 @@ export default function EmpirePage() {
   const loadDm = async (no: number) => { const d = await api({ action: 'dmThread', withNo: no }); if (d) setDmMsgs(d.msgs || []) }
   const loadClan = async () => {
     const d = await api({ action: 'clanList' }); if (d) setClanD(d)
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clanRent' }) })
+      .then(x => x.ok ? x.json() : null).then(x => { if (x?.ok) setClanRent(x.rent || []) }).catch(() => {})
     // 🏆 فاز ۱۸۶ب: تابلوی اتحادها — قدرتِ واقعی (املاکِ اعضا/خزانه/قلمرو/کنسرسیوم) از سرور؛ خطا = تابلوی قبلی می‌ماند
     fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clanBoard' }) })
       .then(r => r.ok ? r.json() : null).then(d2 => { if (d2?.ok) setClanBoardD(d2) }).catch(() => {})
@@ -5281,6 +5284,24 @@ export default function EmpirePage() {
                     const d = await api({ action: 'clanProjectJoin', projectId: pr.id, amount: amt, fromTreasury: true })
                     if (d) { if (d.note) alert(d.note); if (d.completed) celebrate(); loadClan(); load() }
                   }}>🏦 از خزانه</button>}
+                  {pr.status === 'owned' && (() => {
+                    const rr = clanRent.find((x: any) => x.id === pr.id)
+                    if (!rr) return null
+                    return <>
+                      <span style={{ color: 'var(--muted)' }}>🏘 اجارهٔ روزانه: {faB(rr.dailyRent)}</span>
+                      {rr.boostPct > 0 && <span style={{ color: '#7c6' }}>🛠 +{fa(rr.boostPct)}٪ ارزش</span>}
+                      {(rr.claimable > 0 || rr.tClaimable > 0) && <button style={{ ...btn, padding: '2px 10px', fontSize: 10.5, fontFamily: 'inherit' }} disabled={busy} onClick={async () => {
+                        const d = await api({ action: 'clanProjectClaim', projectId: pr.id })
+                        if (d) { setSt(d); alert(`${(d.amount || 0).toLocaleString('fa-IR')} تومان به سرمایه‌ات واریز شد${(d.toTreasury || 0) > 0 ? ` و ${(d.toTreasury).toLocaleString('fa-IR')} تومان به خزانه` : ''}`); loadClan(); load() }
+                      }}>💰 برداشتِ اجاره ({faB(rr.claimable)})</button>}
+                      {clanD.mine.imOwner && rr.boostPct < 25 && <button style={{ ...btnGhost, padding: '2px 10px', fontSize: 10.5, fontFamily: 'inherit' }} disabled={busy} title="هزینه از خزانه، ارزش‌افزوده در قیمتِ فروش" onClick={async () => {
+                        const k = prompt('کدام بازسازی؟  kitchen = آشپزخانه (۳٪ هزینه، +۵٪ ارزش)  |  facade = نما (۴٪، +۶٪)  |  full = کامل (۱۰٪، +۱۵٪)', 'kitchen')
+                        if (!k) return
+                        const d = await api({ action: 'clanProjectRenovate', projectId: pr.id, kind: k.trim() })
+                        if (d) { alert(`${(d.cost || 0).toLocaleString('fa-IR')} تومان از خزانه خرج شد — ارزش‌افزوده حالا ${d.boostPct}٪`); loadClan() }
+                      }}>🛠 بازسازی از خزانه</button>}
+                    </>
+                  })()}
                   {pr.status === 'owned' && clanD.mine.imOwner && <button style={{ ...btnGhost, padding: '2px 10px', fontSize: 10.5 }} disabled={busy} onClick={async () => {
                     if (!confirm('به قیمتِ روزِ واقعیِ آگهی فروخته و نسبتی بینِ سهم‌داران تقسیم شود؟')) return
                     const d = await api({ action: 'clanProjectSell', projectId: pr.id })
