@@ -452,12 +452,12 @@ function IsoCity({ assets, wx, visual, onTower, bubbleOf, civic, civicHint }: {
   const phase: DayPhase = vis.dayNight === false ? 'night' : dayPhaseOf(new Date().getHours())
   // فاز ۱۶۳: آسمانِ چندپرده با باندِ گرمِ افق — به سبکِ سیتی‌بیلدرهای بزرگ
   const sky: Record<DayPhase, string> = {
-    // آسمانِ روز از سندِ بازطراحی — چهار توقف، یکسان در همهٔ فازها چون کلِ رابط روزانه شد.
-    // پیش از این هر فاز آسمانِ بنفش/نارنجیِ خودش را داشت و هنرِ کرم‌رنگِ اسپرایت‌ها را می‌کشت.
-    dawn: 'linear-gradient(180deg, #7fc6e4 0%, #bfe2ee 30%, #efe4c9 58%, #e6d9bd 100%)',
+    // چهار آسمان در خانوادهٔ پالتِ روزِ سند — نه بنفشِ قدیمی، نه یک‌رنگیِ مسطح.
+    // شب عمداً سرمه‌ای روشن است نه سیاه، تا اسپرایت‌های کرم‌رنگ خوانا بمانند.
+    dawn: 'linear-gradient(180deg, #8fb9d8 0%, #cfd9e4 26%, #f3d9b4 58%, #efc9a0 100%)',
     day: 'linear-gradient(180deg, #7fc6e4 0%, #bfe2ee 30%, #efe4c9 58%, #e6d9bd 100%)',
-    dusk: 'linear-gradient(180deg, #7fc6e4 0%, #bfe2ee 30%, #efe4c9 58%, #e6d9bd 100%)',
-    night: 'linear-gradient(180deg, #7fc6e4 0%, #bfe2ee 30%, #efe4c9 58%, #e6d9bd 100%)',
+    dusk: 'linear-gradient(180deg, #6a86bd 0%, #b08bb0 34%, #e9a97e 66%, #dc9a6e 100%)',
+    night: 'linear-gradient(180deg, #1f2a4a 0%, #2b3358 34%, #46456b 70%, #5b5273 100%)',
   }
   const skyIcon = phase === 'day' ? '☀️' : phase === 'dawn' ? '🌅' : phase === 'dusk' ? '🌇' : '🌙'
   const fx = vis.weatherFx === false ? null : weatherFxOf(wx?.icon)
