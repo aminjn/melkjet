@@ -5303,9 +5303,9 @@ export default function EmpirePage() {
                     </>
                   })()}
                   {pr.status === 'owned' && clanD.mine.imOwner && <button style={{ ...btnGhost, padding: '2px 10px', fontSize: 10.5 }} disabled={busy} onClick={async () => {
-                    if (!confirm('به قیمتِ روزِ واقعیِ آگهی فروخته و نسبتی بینِ سهم‌داران تقسیم شود؟')) return
+                    if (!confirm('به قیمتِ روزِ واقعیِ آگهی فروخته و نسبتی بینِ سهم‌داران تقسیم شود؟ اگر آگهی دیگر فعال نباشد، به قیمتِ خرید تسویه می‌شود.')) return
                     const d = await api({ action: 'clanProjectSell', projectId: pr.id })
-                    if (d) { alert(`فروخته شد: ${(d.soldFor || 0).toLocaleString('fa-IR')} تومان — سهم‌ها به سرمایهٔ اعضا برگشت${(d.toTreasury || 0) > 0 ? ` و ${(d.toTreasury).toLocaleString('fa-IR')} تومان به خزانهٔ اتحاد` : ''}`); loadClan(); load() }
+                    if (d) { alert(`فروخته شد: ${(d.soldFor || 0).toLocaleString('fa-IR')} تومان — سهم‌ها به سرمایهٔ اعضا برگشت${(d.toTreasury || 0) > 0 ? ` و ${(d.toTreasury).toLocaleString('fa-IR')} تومان به خزانهٔ اتحاد` : ''}${d.stale ? '\n\n(آگهی دیگر روی دیوار فعال نبود، پس به قیمتِ خرید تسویه شد.)' : ''}`); loadClan(); load() }
                   }}>💰 فروش</button>}
                 </div>
               </div>

@@ -2509,13 +2509,18 @@ export async function POST(req: NextRequest) {
       const pr = (clan.projects || []).find(x => x.id === String(b.projectId || ''))
       if (!pr) return NextResponse.json({ error: 'کنسرسیوم پیدا نشد' }, { status: 404 })
       const it = await getItemById(pr.listingId).catch(() => null)
-      const live = it ? priceOf(it) : 0
+      const liveNow = it ? priceOf(it) : 0
+      // آگهیِ دیوار ممکن است حذف شده باشد. تا امروز در این حالت liveNow صفر می‌شد، فروش رد
+      // می‌شد و پولِ همهٔ سهم‌داران برای همیشه داخل پروژه قفل می‌ماند — بدونِ هیچ راهِ خروج.
+      // حالا به قیمتِ خریدِ خودِ پروژه تسویه می‌شود (ارزش‌افزودهٔ بازسازی سرِ جایش می‌ماند):
+      // نه سودِ ساختگی، نه ضرر، و پول آزاد می‌شود.
+      const live = liveNow > 0 ? liveNow : pr.price
       const r = await clanProjectSell(userId, pr.id, live)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       for (const po of r.payouts || []) await moveCapital(po.userId, po.amount, '💰', `سهمِ فروشِ کنسرسیوم «${(r.title || '').slice(0, 40)}»`).catch(() => {})
       await releaseListing(r.listingId!, 'clan:' + clan.id).catch(() => {})
       appendWorldEvent({ icon: '💰', title: `اتحادِ «${clan.name}» کنسرسیومش را به قیمتِ روز فروخت`, kind: 'npc' }, dayNumberOf(Date.now())).catch(() => {})
-      return NextResponse.json({ ok: true, soldFor: live, payouts: r.payouts, toTreasury: r.toTreasury || 0 })
+      return NextResponse.json({ ok: true, soldFor: live, stale: liveNow <= 0, payouts: r.payouts, toTreasury: r.toTreasury || 0 })
     }
     // 🌌 فاز ۱۰۳ (جلد ۳): Prestige — بازتولد با امتیازِ مهارتِ دائمی + خرجِ درختِ مهارت
     case 'prestige': {
