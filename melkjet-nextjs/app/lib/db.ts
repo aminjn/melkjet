@@ -21,9 +21,19 @@ function getPool(): Pool {
   return pool
 }
 
-let schemaReady = false
+// schemaOnce — پیش از این یک بولین بود که *در انتهای* تابع ست می‌شد. نتیجه: هنگام بالا
+// آمدنِ هر پروسه، هر ۱۵ اتصالِ استخر هم‌زمان واردِ این تابع می‌شدند و ۱۵ بار CREATE TABLE و
+// CREATE INDEX می‌زدند؛ CREATE INDEX قفلِ سنگین می‌گیرد، پس همه پشتِ هم صف می‌بستند و
+// درخواست‌های عادی هم پشتِ آن صف می‌ماندند. ضربدر چهار اینستنس، در هر ری‌استارت.
+// حالا Promise نگه داشته می‌شود: اولی DDL را می‌زند، بقیه فقط منتظرِ همان می‌مانند.
+// در صورت خطا ریست می‌شود تا تلاشِ بعدی دوباره امتحان کند (قفلِ دائمیِ شکست نداشته باشیم).
+let schemaOnce: Promise<void> | null = null
 async function ensureSchema(client: PoolClient) {
-  if (schemaReady) return
+  if (schemaOnce) return schemaOnce
+  schemaOnce = ensureSchemaOnce(client).catch(e => { schemaOnce = null; throw e })
+  return schemaOnce
+}
+async function ensureSchemaOnce(client: PoolClient) {
   await client.query(`CREATE TABLE IF NOT EXISTS kv (
     key text PRIMARY KEY,
     data jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -40,7 +50,6 @@ async function ensureSchema(client: PoolClient) {
   )`)
   await client.query(`CREATE INDEX IF NOT EXISTS listings_scraped ON listings(scraped_at DESC)`)
   await client.query(`CREATE INDEX IF NOT EXISTS listings_type ON listings(type)`)
-  schemaReady = true
 }
 
 /** اجرای یک تابع داخلِ یک تراکنش (BEGIN/COMMIT با rollback خودکار). client خام برای کوئری‌های دلخواه. */
