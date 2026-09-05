@@ -530,8 +530,16 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // مثلِ کیل رفتار می‌شود و رانِ بعدیِ کرون خودکار از همان‌جا ادامه می‌دهد.
     const transient = /timeout|connect|ECONN|pool|terminat|socket/i.test(msg)
     console.error(`[roster] pass FAILED (${transient ? 'transient — ادامهٔ خودکار' : 'fatal'}): ${msg.slice(0, 200)}`)
+    // فاز ۲۸۹ — «ادامهٔ خودکار در چند لحظه» تا امروز یک وعدهٔ توخالی بود.
+    // مسیرِ گذرا runRequested را ست نمی‌کرد، و runRequested تنها راهِ «فوری» است (خط ۲۱۶).
+    // پس رانِ *زمان‌بندی‌شده* که گذرا می‌مرد، هیچ‌کس دوباره برنمی‌داشتش و می‌افتاد به پنجرهٔ
+    // شبِ بعد — یعنی «چند لحظه» عملا «فردا شب»، و برای آژانسی که هر شب تایم‌اوت می‌خورد
+    // یعنی هرگز. (اجرای دستی این باگ را نداشت، چون کلیک خودش runRequested می‌گذاشت.)
+    // حالا مسیرِ زمان‌بندی‌شده هم همان رفتارِ فاز ۱۹۲ را می‌گیرد: تیکِ بعدیِ کرون از همان‌جا
+    // (RowCache) ادامه می‌دهد. سقفِ ۸ تلاشِ خط ۳۸۴ جلوی حلقهٔ بی‌پایان را می‌گیرد و بعد از آن
+    // با پیامِ روشن تسلیم می‌شود، پس نه حلقهٔ بی‌صدا می‌ماند نه فشارِ بی‌پایان روی دیوار.
     await patchScrape(id, transient
-      ? { running: false, lastRun: Date.now(), lastError: 'خطای گذرای زیرساخت — ادامهٔ خودکار در چند لحظه' }
+      ? { running: false, runRequested: true, lastRun: Date.now(), lastError: 'خطای گذرای زیرساخت — ادامهٔ خودکار در چند لحظه' }
       : { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: msg })
     return { ok: false, error: msg, advisors: 0, total: 0, unnamed: 0 }
   } finally {
