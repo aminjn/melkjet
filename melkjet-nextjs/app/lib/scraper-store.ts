@@ -412,6 +412,25 @@ export async function listItemsStable(type?: SourceType, opts?: { category?: str
 // به‌جای بارگذاریِ همهٔ ردیف‌ها در حافظه و برش در JS، مستقیماً از جدولِ `listings` با SQL و
 // LIMIT کاندیدا می‌گیرد (ایندکسِ type + scraped_at). پس با میلیون‌ها آگهی هم مسیرِ رتبه‌بندی
 // فقط N کاندیدا را می‌گیرد، نه کلِ جدول. در حالتِ فایل به listItems برمی‌گردد.
+/** آگهی‌های یک محل — مستقیم از دیتابیس، بدونِ «پنجرهٔ تازگی».
+ *  پیش از این هر مسیرِ محله‌ای candidateListings(500) می‌گرفت و در حافظه فیلتر می‌کرد؛ یعنی
+ *  از ۱٬۴۵۹ آگهیِ جنت‌آباد فقط آن‌هایی دیده می‌شدند که در ۵۰۰ تازه‌ترینِ کلِ کشور بودند (۹۲تا).
+ *  مشاوری که دنبالِ آگهیِ خودش بود عملا شانسی می‌دید.
+ *  loc_norm ستونِ محاسباتیِ نرمال‌شدهٔ جدول است با ایندکسِ GIN trigram (~۱۲ میلی‌ثانیه)،
+ *  و count(*) OVER () شمارشِ کل را در همان کوئری می‌دهد — بدونِ رفت‌وبرگشتِ دوم. */
+export async function listingsByLoc(needle: string, limit = 60, offset = 0, type: SourceType = 'listing'): Promise<{ items: Item[]; total: number }> {
+  if (!pgEnabled() || !needle) return { items: [], total: 0 }
+  try {
+    const r = await pgTx(c => c.query(
+      `SELECT data, count(*) OVER () AS total FROM listings
+       WHERE type=$1 AND status NOT IN ('rejected','duplicate') AND loc_norm LIKE '%'||$2||'%'
+       ORDER BY scraped_at DESC LIMIT $3 OFFSET $4`, [type, needle, limit, offset]))
+    const now = Date.now()
+    const total = r.rows.length ? Number(r.rows[0].total) || 0 : 0
+    return { items: r.rows.map(x => x.data as Item).filter(i => !isExpired(i, now)), total }
+  } catch { return { items: [], total: 0 } }
+}
+
 export async function candidateListings(limit = 500, type: SourceType = 'listing'): Promise<Item[]> {
   if (pgEnabled()) {
     try {

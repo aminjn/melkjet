@@ -797,11 +797,17 @@ export async function POST(req: NextRequest) {
     case 'hoodListings': {
       const hood = String(b.hood || '').trim()
       if (!hood) return NextResponse.json({ error: 'محله مشخص نیست' }, { status: 400 })
-      const { hoodMatches } = await import('@/app/lib/empire-territory')
-      const pool = await candidateListings(500).catch(() => [] as Item[])
-      const here = pool.filter(it => hoodMatches(hood, it.location))
+      const { hoodMatches, normLoc } = await import('@/app/lib/empire-territory')
+      const { listingsByLoc } = await import('@/app/lib/scraper-store')
+      // صفحه‌بندیِ واقعی روی کلِ محله. پیش از این pool = candidateListings(500) بود و فیلترِ
+      // محله در حافظه انجام می‌شد: از ۱٬۴۵۹ آگهیِ جنت‌آباد فقط ۹۲تا اصلا به بازی می‌رسید و
+      // ۶۰تا نمایش داده می‌شد. حالا فیلتر داخلِ دیتابیس است و کلِ محله ورق‌زدنی است.
+      const PER = 60
+      const page = Math.max(0, Math.min(200, Math.floor(Number(b.page) || 0)))
+      const { items, total: hoodTotal } = await listingsByLoc(normLoc(hood), PER, page * PER)
+      const here = items.filter(it => hoodMatches(hood, it.location))
       const owners = await allListingOwners().catch(() => ({} as Record<string, { userId: string; no: number; name: string }>))
-      const rows = here.slice(0, 60).map(it => {
+      const rows = here.map(it => {
         const p = priceOf(it)
         const ow = owners[it.id]
         const soldTo = ow && ow.userId !== userId && !String(ow.userId).startsWith(NPC_USER_PREFIX) ? { name: ow.name, no: ow.no } : null
@@ -814,7 +820,7 @@ export async function POST(req: NextRequest) {
       })
       // فروشیِ قیمت‌دارِ آزاد اول — بعد خریده‌شده‌ها/بی‌قیمت‌ها (صادقانه دیده شوند، ولی تهِ فهرست)
       rows.sort((a, b2) => Number(b2.saleable && !b2.soldTo && !b2.mine) - Number(a.saleable && !a.soldTo && !a.mine))
-      return NextResponse.json({ ok: true, hood, total: here.length, capped: here.length > rows.length, listings: rows })
+      return NextResponse.json({ ok: true, hood, total: hoodTotal, page, per: PER, hasMore: (page + 1) * PER < hoodTotal, listings: rows })
     }
     // محلهٔ خانهٔ کاربر (پاسخِ واقعیِ خودش؛ خالی = پاک‌کردن)
     case 'setHomeHood': {

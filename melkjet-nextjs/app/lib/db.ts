@@ -50,6 +50,16 @@ async function ensureSchemaOnce(client: PoolClient) {
   )`)
   await client.query(`CREATE INDEX IF NOT EXISTS listings_scraped ON listings(scraped_at DESC)`)
   await client.query(`CREATE INDEX IF NOT EXISTS listings_type ON listings(type)`)
+  // ستونِ محاسباتیِ محلِ نرمال‌شده + ایندکسِ trigram: فیلترِ محله باید داخلِ دیتابیس اجرا شود،
+  // نه با کشیدنِ چند صد آگهیِ «تازه» به حافظه و فیلترِ درجا. GENERATED یعنی پستگرس خودش
+  // هنگام درج پرش می‌کند، پس هیچ‌کدام از مسیرهای درج تغییر نمی‌خواهد و از هم‌گامی خارج نمی‌شود.
+  // در محیطی که extension نیاز به superuser دارد و در دسترس نیست، خطا بلعیده می‌شود و
+  // listingsByLoc خالی برمی‌گرداند؛ یعنی رفتار به مسیرِ قبلی برمی‌گردد نه به خطا.
+  try {
+    await client.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`)
+    await client.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS loc_norm text GENERATED ALWAYS AS (translate(coalesce(data->>'location',''), chr(1610)||chr(1603)||chr(8204)||chr(8207)||chr(8206)||' ', chr(1740)||chr(1705))) STORED`)
+    await client.query(`CREATE INDEX IF NOT EXISTS listings_loc_norm_trgm ON listings USING gin (loc_norm gin_trgm_ops)`)
+  } catch { /* بدونِ دسترسیِ لازم: مسیرِ قدیمی کار می‌کند */ }
 }
 
 /** اجرای یک تابع داخلِ یک تراکنش (BEGIN/COMMIT با rollback خودکار). client خام برای کوئری‌های دلخواه. */

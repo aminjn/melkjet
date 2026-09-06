@@ -2747,8 +2747,17 @@ export default function EmpirePage() {
       // نمی‌شه دوباره میره تو سایت») — مسیرِ اصلی داخلِ دنیاست؛ جستجویِ سایت فقط لینکِ ثانویه.
       const openHoodBrowse = async (hood: string, rowId = '') => {
         setHoodBrowse(hood); setHoodRow(rowId); setHoodL({ loading: true })
-        const d = await api({ action: 'hoodListings', hood })
+        const d = await api({ action: 'hoodListings', hood, page: 0 })
         setHoodL(d?.ok ? d : { failed: true })
+      }
+      // صفحهٔ بعدیِ همان محله به فهرست اضافه می‌شود (نه جایگزین) تا کاربر بتواند کلِ محله را
+      // ورق بزند و مشاور آگهیِ خودش را پیدا کند — خواستهٔ اصلی: هر آگهیِ سایت در بازی باشد.
+      const moreHoodBrowse = async () => {
+        if (!hoodL?.ok || !hoodL.hasMore || hoodL.loadingMore) return
+        setHoodL({ ...hoodL, loadingMore: true })
+        const d = await api({ action: 'hoodListings', hood: hoodBrowse, page: (hoodL.page || 0) + 1 })
+        if (d?.ok) setHoodL({ ...d, listings: [...(hoodL.listings || []), ...(d.listings || [])] })
+        else setHoodL({ ...hoodL, loadingMore: false })
       }
       if (hoodBrowse) {
         const rows: any[] = hoodL?.listings || []
@@ -2759,7 +2768,8 @@ export default function EmpirePage() {
             <button className="empChunky" style={{ ...btnGhost, padding: '6px 13px', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }} onClick={backToBoard}>→ بازگشت به تابلو</button>
             <b style={{ fontSize: 15, fontWeight: 900 }}>🔎 آگهی‌های واقعیِ {hoodBrowse}</b>
             <span style={{ flex: 1 }} />
-            {hoodL?.ok && <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{hoodL.capped ? `${fa(rows.length)} از ${fa(hoodL.total)} آگهی — فروشی‌های قیمت‌دار اول` : `${fa(hoodL.total)} آگهی`}</span>}
+            {hoodL?.ok && <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{`${fa(rows.length)} از ${fa(hoodL.total)} آگهی`}</span>}
+            {hoodL?.ok && hoodL.hasMore && <button className="empChunky" style={{ ...btnGhost, padding: '5px 11px', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }} disabled={busy || !!hoodL.loadingMore} onClick={moreHoodBrowse}>{hoodL.loadingMore ? '...' : '\u2193 \u06f6\u06f0 \u0622\u06af\u0647\u06cc\u0650 \u0628\u0639\u062f\u06cc'}</button>}
             <a href={`/search?hood=${encodeURIComponent(hoodBrowse)}`} target="_blank" rel="noopener" style={{ fontSize: 10.5, color: 'var(--faint)', textDecoration: 'none', whiteSpace: 'nowrap' }}>↗ در جستجوی سایت</a>
           </div>
           {hoodBuyOk?.hood === hoodBrowse && (

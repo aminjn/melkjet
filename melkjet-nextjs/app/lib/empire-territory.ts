@@ -78,6 +78,12 @@ export function hoodClanKings(empires: EmpireLite[], clanOfUser: Record<string, 
 // می‌گیرد (فیدبک: «محله آگهی دارد ولی تابلو هیچی نشان نمی‌دهد») ولی «ونک» هرگز «پونک» را نمی‌گیرد (زیررشته ممنوع).
 // نرمال‌سازی: نیم‌فاصله→حذف، ي/ك عربی→فارسی — «سعادت‌آباد» و «سعادت آباد» یکی‌اند.
 const normTok = (s: string) => s.replace(/[‌‏‎]/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک')
+// نرمال‌سازیِ محل برای کوئریِ دیتابیس. باید دقیقا با ستونِ محاسباتیِ loc_norm جدولِ listings
+// یکی باشد: نیم‌فاصله و علائمِ جهت و فاصله حذف، ی و ک عربی یکسان. عمدا از normTok فراگیرتر
+// است (فاصله را هم برمی‌دارد) چون فقط پیش‌فیلترِ ارزانِ SQL است — دقتِ نهایی همچنان با
+// hoodMatches انجام می‌شود که مرزِ واژه را حفظ می‌کند. یعنی SQL ابرمجموعه می‌دهد، نه کمتر.
+export const normLoc = (s: string) => String(s || '').replace(/[\u200c\u200f\u200e\s]/g, '').replace(/\u064a/g, '\u06cc').replace(/\u0643/g, '\u06a9')
+
 export function hoodMatches(hood: string, location?: string): boolean {
   const hTok = String(hood || '').trim().split(/\s+/).filter(Boolean).map(normTok)
   if (!hTok.length) return false
