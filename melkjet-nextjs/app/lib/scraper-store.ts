@@ -431,14 +431,50 @@ export async function listingsByLoc(needle: string, limit = 60, offset = 0, type
   } catch { return { items: [], total: 0 } }
 }
 
+// کشِ کوتاهِ درون‌پروسه‌ای. کوئریِ سهمیه‌بندی یک اسکنِ کامل + window روی ~۲۶ هزار ردیف
+// است (برخلافِ کوئریِ قبلی که با ایندکس فقط N ردیف می‌خواند)، و بازی ۲۴ نقطهٔ مصرف دارد.
+// روی یک vCPU بدونِ کش این یک پس‌رفت می‌شد. نمونهٔ بزرگ (geo-live با ۱۰۰۰۰) کش نمی‌شود
+// تا حافظه بی‌دلیل اشغال نشود.
+const CAND_TTL = 60_000
+const candCache = new Map<string, { at: number; rows: Item[] }>()
+
+/** نمونهٔ نمایندهٔ آگهی‌ها برای آمار و فرصت‌های بازی.
+ *  پیش از این «N تازه‌ترین» بود؛ ولی اسکرپ آژانس‌به‌آژانس کار می‌کند، پس آن پنجره همیشه
+ *  مالِ آژانسی است که آخر سینک شده. اندازه‌گیریِ ۷ سپتامبر: از ۸۰۰ تازه‌ترین، ۷۳۲ تا
+ *  تهران بود (۹۱٪) و مشهد که ۲۱٪ بازار است فقط ۱۵ تا — یعنی «میانهٔ بازار» عملا میانهٔ
+ *  آخرین آژانس بود، و ارزش‌گذاری و اجاره و «ارزان‌ترین فرصت» همه روی همان بنا می‌شد.
+ *  حالا سهمیهٔ هر شهر متناسبِ سهمِ واقعی‌اش است، با کفِ حداقل یک: تهران ۵۸۷، مشهد ۱۵۱،
+ *  کرج ۷ … . سهمیهٔ *برابر* عمدا انتخاب نشد — هم‌وزن‌کردنِ کیش و تهران میانه را بی‌معنی
+ *  می‌کند. هدف نمایندگیِ آماری است، نه تنوعِ تزئینی. */
 export async function candidateListings(limit = 500, type: SourceType = 'listing'): Promise<Item[]> {
+  const ck = type + '|' + limit
+  const cacheable = limit <= 2000
+  const hit = cacheable ? candCache.get(ck) : undefined
+  if (hit && Date.now() - hit.at < CAND_TTL) { const t = Date.now(); return hit.rows.filter(i => !isExpired(i, t)) }
   if (pgEnabled()) {
     try {
       const r = await pgTx(c => c.query(
-        `SELECT data FROM listings WHERE type=$1 AND status NOT IN ('rejected','duplicate')
-         ORDER BY scraped_at DESC LIMIT $2`, [type, limit]))
+        `WITH pool AS (
+           SELECT data, scraped_at, split_part(coalesce(loc_norm,''), '،', 1) AS city
+           FROM listings WHERE type=$1 AND status NOT IN ('rejected','duplicate')
+         ),
+         tot AS (SELECT greatest(count(*), 1)::float AS n FROM pool),
+         q AS (
+           SELECT city, greatest(1, floor(count(*)::float / (SELECT n FROM tot) * $2))::int AS quota
+           FROM pool GROUP BY city
+         ),
+         ranked AS (
+           SELECT p.data, p.scraped_at, p.city,
+                  row_number() OVER (PARTITION BY p.city ORDER BY p.scraped_at DESC) AS rn
+           FROM pool p
+         )
+         SELECT r.data FROM ranked r JOIN q ON q.city = r.city
+         WHERE r.rn <= q.quota
+         ORDER BY r.scraped_at DESC`, [type, limit]))
       const now = Date.now()
-      return (r.rows.map(x => x.data as Item)).filter(i => !isExpired(i, now))
+      const rows = r.rows.map(x => x.data as Item)
+      if (cacheable) candCache.set(ck, { at: now, rows })
+      return rows.filter(i => !isExpired(i, now))
     } catch { /* اگر جدول/DB آماده نبود → مسیرِ امن */ }
   }
   return (await listItems(type, { publicOnly: true })).slice(0, limit)

@@ -41,11 +41,20 @@ function caption(it: Item): string {
   ].filter(Boolean).join('\n')
 }
 
+// آدرسِ عکس برای تلگرام باید مطلق باشد. کشِ محلیِ تصویر، it.image را به «/api/li/…»
+// تبدیل کرد و تلگرام آدرسِ نسبی را با «URL host is empty» رد می‌کند. نتیجه: از همان روز
+// هیچ آگهیِ عکس‌داری به کانال نرفت و فقط صدها خطای بی‌صدا در لاگ نشست.
+const tgPhoto = (im?: string): string =>
+  !im ? '' : /^https?:\/\//i.test(im) ? im : im.startsWith('/') ? 'https://melkjet.com' + im : ''
+
 async function sendCard(chatId: number, it: Item) {
   const url = `https://melkjet.com/property/${it.id}`
   const reply_markup = { inline_keyboard: [[{ text: '👁 مشاهده در ملک‌جت', url }]] }
   const text = caption(it)
-  if (it.image) return tgApi('sendPhoto', { chat_id: chatId, photo: it.image, caption: text, parse_mode: 'HTML', reply_markup })
+  // اگر ارسالِ عکس نشد، پیامِ متنی می‌رود. پیش از این «عکس یا هیچ» بود: یک عکسِ خراب
+  // یعنی آگهی کاملا گم می‌شد — بدترین شکلِ خرابی، چون هیچ‌کس متوجهش نمی‌شود.
+  const ph = tgPhoto(it.image)
+  if (ph) { const r = await tgApi('sendPhoto', { chat_id: chatId, photo: ph, caption: text, parse_mode: 'HTML', reply_markup }); if (r) return r }
   return tgApi('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: false, reply_markup })
 }
 
@@ -69,8 +78,9 @@ export async function postToChannel(items: Item[]) {
     const tags = hashtags(it)
     const text = caption(it) + (tags ? `\n\n${tags}` : '')
     const reply_markup = { inline_keyboard: [[{ text: '👁 مشاهده در ملک‌جت', url }]] }
-    if (it.image) await tgApi('sendPhoto', { chat_id: ch, photo: it.image, caption: text, parse_mode: 'HTML', reply_markup })
-    else await tgApi('sendMessage', { chat_id: ch, text, parse_mode: 'HTML', disable_web_page_preview: false, reply_markup })
+    const ph = tgPhoto(it.image)
+    const sent = ph ? await tgApi('sendPhoto', { chat_id: ch, photo: ph, caption: text, parse_mode: 'HTML', reply_markup }) : null
+    if (!sent) await tgApi('sendMessage', { chat_id: ch, text, parse_mode: 'HTML', disable_web_page_preview: false, reply_markup })
     n++
     await new Promise(r => setTimeout(r, 60))
     if (n >= 100) break
