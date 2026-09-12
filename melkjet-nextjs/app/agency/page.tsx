@@ -653,6 +653,13 @@ export default function AgencyPage() {
               </button>
             )
           })}
+          {/* استعلام‌ها — صفحهٔ واقعیِ /inquiries، نه نمای درون‌پنلی. آیتم‌های منو با تایپِ View
+              مقید شده‌اند و افزودنِ id تازه شش فایل را می‌شکست؛ لینکِ ساده در همهٔ پنل‌ها کار
+              می‌کند و پنلِ بعدی هم فقط یک خط می‌خواهد. */}
+          <a href="/inquiries" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--muted)', fontSize: 14, textDecoration: 'none', marginBottom: 2 }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>✉</span>
+            <span className="mjp-sidelabel" style={{ flex: 1 }}>استعلام‌ها</span>
+          </a>
         </nav>
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{stats.profile.name.trim().charAt(0) || 'آ'}</div>

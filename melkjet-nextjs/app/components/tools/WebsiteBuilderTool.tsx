@@ -1513,6 +1513,11 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   const [publishSuccess, setPublishSuccess] = useState(false)
   const [publishedSlug, setPublishedSlug] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  // دلیلِ واقعیِ شکستِ ذخیره. پیش از این status و بدنهٔ پاسخ دور ریخته می‌شد و دکمه برای
+  // *هر* خطا می‌نوشت «ورود لازم است» — در حالی که رایج‌ترین علتش ۴۰۳ِ پلن است. کاربرِ
+  // واردشده می‌رفت دوباره لاگین می‌کرد، همان پیام را می‌دید و فکر می‌کرد سایت خراب است.
+  // سرور پیامِ درست را از قبل می‌سازد (plan-gate: نامِ پلن + آدرسِ ارتقا)؛ فقط باید نمایش داده شود.
+  const [saveErr, setSaveErr] = useState<{ text: string; href?: string; cta?: string } | null>(null)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState('')
   const [history, setHistory] = useState<Block[][]>([])
@@ -1976,7 +1981,17 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         })),
       }),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({} as Record<string, string>))
+      setSaveErr(
+        res.status === 401
+          ? { text: 'برای ذخیره باید وارد شوی.', href: '/auth', cta: 'ورود' }
+          : res.status === 403
+            ? { text: d.error || 'این بخش در پلنِ فعالِ تو نیست.', href: d.upgrade || '/pricing', cta: 'ارتقای پلن' }
+            : { text: d.error || `ذخیره نشد (خطای ${res.status}) — دوباره تلاش کن.` },
+      )
+      return null
+    }
     const data = await res.json()
     if (data.slug && data.slug !== slug) setSlug(data.slug)
     return { slug: data.slug, url: data.url }
@@ -1984,6 +1999,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
 
   const handleSave = async () => {
     if (saveState === 'saving') return
+    setSaveErr(null)
     setSaveState('saving')
     try {
       const result = await persistSite()
@@ -2088,8 +2104,21 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           disabled={saveState === 'saving'}
           style={{ padding: '5px 16px', borderRadius: 8, border: '1px solid var(--line)', background: saveState === 'saved' ? 'var(--goldDim)' : 'transparent', color: saveState === 'error' ? '#e7674a' : saveState === 'saved' ? 'var(--gold)' : 'var(--text)', fontSize: 12, fontWeight: 700, cursor: saveState === 'saving' ? 'default' : 'pointer' }}
         >
-          {saveState === 'saving' ? 'در حال ذخیره...' : saveState === 'saved' ? 'ذخیره شد ✓' : saveState === 'error' ? 'ورود لازم است' : 'ذخیره'}
+          {saveState === 'saving' ? 'در حال ذخیره...' : saveState === 'saved' ? 'ذخیره شد ✓' : saveState === 'error' ? (saveErr?.cta === 'ورود' ? 'ورود لازم است' : saveErr?.href ? 'نیاز به پلن' : 'ذخیره نشد') : 'ذخیره'}
         </button>
+
+        {/* دلیلِ واقعی، کنارِ دکمه. بدونِ این، کاربر فقط یک برچسبِ کوتاه می‌دید و نمی‌دانست
+            چه کاری باید بکند. متن و لینک هر دو از پاسخِ خودِ سرور می‌آیند. */}
+        {saveState === 'error' && saveErr && (
+          <span style={{ fontSize: 11.5, color: '#e7674a', maxWidth: 380, lineHeight: 1.8 }}>
+            {saveErr.text}
+            {saveErr.href && (
+              <a href={saveErr.href} style={{ color: 'var(--gold)', fontWeight: 700, marginInlineStart: 6, textDecoration: 'none' }}>
+                {saveErr.cta || 'ارتقای پلن'} ←
+              </a>
+            )}
+          </span>
+        )}
 
         <button
           onClick={handlePublish}

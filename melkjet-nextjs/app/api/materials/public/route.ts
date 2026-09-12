@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
     if (!b.product) return NextResponse.json({ error: 'محصول را مشخص کنید' }, { status: 400 })
     const q = await addPublicInquiry(slug, {
       customer: String(b.customer || getAccount(s.phone)?.name || s.phone).slice(0, 80),
+      customerPhone: s.phone,   // بدونِ این، پاسخِ فروشنده هیچ مقصدی ندارد
       product: String(b.product).slice(0, 120),
       qty: String(b.qty || '').slice(0, 60),
       note: b.note ? String(b.note).slice(0, 400) : undefined,

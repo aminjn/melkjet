@@ -260,6 +260,13 @@ export default function OwnerPage() {
               <span className="mjo-sidelabel" style={{ flex: 1 }}>{l.label}</span>
             </a>
           ))}
+          {/* استعلام‌ها — صفحهٔ واقعیِ /inquiries، نه نمای درون‌پنلی. آیتم‌های منو با تایپِ View
+              مقید شده‌اند و افزودنِ id تازه شش فایل را می‌شکست؛ لینکِ ساده در همهٔ پنل‌ها کار
+              می‌کند و پنلِ بعدی هم فقط یک خط می‌خواهد. */}
+          <a href="/inquiries" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--muted)', fontSize: 14, textDecoration: 'none', marginBottom: 2 }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>✉</span>
+            <span className="mjp-sidelabel" style={{ flex: 1 }}>استعلام‌ها</span>
+          </a>
         </nav>
 
         {/* Owner identity */}

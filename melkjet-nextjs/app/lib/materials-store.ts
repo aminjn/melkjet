@@ -78,6 +78,7 @@ export interface Order {
 export interface Inquiry {
   id: string
   customer: string
+  customerPhone?: string   // شمارهٔ پرسش‌کننده — تنها راهِ رساندنِ پاسخ به او
   product: string
   qty: string
   note?: string
@@ -211,7 +212,7 @@ export async function shopPhone(slug: string): Promise<string | null> {
 }
 
 // استعلامِ عمومی از سمتِ خریدار روی ویترین → به پنلِ فروشنده اضافه می‌شود.
-export async function addPublicInquiry(slug: string, input: { customer: string; product: string; qty: string; note?: string }): Promise<Inquiry | null> {
+export async function addPublicInquiry(slug: string, input: { customer: string; customerPhone?: string; product: string; qty: string; note?: string }): Promise<Inquiry | null> {
   const found = await shopBySlug(slug)
   if (!found) return null
   const q = await addInquiry(found.owner, input)
@@ -517,12 +518,16 @@ export async function setOrderStatus(owner: string, orderId: string, status: Ord
 }
 
 // ---- استعلام‌ها ----
-export async function addInquiry(owner: string, input: { customer: string; product: string; qty: string; note?: string }): Promise<Inquiry> {
+export async function addInquiry(owner: string, input: { customer: string; customerPhone?: string; product: string; qty: string; note?: string }): Promise<Inquiry> {
   let created!: Inquiry
   await mutate(owner, s => {
-    created = { id: id('q_'), customer: input.customer, product: input.product, qty: input.qty, note: input.note, status: 'new', createdAt: Date.now() }
+    created = { id: id('q_'), customer: input.customer, customerPhone: input.customerPhone, product: input.product, qty: input.qty, note: input.note, status: 'new', createdAt: Date.now() }
     s.inquiries.unshift(created)
   })
+  // فروشنده باید بفهمد استعلامِ تازه‌ای آمده. تا امروز فقط لیدِ CRM ساخته می‌شد و اگر
+  // پنلش را باز نمی‌کرد هرگز خبردار نمی‌شد — یعنی نیمی از حلقه از اول باز بود.
+  // importِ پویا تا حلقهٔ وابستگی ایجاد نشود، و catch تا اعلان هرگز مسیرِ اصلی را نشکند.
+  import('./notif-store').then(m => m.addNotif(owner, `📩 استعلامِ تازه از ${input.customer}: «${input.product}»${input.qty ? ` — ${input.qty}` : ''}`, 'inquiry')).catch(() => {})
   return created
 }
 export async function answerInquiry(owner: string, inquiryId: string, reply: string): Promise<Inquiry | null> {
@@ -533,7 +538,41 @@ export async function answerInquiry(owner: string, inquiryId: string, reply: str
     q.status = 'answered'; q.reply = reply
     result = q
   })
+  // پاسخ تا امروز فقط در سندِ خودِ فروشنده می‌نشست: نه اعلانی می‌رفت، نه خریدار جایی برای
+  // دیدنش داشت. متنِ پاسخ عمدا *داخلِ خودِ اعلان* می‌رود تا حلقه همین‌جا بسته شود و به
+  // ساختِ صفحهٔ تازه‌ای وابسته نباشد — همان وابستگی که این فیچر را ناتمام رها کرده بود.
+  const r = result as Inquiry | null
+  if (r && r.customerPhone) {
+    let shopName = 'فروشنده'
+    try { shopName = (await getShop(owner)).profile?.name || shopName } catch {}
+    const txt = `✅ پاسخِ استعلامِ «${r.product}» از ${shopName}: ${reply}\nهمهٔ استعلام‌های تو: melkjet.com/inquiries`
+    import('./notif-store').then(m => m.addNotif(r.customerPhone as string, txt, 'inquiry')).catch(() => {})
+  }
   return result
+}
+
+// استعلام‌های یک کاربر در همهٔ فروشگاه‌ها. هر استعلام داخلِ سندِ *فروشنده* ذخیره می‌شود،
+// پس «استعلام‌های من» جز با پیمایشِ فروشگاه‌ها به‌دست نمی‌آید — ولی چون همهٔ فروشگاه‌ها در
+// یک سندِ kv هستند، این فقط یک خواندن است نه چند صد کوئری.
+// استعلام‌هایی که به فروشگاهِ خودِ کاربر رسیده. عمدا از getShop استفاده نمی‌شود چون آن
+// برای کاربرِ بدونِ فروشگاه یک فروشگاهِ خالی می‌سازد؛ اینجا فقط می‌خوانیم.
+export async function listReceivedInquiries(owner: string): Promise<Inquiry[]> {
+  const db = await load()
+  return (db.shops[owner]?.inquiries || []).slice().sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function listMyInquiries(phone: string): Promise<Array<Inquiry & { shopName: string; shopSlug: string }>> {
+  const me = String(phone || '').replace(/\D/g, '')
+  if (!me) return []
+  const db = await load()
+  const out: Array<Inquiry & { shopName: string; shopSlug: string }> = []
+  for (const [owner, shop] of Object.entries(db.shops)) {
+    for (const q of shop.inquiries || []) {
+      if (String(q.customerPhone || '').replace(/\D/g, '') !== me) continue
+      out.push({ ...q, shopName: getProfile(owner).businessName || shop.profile.name || 'فروشگاه', shopSlug: shop.slug || '' })
+    }
+  }
+  return out.sort((a, b) => b.createdAt - a.createdAt)
 }
 
 export async function listProducts(owner: string) { return (await getShop(owner)).products }
