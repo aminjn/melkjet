@@ -133,6 +133,10 @@ export function Shell({ cfg, active, setActive, title, children }: { cfg: ShellC
               </button>
             )
           })}
+          <a href="/inquiries" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--muted)', fontSize: 14, textDecoration: 'none', marginBottom: 2 }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>✉</span>
+            <span style={{ flex: 1 }}>استعلام‌ها</span>
+          </a>
           <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
           <ToolGroup icon="◇" label="CRM و مشتریان" views={CRM_VIEWS} activeView={crmView} open={crmOpen} setOpen={setCrmOpen} onPick={openCrm} />
           <ToolGroup icon="◈" label="مارکتینگ" views={MARKETING_VIEWS} activeView={mktView} open={mktOpen} setOpen={setMktOpen} onPick={openMkt} />
