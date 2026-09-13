@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { getProfile } from './profile-store'
 
 // استور پنل «مالک/فروشنده» — per-owner (مثل materials-store). هر کاربر فقط دادهٔ خودش.
 // دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
@@ -10,7 +11,7 @@ const KV_KEY = 'owner'
 
 export type DealType = 'sale' | 'rent'
 export type PropStatus = 'active' | 'sold' | 'rented' | 'draft'
-export type InquiryStatus = 'new' | 'contacted' | 'closed'
+export type InquiryStatus = 'new' | 'contacted' | 'closed' | 'answered'
 export type ViewingStatus = 'scheduled' | 'done' | 'canceled'
 export type OfferStatus = 'pending' | 'accepted' | 'rejected'
 
@@ -30,6 +31,7 @@ export interface Property {
 export interface Inquiry {
   id: string; propertyId: string; name: string; phone?: string; message?: string
   status: InquiryStatus; createdAt: number
+  customerPhone?: string; reply?: string; repliedAt?: number
 }
 export interface Viewing {
   id: string; propertyId: string; visitor: string; phone?: string; date: string
@@ -159,10 +161,64 @@ export async function setInquiryStatus(owner: string, qid: string, status: Inqui
   await mutate(owner, o => { const q = o.inquiries.find(x => x.id === qid); if (!q) return; q.status = status; res = q })
   return res
 }
-export async function addInquiry(owner: string, input: { propertyId: string; name: string; phone?: string; message?: string }): Promise<Inquiry> {
+export async function addInquiry(owner: string, input: { propertyId: string; name: string; phone?: string; message?: string; customerPhone?: string }): Promise<Inquiry> {
   let created!: Inquiry
-  await mutate(owner, o => { created = { id: id('q_'), propertyId: input.propertyId, name: input.name, phone: input.phone, message: input.message, status: 'new', createdAt: Date.now() }; o.inquiries.unshift(created) })
+  await mutate(owner, o => { created = { id: id('q_'), propertyId: input.propertyId, name: input.name, phone: input.phone, message: input.message, customerPhone: input.customerPhone || input.phone, status: 'new', createdAt: Date.now() }; o.inquiries.unshift(created) })
+  let title = ''
+  try { const db = await load(); title = db.owners[owner]?.properties?.find(p => p.id === input.propertyId)?.title || '' } catch {}
+  const msg = '\ud83d\udce9 \u0627\u0633\u062a\u0639\u0644\u0627\u0645\u0650 \u062a\u0627\u0632\u0647 \u0627\u0632 ' + input.name + (title ? ' \u062f\u0631\u0628\u0627\u0631\u0647\u0654 \u00ab' + title + '\u00bb' : '')
+  import('./notif-store').then(m => m.addNotif(owner, msg, 'inquiry')).catch(() => {})
   return created
+}
+
+export async function answerInquiry(owner: string, qid: string, reply: string): Promise<Inquiry | null> {
+  let res: Inquiry | null = null
+  await mutate(owner, o => {
+    const q = o.inquiries.find(x => x.id === qid)
+    if (!q) return
+    q.reply = reply; q.repliedAt = Date.now(); q.status = 'answered'
+    res = q
+  })
+  const r = res as Inquiry | null
+  if (r && r.customerPhone) {
+    let who = '\u0645\u0627\u0644\u06a9'
+    let title = ''
+    try {
+      const db = await load(); const od = db.owners[owner]
+      who = getProfile(owner).businessName || od?.profile?.name || who
+      title = od?.properties?.find(p => p.id === r.propertyId)?.title || ''
+    } catch {}
+    const txt = '\u2705 \u067e\u0627\u0633\u062e\u0650 \u0627\u0633\u062a\u0639\u0644\u0627\u0645\u0650 '
+      + (title ? '\u00ab' + title + '\u00bb ' : '') + '\u0627\u0632 ' + who + ': ' + reply
+      + '\n\u0647\u0645\u0647\u0654 \u0627\u0633\u062a\u0639\u0644\u0627\u0645\u200c\u0647\u0627\u06cc \u062a\u0648: melkjet.com/inquiries'
+    import('./notif-store').then(m => m.addNotif(r.customerPhone as string, txt, 'inquiry')).catch(() => {})
+  }
+  return res
+}
+
+export type MyPropertyInquiry = Inquiry & { ownerName: string; propertyTitle: string }
+export async function listMyPropertyInquiries(phone: string): Promise<MyPropertyInquiry[]> {
+  const me = String(phone || '').replace(/\D/g, '')
+  if (!me) return []
+  const db = await load()
+  const out: MyPropertyInquiry[] = []
+  for (const [owner, od] of Object.entries(db.owners)) {
+    for (const q of od.inquiries || []) {
+      if (String(q.customerPhone || '').replace(/\D/g, '') !== me) continue
+      out.push({ ...q,
+        ownerName: getProfile(owner).businessName || od.profile?.name || '\u0645\u0627\u0644\u06a9',
+        propertyTitle: od.properties?.find(p => p.id === q.propertyId)?.title || '' })
+    }
+  }
+  return out.sort((a, b) => b.createdAt - a.createdAt)
+}
+export async function listReceivedPropertyInquiries(owner: string): Promise<Array<Inquiry & { propertyTitle: string }>> {
+  const db = await load()
+  const od = db.owners[owner]
+  if (!od) return []
+  return (od.inquiries || [])
+    .map(q => ({ ...q, propertyTitle: od.properties?.find(p => p.id === q.propertyId)?.title || '' }))
+    .sort((a, b) => b.createdAt - a.createdAt)
 }
 
 // ---- Viewings ----

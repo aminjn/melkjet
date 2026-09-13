@@ -3,7 +3,7 @@ import { getSession } from '@/app/lib/session'
 import {
   ownerStats, listProperties, listInquiries, listViewings, listOffers,
   addProperty, updateProperty, deleteProperty,
-  setInquiryStatus, addInquiry, setViewingStatus, addViewing, setOfferStatus, updateOwnerProfile,
+  setInquiryStatus, addInquiry, answerInquiry, setViewingStatus, addViewing, setOfferStatus, updateOwnerProfile,
 } from '@/app/lib/owner-store'
 
 // همهٔ دادهٔ پنل مالک، مخصوص کاربرِ واردشده (per-profile).
@@ -39,6 +39,12 @@ export async function POST(req: NextRequest) {
     case 'addInquiry':
       if (!b.propertyId || !b.name) return NextResponse.json({ error: 'ملک و نام الزامی است' }, { status: 400 })
       return NextResponse.json({ ok: true, inquiry: await addInquiry(o, { propertyId: String(b.propertyId), name: String(b.name), phone: b.phone, message: b.message }) })
+    case 'answerInquiry': {
+      const txt = String(b.reply || '').trim()
+      if (!b.id || !txt) return NextResponse.json({ error: '\u0645\u062a\u0646\u0650 \u067e\u0627\u0633\u062e \u0627\u0644\u0632\u0627\u0645\u06cc \u0627\u0633\u062a' }, { status: 400 })
+      const q = await answerInquiry(o, String(b.id), txt)
+      return q ? NextResponse.json({ ok: true, inquiry: q }) : NextResponse.json({ error: '\u06cc\u0627\u0641\u062a \u0646\u0634\u062f' }, { status: 404 })
+    }
     case 'setViewingStatus':
       { const v = await setViewingStatus(o, String(b.id), b.status); return v ? NextResponse.json({ ok: true, viewing: v }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'addViewing':

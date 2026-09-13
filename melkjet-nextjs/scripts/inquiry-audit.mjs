@@ -36,7 +36,7 @@ const FLOWS = [
   { t: 0, store: 'app/lib/materials-store.ts', add: 'addInquiry', ans: 'answerInquiry',
     views: ['app/api/inquiries/route.ts', 'app/inquiries/page.tsx'] },
   { t: 1, store: 'app/lib/owner-store.ts', add: 'addInquiry', ans: 'answerInquiry',
-    views: [] },
+    views: ['app/api/inquiries/route.ts', 'app/inquiries/page.tsx'] },
 ]
 
 // Not flows of their own: they only create inquiries inside a flow above.

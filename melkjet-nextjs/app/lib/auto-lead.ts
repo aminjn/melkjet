@@ -28,7 +28,7 @@ export async function createAutoLead(ownerPhone: string, input: {
       const prop = title
         ? (await listProperties(ownerPhone)).find(p => { const t = norm(p.title); return t === title || t.includes(title) || title.includes(t) })
         : null
-      await addOwnerInquiry(ownerPhone, { propertyId: prop?.id || '', name: input.name, phone: input.phone, message: input.note })
+      await addOwnerInquiry(ownerPhone, { propertyId: prop?.id || '', name: input.name, phone: input.phone, message: input.note, customerPhone: input.phone })
     }
     else await addGenericLead(ownerPhone, { name: base.name, phone: base.phone, need: base.need, note: base.note, stage: 'new' })
   } catch { /* ساختِ لید نباید مسیرِ اصلی را بشکند */ }

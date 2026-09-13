@@ -17,7 +17,7 @@ import SupportPanel from '@/app/components/SupportPanel'
 // ════════════════════════════════════════════════════════
 type Deal = 'sale' | 'rent'
 type PropStatus = 'active' | 'sold' | 'rented' | 'draft'
-type InquiryStatus = 'new' | 'contacted' | 'closed'
+type InquiryStatus = 'new' | 'contacted' | 'closed' | 'answered'
 type ViewingStatus = 'scheduled' | 'done' | 'canceled'
 type OfferStatus = 'pending' | 'accepted' | 'rejected'
 
@@ -25,7 +25,7 @@ interface Property {
   id: string; title: string; ptype: string; location: string; area: number; rooms: number
   price: number; deal: Deal; status: PropStatus; views: number; createdAt: number
 }
-interface Inquiry { id: string; propertyId: string; name: string; phone?: string; message?: string; status: InquiryStatus; createdAt: number }
+interface Inquiry { id: string; propertyId: string; name: string; phone?: string; message?: string; status: InquiryStatus; createdAt: number; reply?: string; repliedAt?: number }
 interface Viewing { id: string; propertyId: string; visitor: string; phone?: string; date: string; status: ViewingStatus; createdAt: number }
 interface Offer { id: string; propertyId: string; buyer: string; phone?: string; amount: number; status: OfferStatus; createdAt: number }
 
@@ -63,8 +63,8 @@ const PROP_LABEL: Record<PropStatus, string> = { active: 'فعال', sold: 'فر
 const PROP_COLOR: Record<PropStatus, string> = { active: '#34d399', sold: '#60a5fa', rented: '#2dd4bf', draft: '#7a8fae' }
 const PROP_STATUSES: PropStatus[] = ['active', 'sold', 'rented', 'draft']
 
-const INQ_LABEL: Record<InquiryStatus, string> = { new: 'جدید', contacted: 'پیگیری‌شده', closed: 'بسته' }
-const INQ_COLOR: Record<InquiryStatus, string> = { new: 'var(--gold)', contacted: '#60a5fa', closed: '#7a8fae' }
+const INQ_LABEL: Record<InquiryStatus, string> = { new: 'جدید', contacted: 'پیگیری‌شده', closed: 'بسته', answered: '\u067e\u0627\u0633\u062e \u062f\u0627\u062f\u0647 \u0634\u062f' }
+const INQ_COLOR: Record<InquiryStatus, string> = { new: 'var(--gold)', contacted: '#60a5fa', closed: '#7a8fae', answered: '#5fb478' }
 const INQ_STATUSES: InquiryStatus[] = ['new', 'contacted', 'closed']
 
 const VIEW_LABEL: Record<ViewingStatus, string> = { scheduled: 'برنامه‌ریزی‌شده', done: 'انجام‌شده', canceled: 'لغو' }
@@ -578,6 +578,7 @@ function InquiriesView({ inquiries, properties, titleOf, post, busy, search }: {
 }) {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ propertyId: '', name: '', phone: '', message: '' })
+  const [reply, setReply] = useState<Record<string, string>>({})
 
   const q = search.trim()
   const sorted = [...inquiries].sort((a, b) => b.createdAt - a.createdAt)
@@ -636,13 +637,23 @@ function InquiriesView({ inquiries, properties, titleOf, post, busy, search }: {
                   <Pill label={INQ_LABEL[x.status]} color={INQ_COLOR[x.status]} />
                 </div>
                 {x.message && <div style={{ fontSize: 13, color: 'var(--text)', background: 'var(--bg)', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>{x.message}</div>}
+                {x.reply
+                  ? <div style={{ fontSize: 12.5, background: 'rgba(95,180,120,.08)', border: '1px solid rgba(95,180,120,.3)', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
+                      <b style={{ fontSize: 11 }}>{'\u067e\u0627\u0633\u062e\u0650 \u062a\u0648:'}</b><div style={{ marginTop: 4 }}>{x.reply}</div>
+                    </div>
+                  : <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                      <input value={reply[x.id] || ''} onChange={e => setReply({ ...reply, [x.id]: e.target.value })}
+                        placeholder={'\u067e\u0627\u0633\u062e\u0650 \u062e\u0648\u062f \u0631\u0627 \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f\u2026'} style={{ ...inputStyle, flex: 1 }} />
+                      <button onClick={async () => { const t = (reply[x.id] || '').trim(); if (!t) return; const ok = await post({ action: 'answerInquiry', id: x.id, reply: t }); if (ok) setReply({ ...reply, [x.id]: '' }) }}
+                        disabled={busy} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--gold)', color: '#16140f', fontSize: 12, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT, whiteSpace: 'nowrap' }}>{'\u0627\u0631\u0633\u0627\u0644\u0650 \u067e\u0627\u0633\u062e'}</button>
+                    </div>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 11, color: 'var(--faint)' }}>{new Date(x.createdAt).toLocaleDateString('fa-IR')}</span>
                   <select value={x.status} onChange={e => post({ action: 'setInquiryStatus', id: x.id, status: e.target.value })} disabled={busy} style={{
                     marginInlineStart: 'auto', padding: '6px 10px', borderRadius: 8, background: 'var(--bg)', border: `1px solid ${INQ_COLOR[x.status]}55`,
                     color: INQ_COLOR[x.status], fontSize: 12, fontWeight: 600, outline: 'none', cursor: 'pointer', fontFamily: FONT,
                   }}>
-                    {INQ_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{INQ_LABEL[s]}</option>)}
+                    {(x.status === 'answered' ? [...INQ_STATUSES, 'answered' as InquiryStatus] : INQ_STATUSES).map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{INQ_LABEL[s]}</option>)}
                   </select>
                 </div>
               </div>

@@ -5,8 +5,13 @@ import { useEffect, useState } from 'react'
 // می‌نشست و پرسنده هیچ جایی برای دیدنش نداشت؛ و صفحه‌ای که ساخته شد به هیچ منویی وصل
 // نبود. حالا از منوی همهٔ پنل‌ها در دسترس است.
 
-type Sent = { id: string; product: string; qty?: string; note?: string; status: 'new' | 'answered'; reply?: string; createdAt: number; shopName: string; shopSlug: string }
-type Recv = { id: string; customer: string; product: string; qty?: string; note?: string; status: 'new' | 'answered'; reply?: string; createdAt: number }
+type Kind = 'materials' | 'property'
+type Item = { id: string; kind: Kind; title: string; sub?: string; note?: string; status: 'new' | 'answered'; reply?: string; createdAt: number; counterparty: string; href?: string; answerHref?: string }
+
+const KIND_LABEL: Record<Kind, string> = { materials: '\u0645\u0635\u0627\u0644\u062d', property: '\u0645\u0644\u06a9' }
+function KindChip({ k }: { k: Kind }) {
+  return <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 6, padding: '2px 7px', color: 'var(--muted)', border: '1px solid var(--line)' }}>{KIND_LABEL[k]}</span>
+}
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
 const dateFa = (ms: number) => new Date(ms).toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -18,8 +23,8 @@ function Pill({ done }: { done: boolean }) {
 
 export default function InquiriesPage() {
   const [tab, setTab] = useState<'sent' | 'recv'>('sent')
-  const [sent, setSent] = useState<Sent[] | null>(null)
-  const [recv, setRecv] = useState<Recv[] | null>(null)
+  const [sent, setSent] = useState<Item[] | null>(null)
+  const [recv, setRecv] = useState<Item[] | null>(null)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -55,8 +60,8 @@ export default function InquiriesPage() {
 
       {tab === 'sent' && sent && sent.length === 0 && (
         <div style={{ ...CARD, fontSize: 13.5, color: 'var(--muted)', lineHeight: 2 }}>
-          هنوز استعلامی نفرستاده‌ای. از صفحهٔ هر فروشندهٔ مصالح می‌توانی قیمت و موجودی بپرسی —{' '}
-          <a href="/materials" style={{ color: 'var(--gold)' }}>فروشندگانِ مصالح</a>
+          {'\u0647\u0646\u0648\u0632 \u0627\u0633\u062a\u0639\u0644\u0627\u0645\u06cc \u0646\u0641\u0631\u0633\u062a\u0627\u062f\u0647\u200c\u0627\u06cc \u2014 \u0627\u0632 \u0635\u0641\u062d\u0647\u0654 \u0647\u0631 \u0641\u0631\u0648\u0634\u0646\u062f\u0647\u0654 \u0645\u0635\u0627\u0644\u062d \u06cc\u0627 \u0647\u0631 \u0645\u0644\u06a9 \u0645\u06cc\u200c\u062a\u0648\u0627\u0646\u06cc \u0628\u067e\u0631\u0633\u06cc.'}{' '}
+          <a href="/materials" style={{ color: 'var(--gold)' }}>{'\u0641\u0631\u0648\u0634\u0646\u062f\u06af\u0627\u0646\u0650 \u0645\u0635\u0627\u0644\u062d'}</a>
         </div>
       )}
 
@@ -65,18 +70,18 @@ export default function InquiriesPage() {
         return (
           <div key={q.id} style={CARD}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <b style={{ fontSize: 14.5 }}>{q.product}</b>
-              {q.qty ? <span style={{ fontSize: 12, color: 'var(--muted)' }}>· {q.qty}</span> : null}
+              <b style={{ fontSize: 14.5 }}>{q.title}</b><KindChip k={q.kind} />
+              {q.sub ? <span style={{ fontSize: 12, color: 'var(--muted)' }}>· {q.sub}</span> : null}
               <span style={{ flex: 1 }} /><Pill done={ok} />
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-              {q.shopSlug ? <a href={`/store/${q.shopSlug}`} style={{ color: 'var(--gold)', textDecoration: 'none' }}>{q.shopName}</a> : q.shopName}
+              {q.href ? <a href={q.href} style={{ color: 'var(--gold)', textDecoration: 'none' }}>{q.counterparty}</a> : q.counterparty}
               {' · '}{dateFa(q.createdAt)}
             </div>
             {q.note ? <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.9 }}>یادداشتِ تو: {q.note}</div> : null}
             {ok && (
               <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(95,180,120,.07)', border: '1px solid rgba(95,180,120,.3)', fontSize: 13, lineHeight: 2 }}>
-                <b style={{ fontSize: 12 }}>پاسخِ فروشنده:</b>
+                <b style={{ fontSize: 12 }}>{'\u067e\u0627\u0633\u062e:'}</b>
                 <div style={{ marginTop: 4 }}>{q.reply}</div>
               </div>
             )}
@@ -86,8 +91,7 @@ export default function InquiriesPage() {
 
       {tab === 'recv' && recv && recv.length === 0 && (
         <div style={{ ...CARD, fontSize: 13.5, color: 'var(--muted)', lineHeight: 2 }}>
-          استعلامی دریافت نکرده‌ای. اگر فروشندهٔ مصالحی، از پنلِ فروشگاه پاسخ می‌دهی —{' '}
-          <a href="/materials" style={{ color: 'var(--gold)' }}>پنلِ فروشگاه</a>
+          {'\u0627\u0633\u062a\u0639\u0644\u0627\u0645\u06cc \u062f\u0631\u06cc\u0627\u0641\u062a \u0646\u06a9\u0631\u062f\u0647\u200c\u0627\u06cc.'}
         </div>
       )}
 
@@ -96,17 +100,17 @@ export default function InquiriesPage() {
         return (
           <div key={q.id} style={CARD}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <b style={{ fontSize: 14.5 }}>{q.product}</b>
-              {q.qty ? <span style={{ fontSize: 12, color: 'var(--muted)' }}>· {q.qty}</span> : null}
+              <b style={{ fontSize: 14.5 }}>{q.title}</b><KindChip k={q.kind} />
+              {q.sub ? <span style={{ fontSize: 12, color: 'var(--muted)' }}>· {q.sub}</span> : null}
               <span style={{ flex: 1 }} /><Pill done={ok} />
             </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>از {q.customer} · {dateFa(q.createdAt)}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>{'\u0627\u0632 '}{q.counterparty} · {dateFa(q.createdAt)}</div>
             {q.note ? <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.9 }}>{q.note}</div> : null}
             {ok
               ? <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(95,180,120,.07)', border: '1px solid rgba(95,180,120,.3)', fontSize: 13, lineHeight: 2 }}>
                   <b style={{ fontSize: 12 }}>پاسخِ تو:</b><div style={{ marginTop: 4 }}>{q.reply}</div>
                 </div>
-              : <div style={{ marginTop: 10, fontSize: 12.5 }}><a href="/materials" style={{ color: 'var(--gold)' }}>پاسخ بده در پنلِ فروشگاه ←</a></div>}
+              : <div style={{ marginTop: 10, fontSize: 12.5 }}><a href={q.answerHref || '/materials'} style={{ color: 'var(--gold)' }}>{'\u067e\u0627\u0633\u062e \u0628\u062f\u0647 \u2190'}</a></div>}
           </div>
         )
       })}
