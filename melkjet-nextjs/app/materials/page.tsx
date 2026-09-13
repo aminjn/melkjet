@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import EmpireCard from '@/app/components/EmpireCard'
 import NumberInput from '@/app/components/NumberInput'
 import ReosPanelSection from '@/app/components/ReosPanelSection'
@@ -786,7 +786,9 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
   const [saving, setSaving] = useState(false)
   const [ai, setAi] = useState<{ what: string } | null>(null)
   const [aiErr, setAiErr] = useState('')
-  const set = (k: string, v: any) => setF(s => ({ ...s, [k]: v }))
+  // هر تغییرِ کاربر را علامت می‌زند؛ fetchِ دیرهنگامِ کاتالوگ حق ندارد نما را بدزدد.
+  const touchedRef = useRef(false)
+  const set = (k: string, v: any) => { touchedRef.current = true; setF(s => ({ ...s, [k]: v })) }
 
   // کاتالوگِ مرجع — مصالح‌فروش از این لیست انتخاب می‌کند (اگر کالایی موجود باشد).
   const [catalog, setCatalog] = useState<{ categories: { id: string; name: string; parentId?: string }[]; products: any[] } | null>(null)
@@ -797,9 +799,16 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
   const locked = !!catalogId
   useEffect(() => {
     if (product) return   // ویرایشِ محصولِ موجود: پیکر لازم نیست
+    // /api/catalog کند است. تا امروز هر وقت جوابش می‌رسید — گاهی ده ثانیه بعد —
+    // بدونِ قید setPicking(true) می‌زد و کاربری که وسطِ تایپ بود پرت می‌شد
+    // روی ویزاردِ دسته‌بندی. متن پاک نمی‌شد ولی نما عوض می‌شد.
+    let cancelled = false
     fetch('/api/catalog').then(r => r.ok ? r.json() : null).then(d => {
-      if (d?.ok) { setCatalog({ categories: d.categories || [], products: d.products || [] }); if ((d.products || []).length) setPicking(true) }
+      if (cancelled || !d?.ok) return
+      setCatalog({ categories: d.categories || [], products: d.products || [] })
+      if ((d.products || []).length && !touchedRef.current) setPicking(true)
     }).catch(() => {})
+    return () => { cancelled = true }
   }, [product])
   const pickProduct = (cp: any) => {
     setCatalogId(cp.id)
@@ -919,6 +928,9 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
       <div onClick={e => e.stopPropagation()} style={{ ...card, maxWidth: 780, width: '100%', margin: '20px 0', padding: 22 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <div style={{ fontSize: 16, fontWeight: 800 }}>{product ? 'ویرایشِ محصول' : 'محصولِ جدید'}</div>
+          {!product && !locked && catalog && catalog.products.length > 0 && (
+            <button onClick={() => setPicking(true)} style={{ marginInlineEnd: 'auto', marginInlineStart: 12, fontSize: 11.5, color: 'var(--gold)', border: '1px solid var(--gold)', background: 'transparent', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>🧱 انتخاب از کاتالوگ</button>
+          )}
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 24, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
 

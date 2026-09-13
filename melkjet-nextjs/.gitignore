@@ -123,3 +123,8 @@ INSTALLATION_COMPLETE
 .deploy-failed
 .next-build
 .next.prev
+
+# build slots used by scripts/deploy.sh (see ecosystem.config.js)
+.next-a/
+.next-b/
+.next-current

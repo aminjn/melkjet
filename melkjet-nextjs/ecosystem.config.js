@@ -17,6 +17,30 @@
 
 const CWD = '/var/www/melkjet/melkjet-nextjs'
 
+// Which build directory to serve.
+//
+// next.config.ts takes distDir from NEXT_DIST_DIR, and `next start` reads that
+// same config, so this env var alone decides where a process serves from.
+// deploy.sh builds into the idle slot (.next-a / .next-b), writes its name into
+// .next-current, then reloads. The directory being served is never the one being
+// written -- which is exactly the ENOTEMPTY that took the site down: `next build`
+// tried to clear .next while these processes still held files open inside it.
+//
+// If .next-current is missing or names a slot with no BUILD_ID, fall back to
+// whichever slot actually has one, so losing the pointer cannot strand the
+// server on a directory that does not exist.
+const fs = require('fs')
+function currentDist() {
+  const ok = d => { try { return fs.existsSync(CWD + '/' + d + '/BUILD_ID') } catch { return false } }
+  try {
+    const v = fs.readFileSync(CWD + '/.next-current', 'utf8').trim()
+    if (/^\.next(-[ab])?$/.test(v) && ok(v)) return v
+  } catch {}
+  for (const d of ['.next', '.next-a', '.next-b']) if (ok(d)) return d
+  return '.next'
+}
+const DIST = currentDist()
+
 function instance(port, idx) {
   return {
     // نامِ یکتا برای هر اینستنس — وگرنه pm2 با نام‌های تکراری در هر reload/start
@@ -30,6 +54,7 @@ function instance(port, idx) {
     instances: 1,
     env: {
       NODE_ENV: 'production',
+      NEXT_DIST_DIR: DIST,
       PORT: String(port),
       // فقط اینستنسِ صفر کرون را اجرا می‌کند.
       NODE_APP_INSTANCE: String(idx),

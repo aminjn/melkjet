@@ -59,7 +59,31 @@ echo "→ build (با اولویتِ پایین — سایت در طولِ build
 # nice/ionice: کامپایل تمامِ ۴ هسته را نمی‌بلعد؛ اینستنس‌های سرویس‌دهنده (۳۰۰۱-۳۰۰۳) گرسنه نمی‌مانند
 # و دیگر وسطِ دیپلوی ۵۰۴/Timeout نمی‌خوریم (نمودارِ CPU آروان سرِ دیپلوی ۷۰۰٪ می‌زد). build کمی کندتر
 # تمام می‌شود ولی ترافیکِ کاربر همیشه مقدم است.
-NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build
+# Build into the idle slot, never into the directory these processes serve from.
+CUR=".next"
+if [ -f .next-current ]; then CUR="$(cat .next-current)"; fi
+[ -f "$CUR/BUILD_ID" ] || CUR=".next"
+case "$CUR" in .next-a) NEW=".next-b" ;; *) NEW=".next-a" ;; esac
+echo "→ بیلد در اسلاتِ خاموش: $NEW   (زنده: $CUR)"
+
+# Two build directories exist at once, so stop loudly instead of filling the disk.
+FREE_KB=$(df -Pk . | awk 'NR==2{print $4}')
+NEED_KB=$(du -sk "$CUR" 2>/dev/null | awk '{print $1}'); NEED_KB=${NEED_KB:-1500000}
+if [ "$FREE_KB" -lt $((NEED_KB + 500000)) ]; then
+  echo "✗ فضای دیسک برای بیلدِ تازه کافی نیست — اول scripts/media-prune.sh را بزن."
+  echo "   free=${FREE_KB}KB  need=$((NEED_KB + 500000))KB"
+  exit 1
+fi
+
+rm -rf "$NEW"
+NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build
+
+# A half-written slot must never go live.
+if [ ! -f "$NEW/BUILD_ID" ]; then
+  echo "✗ بیلد ناقص ماند — اشاره‌گر عوض نشد و سایت روی نسخهٔ قبلی ماند."
+  rm -rf "$NEW"
+  exit 1
+fi
 
 # Economy QA (سند ۲۳ فصل ۱۳ Part 09): ممیزیِ knobهای زندهٔ اقتصادِ «امپراتوری» قبل از انتشار —
 # پولِ مجانی/سودِ غیرمنطقی/پاداشِ خارج از تعادل. هشدار می‌دهد ولی دیپلوی را متوقف نمی‌کند.
@@ -73,6 +97,7 @@ else
 fi
 
 echo "→ reload (rolling، بدونِ داون‌تایم)"
+echo "$NEW" > .next-current
 pm2 reload ecosystem.config.js --update-env
 
 # چند ثانیه فرصت تا اینستنس‌ها بالا بیایند، بعد سلامتِ پورت‌های کاربر (nginx به 3001-3003 می‌فرستد).
@@ -87,8 +112,15 @@ done
 if [ "$ok" = "1" ]; then
   echo "✓ همهٔ اینستنس‌ها سالم‌اند. دیپلوی‌شده:"
   git log -1 --oneline
+  # Only now is the old slot certainly unused.
+  if [ "$CUR" != "$NEW" ]; then rm -rf "$CUR"; echo "✓ اسلاتِ قدیمی پاک شد: $CUR"; fi
   echo "یادآوری: اگر HTML را در Arvan کش می‌کنی، cache را Purge کن (یا در CDN فقط /_next/static را کش کن، HTML را هرگز)."
 else
-  echo "✗ یک اینستنس ۲۰۰ نداد. لاگ:  pm2 logs --err --lines 40 --nostream"
+  echo "✗ چکِ سلامت رد شد — برگشت به نسخهٔ قبلی…"
+  echo "$CUR" > .next-current
+  pm2 reload ecosystem.config.js --update-env
+  sleep 4
+  rm -rf "$NEW"
+  echo "✓ برگشت انجام شد. سایت روی نسخهٔ قبلی است. لاگ: pm2 logs --err --lines 40 --nostream"
   exit 1
 fi
