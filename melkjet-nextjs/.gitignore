@@ -128,3 +128,4 @@ INSTALLATION_COMPLETE
 .next-a/
 .next-b/
 .next-current
+.enrich-data.json.tmp.*
