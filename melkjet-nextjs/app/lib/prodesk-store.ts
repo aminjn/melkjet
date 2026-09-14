@@ -3,6 +3,7 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { FA_DIGITS, faDigit } from '../lib/digits'
+import { getProfile } from './profile-store'
 
 // میزِ کارِ متخصص — بک‌اندِ مشترکِ داشبوردهای معمار/پیمانکار/کارشناس/دفتر حقوقی/بانک‌وبیمه/دفترخانه.
 // هر پنل نمای اختصاصیِ خودش را دارد، اما داده در دو مجموعهٔ منعطف ذخیره می‌شود:
@@ -13,7 +14,7 @@ import { FA_DIGITS, faDigit } from '../lib/digits'
 const DATA_FILE = join(process.cwd(), '.prodesk-data.json')
 const KV_KEY = 'prodesk'
 
-export type ReqStatus = 'new' | 'in_progress' | 'done' | 'canceled'
+export type ReqStatus = 'new' | 'in_progress' | 'done' | 'canceled' | 'answered'
 export type RecStatus = 'active' | 'pending' | 'archived'
 
 export interface ProRequest {
@@ -27,6 +28,11 @@ export interface ProRequest {
   status: ReqStatus
   amount?: number        // مبلغِ برآورد/حق‌الزحمه (تومان)
   meta?: Record<string, any>   // فیلدهای اختصاصیِ شغل (متراژ/سبک/بودجه …)
+  // استعلامِ واقعیِ دوطرفه: customerPhone پرسنده را به یک حساب گره می‌زند
+  // (clientPhone متنِ آزادی است که خودِ متخصص تایپ می‌کند و به حسابی بند نیست).
+  customerPhone?: string
+  reply?: string
+  repliedAt?: number
   createdAt: number
   updatedAt: number
 }
@@ -72,10 +78,10 @@ const owns = (owner: string, role: string) => (x: { owner: string; role: string 
 export async function listRequests(owner: string, role: string): Promise<ProRequest[]> {
   return (await load()).requests.filter(owns(owner, role)).sort((a, b) => b.createdAt - a.createdAt)
 }
-export interface RequestInput { clientName: string; clientPhone?: string; kind?: string; detail?: string; status?: ReqStatus; amount?: number; meta?: Record<string, any> }
+export interface RequestInput { clientName: string; clientPhone?: string; customerPhone?: string; kind?: string; detail?: string; status?: ReqStatus; amount?: number; meta?: Record<string, any> }
 export async function addRequest(owner: string, role: string, input: RequestInput): Promise<ProRequest> {
   const now = Date.now()
-  const r: ProRequest = { id: id(), owner, role, clientName: input.clientName || 'بدون‌نام', clientPhone: input.clientPhone, kind: input.kind, detail: input.detail, status: input.status || 'new', amount: input.amount, meta: input.meta, createdAt: now, updatedAt: now }
+  const r: ProRequest = { id: id(), owner, role, clientName: input.clientName || 'بدون‌نام', clientPhone: input.clientPhone, customerPhone: input.customerPhone, kind: input.kind, detail: input.detail, status: input.status || 'new', amount: input.amount, meta: input.meta, createdAt: now, updatedAt: now }
   await mutate(db => { db.requests.push(r) })
   return r
 }
@@ -90,6 +96,72 @@ export async function updateRequest(owner: string, role: string, rid: string, pa
 export async function deleteRequest(owner: string, role: string, rid: string): Promise<boolean> {
   return mutate(db => { const n = db.requests.length; db.requests = db.requests.filter(x => !(x.id === rid && norm(x.owner) === norm(owner) && x.role === role)); return db.requests.length !== n })
 }
+
+// Two-way inquiry.
+//
+// Until now `requests` was only the professional's own manual notebook: no
+// public entry point, no reply field, no notification -- while the menu of all
+// seven ProDesk panels advertised an inquiry inbox. customerPhone binds the
+// asker to a real account; clientPhone is free text the professional types and
+// is bound to nothing.
+export const PRO_ROLE_LABEL: Record<string, string> = {
+  '/architect': 'معمار',
+  '/contractor': 'پیمانکار',
+  '/appraiser': 'کارشناس رسمی',
+  '/lawfirm': 'دفتر حقوقی',
+  '/finance': 'بانک و بیمه',
+  '/notary': 'دفترخانه',
+  '/legal': 'حقوقی',
+}
+const proName = (owner: string) => {
+  try { return getProfile(owner).businessName || 'متخصص' } catch { return 'متخصص' }
+}
+
+// Sent by a signed-in visitor from the professional's public page.
+export async function addPublicRequest(owner: string, role: string, input: RequestInput): Promise<ProRequest> {
+  const r = await addRequest(owner, role, input)
+  const msg = '📩 استعلامِ تازه از ' + r.clientName + (r.kind ? ' — ' + r.kind : '')
+  import('./notif-store').then(m => m.addNotif(owner, msg, 'inquiry')).catch(() => {})
+  return r
+}
+
+export async function answerRequest(owner: string, role: string, rid: string, reply: string): Promise<ProRequest | null> {
+  const r = await mutate(db => {
+    const x = db.requests.find(q => q.id === rid && norm(q.owner) === norm(owner) && q.role === role)
+    if (!x) return null
+    x.reply = reply; x.repliedAt = Date.now(); x.status = 'answered'; x.updatedAt = Date.now()
+    return x
+  })
+  if (r && r.customerPhone) {
+    const txt = '✅ پاسخِ استعلامِ شما از ' + proName(owner) + ': ' + reply
+      + '\nهمهٔ استعلام‌های تو: melkjet.com/inquiries'
+    import('./notif-store').then(m => m.addNotif(r.customerPhone as string, txt, 'inquiry')).catch(() => {})
+  }
+  return r
+}
+
+export type MyProRequest = ProRequest & { proName: string; roleLabel: string }
+export async function listMyProRequests(phone: string): Promise<MyProRequest[]> {
+  const me = norm(phone)
+  if (!me) return []
+  const db = await load()
+  return db.requests
+    .filter(r => norm(r.customerPhone || '') === me)
+    .map(r => ({ ...r, proName: proName(r.owner), roleLabel: PRO_ROLE_LABEL[r.role] || 'متخصص' }))
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+// Everything this professional received, across every role they hold.
+export async function listReceivedProRequests(phone: string): Promise<Array<ProRequest & { roleLabel: string }>> {
+  const me = norm(phone)
+  if (!me) return []
+  const db = await load()
+  return db.requests
+    .filter(r => norm(r.owner) === me && !!r.customerPhone)
+    .map(r => ({ ...r, roleLabel: PRO_ROLE_LABEL[r.role] || 'متخصص' }))
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
 
 // ── رکوردهای کاری ────────────────────────────────────────────────────────────
 export async function listRecords(owner: string, role: string): Promise<ProRecord[]> {

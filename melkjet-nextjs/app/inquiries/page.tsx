@@ -1,14 +1,14 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 // «استعلام‌ها» — یک صفحه برای هر دو نقش. پیش از این پاسخِ فروشنده فقط در سندِ خودش
 // می‌نشست و پرسنده هیچ جایی برای دیدنش نداشت؛ و صفحه‌ای که ساخته شد به هیچ منویی وصل
 // نبود. حالا از منوی همهٔ پنل‌ها در دسترس است.
 
-type Kind = 'materials' | 'property'
-type Item = { id: string; kind: Kind; title: string; sub?: string; note?: string; status: 'new' | 'answered'; reply?: string; createdAt: number; counterparty: string; href?: string; answerHref?: string }
+type Kind = 'materials' | 'property' | 'pro'
+type Item = { id: string; kind: Kind; title: string; sub?: string; note?: string; status: 'new' | 'answered'; reply?: string; createdAt: number; counterparty: string; href?: string; answerHref?: string; role?: string }
 
-const KIND_LABEL: Record<Kind, string> = { materials: '\u0645\u0635\u0627\u0644\u062d', property: '\u0645\u0644\u06a9' }
+const KIND_LABEL: Record<Kind, string> = { materials: '\u0645\u0635\u0627\u0644\u062d', property: '\u0645\u0644\u06a9', pro: '\u0645\u062a\u062e\u0635\u0635' }
 function KindChip({ k }: { k: Kind }) {
   return <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 6, padding: '2px 7px', color: 'var(--muted)', border: '1px solid var(--line)' }}>{KIND_LABEL[k]}</span>
 }
@@ -21,19 +21,56 @@ function Pill({ done }: { done: boolean }) {
   return <span style={{ fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 10px', color: done ? '#2f7d4f' : '#8a6a1e', background: done ? 'rgba(95,180,120,.12)' : 'rgba(200,160,60,.12)', border: `1px solid ${done ? 'rgba(95,180,120,.45)' : 'rgba(200,160,60,.45)'}` }}>{done ? 'پاسخ داده شد' : 'در انتظارِ پاسخ'}</span>
 }
 
+// One reply box for all three flows. Replying used to be possible only inside
+// each role's own panel, and the professional flow had nowhere at all.
+function ReplyBox({ item, onDone }: { item: Item; onDone: () => void }) {
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const send = async () => {
+    const t = text.trim()
+    if (!t) return
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/inquiries', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: item.kind, id: item.id, role: item.role, reply: t }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.error) { setErr(d.error || `\u062e\u0637\u0627\u06cc ${r.status}`); return }
+      setText(''); onDone()
+    } catch { setErr('\u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062f') } finally { setBusy(false) }
+  }
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()}
+          placeholder={'\u067e\u0627\u0633\u062e\u0650 \u062e\u0648\u062f \u0631\u0627 \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f\u2026'}
+          style={{ flex: 1, padding: '8px 10px', borderRadius: 9, border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13 }} />
+        <button onClick={send} disabled={busy} style={{ padding: '8px 14px', borderRadius: 9, border: 'none', background: 'var(--gold)', color: '#16140f', fontSize: 12.5, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+          {'\u0627\u0631\u0633\u0627\u0644\u0650 \u067e\u0627\u0633\u062e'}
+        </button>
+      </div>
+      {err ? <div style={{ fontSize: 11.5, color: '#f87171', marginTop: 6 }}>{err}</div> : null}
+      {item.answerHref ? <div style={{ fontSize: 11.5, marginTop: 6 }}><a href={item.answerHref} style={{ color: 'var(--muted)' }}>{'\u06cc\u0627 \u062f\u0631 \u067e\u0646\u0644 \u067e\u0627\u0633\u062e \u0628\u062f\u0647 \u2190'}</a></div> : null}
+    </div>
+  )
+}
+
 export default function InquiriesPage() {
   const [tab, setTab] = useState<'sent' | 'recv'>('sent')
   const [sent, setSent] = useState<Item[] | null>(null)
   const [recv, setRecv] = useState<Item[] | null>(null)
   const [failed, setFailed] = useState(false)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch('/api/inquiries').then(async r => {
       if (r.status === 401) { window.location.href = `/auth?next=${encodeURIComponent('/inquiries')}`; return }
       const d = await r.json().catch(() => ({}))
       if (d?.ok) { setSent(d.sent || []); setRecv(d.received || []) } else setFailed(true)
     }).catch(() => setFailed(true))
   }, [])
+  useEffect(() => { load() }, [load])
 
   const tabBtn = (k: 'sent' | 'recv', label: string, n: number | null) => (
     <button onClick={() => setTab(k)} style={{ padding: '8px 16px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: tab === k ? 800 : 600, border: `1px solid ${tab === k ? 'var(--gold)' : 'var(--line)'}`, background: tab === k ? 'var(--goldDim)' : 'transparent', color: tab === k ? 'var(--gold)' : 'var(--muted)' }}>
@@ -110,7 +147,7 @@ export default function InquiriesPage() {
               ? <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(95,180,120,.07)', border: '1px solid rgba(95,180,120,.3)', fontSize: 13, lineHeight: 2 }}>
                   <b style={{ fontSize: 12 }}>پاسخِ تو:</b><div style={{ marginTop: 4 }}>{q.reply}</div>
                 </div>
-              : <div style={{ marginTop: 10, fontSize: 12.5 }}><a href={q.answerHref || '/materials'} style={{ color: 'var(--gold)' }}>{'\u067e\u0627\u0633\u062e \u0628\u062f\u0647 \u2190'}</a></div>}
+              : <ReplyBox item={q} onDone={load} />}
           </div>
         )
       })}

@@ -20,6 +20,7 @@ const T = {
   nAdd: '\u0627\u0639\u0644\u0627\u0646 \u0628\u0647 \u0641\u0631\u0648\u0634\u0646\u062f\u0647',
   nAns: '\u0627\u0639\u0644\u0627\u0646 \u0628\u0647 \u067e\u0631\u0633\u0646\u062f\u0647',
   view: '\u0645\u0633\u06cc\u0631\u0650 \u062f\u06cc\u062f\u0646\u0650 \u067e\u0627\u0633\u062e',
+  pub: '\u0648\u0631\u0648\u062f\u06cc\u0650 \u0639\u0645\u0648\u0645\u06cc',
   missing: '\u0641\u0627\u06cc\u0644 \u0646\u06cc\u0633\u062a',
   gapsNone: '\u0634\u06a9\u0627\u0641\u06cc \u067e\u06cc\u062f\u0627 \u0646\u0634\u062f \u2014 \u0648\u0644\u06cc \u0627\u06cc\u0646 \u06cc\u0639\u0646\u06cc \u0642\u0637\u0639\u0647\u200c\u0647\u0627 \u0633\u0631\u0650 \u062c\u0627\u06cc\u0634\u0627\u0646\u0646\u062f\u060c \u0646\u0647 \u0627\u06cc\u0646\u06a9\u0647 \u062a\u0633\u062a \u0634\u062f\u0647',
   gaps: '\u0634\u06a9\u0627\u0641',
@@ -29,14 +30,20 @@ const T = {
   flows: [
     '\u0645\u0635\u0627\u0644\u062d \u0648 \u0641\u0631\u0648\u0634\u06af\u0627\u0647',
     '\u0645\u0627\u0644\u06a9 \u0648 \u0645\u0644\u06a9',
+    '\u0645\u062a\u062e\u0635\u0635 (\u0647\u0641\u062a \u067e\u0646\u0644)',
   ],
 }
 
 const FLOWS = [
   { t: 0, store: 'app/lib/materials-store.ts', add: 'addInquiry', ans: 'answerInquiry',
-    views: ['app/api/inquiries/route.ts', 'app/inquiries/page.tsx'] },
+    views: ['app/api/inquiries/route.ts', 'app/inquiries/page.tsx'],
+    pub: { file: 'app/lib/materials-store.ts', needle: 'addPublicInquiry' } },
   { t: 1, store: 'app/lib/owner-store.ts', add: 'addInquiry', ans: 'answerInquiry',
-    views: ['app/api/inquiries/route.ts', 'app/inquiries/page.tsx'] },
+    views: ['app/api/inquiries/route.ts', 'app/inquiries/page.tsx'],
+    pub: { file: 'app/lib/auto-lead.ts', needle: 'addOwnerInquiry' } },
+  { t: 2, store: 'app/lib/prodesk-store.ts', add: 'addPublicRequest', ans: 'answerRequest',
+    views: ['app/api/inquiries/route.ts', 'app/inquiries/page.tsx'],
+    pub: { file: 'app/api/pro-inquiry/route.ts', needle: 'addPublicRequest' } },
 ]
 
 // Not flows of their own: they only create inquiries inside a flow above.
@@ -88,6 +95,9 @@ for (const f of FLOWS) {
     [T.nAdd, !!bAdd && RE_NOTIF.test(bAdd)],
     [T.nAns, !!bAns && RE_NOTIF.test(bAns)],
     [T.view, f.views.length > 0 && f.views.every((p) => R(p) !== null)],
+    // Without this column seven unbuilt flows reported zero gaps: the inbox
+    // existed, nothing outside the panel could write to it.
+    [T.pub, (() => { const c = f.pub && R(f.pub.file); return !!c && c.includes(f.pub.needle) })()],
   ]
   for (const [k, ok] of checks) { line(k, mark(ok)); if (!ok) gaps++ }
   console.log('')

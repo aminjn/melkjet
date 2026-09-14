@@ -6,8 +6,12 @@ import Footer from '@/app/components/Footer'
 import RevealContact from '@/app/components/RevealContact'
 import { listingHref } from '@/app/lib/listing-url'
 import RepBadges from '@/app/components/RepBadges'
+import ProInquiryForm from '@/app/components/ProInquiryForm'
 import { resolveProvider, typeLabel } from '@/app/lib/provider-public'
 import { gradientFor, initialsFor } from '@/app/lib/content-display'
+
+// Only these provider types have a ProDesk inbox that can receive an inquiry.
+const PRO_INQUIRY_TYPES = ['architect', 'contractor', 'appraiser', 'lawfirm', 'finance', 'notary', 'legal']
 
 // متایِ SSR برای صفحهٔ عمومیِ یک متخصص.
 export async function providerMetadata(type: string, slug: string): Promise<Metadata> {
@@ -69,6 +73,8 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
           </div>
           {p.hasPhone && <div style={{ flexShrink: 0 }}><RevealContact kind="advisor" id={p.phone} compact label="نمایشِ شماره" /></div>}
         </div>
+
+        {PRO_INQUIRY_TYPES.includes(p.type) && <ProInquiryForm type={p.type} slug={p.slug} />}
 
         {p.bio && <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20, marginBottom: 22, fontSize: 14.5, lineHeight: 2, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: /<\/?[a-z]/i.test(p.bio) ? p.bio : p.bio.replace(/\n/g, '<br/>') }} />}
 
