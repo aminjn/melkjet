@@ -23,9 +23,34 @@ interface DB { categories: CatalogCategory[]; products: CatalogProduct[] }
 function id(p = '') { return p + randomBytes(5).toString('hex') }
 function load(): DB {
   const d = readJsonCached<Partial<DB>>(FILE, {})
-  return { categories: d.categories || [], products: d.products || [] }
+  const db = { categories: d.categories || [], products: d.products || [] }
+  // Read-side net for images already on disk (see storeImage). A data: URI here
+  // is dropped in memory, so a stale blob can never reach a page again, and the
+  // next write removes it from the file too.
+  for (const p of db.products) if (p.image && p.image.startsWith('data:')) p.image = undefined
+  for (const c of db.categories) if (c.image && c.image.startsWith('data:')) c.image = undefined
+  return db
 }
 function save(db: DB) { try { writeJsonCached(FILE, db) } catch {} }
+
+// An image must be a URL, never a data: URI. A data URI is embedded once in the
+// markup and again in the RSC flight payload, so eleven ~2MB PNGs written here by
+// the admin image generator turned /product/<slug> into 48MB of HTML and 970MB of
+// ISR cache. The previous guard truncated at 100000 chars, which only produced a
+// corrupt image that still weighed 100KB on every page. Convert once, keep a URL.
+function storeImage(v: unknown): string | undefined {
+  const raw = v == null ? '' : String(v)
+  if (!raw) return undefined
+  if (!raw.startsWith('data:')) return raw.slice(0, 2000)
+  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(raw)
+  if (!m) return undefined
+  try {
+    const { saveMedia } = require('./media-store') as typeof import('./media-store')
+    const buf = Buffer.from(m[2], 'base64')
+    if (!buf.length) return undefined
+    return '/api/media/' + saveMedia(buf, m[1], 'catalog').id
+  } catch { return undefined }
+}
 function norm(s: string) { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
 // نامِ سایت/منبع یا آیتمِ ناوبری (breadcrumb) — دسته نیست؛ بچه‌هایش بالا می‌روند.
 const JUNK_SITE = /^(صفحه\s*اصلی|خانه|home|فروشگاه|فروشگاه\s*اینترنتی|آهن\s*آنلاین|هایپرساز|ahanonline|hypersaz|قیمت\s*روز|قیمت\s*آهن(\s*آلات)?|لیست\s*قیمت|محصولات|همه\s*محصولات|دسته\s*بندی(\s*ها)?)$/i
@@ -119,7 +144,7 @@ function cleanProduct(input: any): Partial<CatalogProduct> {
   if (input.categoryId !== undefined) out.categoryId = String(input.categoryId)
   if (input.brand !== undefined) out.brand = String(input.brand).slice(0, 80)
   if (input.unit !== undefined) out.unit = String(input.unit).slice(0, 24)
-  if (input.image !== undefined) out.image = String(input.image).slice(0, 100000)
+  if (input.image !== undefined) out.image = storeImage(input.image)
   if (input.description !== undefined) out.description = String(input.description).slice(0, 4000)
   if (input.externalId !== undefined) out.externalId = String(input.externalId).slice(0, 120)
   if (input.externalUrl !== undefined) out.externalUrl = String(input.externalUrl).slice(0, 400)
@@ -150,6 +175,7 @@ export function categoriesNeedingImage(): CatalogCategory[] {
 }
 // عکسِ تولیدشده را روی دسته می‌نشاند و به همهٔ محصولاتِ بدونِ عکسِ همان دسته می‌دهد.
 export function setCategoryImage(categoryId: string, url: string): number {
+  url = storeImage(url) || ''
   const db = load(); const cat = db.categories.find(c => c.id === categoryId); if (!cat) return 0
   cat.image = url; let n = 0
   for (const p of db.products) if (p.categoryId === categoryId && !p.image) { p.image = url; n++ }
@@ -172,6 +198,7 @@ export function imageGenTargets(mode: 'missing' | 'all', scope?: { source?: stri
 }
 // نشاندنِ عکس روی محصولاتِ یک دسته. replace=true همه را بازنویسی می‌کند، وگرنه فقط بدونِ عکس.
 export function applyCategoryImage(categoryId: string, url: string, opts?: { replace?: boolean; source?: string }): number {
+  url = storeImage(url) || ''
   const db = load(); const cat = db.categories.find(c => c.id === categoryId); if (!cat || !url) return 0
   cat.image = url; let n = 0
   for (const p of db.products) {
@@ -218,6 +245,7 @@ export function deleteProducts(ids: string[]): number {
 // پس از اسکرپ: روی محصولاتِ یک منبع که «عکسِ درست» ندارند لوگو بگذار — تا کاربر هی دستی پاک نکند.
 // «عکسِ نادرست» = خالی، یا خودِ لوگو نیست ولی روی بیش از ۵ محصول تکرار شده (بنر/عکسِ اشتباهِ مشترک).
 export function applyLogoToScraped(source: string, logoUrl: string): number {
+  logoUrl = storeImage(logoUrl) || ''
   if (!logoUrl) return 0
   const db = load()
   const usage = new Map<string, number>()
@@ -232,6 +260,7 @@ export function applyLogoToScraped(source: string, logoUrl: string): number {
 }
 // نشاندنِ یک تصویر (لوگو) یا حذفِ عکس روی محصولاتِ یک محدوده (منبع/دسته) — بدونِ AI، آنی.
 export function setImagesForScope(opts: { source?: string; category?: string }, url: string): number {
+  url = url ? (storeImage(url) || '') : ''
   const db = load(); const catIds = opts.category ? descendantsOf(db.categories, opts.category) : null
   let n = 0
   for (const p of db.products) {
