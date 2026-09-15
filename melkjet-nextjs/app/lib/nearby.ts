@@ -125,12 +125,20 @@ async function computeNearbyUncached(lat: number, lng: number): Promise<NearbyRe
   // برای هر دسته یک جستجوی واقعیِ NexaMap — کاملاً بدونِ AI. ترتیبی (نه موازی) اجرا می‌شود تا NexaMap
   // زیرِ فشارِ ده‌ها درخواستِ هم‌زمان تعدادی را timeout/rate-limit نکند (تجربهٔ «فقط ۳تا آمد»). چون
   // نتیجه ۶ ساعت کش می‌شود، این چند ثانیه فقط یک‌بار برای هر نقطه هزینه دارد.
+  // Three at a time, not one after another. Sequential was chosen on purpose to keep
+  // NexaMap from rate-limiting us, and that reason still holds - but with one 8s
+  // timeout per category the total reached 14-30s per listing ("slow generate ...
+  // nearby 30s" in the enrich log), which is what kept the cron instance busy. A
+  // small pool keeps the request rate low while bounding the wall clock to a few
+  // waves instead of the sum of every timeout.
   const picked: Located[] = []
-  for (const c of NEARBY_CATEGORIES) {
+  const POOL = 3
+  const queue = [...NEARBY_CATEGORIES]
+  const runOne = async (c: typeof NEARBY_CATEGORIES[number]) => {
     try {
       const found = await geoSearch(c.q, { lat, lng, radius: NEARBY_MAX_KM * 1000, limit: 5, timeoutMs: 8000 })
       const near = found
-        .filter(f => f.name && !isAdminPlace(f))   // واحدهای اداری (استان/شهر/محله…) مکانِ «قابلِ رفتن» نیستند
+        .filter(f => f.name && !isAdminPlace(f))
         .map(f => ({
           type: c.label, name: f.name, lat: f.lat, lng: f.lng,
           km: typeof f.distanceM === 'number' ? f.distanceM / 1000 : haversine(lat, lng, f.lat, f.lng),
@@ -138,8 +146,15 @@ async function computeNearbyUncached(lat: number, lng: number): Promise<NearbyRe
         .filter(p => p.km <= NEARBY_MAX_KM)
         .sort((a, b) => a.km - b.km)
       if (near[0]) picked.push(near[0])
-    } catch { /* این دسته را رد کن */ }
+    } catch { /* skip this category */ }
   }
+  await Promise.all(Array.from({ length: Math.min(POOL, queue.length) }, async () => {
+    for (;;) {
+      const c = queue.shift()
+      if (!c) return
+      await runOne(c)
+    }
+  }))
 
   // نزدیک‌ترینِ هر دسته → فهرستِ متنوعِ واقعی، مرتب بر اساسِ فاصله، حداکثر ۱۰تا.
   const all = dedupByName(picked).sort((a, b) => a.km - b.km).slice(0, 10)

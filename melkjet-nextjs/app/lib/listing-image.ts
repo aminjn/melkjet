@@ -15,7 +15,12 @@ import { join } from 'path'
 // هشِ آدرسِ مبدأ ساخته می‌شود، پس نه فهرستی لازم است نه بازنویسی‌ای — و چون نام
 // ثابت است، کشِ مرورگر می‌تواند immutable باشد.
 
-const DIR = join(process.cwd(), '.media', 'li')
+// turbopackIgnore: .media holds ~52k cached images. Left analysable, Turbopack
+// folds this join() into a literal directory and every later join(DIR, x) becomes a
+// glob over it - the build reported one pattern matching 210,504 files, and compile
+// time went from 2.2min to 4.9min as the cache grew. Nothing here is a module; it is
+// runtime data, so there is nothing for the bundler to trace.
+const DIR = join(/*turbopackIgnore: true*/ process.cwd(), '.media', 'li')
 const MAX_BYTES = 3 * 1024 * 1024
 
 // کلیدِ کش تا ۷ سپتامبر ۲۰۲۶ sha1(کلِ آدرس) بود — و همین دیسک را پر کرد.

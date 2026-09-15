@@ -2,8 +2,13 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 
-const DIR = join(process.cwd(), '.media')
-const INDEX = join(process.cwd(), '.media-index.json')
+// turbopackIgnore: .media holds ~52k cached images. Left analysable, Turbopack
+// folds this join() into a literal directory and every later join(DIR, x) becomes a
+// glob over it - the build reported one pattern matching 210,504 files, and compile
+// time went from 2.2min to 4.9min as the cache grew. Nothing here is a module; it is
+// runtime data, so there is nothing for the bundler to trace.
+const DIR = join(/*turbopackIgnore: true*/ process.cwd(), '.media')
+const INDEX = join(/*turbopackIgnore: true*/ process.cwd(), '.media-index.json')
 
 interface MediaMeta { id: string; ext: string; mime: string; name: string; size: number; at: number }
 

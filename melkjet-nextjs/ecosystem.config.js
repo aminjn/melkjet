@@ -62,7 +62,12 @@ function instance(port, idx) {
       WARM_PORTS: '3000,3001,3002,3003',
     },
     autorestart: true,
-    max_memory_restart: idx === 0 ? '2200M' : '1200M',   // اینستنسِ ۰ کارگرِ دسته‌ای است، نه سرورِ وب
+    // Sized for the 8GB server, not the 2GB one these numbers were written for.
+    // At 1200M pm2 was killing healthy serving instances roughly every two
+    // minutes (28-32 restarts in one hour, current_memory up to 1.68GB in
+    // pm2.log) - the cap had stopped protecting anything and had become the
+    // cause of the instability it was meant to prevent.
+    max_memory_restart: idx === 0 ? '3000M' : '2500M',
     // اگر هنگامِ بوت خطا داد، به‌جای crash-loopِ بی‌نهایت بعد از ۱۵ تلاش بایستد.
     min_uptime: '10s',
     max_restarts: 15,

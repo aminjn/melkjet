@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   // هر بار یک پوشهٔ تازه پیدا می‌کرد. با این متغیر، بیلد در پوشهٔ کاملا جدا انجام می‌شود و
   // سایتِ زنده حتی یک بایت هم دست نمی‌خورد؛ جابه‌جایی فقط در پایان و در چند ثانیه.
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  // Runtime data directories must never enter the output file trace. Without this
+  // the tracer walked .media (~52k files) and the build slots themselves.
+  outputFileTracingExcludes: {
+    '*': ['.media/**', '.next/**', '.next-a/**', '.next-b/**', '.next-build/**'],
+  },
   // فاز ۲۵۷ (سرعت): در بیلدِ پروداکشن همهٔ console.* از باندلِ کلاینت حذف می‌شود (باندلِ JS کوچک‌تر،
   // بدونِ نشتِ لاگ در مرورگرِ کاربر) — به‌جز error/warn که برای تشخیصِ مشکل روی prod لازم‌اند.
   // فاز ۲۷۶ — ⚠️ removeConsole خاموش شد و باید خاموش بماند.

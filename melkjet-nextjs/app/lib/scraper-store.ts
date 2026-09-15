@@ -480,7 +480,21 @@ export async function candidateListings(limit = 500, type: SourceType = 'listing
   return (await listItems(type, { publicOnly: true })).slice(0, limit)
 }
 
+// One listing by id must not read every listing. load() pulls all ~16k jsonb rows
+// through pgListingsAll(), and app/listing/[slug]/page.tsx calls this twice per
+// render (generateMetadata, then the page). After each pm2 restart the cache was
+// cold, so all four instances re-read the whole table at once, hit
+// statement_timeout (57014 in the logs), and the failed renders pushed memory past
+// the pm2 cap - which restarted the instance and dropped the cache again. id is the
+// table's primary key, so this is a single indexed lookup. The old full-load path
+// stays as the fallback for the file-backed mode and for any query error.
 export async function getItemById(itemId: string): Promise<Item | null> {
+  if (pgEnabled() && itemId) {
+    try {
+      const r = await pgTx(c => c.query('SELECT data FROM listings WHERE id = $1 LIMIT 1', [itemId]))
+      return r.rows.length ? (r.rows[0].data as Item) : null
+    } catch { /* fall through to the cached full load */ }
+  }
   return (await load()).items.find(i => i.id === itemId) || null
 }
 
