@@ -50,6 +50,20 @@ async function ensureSchemaOnce(client: PoolClient) {
   )`)
   await client.query(`CREATE INDEX IF NOT EXISTS listings_scraped ON listings(scraped_at DESC)`)
   await client.query(`CREATE INDEX IF NOT EXISTS listings_type ON listings(type)`)
+  // Enrichment deltas, one row per listing.
+  //
+  // The baseline stays in .enrich-data.json, which enrich-store reads synchronously
+  // at boot so its read API can stay synchronous on a hot path. These rows carry
+  // only the changes since that snapshot: writes became one small upsert instead of
+  // restringifying and fsyncing the whole ~52MB document per field (21,555 keys),
+  // and updated_at lets each pm2 instance pull the other instances' results
+  // incrementally instead of re-parsing 52MB whenever the file mtime moved.
+  await client.query(`CREATE TABLE IF NOT EXISTS enrich (
+    id text PRIMARY KEY,
+    data jsonb NOT NULL DEFAULT '{}'::jsonb,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`)
+  await client.query(`CREATE INDEX IF NOT EXISTS enrich_updated ON enrich(updated_at)`)
   // ستونِ محاسباتیِ محلِ نرمال‌شده + ایندکسِ trigram: فیلترِ محله باید داخلِ دیتابیس اجرا شود،
   // نه با کشیدنِ چند صد آگهیِ «تازه» به حافظه و فیلترِ درجا. GENERATED یعنی پستگرس خودش
   // هنگام درج پرش می‌کند، پس هیچ‌کدام از مسیرهای درج تغییر نمی‌خواهد و از هم‌گامی خارج نمی‌شود.
