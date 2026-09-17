@@ -3,7 +3,7 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 
 // turbopackIgnore: .media holds ~52k cached images. Left analysable, Turbopack
-// folds this join() into a literal directory and every later join(DIR, x) becomes a
+// folds this join() into a literal directory and every later join(/*turbopackIgnore: true*/ DIR, x) becomes a
 // glob over it - the build reported one pattern matching 210,504 files, and compile
 // time went from 2.2min to 4.9min as the cache grew. Nothing here is a module; it is
 // runtime data, so there is nothing for the bundler to trace.
@@ -26,7 +26,7 @@ export function saveMedia(buf: Buffer, mime: string, name: string): MediaMeta {
   ensure()
   const ext = EXT[mime] || (name.split('.').pop() || 'bin').toLowerCase().slice(0, 5)
   const id = randomBytes(8).toString('hex')
-  writeFileSync(join(DIR, `${id}.${ext}`), buf)
+  writeFileSync(join(/*turbopackIgnore: true*/ DIR, `${id}.${ext}`), buf)
   const meta: MediaMeta = { id, ext, mime, name: name.slice(0, 120), size: buf.length, at: Date.now() }
   const rows = loadIndex(); rows.unshift(meta); saveIndex(rows.slice(0, 2000))
   return meta
@@ -35,7 +35,7 @@ export function saveMedia(buf: Buffer, mime: string, name: string): MediaMeta {
 export function getMedia(id: string): { path: string; mime: string } | null {
   const m = loadIndex().find(x => x.id === id)
   if (!m) return null
-  const p = join(DIR, `${m.id}.${m.ext}`)
+  const p = join(/*turbopackIgnore: true*/ DIR, `${m.id}.${m.ext}`)
   if (!existsSync(p)) return null
   return { path: p, mime: m.mime }
 }

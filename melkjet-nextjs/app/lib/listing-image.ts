@@ -16,7 +16,7 @@ import { join } from 'path'
 // ثابت است، کشِ مرورگر می‌تواند immutable باشد.
 
 // turbopackIgnore: .media holds ~52k cached images. Left analysable, Turbopack
-// folds this join() into a literal directory and every later join(DIR, x) becomes a
+// folds this join() into a literal directory and every later join(/*turbopackIgnore: true*/ DIR, x) becomes a
 // glob over it - the build reported one pattern matching 210,504 files, and compile
 // time went from 2.2min to 4.9min as the cache grew. Nothing here is a module; it is
 // runtime data, so there is nothing for the bundler to trace.
@@ -49,13 +49,13 @@ export function localName(url: string): string {
 export function localUrl(url: string): string { return '/api/li/' + localName(url) }
 
 export function isCached(url: string): boolean {
-  try { return existsSync(join(DIR, localName(url))) } catch { return false }
+  try { return existsSync(join(/*turbopackIgnore: true*/ DIR, localName(url))) } catch { return false }
 }
 
 // مسیرِ فایلِ کش‌شده برای مسیرِ سِرو — نام اعتبارسنجی می‌شود تا از عبور از پوشه جلوگیری شود.
 export function cachedPath(name: string): string | null {
   if (!/^[a-f0-9]{20}\.(jpg|png|webp|gif)$/.test(name)) return null
-  const p = join(DIR, name)
+  const p = join(/*turbopackIgnore: true*/ DIR, name)
   try { return existsSync(p) ? p : null } catch { return null }
 }
 
@@ -63,13 +63,13 @@ export function cachedPath(name: string): string | null {
 export async function cacheRemote(url: string): Promise<string> {
   if (!/^https?:\/\//i.test(url)) return ''
   const name = localName(url)
-  try { if (existsSync(join(DIR, name))) return '/api/li/' + name } catch {}
+  try { if (existsSync(join(/*turbopackIgnore: true*/ DIR, name))) return '/api/li/' + name } catch {}
   // فایل‌هایی که با کلیدِ قدیمی ذخیره شده‌اند همچنان معتبرند و همان‌ها سِرو می‌شوند.
   // بدونِ این خط، تغییرِ کلید یعنی ۳۶ هزار دانلودِ تازه از دیوار و خوردن به سقفِ
   // ضدِاسکرپ. این‌طور گذار تدریجی و رایگان است: هر عکس فقط وقتی با کلیدِ تازه نوشته
   // می‌شود که آگهی‌اش دوباره اسکرپ شود.
   const legacy = urlHashName(url)
-  if (legacy !== name) { try { if (existsSync(join(DIR, legacy))) return '/api/li/' + legacy } catch {} }
+  if (legacy !== name) { try { if (existsSync(join(/*turbopackIgnore: true*/ DIR, legacy))) return '/api/li/' + legacy } catch {} }
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(12000) })
     if (!r.ok) return ''
@@ -77,7 +77,7 @@ export async function cacheRemote(url: string): Promise<string> {
     const buf = Buffer.from(await r.arrayBuffer())
     if (!buf.length || buf.length > MAX_BYTES) return ''
     if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true })
-    writeFileSync(join(DIR, name), buf)
+    writeFileSync(join(/*turbopackIgnore: true*/ DIR, name), buf)
     return '/api/li/' + name
   } catch { return '' }
 }
