@@ -71,6 +71,27 @@ console.log('')
 console.log('عنوانِ بازساخته ولی «در نامشخص»: ' + bucket.unknownLoc.length + '  ' + pct(bucket.unknownLoc.length))
 console.log('توضیحِ متایِ کوتاه‌تر از ۱۲۰ نویسه: ' + descShort)
 
+// متنِ بدنهٔ صفحه: عنوان و متا یکتا شده‌اند، ولی اگر enrich متنِ خودش را نداشته باشد بدنهٔ
+// صفحه همان متنِ دیوار است. کلیدِ فایل و ردیفِ enrich هر دو شمرده می‌شوند (فایل = پایه، ردیف = دلتا).
+const withDesc = new Set()
+try {
+  if (existsSync('.enrich-data.json')) {
+    const raw = JSON.parse(readFileSync('.enrich-data.json', 'utf-8'))
+    for (const [k, v] of Object.entries(raw)) if (v && String(v.description || '').trim()) withDesc.add(k)
+  }
+} catch {}
+try {
+  const { pgEnabled, pgTx } = await import('../app/lib/db.ts')
+  if (pgEnabled()) {
+    const r = await pgTx(c => c.query("SELECT id FROM enrich WHERE coalesce(data->>'description','') <> ''"))
+    for (const x of r.rows) withDesc.add(x.id)
+  }
+} catch {}
+const bodyUnique = items.filter(it => withDesc.has(it.id)).length
+console.log('')
+console.log('بدنهٔ یکتا (متنِ enrich جای متنِ دیوار): ' + bodyUnique + '  ' + pct(bodyUnique))
+console.log('بدنه هنوز متنِ دیوار:              ' + (n - bodyUnique) + '  ' + pct(n - bodyUnique))
+
 const show = (label, arr) => {
   if (!NSAMP || !arr.length) return
   console.log('')

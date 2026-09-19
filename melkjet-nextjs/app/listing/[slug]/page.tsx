@@ -79,9 +79,20 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
     floorSize: area ? { '@type': 'QuantitativeValue', value: area, unitCode: 'MTK' } : undefined,
     address: { '@type': 'PostalAddress', addressLocality: city || loc || undefined, addressCountry: 'IR' },
   }
+  // ۱۹ سپتامبر — تا امروز descriptionِ اسکیما عیناً متنِ دیوار بود: فاز ۲۲۸ عنوان/متا را یکتا کرده بود
+  // ولی دادهٔ ساختاریافته همان متنِ تکراری را به گوگل می‌داد. ترتیبِ ترجیح: متنِ یکتایِ enrich →
+  // توصیفِ بازساختهٔ سئو → هیچ. متنِ خامِ دیوار دیگر هیچ‌وقت به اسکیما نمی‌رود.
+  let enr: import('@/app/lib/enrich-store').Enrichment | null = null
+  try { const { getEnrichment } = await import('@/app/lib/enrich-store'); enr = getEnrichment(id) } catch {}
+  let seoDesc = ''
+  try {
+    const { seoListingDescription, deriveListing } = await import('@/app/lib/listing-search')
+    seoDesc = seoListingDescription(deriveListing(it as Parameters<typeof deriveListing>[0]), it.price)
+  } catch {}
+  const ldDescription = (enr?.description || '').trim() || seoDesc || undefined
   const ld: Record<string, unknown> = {
     '@context': 'https://schema.org', '@type': 'RealEstateListing',
-    name: it.title, description: it.excerpt || undefined,
+    name: it.title, description: ldDescription,
     image: it.image || undefined, url: canonical,
     datePosted: it.scrapedAt ? new Date(it.scrapedAt).toISOString() : undefined,
     about,
@@ -109,8 +120,7 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   let originality: import('@/app/lib/originality').OriginalityVerdict | null = null
   try {
     const { originalityOf } = await import('@/app/lib/originality')
-    const { getEnrichment } = await import('@/app/lib/enrich-store')
-    const gallery = getEnrichment(id)?.gallery?.length || 0
+    const gallery = enr?.gallery?.length || 0
     // انحرافِ قیمتِ متری از میانهٔ هم‌محله‌ها (فقط هم‌نوعِ معامله؛ حداقل ۵ نمونه وگرنه نامعلوم)
     let priceVsMarketPct: number | null = null
     try {
@@ -162,8 +172,7 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   // «نزدیک به مترو…، بانک…، مدرسه…» را ایندکس کند. اگر هنوز در کش نبود، این بخش بی‌صدا رد می‌شود.
   let nearbyLd: Record<string, unknown> | null = null
   try {
-    const { getEnrichment } = await import('@/app/lib/enrich-store')
-    const nb = getEnrichment(id)?.nearby as { type?: string; name?: string; time?: string }[] | undefined
+    const nb = enr?.nearby as { type?: string; name?: string; time?: string }[] | undefined
     if (Array.isArray(nb) && nb.length >= 2) {
       const line = nb.slice(0, 8).map(n => `${n.type ? n.type + ' ' : ''}${n.name || ''}${n.time ? ` (${n.time})` : ''}`.trim()).filter(Boolean).join('، ')
       if (line) {
@@ -179,12 +188,19 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
     }
   } catch { /* بدونِ سئوِ محله هم صفحه سالم است */ }
 
+  // متنِ توضیحات: کلاینت از قبل بعد از فچِ /api/listing/enrich متنِ یکتا را جایگزین می‌کرد — ولی
+  // خزندهٔ گوگل فقط HTMLِ اولیه را می‌بیند، پس همیشه متنِ دیوار را می‌دید. حالا همان جایگزینی
+  // سمتِ سرور انجام می‌شود: همان مقداری که کلاینت می‌گذاشت، این‌بار در HTMLِ اولیه (بدونِ پرشِ متن).
+  const enrDesc = (enr?.description || '').trim()
+  const base = enrDesc ? { ...it, excerpt: enrDesc } : it
+  const initial = (promoKind ? { ...base, promoted: true, promoKind } : base) as any
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       {nearbyLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(nearbyLd) }} />}
-      <PropertyClient id={id} initial={promoKind ? { ...it, promoted: true, promoKind } as any : (it as any)} originality={originality} />
+      <PropertyClient id={id} initial={initial} originality={originality} />
     </>
   )
 }

@@ -6,6 +6,7 @@
 
 import { dealOf } from './listing-filter'
 import { PROPERTY_KINDS } from './taxonomy'
+import { hasTimePrefix } from './location-match'
 
 export function seedNum(s: string): number {
   let h = 0
@@ -149,9 +150,15 @@ export function seoListingTitle(d: Pick<DerivedListing, 'deal' | 'kind' | 'areaN
   const hood = parts.length > 1 ? parts[parts.length - 1] : ''
   const city = parts[0] || ''
   const place = [hood, city].filter(Boolean).join('، ')
-  // بدونِ حداقلِ داده (نوع+متراژ+مکان) عنوانِ اصلی می‌ماند — عنوانِ نصفه‌نیمه نمی‌سازیم
-  if (!kind || !d.areaNum || !place) return d.title
   const deal = DEAL_FA[d.deal] || ''
+  // بدونِ حداقلِ داده (نوع+متراژ+مکان) عنوانِ اصلی می‌ماند — عنوانِ نصفه‌نیمه نمی‌سازیم.
+  // استثنا: در ۸۳ آگهی عنوانِ ذخیره‌شده اصلاً عنوان نیست — خطِ «۲ هفته پیش در تهران، میرداماد»ی
+  // که روی کارتِ دیوار به‌جای عنوان اسکرپ شده. برگرداندنِ آن هم تکراریِ دیوار است هم بی‌معنا؛
+  // با همان نوع+مکانی که داریم عنوانِ درست و کوتاه می‌سازیم.
+  if (!kind || !d.areaNum || !place) {
+    if (kind && place && hasTimePrefix(d.title || '')) return `${deal ? deal + ' ' : ''}${kind} در ${place}`
+    return d.title
+  }
   let t = `${deal ? deal + ' ' : ''}${kind} ${faN(d.areaNum)} متری${d.bedsNum ? ` ${faN(d.bedsNum)} خوابه` : ''} در ${place}`
   if (d.deal === 'sale' && d.priceNum > 0 && d.areaNum > 0) {
     const perM = Math.round((d.priceNum * 1e9) / d.areaNum / 1e6)
