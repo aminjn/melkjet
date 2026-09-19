@@ -1,4 +1,5 @@
-import { getItemById } from './scraper-store'
+import { getItemById, repairTimePrefixTitle } from './scraper-store'
+import { hasTimePrefix } from './location-match'
 import { getEnrichment, patchEnrichment, type Enrichment } from './enrich-store'
 import { fetchDivarPost, divarToken } from './divar-post'
 import { computeNearby, NEARBY_V } from './nearby'
@@ -48,6 +49,9 @@ async function generate(id: string): Promise<Enrichment> {
         // شکستِ گذرا (پروکسی/شبکه/429) — نهایی نکن؛ فقط مهرِ تلاش بزن تا جارو بعداً برگردد.
         return patchEnrichment(id, { v: ENRICH_V, baseTriedAt: Date.now() })
       }
+      // عنوانِ واقعی همین‌جا در دست است و تا امروز دور ریخته می‌شد. اگر عنوانِ ذخیره‌شده
+      // خطِ زمان‌دارِ کارت باشد، همین جا ترمیم می‌شود — پس هر آگهی‌ای که غنی می‌شود خودش را درمان می‌کند.
+      if (g.title && hasTimePrefix(it.title || '')) { try { await repairTimePrefixTitle(it.id, g.title) } catch {} }
       gallery = g.images?.length ? g.images : undefined
       facts = g.facts || []
       amenities = g.amenities || []

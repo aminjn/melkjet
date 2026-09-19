@@ -6,6 +6,7 @@ import { pgEnabled, kvGet, pgTx, pgListingsAll } from './db'
 import { fieldsOf as simFieldsOf, TwinIndex, norm as simNorm } from './listing-similarity'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 import { resolveScrapedLocation } from './geo-store'
+import { hasTimePrefix } from './location-match'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 const KV_KEY = 'scraper'          // بلابِ قدیمی — بعد از migration دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند
@@ -608,6 +609,25 @@ export async function setItemCoords(itemId: string, lat: number, lng: number) {
     it.meta = it.meta || {}
     if (Number(it.meta['__lat']) && Number(it.meta['__lng'])) return
     it.meta['__lat'] = String(lat); it.meta['__lng'] = String(lng)
+  })
+}
+
+// عنوانی که عنوان نیست: در بعضی آگهی‌ها خطِ «۳ هفته پیش در تهران، هروی»ی کارتِ دیوار
+// به‌جای عنوان اسکرپ شده — همان خانوادهٔ باگِ ۵۹۴ «مکان»، این‌بار در فیلدِ title. این
+// عنوان هم H1 است هم اسلاگِ URL، پس فقط درست‌کردنِ متا کافی نیست.
+//
+// گارد داخلِ خودِ تابع است تا هیچ صدازننده‌ای نتواند عنوانِ سالم را بازنویسی کند، و عنوانِ
+// اولیه در meta.__rawTitle می‌ماند تا چیزی بی‌بازگشت پاک نشود.
+export async function repairTimePrefixTitle(itemId: string, realTitle: string): Promise<boolean> {
+  const t = (realTitle || '').trim()
+  if (!itemId || !t || hasTimePrefix(t)) return false
+  return mutateSome([itemId], ({ items }) => {
+    const it = items.find(i => i.id === itemId)
+    if (!it || !hasTimePrefix(it.title || '')) return false
+    it.meta = it.meta || {}
+    if (!it.meta['__rawTitle']) it.meta['__rawTitle'] = it.title
+    it.title = t
+    return true
   })
 }
 
