@@ -2,6 +2,7 @@
 // از متن (هم‌پوشانیِ توکن‌های عنوان)، مشخصات (متراژ/اتاق/قیمت) و لوکیشن (محله) امتیازِ شباهتِ ۰..۱ می‌سازد.
 // بدونِ وابستگی به استورها تا هم در ingest (scraper-store)، هم dedupe، هم واردکنندهٔ دیوار استفاده شود.
 import { dealOf } from './listing-filter'
+import { intFrom } from './digits'
 
 export function faToEn(s: string): string {
   // فاز ۲۸۴ — جداکننده‌های فارسی هم ترجمه می‌شوند: بازبینِ خصمانه ثابت کرد بدونِ «٬»→«,»
@@ -13,7 +14,7 @@ export function norm(s?: string): string { return (s || '').replace(/‌/g, '').
 function toks(s?: string): Set<string> { return new Set(norm(s).split(/[\s,،.\/\-+*()]+/).filter(t => t.length > 2)) }
 function overlap(a: Set<string>, b: Set<string>): number { if (!a.size || !b.size) return 0; let c = 0; for (const t of a) if (b.has(t)) c++; return c / Math.min(a.size, b.size) }
 function near(a: number, b: number, tol: number): boolean { if (!a || !b) return false; return Math.abs(a - b) / Math.max(a, b) <= tol }
-function firstInt(s?: string): number { const m = faToEn(s || '').match(/\d[\d,]*/); return m ? parseInt(m[0].replace(/,/g, ''), 10) : 0 }
+function firstInt(s?: string): number { return intFrom(s) ?? 0 }
 
 // فاز ۱۴۵ (فیدبک: «شهر، استان، موقعیت، نوع ملک و همهٔ جزئیات باید مورد توجه باشد»)
 export interface SimFields {

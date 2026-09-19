@@ -7,6 +7,7 @@
 import { dealOf } from './listing-filter'
 import { PROPERTY_KINDS } from './taxonomy'
 import { hasTimePrefix } from './location-match'
+import { intFrom } from './digits'
 
 export function seedNum(s: string): number {
   let h = 0
@@ -19,7 +20,7 @@ const FA_DIGITS: Record<string, string> = {
   '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
 }
 export function faToEn(s: string): string { return (s || '').replace(/[۰-۹٠-٩]/g, d => FA_DIGITS[d] ?? d) }
-export function firstInt(s?: string): number | null { const m = faToEn(s || '').match(/(\d{1,4})/); return m ? parseInt(m[1], 10) : null }
+export function firstInt(s?: string): number | null { return intFrom(s) }
 
 // واحدِ ملک (آپارتمان/ویلا/…) را از متن تشخیص می‌دهد
 export function detectKind(text: string): string {
