@@ -30,8 +30,13 @@ const disp = (it: Item) => ({
 })
 
 /** اولین باری که آگهی دیده شده. scrapedAt در هر به‌روزرسانی ریست می‌شود، پس تنها
- *  وقتی «تازگی» معنا دارد که مهرِ اولین‌بار موجود باشد. */
-const firstSeen = (it: Item): number => Number(it.firstSeenAt) || 0
+ *  وقتی «تازگی» معنا دارد که مهرِ اولین‌بار موجود باشد.
+ *
+ *  Falling back to 0 sorted every listing predating the field to the bottom of a
+ *  newest-first feed, permanently - 9,409 of them. scrapedAt is the wrong answer
+ *  for a listing that has been re-scraped since, but it is the right order of
+ *  magnitude, where 0 is not; telegram-notify has always fallen back this way. */
+const firstSeen = (it: Item): number => Number(it.firstSeenAt) || Number(it.scrapedAt) || 0
 
 export async function GET(req: NextRequest) {
   const s = await getSession()
