@@ -32,12 +32,18 @@ export function dealOf(it: DealFields): DealKind {
   // شواهدِ سختِ روزانه — مستقل از متایِ صریح، چون ایمپورتِ قدیمیِ دیوار (که «روزانه» را نمی‌شناخت)
   // همین آگهی‌ها را صریحاً «نوع معامله: فروش» مهر کرده بود؛ شاهدِ سخت باید آن مهرِ غلط را بشکند.
   const strongDaily = NIGHT_PRICE_RE.test(price) || DAILY_META_KEYS_RE.test(metaKeys) || DAILY_STRONG_RE.test(price) || DAILY_STRONG_RE.test(excerpt)
+  // ۱۹ سپتامبر — همان داستانِ strongDaily، این‌بار برای اجاره. ممیزیِ قیمت آگهی‌هایی
+  // را نشان داد که رشتهٔ قیمتشان «اجاره ماهیانه: ۱۵۰٬۰۰۰٬۰۰۰ تومان» است ولی متاشان
+  // می‌گوید «نوع معامله: فروش». چون مهرِ صریح جلوتر از قیمت چک می‌شد، این‌ها در فیلترِ
+  // «خرید» می‌آمدند. رشتهٔ قیمتِ یک آگهیِ فروشی هرگز واژهٔ ودیعه/رهن/اجاره ندارد، پس
+  // همان شاهدِ سختی است که باید مهرِ غلط را بشکند.
+  const strongRent = !strongDaily && /ودیعه|رهن|اجاره/.test(price)
   const explicit = it.meta?.['نوع معامله'] || ''
   if (explicit) {
     if (/پیش[‌\s]?فروش/.test(explicit)) return 'presale'
     if (DAILY_RE.test(explicit)) return 'daily'
     if (/اجاره|رهن|ودیعه/.test(explicit)) return 'rent'
-    if (/فروش|خرید/.test(explicit)) return strongDaily ? 'daily' : 'sale'
+    if (/فروش|خرید/.test(explicit)) return strongDaily ? 'daily' : strongRent ? 'rent' : 'sale'
   }
   if (strongDaily) return 'daily'
   if (/ودیعه|رهن|اجاره/.test(price)) return 'rent'

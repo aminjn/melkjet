@@ -95,10 +95,26 @@ console.log('  متریِ بی‌معنا (خارج از ' + PPM_MIN + ' تا ' 
 for (const a of absurd.slice(0, 10)) {
   console.log('    «' + String(a.it.price || '').slice(0, 44) + '»  ' + a.d.areaNum + 'م  →  متری ' + Math.round(a.ppm).toLocaleString('fa-IR') + ' میلیون')
   console.log('      ' + String(a.it.title || '').slice(0, 80))
+  // خامِ متا هم چاپ می‌شود تا بدانیم باگِ پارس است یا خودِ داده غلط است —
+  // بدونِ این، هر دو یکِسان به نظر می‌رسند.
+  console.log('      خام: متراژ=«' + (a.it.meta?.['متراژ'] ?? '—') + '»  نوع معامله=«' + (a.it.meta?.['نوع معامله'] ?? '—') + '»')
 }
 if (absurd.length) {
   const byS = new Map()
   for (const a of absurd) byS.set(shape(a.it.price), (byS.get(shape(a.it.price)) || 0) + 1)
   console.log('  تفکیکِ قالبِ موارد بی‌معنا: ' + [...byS.entries()].map(([k, v]) => k + '=' + v).join('، '))
 }
+
+// مهرِ صریحِ متا با رشتهٔ قیمت نمی‌خواند؟ یکی از دو طرف دروغ می‌گوید و
+// تا امروز متا برنده می‌شد — آگهیِ اجاره در فیلترِ خرید.
+const rentPrice = /ودیعه|رهن|اجاره/
+const mism = items.filter(it => rentPrice.test(String(it.price || '')) && /فروش|خرید/.test(String(it.meta?.['نوع معامله'] || '')))
+console.log('')
+console.log('— مهرِ «فروش» با قیمتِ اجاره —')
+console.log('  تعداد: ' + mism.length)
+for (const it of mism.slice(0, NSAMP)) {
+  console.log('    «' + String(it.price || '').slice(0, 44) + '»  →  dealOf=' + deriveListing(it).deal)
+  console.log('      ' + String(it.title || '').slice(0, 80))
+}
+
 process.exit(0)
