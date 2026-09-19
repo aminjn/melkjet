@@ -9,10 +9,14 @@
 //
 // That text is now rendered in the initial HTML and indexed as the listing's
 // schema description, so the mixed digits are visible to both readers and Google.
-//
 // The generator is fixed, but a summary is only ever built once (analysisOk), so
-// the entries already in the cache would keep their Latin digits forever. This
-// rewrites those in place - summary only, nothing else is touched.
+// the entries already in the cache would keep their Latin digits forever.
+//
+// Why this writes the rows with SQL instead of calling patchEnrichment: the store
+// flushes on a timer and flushEnrichment() does not await flushRows(), so the
+// first version of this script had its 15,250 upserts cut off by process.exit.
+// Writing the delta rows directly is the designed channel anyway - every instance
+// merges them in within SYNC_MS and snapshots them into the file later.
 //
 // اجرا:  node --import ./scripts/reos-loader.mjs scripts/fix-summary-digits.mjs [--apply]
 import { readFileSync, existsSync } from 'node:fs'
@@ -32,22 +36,30 @@ loadEnv('.env.production.local'); loadEnv('.env')
 const APPLY = process.argv.includes('--apply')
 const FA = '۰۱۲۳۴۵۶۷۸۹'
 const enToFa = s => String(s || '').replace(/[0-9]/g, d => FA[Number(d)])
+const FILE = '.enrich-data.json'
 
-const { listItems } = await import('../app/lib/scraper-store.ts')
-const { getEnrichment, patchEnrichment, flushEnrichment } = await import('../app/lib/enrich-store.ts')
+const { pgEnabled, pgTx } = await import('../app/lib/db.ts')
+if (!pgEnabled()) { console.error('دیتابیس در دسترس نیست.'); process.exit(1) }
 
-const items = await listItems('listing', { publicOnly: true })
-if (!items.length) { console.error('هیچ آگهیِ عمومی‌ای خوانده نشد — DATABASE_URL را بررسی کنید.'); process.exit(1) }
+// حالتِ مؤثر = ردیف (دلتایِ تازه‌تر) وگرنه فایل (پایه). هر دو خوانده می‌شوند،
+// وگرنه چیزی که اینستنس‌ها تازه نوشته‌اند دیده نمی‌شود.
+const analysisOf = new Map()
+if (existsSync(FILE)) {
+  const raw = JSON.parse(readFileSync(FILE, 'utf-8'))
+  for (const [id, v] of Object.entries(raw)) if (v?.analysis) analysisOf.set(id, v.analysis)
+}
+const fileKeys = analysisOf.size
+const rows = await pgTx(c => c.query("SELECT id, data->'analysis' AS a FROM enrich WHERE data ? 'analysis'"))
+for (const r of rows.rows) if (r.a) analysisOf.set(r.id, r.a)
 
 const hits = []
-for (const it of items) {
-  const a = getEnrichment(it.id)?.analysis
-  const s = a && typeof a.summary === 'string' ? a.summary : ''
-  if (s && /[0-9]/.test(s)) hits.push({ id: it.id, a, before: s, after: enToFa(s) })
+for (const [id, a] of analysisOf) {
+  const s = typeof a?.summary === 'string' ? a.summary : ''
+  if (s && /[0-9]/.test(s)) hits.push({ id, a, before: s, after: enToFa(s) })
 }
 
-console.log('آگهیِ عمومی: ' + items.length)
-console.log('خلاصهٔ دارایِ رقمِ لاتین: ' + hits.length)
+console.log('خلاصه در فایل: ' + fileKeys + '   در ردیف‌ها: ' + rows.rows.length + '   مؤثر: ' + analysisOf.size)
+console.log('دارایِ رقمِ لاتین: ' + hits.length)
 for (const h of hits.slice(0, 3)) {
   console.log('  قبل:  ' + h.before.slice(0, 100))
   console.log('  بعد:  ' + h.after.slice(0, 100))
@@ -55,8 +67,28 @@ for (const h of hits.slice(0, 3)) {
 if (!hits.length) { console.log('چیزی برای ترمیم نیست.'); process.exit(0) }
 if (!APPLY) { console.log('\nنمایشی بود. برای اعمال: --apply'); process.exit(0) }
 
-for (const h of hits) patchEnrichment(h.id, { analysis: { ...h.a, summary: h.after } })
-flushEnrichment()
-console.log('\nاعمال شد: ' + hits.length)
-console.log('اینستنس‌ها تا ۲۰ ثانیهٔ بعد ردیف‌ها را sync می‌کنند؛ صفحه‌های کش‌شده با revalidate بعدی تازه می‌شوند.')
+// دسته‌دسته و await‌شده. data || EXCLUDED.data ادغامِ سطحی است، پس کلِ آبجکتِ
+// analysis فرستاده می‌شود نه فقط summary — وگرنه بقیهٔ تحلیل پاک می‌شد.
+const CHUNK = 500
+let done = 0
+for (let i = 0; i < hits.length; i += CHUNK) {
+  const part = hits.slice(i, i + CHUNK)
+  await pgTx(async c => {
+    for (const h of part) {
+      await c.query(
+        `INSERT INTO enrich (id, data) VALUES ($1, $2::jsonb)
+         ON CONFLICT (id) DO UPDATE SET data = enrich.data || EXCLUDED.data, updated_at = now()`,
+        [h.id, JSON.stringify({ analysis: { ...h.a, summary: h.after }, enrichedAt: Date.now() })])
+    }
+  })
+  done += part.length
+  process.stdout.write('\r  نوشته‌شده: ' + done + '/' + hits.length)
+}
+console.log('')
+
+// تأییدِ همان‌جا، از خودِ دیتابیس — نه از حافظه.
+const left = await pgTx(c => c.query(
+  "SELECT count(*)::int AS n FROM enrich WHERE data->'analysis'->>'summary' ~ '[0-9]'"))
+console.log('باقی‌ماندهٔ دارایِ رقمِ لاتین در ردیف‌ها: ' + left.rows[0].n)
+console.log('اینستنس‌ها تا ۲۰ ثانیه ردیف‌ها را sync می‌کنند و در اسنپ‌شاتِ بعدی در فایل می‌نشیند.')
 process.exit(0)

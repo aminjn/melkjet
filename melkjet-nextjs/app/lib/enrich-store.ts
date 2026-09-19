@@ -123,9 +123,12 @@ async function syncIn(): Promise<void> {
   } catch (e) { console.error('[enrich-store] sync failed:', (e as Error)?.message) }
 }
 
-export function flushEnrichment(): void {
+// Await this. The first caller did not: it called flushEnrichment() and then
+// process.exit(0), and all 15,250 of its upserts were cut off mid-flight because
+// flushRows() was still running. The signature now makes that impossible to miss.
+export async function flushEnrichment(): Promise<void> {
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null }
-  if (pgEnabled()) void flushRows()
+  if (pgEnabled()) await flushRows()
   snapshot()   // synchronous, and already holds everything in memory
 }
 
