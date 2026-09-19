@@ -29,13 +29,13 @@ loadEnv('.env.production.local'); loadEnv('.env')
 const ms = t => Math.round(t) + 'ms'
 const time = async fn => { const t0 = Date.now(); const r = await fn(); return [Date.now() - t0, r] }
 
-const { listAccounts, dashForRoleId } = await import('../app/lib/account-store.ts')
+const { listAccounts } = await import('../app/lib/account-store.ts')
 const { listItemsStable } = await import('../app/lib/scraper-store.ts')
 const { creditsByOwner, getCredit, getTokenUsage } = await import('../app/lib/comm-store.ts')
 const { leadCountsByOwner, listLeads } = await import('../app/lib/leads-store.ts')
 const { taskCountsByOwner, listTasks } = await import('../app/lib/crm-store.ts')
 const { getProfile, completeness } = await import('../app/lib/profile-store.ts')
-const { listRoles } = await import('../app/lib/role-store.ts')
+const { listRoles, dashForRoleId } = await import('../app/lib/role-store.ts')
 const { listPlans } = await import('../app/lib/plan-store.ts')
 
 const [tAcc, accounts] = await time(async () => listAccounts())
@@ -57,6 +57,27 @@ console.log('  سه سند دسته‌ای      ' + ms(tBulk))
 console.log('  پروفایل‌ها           ' + ms(tProf))
 console.log('  ــــــــــــــــــــــــــــ')
 console.log('  جمع                 ' + ms(nowTotal))
+
+// حجمِ خودِ پاسخ: با هزاران حساب، سرورِ سریع هنوز می‌تواند مرورگرِ کند بدهد.
+const [tJson, payload] = await time(async () => {
+  const [credits, leadCounts, taskCounts] = await Promise.all([creditsByOwner(), leadCountsByOwner(), taskCountsByOwner()])
+  const counts = {}
+  for (const it of items) { const p = String(it.meta?.__ownerPhone || ''); if (p) counts[p] = (counts[p] || 0) + 1 }
+  const users = accounts.map(a => {
+    const cw = credits[a.phone]
+    return { ...a, dashboard: dashForRoleId(a.role), listings: counts[a.phone] || 0,
+      leads: leadCounts[a.phone] || 0, tasks: taskCounts[a.phone] || 0,
+      credit: cw ? cw.credit : { sms: 0, email: 0, token: 0 }, tokenUsed: cw ? cw.tokenUsed : 0,
+      profileCompletion: completeness(getProfile(a.phone)) }
+  })
+  return JSON.stringify({ users })
+})
+const kb = Math.round(payload.length / 1024)
+console.log('')
+console.log('— حجمِ پاسخ —')
+console.log('  ساخت + JSON      ' + ms(tJson))
+console.log('  حجم              ' + kb + ' KB   (' + Math.round(payload.length / accounts.length) + ' بایت به ازای هر حساب)')
+if (kb > 1500) console.log('  ← همین محتملاً گلوگاهِ مرورگر است: صفحه‌بندی/جستجوی سمتِ سرور لازم است، نه فرستادنِ همه یکجا.')
 
 // مسیرِ قدیمی را روی نمونه می‌سنجیم؛ اجرای کاملش همان چیزی است که صفحه را کند می‌کرد.
 const SAMPLE = Math.min(8, accounts.length)
