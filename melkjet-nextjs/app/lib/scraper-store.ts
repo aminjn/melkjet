@@ -7,6 +7,7 @@ import { fieldsOf as simFieldsOf, TwinIndex, norm as simNorm } from './listing-s
 import { FA_DIGITS, faDigit } from '../lib/digits'
 import { resolveScrapedLocation } from './geo-store'
 import { hasTimePrefix } from './location-match'
+import { deriveListing, seoListingTitle } from './listing-search'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 const KV_KEY = 'scraper'          // بلابِ قدیمی — بعد از migration دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند
@@ -719,9 +720,25 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
       const loc = (r.location ? resolveScrapedLocation(r.location, meta?.['شهر']) : '')
         || [meta?.['شهر'], meta?.['محله']].filter(Boolean).join('، ')
         || undefined
+      // همان بلا در فیلدِ عنوان: ۸۳ ردیف خطِ «۳ هفته پیش در تهران، هروی، خ …» را
+      // به‌جای عنوان نگه داشتند؛ این مقدار هم H1ِ صفحه است هم اسلاگِ URL.
+      //
+      // enrich-warm عنوانِ واقعی را از خودِ دیوار می‌گیرد و جایگزین می‌کند، ولی فقط وقتی url توکنِ
+      // پست داشته باشد — در همان ۸۳ ردیف هیچ‌کدام نداشت. پس درِ واقعی این‌جاست: اگر عنوان
+      // پیشوندِ زمان داشت، از دادهٔ ساختاریافتهٔ همین آگهی عنوان می‌سازیم — با همان تابعی که متای
+      // صفحه استفاده می‌کند، پس صفحه و آدرس و متا یک چیز می‌گویند. نشد، همان می‌ماند.
+      let title = r.title
+      if (hasTimePrefix(title || '')) {
+        const rm = (r as { meta?: Record<string, string> }).meta || {}
+        const t = seoListingTitle(deriveListing({
+          id: '', title: r.title, price: r.price, location: loc, excerpt: r.excerpt,
+          category: source.category, url: r.url, meta: { ...(meta || {}), ...rm },
+        }))
+        if (t && !hasTimePrefix(t)) title = t
+      }
       // ── گِیتِ محتوایی: همان ملک با URL/عنوانِ جدید؟ → آپدیتِ آیتمِ موجود، نه درجِ تکراری ──
       if (source.type === 'listing') {
-        const f = fieldsOf({ title: r.title, price: r.price, location: loc, meta: { ...(meta || {}), ...((r as { meta?: Record<string, string> }).meta || {}) } })
+        const f = fieldsOf({ title, price: r.price, location: loc, meta: { ...(meta || {}), ...((r as { meta?: Record<string, string> }).meta || {}) } })
         const twin = twinIdx.find(f)
         if (twin) {
           if (r.price) twin.price = r.price
@@ -768,7 +785,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
       const item: Item = {
         id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
         category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
-        ...r, location: loc, ownerId, firstSeenAt: Date.now(),
+        ...r, title, location: loc, ownerId, firstSeenAt: Date.now(),
       }
       db.items.unshift(item)
       existingByKey.set(key, item)
