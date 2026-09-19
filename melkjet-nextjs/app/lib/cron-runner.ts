@@ -287,6 +287,12 @@ async function queueTick(): Promise<void> {
           // (قربانیانِ دیپلوی — قبل از اینکه کسی بازشان کند) + ۶ قدیمی‌ترین (دُمِ بک‌لاگ) — دو سر به هم می‌رسند.
           // فاز ۲۱۲: صف باید همیشه پر بماند تا ظرفیتِ ۴تاییِ گرم‌سازی هرگز بی‌کار نماند (تخلیهٔ چندساعتهٔ بک‌لاگ)
           if (missing.length) { const batch211 = sweepPick(missing, 12); warmMany(batch211); console.log(`[enrich] sweep: ${missing.length} listings without analysis — warming newest+oldest ${batch211.length}`) }
+          // The heartbeat reported enrichPending: 0 while a standalone probe of the
+          // same two calls reported 14,378 - so one of these two numbers was wrong and
+          // the silent branch was the one hiding it. An idle sweep now says so, with
+          // the size of the list it worked from, because "nothing to warm" and
+          // "listItems returned nothing" are not the same thing.
+          else console.log(`[enrich] sweep: nothing to warm (public=${pub.length})`)
           const { touchCron } = await import('./cron-heartbeat')
           await touchCron({ enrichPending: missing.length })
         } catch { /* جاروی بعدی در تیکِ بعد */ } finally { enrichSweeping = false }
