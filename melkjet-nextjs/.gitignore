@@ -129,3 +129,8 @@ INSTALLATION_COMPLETE
 .next-b/
 .next-current
 .enrich-data.json.tmp.*
+
+# ۱۹ سپتامبر — کشِ DNS، قفلِ فایل، و باقیماندهٔ نوشتنِ اتمی/مهاجرت‌ها
+.dns-cache.json
+*.lock
+*.pre-b64

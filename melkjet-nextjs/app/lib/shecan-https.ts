@@ -1,6 +1,9 @@
 import https from 'node:https'
 import dns from 'node:dns'
 import { Resolver } from 'node:dns'
+import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { writeFileSync } from './fs-atomic'
 
 // چرا این فایل: سرور آروان اینترنت بین‌الملل ندارد و /etc/resolv.conf (DNS شکن)
 // مدام ریست می‌شد، پس api.gapgpt.app / api.neshan.org گاهی resolve نمی‌شدند و
@@ -17,29 +20,77 @@ try { resolver.setServers(SHECAN) } catch { /* ignore */ }
 
 const cache = new Map<string, { ip: string; exp: number }>()
 const TTL = 30 * 60 * 1000   // فاز ۱۷۰: ۵→۳۰ دقیقه — IPهای این سرویس‌ها پایدارند؛ کشِ سرد یعنی تأخیرِ کاربر
+// ۱۹ سپتامبر — لاگِ پرود نشان داد resolve گاهی ۱۲ ثانیه طول می‌کشد (شکن ۴ث می‌سوزاند،
+// بعد dns.lookup هشت ثانیهٔ دیگر) و ۸ از ۲۹ ارسالِ OTP بینِ ۹ تا ۱۳ ثانیه طول کشیده بود.
+//
+// دو تغییر تا کاربر هرگز پشتِ resolve نماند:
+// (۱) کش روی دیسک می‌ماند. هر reloadِ pm2 چهار پراسسِ تازه با کشِ خالی می‌ساخت و
+//     اولین کاربرِ هر کدام هزینه‌اش را می‌داد — دقیقاً بعد از هر دیپلوی.
+// (۲) منقضی‌شده فوراً برگردانده می‌شود و تازه‌سازی در پس‌زمینه انجام می‌شود. اگر IPِ کهنه
+//     مرده باشد، درخواست خطا می‌دهد و مسیرِ retry با bustDns همان را دور می‌ریزد — همان طراحیِ فاز ۱۷۰.
+const STALE_MAX = 7 * 24 * 60 * 60 * 1000
+const CACHE_FILE = join(/*turbopackIgnore: true*/ process.cwd(), '.dns-cache.json')
+const refreshing = new Set<string>()
+
+function loadCache(): void {
+  try {
+    const raw = JSON.parse(readFileSync(CACHE_FILE, 'utf-8')) as Record<string, { ip: string; exp: number }>
+    for (const [h, v] of Object.entries(raw || {})) {
+      if (v && typeof v.ip === 'string' && v.ip) cache.set(h, { ip: v.ip, exp: Number(v.exp) || 0 })
+    }
+  } catch { /* نبود/خراب بود — از صفر پر می‌شود */ }
+}
+loadCache()
+
+function saveCache(): void {
+  try { writeFileSync(CACHE_FILE, JSON.stringify(Object.fromEntries(cache)), 'utf-8') } catch { /* کش است؛ نشد نشد */ }
+}
 
 // فاز ۱۷۰ — ابطالِ کشِ یک هاست (بینِ تلاش‌های retry: شاید IPِ کش‌شده مرده باشد)
-export function bustDns(hostname: string): void { cache.delete(hostname) }
+export function bustDns(hostname: string): void { if (cache.delete(hostname)) saveCache() }
 // گرم‌کردنِ DNS در بوتِ اینستنس (instrumentation) — اولین کاربرِ واقعی دیگر هزینهٔ resolve را نمی‌دهد
 export function warmDns(hostname: string): void { resolveIp(hostname).catch(() => { /* بی‌صدا؛ در اولین استفاده دوباره تلاش می‌شود */ }) }
 
-// resolve یک هاست به IPv4 از طریق شکن (با fallback به resolver سیستم)
-function resolveIp(hostname: string): Promise<string> {
-  const c = cache.get(hostname)
-  if (c && c.exp > Date.now()) return Promise.resolve(c.ip)
+// خودِ پرسِ شبکه — شکن اول، بعد resolverِ سیستم. ترتیب عمداً مسابقه‌ای نیست: برای
+// دامنهٔ فیلترشده، جوابِ resolverِ سیستم ممکن است IPِ فیلتر باشد.
+function lookupFresh(hostname: string): Promise<string> {
   return new Promise((resolve, reject) => {
     resolver.resolve4(hostname, (err, addrs) => {
-      if (!err && addrs && addrs.length && addrs[0]) {
-        cache.set(hostname, { ip: addrs[0], exp: Date.now() + TTL })
-        return resolve(addrs[0])
-      }
-      // fallback: resolver سیستم‌عامل
+      if (!err && addrs && addrs.length && addrs[0]) return resolve(addrs[0])
       dns.lookup(hostname, { family: 4 }, (e, address) => {
-        if (!e && address) { cache.set(hostname, { ip: address, exp: Date.now() + TTL }); resolve(address) }
+        if (!e && address) resolve(address)
         else reject(e || err || new Error('dns resolve failed: ' + hostname))
       })
     })
   })
+}
+
+function remember(hostname: string, ip: string): void {
+  const prev = cache.get(hostname)
+  cache.set(hostname, { ip, exp: Date.now() + TTL })
+  if (!prev || prev.ip !== ip) saveCache()
+}
+
+// تازه‌سازیِ پس‌زمینه — یک بار برای هر هاست، بدونِ معطل‌کردنِ کسی.
+function refreshInBackground(hostname: string): void {
+  if (refreshing.has(hostname)) return
+  refreshing.add(hostname)
+  lookupFresh(hostname)
+    .then(ip => remember(hostname, ip))
+    .catch(() => { /* کهنه را نگه می‌داریم؛ بهتر از هیچ است */ })
+    .finally(() => refreshing.delete(hostname))
+}
+
+// resolve یک هاست به IPv4 — تازه فوری، کهنه فوری + تازه‌سازی، نبود → منتظر.
+async function resolveIp(hostname: string): Promise<string> {
+  const c = cache.get(hostname)
+  if (c) {
+    if (c.exp > Date.now()) return c.ip
+    if (Date.now() - c.exp < STALE_MAX) { refreshInBackground(hostname); return c.ip }
+  }
+  const ip = await lookupFresh(hostname)
+  remember(hostname, ip)
+  return ip
 }
 
 // ۱۹ سپتامبر — مهلتی که کلِ تلاش را بپوشاند، نه فقط بخشی از آن.
