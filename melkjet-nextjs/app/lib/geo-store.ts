@@ -2,6 +2,7 @@ import { statSync } from 'fs'
 import { readJsonCached, writeJsonCached } from './json-file'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { hasTimePrefix, locationCandidates } from './location-match'
 
 const DATA_FILE = join(process.cwd(), '.geo-data.json')
 
@@ -272,6 +273,25 @@ function cityNeighborhoodIndex(cityName: string): Map<string, string> {
   return map
 }
 // از آدرسِ یک ملک، نامِ منطقهٔ استانداردِ سایت را پیدا می‌کند (یا null).
+// حلِ نهاییِ مکانِ اسکرپ‌شده: پیشوندِ زمان برود و نامِ محله به شکلِ رسمیِ درخت برگردد.
+//
+// Called at scrape time so the malformed value never enters, and by
+// scripts/repair-locations.mjs for the rows that already carry one. The dictionary
+// does the disambiguating the regex deliberately refuses to: for "درکه" both "درکه"
+// and "که" are offered, and only the first is a neighbourhood.
+export function resolveScrapedLocation(raw: string, cityHint?: string): string {
+  const s = String(raw || '').trim()
+  if (!hasTimePrefix(s)) return s
+  const cands = locationCandidates(s)
+  for (const cand of cands) {
+    const hit = findNeighborhoodInGeo(cityHint || '', cand)
+    if (hit) return cityHint ? cityHint + '\u060c ' + hit.neighborhood : hit.neighborhood
+  }
+  // No match in the tree: dropping the timestamp still beats keeping it, and the
+  // value stays searchable as free text.
+  return cands[0]
+}
+
 export function districtFromAddress(cityName: string, address: string): string | null {
   if (!address) return null
   const idx = cityNeighborhoodIndex(cityName)

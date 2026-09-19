@@ -5,6 +5,7 @@ import { pgEnabled, kvGet, pgTx, pgListingsAll } from './db'
 // موتورِ خالصِ هم‌ملک‌یابیِ ویژگی‌محور (متن+مشخصات+لوکیشن) — گِیتِ ضدتکراریِ همهٔ ورودی‌ها
 import { fieldsOf as simFieldsOf, TwinIndex, norm as simNorm } from './listing-similarity'
 import { FA_DIGITS, faDigit } from '../lib/digits'
+import { resolveScrapedLocation } from './geo-store'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 const KV_KEY = 'scraper'          // بلابِ قدیمی — بعد از migration دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند
@@ -691,7 +692,11 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
       }
       // merge source meta (city/neighborhood/type/specialty) into the item
       const meta = source.meta && Object.keys(source.meta).length ? source.meta : undefined
-      const loc = r.location
+      // Divar's card carries the relative time and the neighbourhood on one line, so
+      // an unguarded r.location stored things like «۱۴ساعتپیشدرسلسبیلشمالی» - 616 rows
+      // of it, matchable by no neighbourhood filter we have. Resolve against the geo
+      // tree here, at the only door this value comes through.
+      const loc = (r.location ? resolveScrapedLocation(r.location, meta?.['شهر']) : '')
         || [meta?.['شهر'], meta?.['محله']].filter(Boolean).join('، ')
         || undefined
       // ── گِیتِ محتوایی: همان ملک با URL/عنوانِ جدید؟ → آپدیتِ آیتمِ موجود، نه درجِ تکراری ──
