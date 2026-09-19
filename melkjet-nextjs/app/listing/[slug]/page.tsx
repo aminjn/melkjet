@@ -84,12 +84,26 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   // توصیفِ بازساختهٔ سئو → هیچ. متنِ خامِ دیوار دیگر هیچ‌وقت به اسکیما نمی‌رود.
   let enr: import('@/app/lib/enrich-store').Enrichment | null = null
   try { const { getEnrichment } = await import('@/app/lib/enrich-store'); enr = getEnrichment(id) } catch {}
+  // اگر تحلیل هنوز ساخته نشده، همین‌جا بساز — نسخهٔ «فقط ماشین‌لرنینگ» است: هیچ فراخوانِ AI،
+  // هیچ تماسی با دیوار، ~۶ میلی‌ثانیه. بدونِ این، آگهیِ تازه‌ای که گوگل زودتر از کاربر می‌بیند صفحه‌ای
+  // بدونِ محتوایِ ساختهٔ ما ایندکس می‌شود — دقیقاً همان صفحه‌ای که می‌خواهیم تکراری نباشد.
+  if (!enr?.analysis) {
+    try {
+      const { ensureAnalysisNow } = await import('@/app/lib/enrich-warm')
+      const fresh = await ensureAnalysisNow(id)
+      if (fresh?.analysis) enr = fresh
+    } catch { /* صفحه بدونِ تحلیل هم سالم است؛ کلاینت دوباره تلاش می‌کند */ }
+  }
   let seoDesc = ''
   try {
     const { seoListingDescription, deriveListing } = await import('@/app/lib/listing-search')
     seoDesc = seoListingDescription(deriveListing(it as Parameters<typeof deriveListing>[0]), it.price)
   } catch {}
-  const ldDescription = (enr?.description || '').trim() || seoDesc || undefined
+  // تصحیحِ همین روز: اول enr.description را «متنِ یکتا» فرض کرده بودم — نیست. آن خروجیِ
+  // fetchDivarPost است، یعنی متنِ کاملِ خودِ دیوار (enrich-warm.ts:54) — بدتر از excerpt بود نه بهتر.
+  // متنِ واقعاً ساختهٔ خودِ ما analysis.summary است (از دادهٔ ساختاریافته، بدونِ یک کلمه از دیوار).
+  const anaSummary = String((enr?.analysis as { summary?: string } | undefined)?.summary || '').trim()
+  const ldDescription = anaSummary || seoDesc || undefined
   const ld: Record<string, unknown> = {
     '@context': 'https://schema.org', '@type': 'RealEstateListing',
     name: it.title, description: ldDescription,
@@ -188,19 +202,27 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
     }
   } catch { /* بدونِ سئوِ محله هم صفحه سالم است */ }
 
-  // متنِ توضیحات: کلاینت از قبل بعد از فچِ /api/listing/enrich متنِ یکتا را جایگزین می‌کرد — ولی
-  // خزندهٔ گوگل فقط HTMLِ اولیه را می‌بیند، پس همیشه متنِ دیوار را می‌دید. حالا همان جایگزینی
-  // سمتِ سرور انجام می‌شود: همان مقداری که کلاینت می‌گذاشت، این‌بار در HTMLِ اولیه (بدونِ پرشِ متن).
-  const enrDesc = (enr?.description || '').trim()
-  const base = enrDesc ? { ...it, excerpt: enrDesc } : it
-  const initial = (promoKind ? { ...base, promoted: true, promoKind } : base) as any
+  const initial = (promoKind ? { ...it, promoted: true, promoKind } : it) as any
+  // تحلیل/فکت/امکانات/گالری همه در کشِ enrich حاضرند، ولی کلاینت بعد از فچِ
+  // /api/listing/enrich آن‌ها را می‌نشاند — پس HTMLِ اولیه فقط متنِ دیوار را داشت و خزندهٔ گوگل
+  // هیچ‌وقت محتوایِ ساختهٔ خودِ ما را نمی‌دید. حالا همان داده از سرور می‌رود و در HTMLِ اولیه می‌نشیند
+  // (فچِ کلاینت سرجایش است و همان مقدار را دوباره می‌نشاند — پس رفتار عوض نمی‌شود، فقط زودتر دیده می‌شود).
+  const initialEnrich = enr ? {
+    analysis: (enr.analysis ?? null) as any,
+    facts: (enr.facts || []).slice(0, 40),
+    amenities: (enr.amenities || []).slice(0, 40),
+    // تصویرِ data: هرگز داخلِ HTML نمی‌رود — همان درسی که صفحهٔ ۴۸ مگابایتی داد.
+    gallery: (enr.gallery || []).filter(u => typeof u === 'string' && !u.startsWith('data:')).slice(0, 30),
+    geo: enr.geo ?? null,
+    nearby: (enr.nearby || []).slice(0, 12),
+  } : null
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       {nearbyLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(nearbyLd) }} />}
-      <PropertyClient id={id} initial={initial} originality={originality} />
+      <PropertyClient id={id} initial={initial} originality={originality} initialEnrich={initialEnrich} />
     </>
   )
 }

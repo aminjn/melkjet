@@ -76,21 +76,30 @@ function ScoreRing({ value, label }: { value: number; label: string }) {
 
 // فاز ۱۳۷ (سئو): آیتم سرورساید از page.tsx می‌آید (initial) تا HTML اولیه برای گوگل
 // محتوای کامل داشته باشد — نه پوستهٔ خالی که بعد از هیدریشن از API پر می‌شود.
-export default function PropertyClient({ id, initial, originality }: { id: string; initial?: Item | null; originality?: { score: number; level: 'high' | 'medium' | 'low' | 'insufficient'; reasons: string[]; checked: number } | null }) {
+export interface InitialEnrich {
+  analysis?: Analysis | null
+  facts?: Fact[]
+  amenities?: string[]
+  gallery?: string[]
+  geo?: { lat: number; lng: number } | null
+  nearby?: { type?: string; name?: string; time: string }[]
+}
+export default function PropertyClient({ id, initial, originality, initialEnrich }: { id: string; initial?: Item | null; originality?: { score: number; level: 'high' | 'medium' | 'low' | 'insufficient'; reasons: string[]; checked: number } | null; initialEnrich?: InitialEnrich | null }) {
   const [item, setItem] = useState<Item | null>(initial || null)
   const [saved, toggleSave] = useFav(item?.id)   // ذخیرهٔ واقعی (favorites + رویدادِ REOS برای کوئست)
   const [loading, setLoading] = useState(!initial)
-  const [gallery, setGallery] = useState<string[]>([])
+  // مقدارِ اولیه از سرور می‌آید تا در HTMLِ اولیه باشد (خزنده فچِ کلاینت را نمی‌بیند)
+  const [gallery, setGallery] = useState<string[]>(initialEnrich?.gallery || [])
   const [activeImg, setActiveImg] = useState(0)
   const stripRef = useRef<HTMLDivElement | null>(null)   // فاز ۲۸۴ — نوارِ اسلایدِ عکسِ اصلی
   // فاز ۲۰۱ (فیدبک: «عکس‌های آگهی هست، فقط کلیک می‌کنی باز نمی‌شه بزرگ ببینی») — نمایشگرِ تمام‌صفحهٔ عکس‌ها
   const [lightbox, setLightbox] = useState(false)
-  const [facts, setFacts] = useState<Fact[]>([])
+  const [facts, setFacts] = useState<Fact[]>(initialEnrich?.facts || [])
   const [aiAmenities, setAiAmenities] = useState<string[]>([])
-  const [divarAmenities, setDivarAmenities] = useState<string[]>([])
-  const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null)
-  const [nearby, setNearby] = useState<{ type?: string; name?: string; time: string }[]>([])
-  const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const [divarAmenities, setDivarAmenities] = useState<string[]>(initialEnrich?.amenities || [])
+  const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(initialEnrich?.geo || null)
+  const [nearby, setNearby] = useState<{ type?: string; name?: string; time: string }[]>(initialEnrich?.nearby || [])
+  const [analysis, setAnalysis] = useState<Analysis | null>(initialEnrich?.analysis || null)
   const [market, setMarket] = useState<{ stats: { avg: number; count: number; trend: { month: string; avg: number }[] } | null; value?: number } | null>(null)
   const [forecast, setForecast] = useState<{ points: { label: string; value: number; kind: string }[]; currentAvg: number; yearGrowthPct: number; monthlyGrowthPct: number; method: string; confidence: string; samples: number } | null>(null)
   const [selMonth, setSelMonth] = useState<number | null>(null)

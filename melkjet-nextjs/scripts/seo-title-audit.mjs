@@ -71,26 +71,28 @@ console.log('')
 console.log('عنوانِ بازساخته ولی «در نامشخص»: ' + bucket.unknownLoc.length + '  ' + pct(bucket.unknownLoc.length))
 console.log('توضیحِ متایِ کوتاه‌تر از ۱۲۰ نویسه: ' + descShort)
 
-// متنِ بدنهٔ صفحه: عنوان و متا یکتا شده‌اند، ولی اگر enrich متنِ خودش را نداشته باشد بدنهٔ
-// صفحه همان متنِ دیوار است. کلیدِ فایل و ردیفِ enrich هر دو شمرده می‌شوند (فایل = پایه، ردیف = دلتا).
-const withDesc = new Set()
+// متنِ بدنهٔ صفحه. دقت کن: enrich.description «متنِ یکتا» نیست — خروجیِ fetchDivarPost است،
+// یعنی متنِ کاملِ خودِ دیوار (enrich-warm.ts:54). محتوایی که واقعاً مالِ ماست analysis.summary
+// است (از دادهٔ ساختاریافته ساخته می‌شود، بدونِ یک کلمه از دیوار) — همین شمرده می‌شود.
+// کلیدِ فایل و ردیفِ enrich هر دو (فایل = پایه، ردیف = دلتا).
+const withSummary = new Set()
 try {
   if (existsSync('.enrich-data.json')) {
     const raw = JSON.parse(readFileSync('.enrich-data.json', 'utf-8'))
-    for (const [k, v] of Object.entries(raw)) if (v && String(v.description || '').trim()) withDesc.add(k)
+    for (const [k, v] of Object.entries(raw)) if (String(v?.analysis?.summary || '').trim()) withSummary.add(k)
   }
 } catch {}
 try {
   const { pgEnabled, pgTx } = await import('../app/lib/db.ts')
   if (pgEnabled()) {
-    const r = await pgTx(c => c.query("SELECT id FROM enrich WHERE coalesce(data->>'description','') <> ''"))
-    for (const x of r.rows) withDesc.add(x.id)
+    const r = await pgTx(c => c.query("SELECT id FROM enrich WHERE coalesce(data->'analysis'->>'summary','') <> ''"))
+    for (const x of r.rows) withSummary.add(x.id)
   }
 } catch {}
-const bodyUnique = items.filter(it => withDesc.has(it.id)).length
+const bodyUnique = items.filter(it => withSummary.has(it.id)).length
 console.log('')
-console.log('بدنهٔ یکتا (متنِ enrich جای متنِ دیوار): ' + bodyUnique + '  ' + pct(bodyUnique))
-console.log('بدنه هنوز متنِ دیوار:              ' + (n - bodyUnique) + '  ' + pct(n - bodyUnique))
+console.log('محتوایِ ساختهٔ ما در بدنه (analysis.summary): ' + bodyUnique + '  ' + pct(bodyUnique))
+console.log('بدونِ محتوایِ ساختهٔ ما:                 ' + (n - bodyUnique) + '  ' + pct(n - bodyUnique))
 
 const show = (label, arr) => {
   if (!NSAMP || !arr.length) return
