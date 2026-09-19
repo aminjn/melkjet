@@ -188,7 +188,12 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   try {
     const nb = enr?.nearby as { type?: string; name?: string; time?: string }[] | undefined
     if (Array.isArray(nb) && nb.length >= 2) {
-      const line = nb.slice(0, 8).map(n => `${n.type ? n.type + ' ' : ''}${n.name || ''}${n.time ? ` (${n.time})` : ''}`.trim()).filter(Boolean).join('، ')
+      // نامِ نشان خودش اغلب با نوع شروع می‌شود؛ چسباندنِ بی‌شرطِ نوع «سوپرمارکت سوپرمارکت تک گلستان» می‌ساخت.
+      const line = nb.slice(0, 8).map(n => {
+        const nm = (n.name || '').trim(), tp = (n.type || '').trim()
+        const label = !nm ? tp : (tp && !nm.includes(tp) ? `${tp} ${nm}` : nm)
+        return `${label}${n.time ? ` (${n.time})` : ''}`.trim()
+      }).filter(Boolean).join('، ')
       if (line) {
         ld.description = `${ld.description ? ld.description + ' ' : ''}دسترسی‌های نزدیک: ${line}.`
         nearbyLd = {

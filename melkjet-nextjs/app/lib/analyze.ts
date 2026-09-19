@@ -75,12 +75,16 @@ function localAnalyze(b: AnalyzePayload): any | null {
   // ── خلاصه / نقاط قوت / ضعف (قالبی از فکت‌ها) ──
   const ptype = b.meta?.['نوع ملک'] || (/(ویلا|زمین|مغازه|اداری|کلنگی|پنت|سوییت)/.exec(t)?.[1] || 'آپارتمان')
   const area = factVal(facts, 'متراژ'); const rooms = factVal(facts, 'اتاق') || factVal(facts, 'خواب')
-  const summary = [
+  // رقمِ لاتین وسطِ متنِ فارسی: مقدارِ فکت‌ها گاهی فارسی است و گاهی لاتین، و ageYear همیشه
+  // عددِ جاوااسکریپتی است — خروجی می‌شد «آپارتمان ۱۹۰ متر، 4 خوابه … ساختِ حدودِ 1395».
+  // این متن حالا هم در صفحه دیده می‌شود هم در اسکیما ایندکس می‌شود، پس رقم‌ها یکدست فارسی می‌شوند.
+  const enToFa = (x: string) => String(x || '').replace(/[0-9]/g, d => FA[Number(d)])
+  const summary = enToFa([
     `${ptype}${area ? ` ${area}` : ''}${rooms ? `، ${rooms} خوابه` : ''}${district ? ` در ${district}` : ''}${city ? `، ${city}` : ''}`,
     isNew ? 'نوساز و آمادهٔ بهره‌برداری' : ageYear ? `سالِ ساختِ حدودِ ${ageYear}` : '',
     amenities.length ? `دارای ${amenities.slice(0, 3).join('، ')}` : '',
     isRent ? 'برای اجاره' : 'برای فروش',
-  ].filter(Boolean).join('. ') + '.'
+  ].filter(Boolean).join('. ') + '.')
 
   const pros: string[] = []
   if (isNew || ageYear >= 1400) pros.push('ساختِ نوساز و به‌روز')
