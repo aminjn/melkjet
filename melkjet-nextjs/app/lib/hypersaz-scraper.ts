@@ -13,8 +13,9 @@ export const SOURCES: { id: string; label: string; base: string }[] = [
   { id: 'ahanonline', label: 'آهن‌آنلاین', base: 'https://ahanonline.com' },
 ]
 export function isSource(id: string): boolean { return SOURCES.some(s => s.id === id) }
-const cfgFile = (source: string) => join(process.cwd(), `.scraper-cfg-${source}.json`)
-const jobFile = (source: string) => join(process.cwd(), `.scraper-job-${source}.json`)
+// همان دلیل: نامِ فایل در زمانِ اجرا ساخته می‌شود، پس ردگیر نمی‌تواند ایستا حلش کند.
+const cfgFile = (source: string) => join(/*turbopackIgnore: true*/ process.cwd(), `.scraper-cfg-${source}.json`)
+const jobFile = (source: string) => join(/*turbopackIgnore: true*/ process.cwd(), `.scraper-job-${source}.json`)
 
 export interface ScraperConfig {
   baseUrl: string

@@ -33,13 +33,17 @@ const STORE_LABELS: Record<string, string> = {
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const cwd = process.cwd()
+  // ۱۹ سپتامبر — همهٔ هشدارهایِ NFTِ بایلد به همین دو خط برمی‌گشتند: خواندنِ پویای
+  // ریشهٔ پروژه، ردگیر را وادار می‌کرد کلِ پروژه (از جمله next.config.ts) را دنبال کند و در
+  // باندلِ هر روتی بنشاند. این مسیر عمداً پویاست (فهرستِ زندهٔ فایل‌های داده)، پس
+  // همان کاری را می‌کنیم که خودِ Next پیشنهاد می‌دهد: علامتِ صریحِ turbopackIgnore.
+  const cwd = /*turbopackIgnore: true*/ process.cwd()
   const mem = process.memoryUsage()
   const stores: { name: string; label: string; records: number; sizeKB: number; updated: number }[] = []
   try {
-    for (const f of readdirSync(cwd)) {
+    for (const f of readdirSync(/*turbopackIgnore: true*/ cwd)) {
       if (!f.endsWith('.json') || !f.startsWith('.')) continue
-      const full = join(cwd, f)
+      const full = join(/*turbopackIgnore: true*/ cwd, f)
       try {
         const st = statSync(full)
         stores.push({ name: f, label: STORE_LABELS[f] || f, records: countRecords(full), sizeKB: Math.round(st.size / 1024 * 10) / 10, updated: st.mtimeMs })

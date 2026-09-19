@@ -17,7 +17,8 @@ export interface SlugStore {
 }
 
 export function makeSlugStore(fileName: string, kvKey: string, fallbackPrefix: string): SlugStore {
-  const FILE = join(process.cwd(), fileName)
+  // مسیرِ پویا (fileName پارامتر است) — ردگیرِ بایلد بدونِ این علامت کلِ پروژه را دنبال می‌کند.
+  const FILE = join(/*turbopackIgnore: true*/ process.cwd(), fileName)
   const fileLoad = (): SDB => { if (existsSync(FILE)) { try { const d = JSON.parse(readFileSync(FILE, 'utf-8')); return { bySlug: d.bySlug || {}, byId: d.byId || {} } } catch {} } return empty() }
   const fileSave = (db: SDB) => writeFileSync(FILE, JSON.stringify(db, null, 2), 'utf-8')
   const load = async (): Promise<SDB> => pgEnabled() ? await kvGet<SDB>(kvKey, empty()) : fileLoad()
