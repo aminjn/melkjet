@@ -29,6 +29,7 @@ const TTL = 30 * 60 * 1000   // فاز ۱۷۰: ۵→۳۰ دقیقه — IPهای
 // (۲) منقضی‌شده فوراً برگردانده می‌شود و تازه‌سازی در پس‌زمینه انجام می‌شود. اگر IPِ کهنه
 //     مرده باشد، درخواست خطا می‌دهد و مسیرِ retry با bustDns همان را دور می‌ریزد — همان طراحیِ فاز ۱۷۰.
 const STALE_MAX = 7 * 24 * 60 * 60 * 1000
+const SLOW_DNS_MS = 1000   // بالاتر از این لاگ می‌شود — هم مسیرِ بلاک‌کننده هم پس‌زمینه
 const CACHE_FILE = join(/*turbopackIgnore: true*/ process.cwd(), '.dns-cache.json')
 const refreshing = new Set<string>()
 
@@ -75,8 +76,15 @@ function remember(hostname: string, ip: string): void {
 function refreshInBackground(hostname: string): void {
   if (refreshing.has(hostname)) return
   refreshing.add(hostname)
+  const t0 = Date.now()
   lookupFresh(hostname)
-    .then(ip => remember(hostname, ip))
+    .then(ip => {
+      remember(hostname, ip)
+      // برچسبِ background عمدی است: خطِ کندِ بدونِ برچسب معلوم نمی‌کرد کسی واقعاً
+      // منتظر مانده یا تازه‌سازیِ بی‌ضرر بوده — همین ابهام یک بار باعثِ بدخواندنِ لاگ شد.
+      const took = Date.now() - t0
+      if (took > SLOW_DNS_MS) console.log('[dns] background refresh ' + hostname + ': ' + took + 'ms (کسی منتظر نماند)')
+    })
     .catch(() => { /* کهنه را نگه می‌داریم؛ بهتر از هیچ است */ })
     .finally(() => refreshing.delete(hostname))
 }
@@ -110,14 +118,13 @@ function withDeadline<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 // IP را درونِ بودجهٔ خودِ درخواست حل می‌کند و باقیماندهٔ مهلت را برمی‌گرداند.
 // سهمِ DNS سقف دارد تا همیشه وقتی برای خودِ درخواست بماند.
 const DNS_SHARE = 0.45
-const SLOW_DNS_MS = 1000
 async function resolveWithin(hostname: string, budgetMs: number): Promise<{ ip: string; left: number }> {
   const t0 = Date.now()
   const dnsBudget = Math.max(800, Math.round(budgetMs * DNS_SHARE))
   const ip = await withDeadline(resolveIp(hostname), dnsBudget, 'dns timeout: ' + hostname)
   const took = Date.now() - t0
   // بدونِ این خط، سهمِ DNS از تأخیر در لاگ ناپیدا بود و باید حدس می‌زدیم.
-  if (took > SLOW_DNS_MS) console.log('[dns] slow resolve ' + hostname + ': ' + took + 'ms')
+  if (took > SLOW_DNS_MS) console.log('[dns] blocking resolve ' + hostname + ': ' + took + 'ms (کاربر منتظر ماند)')
   return { ip, left: Math.max(500, budgetMs - took) }
 }
 

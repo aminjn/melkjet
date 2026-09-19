@@ -13,7 +13,7 @@ found=0
 for f in /root/.pm2/logs/*out*.log; do
   found=1
   printf '== %s\n' "${f##*/}"
-  grep -E 'otp\] send|\[dns\] slow' "$f" | tail -6
+  grep -E 'otp\] send|\[dns\] (blocking|background|slow)' "$f" | tail -6
 done
 if [ "$found" -eq 0 ]; then
   echo 'هیچ فایلِ لاگی در /root/.pm2/logs پیدا نشد — pm2 زیرِ کاربرِ دیگری اجرا می‌شود؟'
