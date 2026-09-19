@@ -480,22 +480,33 @@ export async function candidateListings(limit = 500, type: SourceType = 'listing
   return (await listItems(type, { publicOnly: true })).slice(0, limit)
 }
 
-// One listing by id must not read every listing. load() pulls all ~16k jsonb rows
-// through pgListingsAll(), and app/listing/[slug]/page.tsx calls this twice per
-// render (generateMetadata, then the page). After each pm2 restart the cache was
-// cold, so all four instances re-read the whole table at once, hit
-// statement_timeout (57014 in the logs), and the failed renders pushed memory past
-// the pm2 cap - which restarted the instance and dropped the cache again. id is the
-// table's primary key, so this is a single indexed lookup. The old full-load path
-// stays as the fallback for the file-backed mode and for any query error.
+// Cache first, then one indexed lookup only on a miss.
+//
+// This was briefly the other way round - a pgTx lookup on every call, with the
+// cached scan as the fallback - and that made the whole site slow, not just this
+// page. pgTx takes a pool connection and runs BEGIN/SELECT/COMMIT, so each call
+// became three round trips against a pool of 15 shared with every other query on
+// the instance, and app/listing/[slug]/page.tsx calls this twice per render. Under
+// crawler traffic the pool starved and user loading, agency intel and profiles
+// slowed with it.
+//
+// The reason given for that change does not survive measurement either: the
+// statement_timeout it was meant to avoid came from a cold cache, and the full
+// load is 1.15s against a 110MB table, not the 15s it would need to trip. A warm
+// Array.find over ~45k items costs microseconds, so the cache is simply the right
+// first stop. The indexed lookup still earns its place for an id newer than the
+// cache's reload floor, which is the one case the scan genuinely cannot answer.
 export async function getItemById(itemId: string): Promise<Item | null> {
-  if (pgEnabled() && itemId) {
+  if (!itemId) return null
+  const hit = (await load()).items.find(i => i.id === itemId)
+  if (hit) return hit
+  if (pgEnabled()) {
     try {
       const r = await pgTx(c => c.query('SELECT data FROM listings WHERE id = $1 LIMIT 1', [itemId]))
-      return r.rows.length ? (r.rows[0].data as Item) : null
-    } catch { /* fall through to the cached full load */ }
+      if (r.rows.length) return r.rows[0].data as Item
+    } catch { /* cache said no and the lookup failed: treat as absent */ }
   }
-  return (await load()).items.find(i => i.id === itemId) || null
+  return null
 }
 
 // Items awaiting AI moderation (pending, not yet moderated)
