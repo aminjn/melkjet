@@ -112,7 +112,7 @@ export async function updateOwner(ownerId: string, patch: { name?: string; phone
 }
 
 export async function deleteOwner(ownerId: string) {
-  return mutate(db => { db.owners = (db.owners || []).filter(x => x.id !== ownerId) })
+  return mutateMeta(m => { m.owners = m.owners.filter(x => x.id !== ownerId) })
 }
 
 function id() { return randomBytes(6).toString('hex') }
@@ -295,6 +295,36 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
  *  fn می‌تواند آیتم‌ها را تغییر دهد یا آیتمِ تازه به آرایه push کند (درج می‌شود).
  *  حذف پشتیبانی نمی‌شود — برای آن از mutate استفاده کنید.
  */
+/** نوشتنِ فقط-متاداتا — منبع، دسته، مالک. جدولِ آگهی‌ها اصلاً خوانده نمی‌شود.
+ *
+ *  چرا لازم شد (۱۹ سپتامبر): addSource/updateSource/addCategory/deleteOwner هیچ آگهی‌ای
+ *  را دست نمی‌زنند، ولی از mutate استفاده می‌کردند و هر کدام ۴۶ هزار ردیف (۱۶۶ مگابایت،
+ *  ~۳ ثانیه) را داخلِ تراکنش می‌خواندند و همه را JSON.stringify می‌کردند تا نقشهٔ «قبل»
+ *  بسازند — و تمامِ این مدت قفلِ FOR UPDATE روی متاداتا در دست بود. */
+async function mutateMeta<R>(fn: (meta: { sources: Source[]; categories?: string[]; owners: Owner[] }) => R): Promise<R> {
+  if (!pgEnabled()) { const d = fileLoad(); const r = fn({ sources: d.sources, categories: d.categories, owners: d.owners || [] }); fileSave(d); return r }
+  await ensureMigrated()
+  let revOut = 0
+  const r = await pgTx(async (c) => {
+    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
+    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
+    const meta = (metaRow.rows[0]?.data || {}) as Partial<DB> & { __rev?: number }
+    const box = {
+      sources: meta.sources && meta.sources.length ? meta.sources : DEFAULT_SOURCES.slice(),
+      categories: meta.categories,
+      owners: meta.owners || [],
+    }
+    const result = fn(box)
+    const rev = (meta.__rev || 0) + 1
+    revOut = rev
+    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...box, __rev: rev })])
+    return result
+  })
+  pgCache = null
+  try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled() && revOut) void rSetMax('scraper_rev', revOut) } catch {}
+  return r
+}
+
 async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Partial<DB> }) => R): Promise<R> {
   if (!pgEnabled()) {
     const d = fileLoad()
@@ -345,28 +375,30 @@ export async function listCategories(): Promise<string[]> {
 }
 
 export async function addCategory(name: string): Promise<string[]> {
-  return mutate(db => {
+  await mutateMeta(m => {
     const n = name.trim()
     if (n) {
-      const cats = db.categories || DEFAULT_CATEGORIES.slice()
+      const cats = m.categories || DEFAULT_CATEGORIES.slice()
       if (!cats.includes(n)) cats.unshift(n)
-      db.categories = cats
+      m.categories = cats
     }
-    return categoriesOf(db)
   })
+  // فهرستِ نهایی دسته‌هایِ مشتق از آیتم‌های دایرکتوری را هم دارد، پس بعد از نوشتن
+  // از مسیرِ خواندن گرفته می‌شود — بیرونِ تراکنش و بدونِ نگه‌داشتنِ قفلِ نویسنده.
+  return categoriesOf(await load())
 }
 
 export async function addSource(input: Omit<Source, 'id' | 'lastRun' | 'lastCount' | 'status'>): Promise<Source> {
-  return mutate(db => {
+  return mutateMeta(m => {
     const src: Source = { ...input, id: id(), lastRun: null, lastCount: 0, status: 'idle' }
-    db.sources.unshift(src)
+    m.sources.unshift(src)
     return src
   })
 }
 
 export async function updateSource(sid: string, patch: Partial<Source>): Promise<Source | null> {
-  return mutate(db => {
-    const s = db.sources.find(x => x.id === sid)
+  return mutateMeta(m => {
+    const s = m.sources.find(x => x.id === sid)
     if (!s) return null
     Object.assign(s, patch)
     return s
@@ -576,8 +608,8 @@ export async function requeueAutoRejected(): Promise<number> {
 }
 
 export async function setItemStatus(itemId: string, status: ItemStatus) {
-  return mutate(db => {
-    const it = db.items.find(i => i.id === itemId)
+  return mutateSome([itemId], ({ items }) => {
+    const it = items.find(i => i.id === itemId)
     if (!it) return
     it.status = status
     // فاز ۱۵۶ (B3): حکمِ دستیِ ادمین باید مثلِ حکمِ AI مهرِ ممیزی بخورد، وگرنه از جدولِ
@@ -604,8 +636,10 @@ export async function updateItem(itemId: string, patch: EditableItem) {
 // فقط اگر آگهی مختصات نداشت (مختصاتِ دستی/مشاور هرگز بازنویسی نمی‌شود).
 export async function setItemCoords(itemId: string, lat: number, lng: number) {
   if (!lat || !lng) return
-  return mutate(db => {
-    const it = db.items.find(i => i.id === itemId)
+  // ۱۹ سپتامبر — داغ‌ترین نویسندهٔ سایت: غنی‌سازی برای هر آگهیِ دارای مختصات صدایش
+  // می‌زند، و با mutate هر بار ۴۶ هزار ردیف خوانده می‌شد — با قفلِ نویسنده در دست.
+  return mutateSome([itemId], ({ items }) => {
+    const it = items.find(i => i.id === itemId)
     if (!it) return
     it.meta = it.meta || {}
     if (Number(it.meta['__lat']) && Number(it.meta['__lng'])) return
@@ -1117,8 +1151,10 @@ export async function addItemManual(raw: {
 }
 
 export async function markError(sourceId: string, err: string) {
-  return mutate(db => {
-    const s = db.sources.find(x => x.id === sourceId)
+  // فقط وضعیتِ یک منبع — ولی با mutate ۴۶ هزار آگهی خوانده می‌شد، و این مسیر دقیقاً
+  // وقتی صدا می‌شود که اسکرپ شکست خورده و ممکن است پشتِ سر هم تکرار شود.
+  return mutateMeta(m => {
+    const s = m.sources.find(x => x.id === sourceId)
     if (s) { s.lastRun = Date.now(); s.status = 'error'; s.lastError = err }
   })
 }
