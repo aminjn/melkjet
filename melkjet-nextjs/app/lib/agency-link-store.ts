@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { listAccounts, getAccount, dashForRole } from './account-store'
-import { getAgency } from './agency-store'
+import { getAgency, allAgencyProfiles } from './agency-store'
 import { getAdvisor } from './advisor-store'
 import { getProfile } from './profile-store'
 
@@ -59,7 +59,15 @@ async function freshRequest(r: LinkRequest): Promise<LinkRequest> {
 // همهٔ آژانس‌های ثبت‌شده (حساب‌هایی که داشبوردشان /agency است)
 export async function listAgencies(): Promise<{ phone: string; name: string; branches?: string }[]> {
   const accts = listAccounts().filter(a => dashForRole(a.role) === '/agency')
-  return Promise.all(accts.map(async a => { let branches: string | undefined; try { branches = (await getAgency(a.phone)).profile.branches } catch {} return { phone: a.phone, name: await agencyNameOf(a.phone), branches } }))
+  if (!accts.length) return []
+  // قبلاً به ازای هر آژانس دو بار سندِ کاملِ agency خوانده می‌شد (getAgency + agencyNameOf)،
+  // و برای آژانسِ seed‌نشده یک نوشتنِ کامل هم. حالا یک خواندن برای کلِ فهرست.
+  const all = await allAgencyProfiles().catch(() => ({} as Record<string, { profile: { name?: string; branches?: string } }>))
+  return accts.map(a => {
+    const prof = all[a.phone]?.profile
+    const name = bizName(a.phone) || String(prof?.name || '').trim() || getAccount(a.phone)?.name || a.phone
+    return { phone: a.phone, name, branches: prof?.branches }
+  })
 }
 
 export async function getAdvisorMembership(advisorPhone: string): Promise<Membership | null> {
@@ -67,7 +75,11 @@ export async function getAdvisorMembership(advisorPhone: string): Promise<Member
   return m ? await freshMembership(m) : null
 }
 export async function listAgencyMembers(agencyPhone: string): Promise<Membership[]> {
-  return Promise.all(load().memberships.filter(m => m.agencyPhone === agencyPhone).sort((a, b) => b.since - a.since).map(freshMembership))
+  const rows = load().memberships.filter(m => m.agencyPhone === agencyPhone).sort((a, b) => b.since - a.since)
+  if (!rows.length) return []
+  // نامِ آژانس برای همهٔ اعضا یکی است — یک بار حساب می‌شود، نه به ازای هر عضو.
+  const agencyName = await agencyNameOf(agencyPhone)
+  return Promise.all(rows.map(async m => ({ ...m, advisorName: await advisorNameOf(m.advisorPhone), agencyName })))
 }
 export async function requestsForAdvisor(advisorPhone: string): Promise<LinkRequest[]> {
   return Promise.all(load().requests.filter(r => r.advisorPhone === advisorPhone && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt).map(freshRequest))

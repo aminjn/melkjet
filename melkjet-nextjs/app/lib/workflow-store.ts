@@ -53,6 +53,14 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
+// پنلِ ادمین قبلاً نسخهٔ تک‌کاربره را در حلقه صدا می‌زد = یک واکشیِ کاملِ سند به ازای هر کاربر.
+// این نسخه یک بار می‌خواند و همه را می‌شمارد.
+export async function workflowCountsByOwner(): Promise<Record<string, number>> {
+  const out: Record<string, number> = {}
+  for (const w of (await load()).workflows) { const o = String(w.owner || ''); if (o) out[o] = (out[o] || 0) + 1 }
+  return out
+}
+
 export async function listWorkflows(owner: string): Promise<Workflow[]> {
   return (await load()).workflows
     .filter(w => w.owner === owner)

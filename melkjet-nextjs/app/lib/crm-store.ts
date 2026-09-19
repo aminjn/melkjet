@@ -49,6 +49,14 @@ export async function reassignTasksOwner(from: string, to: string): Promise<numb
   })
 }
 
+// پنلِ ادمین قبلاً نسخهٔ تک‌کاربره را در حلقه صدا می‌زد = یک واکشیِ کاملِ سند به ازای هر کاربر.
+// این نسخه یک بار می‌خواند و همه را می‌شمارد.
+export async function taskCountsByOwner(): Promise<Record<string, number>> {
+  const out: Record<string, number> = {}
+  for (const t of (await load()).tasks) { const o = String(t.owner || ''); if (o) out[o] = (out[o] || 0) + 1 }
+  return out
+}
+
 export async function listTasks(owner: string): Promise<Task[]> {
   return (await load()).tasks.filter(t => t.owner === owner).sort((a, b) => b.createdAt - a.createdAt)
 }

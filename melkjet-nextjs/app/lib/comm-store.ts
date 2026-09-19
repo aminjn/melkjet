@@ -131,6 +131,17 @@ export async function monetizationOn(channel: Channel): Promise<boolean> {
 }
 
 // ---- Credit ----
+// پنلِ ادمین قبلاً نسخهٔ تک‌کاربره را در حلقه صدا می‌زد = یک واکشیِ کاملِ سند به ازای هر کاربر.
+// این نسخه یک بار می‌خواند و همه را می‌شمارد.
+export async function creditsByOwner(): Promise<Record<string, { credit: Credit; tokenUsed: number }>> {
+  const db = await loadSeeded()
+  const out: Record<string, { credit: Credit; tokenUsed: number }> = {}
+  const row = (o: string) => { let r = out[o]; if (!r) { r = { credit: { sms: 0, email: 0, token: 0 }, tokenUsed: 0 }; out[o] = r } return r }
+  for (const [o, c] of Object.entries(db.credits || {})) row(o).credit = { sms: Number(c?.sms) || 0, email: Number(c?.email) || 0, token: Number(c?.token) || 0 }
+  for (const [o, u] of Object.entries(db.usage || {})) row(o).tokenUsed = Number(u?.token) || 0
+  return out
+}
+
 export async function getCredit(owner: string): Promise<Credit> {
   const c = (await loadSeeded()).credits[owner]
   return { sms: Number(c?.sms) || 0, email: Number(c?.email) || 0, token: Number(c?.token) || 0 }

@@ -5,11 +5,11 @@ import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, creat
 import { saveProfile, getProfile, completeness } from '@/app/lib/profile-store'
 import { listRoles, dashForRoleId } from '@/app/lib/role-store'
 import { listPlans, getPlan } from '@/app/lib/plan-store'
-import { getCredit, getTokenUsage, grantCredit } from '@/app/lib/comm-store'
+import { grantCredit, creditsByOwner } from '@/app/lib/comm-store'
 import { logAudit } from '@/app/lib/audit-store'
-import { listItems } from '@/app/lib/scraper-store'
-import { listTasks } from '@/app/lib/crm-store'
-import { listLeads } from '@/app/lib/leads-store'
+import { listItemsStable } from '@/app/lib/scraper-store'
+import { taskCountsByOwner } from '@/app/lib/crm-store'
+import { leadCountsByOwner } from '@/app/lib/leads-store'
 
 async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) ? s : null }
 
@@ -34,15 +34,19 @@ export async function GET() {
   const planNameOf = (pid?: string) => { if (!pid) return ''; const p = planList.find(x => x.id === pid); return p?.name || pid }
   // شمارشِ آگهیِ هر مالک
   const listingCounts: Record<string, number> = {}
-  for (const it of await listItems('listing')) { const ph = String(it.meta?.__ownerPhone || ''); if (ph) listingCounts[ph] = (listingCounts[ph] || 0) + 1 }
+  for (const it of await listItemsStable('listing')) { const ph = String(it.meta?.__ownerPhone || ''); if (ph) listingCounts[ph] = (listingCounts[ph] || 0) + 1 }
   // اطلاعاتِ کامل‌ترِ هر کاربر بر اساسِ پروفایلش
-  const users = await Promise.all(listAccounts().map(async a => {
-    const credit = await getCredit(a.phone)
-    let leads = 0, tasks = 0
-    try { leads = (await listLeads(a.phone)).length } catch {}
-    try { tasks = (await listTasks(a.phone)).length } catch {}
-    return { ...a, roleName: roleNameOf(a.role), planName: planNameOf(a.plan), dashboard: dashForRoleId(a.role), listings: listingCounts[a.phone] || 0, leads, tasks, credit, tokenUsed: await getTokenUsage(a.phone), profileCompletion: completeness(getProfile(a.phone)) }
-  }))
+  // ۱۹ سپتامبر — ریشهٔ کندیِ صفحهٔ کاربران: این حلقه به ازای هر کاربر چهار سندِ کامل (comm، leads، crm) را
+  // از Postgres می‌کشید و parse می‌کرد — ۴N واکشیِ سندِ کامل روی پولِ ۱۵تایی. حالا هر سند فقط یک بار.
+  const [credits, leadCounts, taskCounts] = await Promise.all([
+    creditsByOwner().catch(() => ({} as Record<string, { credit: { sms: number; email: number; token: number }; tokenUsed: number }>)),
+    leadCountsByOwner().catch(() => ({} as Record<string, number>)),
+    taskCountsByOwner().catch(() => ({} as Record<string, number>)),
+  ])
+  const users = listAccounts().map(a => {
+    const cw = credits[a.phone]
+    return { ...a, roleName: roleNameOf(a.role), planName: planNameOf(a.plan), dashboard: dashForRoleId(a.role), listings: listingCounts[a.phone] || 0, leads: leadCounts[a.phone] || 0, tasks: taskCounts[a.phone] || 0, credit: cw ? cw.credit : { sms: 0, email: 0, token: 0 }, tokenUsed: cw ? cw.tokenUsed : 0, profileCompletion: completeness(getProfile(a.phone)) }
+  })
   return NextResponse.json({ users, roles, plans })
 }
 

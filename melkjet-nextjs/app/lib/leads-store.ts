@@ -159,6 +159,14 @@ export async function reassignLeadsOwner(from: string, to: string): Promise<numb
   })
 }
 
+// پنلِ ادمین قبلاً نسخهٔ تک‌کاربره را در حلقه صدا می‌زد = یک واکشیِ کاملِ سند به ازای هر کاربر.
+// این نسخه یک بار می‌خواند و همه را می‌شمارد.
+export async function leadCountsByOwner(): Promise<Record<string, number>> {
+  const out: Record<string, number> = {}
+  for (const l of (await load()).leads) { const o = String(l.owner || ''); if (o) out[o] = (out[o] || 0) + 1 }
+  return out
+}
+
 export async function listLeads(owner: string): Promise<Lead[]> {
   return (await load()).leads.filter(l => l.owner === owner).map(migrate).sort((a, b) => (b.score - a.score) || (b.updatedAt - a.updatedAt))
 }

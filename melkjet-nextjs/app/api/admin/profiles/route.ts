@@ -3,10 +3,10 @@ import { getSession } from '@/app/lib/session'
 import { listAccounts, getAccount, dashForRole } from '@/app/lib/account-store'
 import { listRoles } from '@/app/lib/role-store'
 import { listPlans } from '@/app/lib/plan-store'
-import { listTasks } from '@/app/lib/crm-store'
-import { listLeads } from '@/app/lib/leads-store'
-import { listWorkflows } from '@/app/lib/workflow-store'
-import { getPrefs } from '@/app/lib/user-store'
+import { listTasks, taskCountsByOwner } from '@/app/lib/crm-store'
+import { listLeads, leadCountsByOwner } from '@/app/lib/leads-store'
+import { listWorkflows, workflowCountsByOwner } from '@/app/lib/workflow-store'
+import { getPrefs, favoriteCountsByUser } from '@/app/lib/user-store'
 import { ownerStats } from '@/app/lib/owner-store'
 import { buyerStats } from '@/app/lib/buyer-store'
 import { advisorStats } from '@/app/lib/advisor-store'
@@ -46,7 +46,15 @@ export async function GET(req: NextRequest) {
   // ── لیست همهٔ پروفایل‌ها ──
   if (!phone) {
     const accounts = listAccounts()
-    const profiles = await Promise.all(accounts.map(async a => ({
+    // ۱۹ سپتامبر — همان ریشهٔ کندیِ صفحهٔ کاربران: commonActivity به ازای هر حساب چهار سندِ
+    // کامل را می‌خواند. برای فهرست، هر سند یک بار خوانده می‌شود (جزئیاتِ تک‌پروفایل همان مسیر می‌ماند).
+    const [taskCounts, leadCounts, wfCounts, favCounts] = await Promise.all([
+      taskCountsByOwner().catch(() => ({} as Record<string, number>)),
+      leadCountsByOwner().catch(() => ({} as Record<string, number>)),
+      workflowCountsByOwner().catch(() => ({} as Record<string, number>)),
+      favoriteCountsByUser().catch(() => ({} as Record<string, number>)),
+    ])
+    const profiles = accounts.map(a => ({
       phone: a.phone,
       name: a.name || '',
       role: a.role || '',
@@ -57,8 +65,8 @@ export async function GET(req: NextRequest) {
       onboarded: a.onboarded,
       createdAt: a.createdAt,
       lastLogin: a.lastLogin || null,
-      activity: await commonActivity(a.phone),
-    })))
+      activity: { tasks: taskCounts[a.phone] || 0, leads: leadCounts[a.phone] || 0, workflows: wfCounts[a.phone] || 0, favorites: favCounts[a.phone] || 0 },
+    }))
     return NextResponse.json({
       profiles,
       roles: listRoles(true).map(r => ({ id: r.id, name: r.name })),

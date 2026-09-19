@@ -49,6 +49,14 @@ function ensure(db: DB, userId: string): UserPrefs {
   return p
 }
 
+// پنلِ ادمین قبلاً نسخهٔ تک‌کاربره را در حلقه صدا می‌زد = یک واکشیِ کاملِ سند به ازای هر کاربر.
+// این نسخه یک بار می‌خواند و همه را می‌شمارد.
+export async function favoriteCountsByUser(): Promise<Record<string, number>> {
+  const out: Record<string, number> = {}
+  for (const [uid, p] of Object.entries(await load())) out[uid] = Array.isArray(p?.favorites) ? p.favorites.length : 0
+  return out
+}
+
 export async function getPrefs(userId: string): Promise<UserPrefs> {
   const db = await load()
   const p = db[userId]

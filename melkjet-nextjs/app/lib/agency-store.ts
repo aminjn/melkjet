@@ -106,6 +106,10 @@ function applyAgency(db: DB, o: string): boolean {
   return false
 }
 
+// فهرست‌هایی که روی همهٔ آژانس‌ها می‌چرخند با یک خواندن. getAgency در حلقه علاوه بر واکشیِ
+// سندِ کامل، برای آژانسِ seed‌نشده یک نوشتنِ کامل هم می‌کند — این مسیر فقط می‌خواند.
+export async function allAgencyProfiles(): Promise<Record<string, AgencyData>> { return (await load()).agencies || {} }
+
 export async function getAgency(o: string): Promise<AgencyData> {
   const db = await load()
   // اگر seed/پاک‌سازی لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی تغییر بود ذخیره می‌شد).
