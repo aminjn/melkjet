@@ -67,6 +67,7 @@ const pending = new Map<string, Partial<Enrichment>>()
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 let timersStarted = false
 let memDirty = false
+let loggedMode = false
 // Start from the snapshot's own mtime, so the first sync-in also picks up whatever
 // the other instances wrote after this file was last written.
 let watermark = (() => {
@@ -97,7 +98,9 @@ async function flushRows(): Promise<void> {
           [id, JSON.stringify(p)])
       }
     })
-  } catch {
+    console.log('[enrich-store] flushed ' + batch.size + ' rows')
+  } catch (e) {
+    console.error('[enrich-store] flush failed:', (e as { code?: string })?.code || '', (e as Error)?.message)
     // Keep the work for the next flush rather than dropping it; a later patch to
     // the same id wins, which is what a cache wants.
     for (const [id, p] of batch) if (!pending.has(id)) pending.set(id, p)
@@ -117,7 +120,7 @@ async function syncIn(): Promise<void> {
       if (t > watermark) watermark = t
     }
     memDirty = true
-  } catch { /* next sync */ }
+  } catch (e) { console.error('[enrich-store] sync failed:', (e as Error)?.message) }
 }
 
 export function flushEnrichment(): void {
@@ -138,6 +141,7 @@ function startTimers(): void {
 
 function scheduleFlush(): void {
   startTimers()
+  if (!loggedMode) { loggedMode = true; console.log('[enrich-store] persistence = ' + (pgEnabled() ? 'rows' : 'file')) }
   if (flushTimer) return
   flushTimer = setTimeout(() => {
     flushTimer = null
