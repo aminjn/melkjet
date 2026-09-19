@@ -82,12 +82,23 @@ for (const it of noEntry) {
 }
 for (const [k, v] of Object.entries(buckets)) out(k, v)
 
-head('orphaned enrichment (keys with no live listing)')
+// Two different questions, and reading the first as the second is a mistake this
+// script has already caused once: a key whose listing is expired or rejected is
+// not orphaned, it is just not on display. Only a key with no row at all in
+// listings is unreachable, because an id is the only way back to it.
+head('enrichment keys vs listings')
 const liveIds = new Set(pub.map(it => it.id))
-let orphan = 0
-for (const k of fileKeys) if (liveIds.has(k) === false) orphan++
-out('keys not in public list', orphan)
-out('  as % of file', fileKeys.size ? ((orphan / fileKeys.size) * 100).toFixed(1) + '%' : '-')
+let notPublic = 0
+for (const k of fileKeys) if (liveIds.has(k) === false) notPublic++
+out('not currently public', notPublic + '  (expired or rejected - keep)')
+if (pgEnabled()) {
+  const ids = await pgTx(c => c.query('SELECT id FROM listings'))
+  const known = new Set(ids.rows.map(x => x.id))
+  let orphan = 0
+  for (const k of fileKeys) if (known.has(k) === false) orphan++
+  out('no listing row at all', orphan + '  (unreachable - prunable)')
+  out('  as % of file', fileKeys.size ? ((orphan / fileKeys.size) * 100).toFixed(1) + '%' : '-')
+}
 
 console.log('')
 process.exit(0)
