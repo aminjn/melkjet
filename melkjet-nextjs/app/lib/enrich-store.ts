@@ -162,7 +162,16 @@ export function patchEnrichment(id: string, patch: Partial<Enrichment>): Enrichm
   return next
 }
 
+// Clearing has to reach the rows as well. Without that the row survives, syncIn
+// merges it back within SYNC_MS, and the admin who cleared the cache to make an
+// edit visible watches the stale enrichment reappear twenty seconds later.
 export function clearEnrichment(id?: string) {
-  if (!id) { save({}); return }
+  if (!id) {
+    save({})
+    if (pgEnabled()) void pgTx(c => c.query('DELETE FROM enrich')).catch(() => {})
+    return
+  }
+  pending.delete(id)
   const db = load(); delete db[id]; save(db)
+  if (pgEnabled()) void pgTx(c => c.query('DELETE FROM enrich WHERE id = $1', [id])).catch(() => {})
 }
