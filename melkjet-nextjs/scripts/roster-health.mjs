@@ -97,6 +97,36 @@ for (const [k, v] of Object.entries(tb)) row(k, v)
 row('کلِ مشاوران', advTotal)
 row('آژانسِ بدونِ مشاور', noAdv, noAdv ? 'ران تمام شده ولی خروجی نداشته' : '')
 
+// چرا محتوا تکان نمی‌خورد حتی وقتی سینک هر شب اجرا می‌شود: دو سقف در agency-roster-store.
+//   REFRESH_AGE = ۱۴ روز  و  فقط ۳۰ ردیف در هر ران تازه می‌شود (خطِ ۴۲۴‌۴۲۵)
+// آژانسی که بیش از ۳۰×۱۴ = ۴۲۰ ردیف دارد، هرگز یک دورِ کامل را درونِ پنجرهٔ کهنگی تمام
+// نمی‌کند — عنوان و قیمتِ ردیف‌هایِ ته‌صف یخ می‌زند. این بخش عددِ واقعیِ هر آژانس را می‌دهد.
+console.log('')
+console.log('— کشِ ردیفِ روستر: آیا دورِ تازه‌سازی به خودش می‌رسد؟ —')
+const CAP = 30, AGE_D = 14
+try {
+  const { pgEnabled, pgTx } = await import('../app/lib/db.ts')
+  if (!pgEnabled()) console.log('  بدونِ DATABASE_URL — این بخش رد شد')
+  else {
+    const r = await pgTx(c => c.query(
+      "SELECT key, (SELECT count(*) FROM jsonb_object_keys(data)) AS rows FROM kv WHERE key LIKE 'agency_roster_cache:%'"))
+    const sizes = r.rows.map(x => Number(x.rows)).sort((a, b) => b - a)
+    const need = n => Math.ceil(n / CAP)               // چند شب لازم است تا یک دور کامل شود
+    const behind = sizes.filter(n => need(n) > AGE_D)
+    row('آژانسِ دارای کش', sizes.length)
+    row('مجموعِ ردیف‌ها', sizes.reduce((a, b) => a + b, 0))
+    row('بزرگ‌ترین', sizes[0] || 0, sizes[0] ? need(sizes[0]) + ' شب برای یک دور' : '')
+    row('میانه', sizes.length ? sizes[Math.floor(sizes.length / 2)] : 0)
+    row('عقب‌مانده از چرخه', behind.length, '>' + AGE_D + ' شب لازم دارند — محتوایشان یخ می‌زند')
+    if (sizes.length) {
+      const worst = sizes.slice(0, 6).map(n => n + ' (' + need(n) + 'شب)').join('، ')
+      console.log('  بزرگ‌ترین‌ها: ' + worst)
+      const cycleCap = Math.ceil((sizes[0] || 0) / AGE_D)
+      console.log('  برای اینکه بزرگ‌ترین هم درونِ ' + AGE_D + ' شب یک دور شود، سقف باید حداقل ' + cycleCap + ' باشد (الان ' + CAP + ').')
+    }
+  }
+} catch (e) { console.log('  خطا: ' + (e?.message || e)) }
+
 const byErr = new Map()
 for (const s of errored) { const k = String(s.lastError).slice(0, 70); byErr.set(k, (byErr.get(k) || 0) + 1) }
 if (byErr.size) {
