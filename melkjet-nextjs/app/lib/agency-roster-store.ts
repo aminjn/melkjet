@@ -419,12 +419,31 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     }
     // ازسرگیری: کشِ آگهی‌های قبلاً اسکرپ‌شده را بارگذاری کن؛ آگهی‌های تازه را افزوده و throttleشده ذخیره کن.
     const rowCache: RowCache = await loadRowCache(id)
-    // فاز ۱۹۸ (مقیاسِ ۱۰۰۰ آژانس) — کش «دائمی» است: سینکِ روزانه فقط توکن‌های جدید را از دیوار می‌گیرد.
-    // تازه‌سازیِ چرخشی: در هر ران حداکثر ۳۰ ردیفِ کهنه‌تر از ۱۴ روز حذف می‌شوند تا دوباره گرفته شوند.
+    // فاز ۱۹۸ (مقیاسِ ۱۰۰۰ آژانس) — کش «دائمی» است: سینکِ روزانه فقط توکن‌های جدید را از دیوار می‌گیرد؛
+    // ردیفِ قدیمی چرخشی تازه می‌شود.
+    //
+    // ۲۰ سپتامبر — سقف ۳۰یِ ثابت بود و حسابش درنمی‌آمد. اندازه‌گیریِ زنده
+    // (scripts/roster-health.mjs): ۱۴۷ آژانس، ۳۲٬۴۴۲ ردیف، میانه ۱۱۱، بزرگ‌ترین ۱۹۱۱.
+    // با ۳۰ ردیف در شب، بزرگ‌ترین ۶۴ شب برای یک دور لازم دارد ولی ردیف بعد از ۱۴ روز
+    // کهنه می‌شود — پس ۱۷ آژانس هرگز به خودشان نمی‌رسیدند و عنوان/قیمتِ ته‌صف یخ می‌زد،
+    // در حالی که لاگ می‌گفت «دیشب سینک شد». همین را کاربر دید: محتوا تکان نمی‌خورد.
+    //
+    // سقف حالا از خودِ قرارداد مشتق می‌شود: «هر ردیف درونِ REFRESH_AGE یک بار» →
+    // ردیف‌ها ÷ شب‌ها. و بارِ کل کمتر می‌شود نه بیشتر: قبلاً آژانسِ میانه بی‌دلیل تا ۳۰
+    // ردیف می‌گرفت در حالی که ۸ تا کافی بود (۴٬۴۱۰ → ~۲٬۳۲۰ واکشیِ شبانه روی دیوار).
+    //
+    // و ترتیب حالا «قدیمی‌ترین اول» است؛ قبلاً slice به ترتیبِ کلیدِ آبجکت بود، پس
+    // چرخش به ترتیبِ درج وابسته بود نه به کهنگی.
     const REFRESH_AGE = 14 * 864e5
-    const staleRows = Object.entries(rowCache).filter(([, v]) => !v.at || Date.now() - (v.at || 0) > REFRESH_AGE).slice(0, 30)
+    const REFRESH_NIGHTS = Math.max(1, Math.round(REFRESH_AGE / 864e5))
+    const rowTotal = Object.keys(rowCache).length
+    const refreshCap = Math.max(30, Math.ceil(rowTotal / REFRESH_NIGHTS))
+    const staleRows = Object.entries(rowCache)
+      .filter(([, v]) => !v.at || Date.now() - (v.at || 0) > REFRESH_AGE)
+      .sort((a, b) => (a[1].at || 0) - (b[1].at || 0))
+      .slice(0, refreshCap)
     for (const [k] of staleRows) delete rowCache[k]
-    if (staleRows.length) console.log(`[roster] incremental: refreshing ${staleRows.length} stale rows`)
+    if (staleRows.length) console.log(`[roster] incremental: refreshing ${staleRows.length} stale rows of ${rowTotal} (cap ${refreshCap})`)
     let lastCacheWrite = 0
     const onRow = (token: string, r: { title: string; desc: string; name?: string }) => {
       if (!r.desc) return   // متنِ خالی را کش نکن تا دفعهٔ بعد دوباره گرفته شود (خودترمیمی)
