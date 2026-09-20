@@ -181,6 +181,39 @@ to connect` (db.ts) → nginx 504. It was NOT CPU/RAM/Arvan (load avg was ~0.5).
   `kv('scraper_meta')` exists. To force a clean re-migrate: `DELETE FROM kv WHERE key='scraper_meta';
   TRUNCATE listings;` then reload (old `scraper` blob re-seeds them).
 
+### scraper-store — بازخوانیِ افزایشی و نوشتنِ هدفمند (۲۰ سپتامبر ۲۰۲۶)
+«همه جای سایت کند شده» — ریشه با اندازه‌گیری پیدا شد، نه حدس. `listings` الان
+**۴۶٬۴۰۹ ردیف / ۱۶۶ MB** است و یک `SELECT data FROM listings` کامل **۲٫۵–۴٫۳ ثانیه** می‌گیرد.
+این هزینه دو جا پرداخت می‌شد (ممیزی: `scripts/users-page-check.mjs` → ۲۱٫۵ ثانیه برای یک صفحه،
+۹۸٪اش یک فراخوان):
+- **نوشتن:** `mutate` همان SELECT کامل را داخلِ تراکنش می‌زد و همه را stringify می‌کرد،
+  با قفلِ `FOR UPDATE` روی متاداتا در دست — برای هر ۲۸ صدازننده‌اش.
+- **خواندن:** هر تغییرِ rev (و هر نوشتنی rev را بالا می‌برد) کلِ جدول را در هر چهار
+  اینستنس دوباره می‌خواند؛ کفِ ۱۵ ثانیه‌ای و خواندنِ ۳ثانیه‌ای = عملاً همیشه در حالِ بارگزاری.
+
+**دو نیمهٔ راهِ حل:**
+1. `mutateMeta` (جدید) برای نوشتنِ فقط-متاداتا — جدول را اصلاً نمی‌خواند. به آن منتقل شدند:
+   addSource / updateSource / addCategory / deleteOwner / markError. و `setItemCoords` و
+   `setItemStatus` به `mutateSome` رفتند (اولی داغ‌ترین نویسندهٔ سایت است: غنی‌سازی
+   برای هر آگهیِ دارای مختصات). **۲۲ → ۱۵** مسیرِ نوشتنِ کلِ جدول.
+2. **لاگِ تغییر در متاداتا (`__log`)**: هر نویسنده می‌نویسد کدام شناسه‌ها را upsert/حذف
+   کرده؛ `applyDelta` در `load()` فقط همان‌ها را می‌کشد. **بدونِ تغییرِ اسکیما.**
+   سقف‌ها: `LOG_MAX=120` ورودی، `LOG_IDS_MAX=200` شناسه در هر rev (بیشتر → مارکرِ `full`)،
+   `LOG_IDS_BUDGET=2000` در کل — وگرنه خودِ لاگ همان بلابِ زیرِ قفلِ قبلی می‌شد.
+
+**دو پلِ ایمنی که نباید برداشته شوند:** (الف) اگر لاگ تمامِ فاصلهٔ rev را پوشش ندهد
+(مانندِ اسکریپتی که مستقیم SQL می‌نویسد)، دلتا رد می‌شود و بازخوانیِ کامل انجام می‌شود؛
+(ب) هر `FULL_RESYNC_MS=10min` یک بازخوانیِ کامل حتی اگر لاگ سالم باشد.
+
+**تست:** `scripts/scraper-delta-test.mjs` روی PostgreSQLِ واقعی (۱۳ تست). نوشتنِ
+«اینستنسِ دیگر» را با SQL خام شبیه‌سازی می‌کند — چون نویسندهٔ خودی `pgCache` را null
+می‌کند و مسیرِ دلتا را نمی‌آزماید. **دادهٔ تست باید واقعاً متمایز باشد**؛ بارِ اول
+۱۲ درج به ۱ ردیف رسید چون گیتِ تکراری همه را یکی دید.
+
+**ابزارِ اندازه‌گیری (همه فقط-خواندن، بدونِ دیپلوی):** `users-page-check.mjs` (مرحله‌به‌مرحلهٔ
+یک صفحه + حجمِ پاسخ)، `listings-load-check.mjs` (کامل در برابرِ دلتا)،
+`load-profile.mjs` (تفکیکِ مراحل: ensureSchema در برابرِ خودِ بارگزاری).
+
 ### advisor-store PER-OWNER SHARD (فاز ۲۵۹ — permanent fix for statement-timeout / slow graduate / instance-0 death)
 Root cause of the roster-scrape meltdown (46s/token, 633s graduate, `statement timeout`, instance-0
 crash-loop): **the whole `kv('advisor')` blob was ONE row holding ALL owners** — it had grown to

@@ -139,7 +139,41 @@ function fileSave(db: DB) {
 // بدونِ این کش هر رندر یک SELECT + دی‌سریالایزِ ~۱مگابایتی روی CPUِ تک‌هسته می‌شد.
 // نوشتن (mutate) کش را باطل می‌کند تا همان اینستنس نوشتهٔ خودش را فوری ببیند. کهنگیِ
 // چند-ثانیه‌ایِ فیدِ آگهی بینِ اینستنس‌ها بی‌ضرر است (نوشتن‌ها اتمیک روی PG می‌مانند).
-let pgCache: { loadedAt: number; checkedAt: number; data: DB; rev: number } | null = null
+let pgCache: { loadedAt: number; checkedAt: number; fullAt: number; data: DB; rev: number } | null = null
+
+// بازخوانیِ افزایشی (۲۰ سپتامبر).
+//
+// تا دیروز، هر تغییرِ rev — و هر نوشتنی rev را بالا می‌برد — هر چهار اینستنس را
+// وادار می‌کرد کلِ جدول را دوباره بخوانند: ۴۶٬۹۶۵ ردیف، ۱۶۶ مگابایت، ۲٫۵ تا ۴٫۳ ثانیه.
+// با کفِ ۱۵ ثانیه‌ای، زیرِ بارِ نوشتن عملاً همیشه در حالِ بارگذاری بود.
+//
+// حالا هر نویسنده در متاداتا می‌نویسد كدام شناسه‌ها را دست زده، پس خواننده فقط همان‌ها
+// را می‌کشد (دلتای ۵ دقیقه در اندازه‌گیری: ۶ ردیف، ۲۱۴ms). بدونِ تغییرِ اسکیما،
+// چون هر دو مسیرِ نوشتن از قبل دقیقاً می‌دانند چه ردیف‌هایی را upsert یا حذف کردند.
+//
+// ایمنی: اگر حتی یک rev در لاگ نباشد (مثلاً اسکریپتی که مستقیم SQL می‌نویسد،
+// یا جهشِ rev بزرگ‌تر از طولِ لاگ باشد) مسیرِ افزایشی رد می‌شود و بازخوانیِ کامل
+// انجام می‌شود. پلِ ایمنیِ دوم: هر FULL_RESYNC_MS یک بازخوانیِ کامل، حتی اگر لاگ سالم باشد.
+interface RevLog { rev: number; ids?: string[]; del?: string[]; full?: boolean }
+type MetaDoc = Partial<DB> & { __rev?: number; __log?: RevLog[] }
+const LOG_MAX = 120          // چند rev اخیر نگه داشته می‌شود
+const LOG_IDS_MAX = 200      // بیش از این شناسه در یک rev → برای آن rev بازخوانیِ کامل
+const LOG_IDS_BUDGET = 2000  // سقفِ مجموعِ شناسه‌های کلِ لاگ
+const FULL_RESYNC_MS = 10 * 60_000
+
+// لاگ در همان سندِ متاداتاست که هر نویسنده زیرِ قفل می‌خواند، پس رشدِ بی‌مرزش
+// خودش گلوگاهِ بعدی می‌شد — همان اشتباهی که با بلابِ آگهی‌ها یک بار کردیم. دو سقف:
+// تعدادِ ورودی، و مجموعِ شناسه‌ها. ورودیِ درشت به‌جای شناسه، مارکرِ full می‌گیرد.
+function withLog(meta: MetaDoc, rev: number, ids: string[], del: string[]): RevLog[] {
+  const log = Array.isArray(meta.__log) ? meta.__log.slice() : []
+  log.push(ids.length + del.length > LOG_IDS_MAX ? { rev, full: true } : { rev, ids, del })
+  let total = log.reduce((n, e) => n + (e.ids?.length || 0) + (e.del?.length || 0), 0)
+  while (log.length > 1 && (log.length > LOG_MAX || total > LOG_IDS_BUDGET)) {
+    const dropped = log.shift()!
+    total -= (dropped.ids?.length || 0) + (dropped.del?.length || 0)
+  }
+  return log
+}
 // فاز ۲۳۲ (فیدبک: «سرعت فاجعه شده؛ آگهی و اسکرپ زیاد شده») — دو ریشهٔ سنگین در همین کش بود:
 // (۱) چکِ rev «در هر فراخوان» انجام می‌شد = یک رفت‌وبرگشتِ DB به‌ازای هر درخواستِ صفحه.
 // (۲) در اوجِ اسکرپ، هر ایمپورت rev را عوض می‌کند → هر چند ثانیه کلِ جدول (۱۲هزار+ ردیف)
@@ -191,6 +225,48 @@ async function ensureMigrated(): Promise<void> {
 /** خواندنِ سندِ کاملِ اسکرپر (دو-حالته: PG یا فایل).
  * فاز ۲۳۹ — fresh: مسیرهای ادمین/ممیزی از کفِ بازخوانیِ فاز ۲۳۲ معاف‌اند (چکِ revِ همیشگی)؛
  * وگرنه تأییدِ ادمین روی یک اینستنس تا ~۲۰ث در اینستنسِ دیگر دیده نمی‌شد و آگهی «برمی‌گشت» به لیست. */
+// تلاش برای به‌روزرسانیِ افزایشی. null یعنی نشد — صدازننده بازخوانیِ کامل می‌کند.
+async function applyDelta(cache: NonNullable<typeof pgCache>, now: number): Promise<DB | null> {
+  if (now - cache.fullAt > FULL_RESYNC_MS) return null   // پلِ ایمنی: دوره‌ای کامل بخوان
+  const meta = await kvGet<MetaDoc>(KV_META, {})
+  const cur = meta.__rev || 0
+  if (cur < cache.rev) return null                       // rev عقب رفته (بازگردانی/مهاجرت) — اعتماد نکن
+  const gap = cur - cache.rev
+  if (gap === 0) { cache.loadedAt = now; return cache.data }
+  const log = Array.isArray(meta.__log) ? meta.__log : []
+  const span = log.filter(e => e.rev > cache.rev && e.rev <= cur)
+  // لاگ باید تمامِ فاصله را پوشش دهد؛ یک revِ ثبت‌نشده کافی است تا به دلتا اعتماد نکنیم.
+  if (span.length !== gap || span.some(e => e.full)) return null
+  const ids = [...new Set(span.flatMap(e => e.ids || []))]
+  const del = new Set(span.flatMap(e => e.del || []))
+  let items = cache.data.items
+  if (ids.length || del.size) {
+    const rows = ids.length
+      ? await pgTx(c => c.query('SELECT data FROM listings WHERE id = ANY($1::text[])', [ids]))
+      : { rows: [] as { data: Item }[] }
+    const fresh = new Map<string, Item>()
+    for (const r of rows.rows as { data: Item }[]) fresh.set(r.data.id, r.data)
+    // شناسه‌ای که در لاگ بود ولی ردیفش نیامد یعنی حذف شده — همان را هم درمی‌آوریم.
+    const gone = new Set<string>(del)
+    for (const idv of ids) if (!fresh.has(idv)) gone.add(idv)
+    const next: Item[] = []
+    for (const it of cache.data.items) { if (!gone.has(it.id) && !fresh.has(it.id)) next.push(it) }
+    for (const it of fresh.values()) next.push(it)
+    next.sort((a, b) => (b.scrapedAt || 0) - (a.scrapedAt || 0))
+    items = next
+  }
+  // آبجکتِ تازه لازم است: کشِ مشتقِ listItemsStable روی مرجعِ همین آبجکت کلید خورده.
+  const data: DB = {
+    sources: meta.sources && meta.sources.length ? meta.sources : cache.data.sources,
+    items,
+    categories: meta.categories !== undefined ? meta.categories : cache.data.categories,
+    owners: meta.owners || cache.data.owners || [],
+  }
+  pgCache = { loadedAt: now, checkedAt: now, fullAt: cache.fullAt, data, rev: cur }
+  if (ids.length || del.size) console.log('[scraper-store] delta ' + ids.length + ' ردیف، ' + gap + ' rev — به‌جای بازخوانیِ کامل')
+  return data
+}
+
 async function load(fresh = false): Promise<DB> {
   if (!pgEnabled()) return fileLoad()
   const now = Date.now()
@@ -206,9 +282,11 @@ async function load(fresh = false): Promise<DB> {
         const { redisEnabled, rGet } = await import('./redis')
         if (redisEnabled()) { const s = await rGet('scraper_rev'); if (s !== null) rev = parseInt(s, 10) || 0 }
       } catch { /* fallback به kv */ }
-      if (rev === null) { const m = await kvGet<{ __rev?: number }>(KV_META, {}); rev = m.__rev || 0 }
+      if (rev === null) { const m = await kvGet<MetaDoc>(KV_META, {}); rev = m.__rev || 0 }
       pgCache.checkedAt = now
       if (rev === pgCache.rev) { pgCache.loadedAt = now; return pgCache.data }
+      const stepped = await applyDelta(pgCache, now)
+      if (stepped) return stepped
     } catch { return pgCache.data }
   }
   try {
@@ -222,7 +300,7 @@ async function load(fresh = false): Promise<DB> {
       categories: m.categories,
       owners: m.owners || [],
     }
-    pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), data, rev: meta.__rev || 0 }
+    pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), fullAt: Date.now(), data, rev: meta.__rev || 0 }
     // فاز ۲۴۰ (خودترمیم): بعدِ هر بازخوانیِ کامل، revِ Redis با kv همگام می‌شود (اگر Redis تازه روشن/کهنه بود).
     try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled()) void rSetMax('scraper_rev', meta.__rev || 0) } catch {}
     return data
@@ -253,26 +331,28 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
     }
     const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
     const result = fn(db)
-    // متادیتای زنده (کوچک) را در KV_META بنویس؛ بلابِ قدیمیِ KV_KEY دست‌نخورده می‌ماند.
-    // فاز ۱۵۶ (B1): rev سراسری با هر نوشتن بالا می‌رود تا کشِ خواندنِ همهٔ instanceها نامعتبر شود.
-    const rev156 = ((meta as { __rev?: number }).__rev || 0) + 1
-    revOut = rev156
-    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...metaOf(db), __rev: rev156 })])
-    // فقط ردیف‌های اضافه‌شده/تغییرکرده را upsert کن
+    // اول تفاوت را حساب کن، بعد متاداتا را بنویس — چون لاگِ شناسه‌ها باید با همان rev
+    // ذخیره شود. خواننده فقط وقتی به دلتا اعتماد می‌کند که هر revِ فاصله لاگ داشته باشد.
+    const changed: { it: Item; str: string }[] = []
     const afterIds = new Set<string>()
     for (const it of db.items) {
       afterIds.add(it.id)
-      const s = JSON.stringify(it)
-      if (before.get(it.id) !== s) {
-        await c.query(
-          `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
-           ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
-          [it.id, it.scrapedAt || 0, it.type, it.status, s],
-        )
-      }
+      const str = JSON.stringify(it)
+      if (before.get(it.id) !== str) changed.push({ it, str })
     }
-    // ردیف‌های حذف‌شده را پاک کن
     const del = [...before.keys()].filter(idv => !afterIds.has(idv))
+    // فاز ۱۵۶ (B1): rev سراسری با هر نوشتن بالا می‌رود تا کشِ خواندنِ همهٔ instanceها نامعتبر شود.
+    const rev156 = ((meta as MetaDoc).__rev || 0) + 1
+    revOut = rev156
+    const log156 = withLog(meta as MetaDoc, rev156, changed.map(x => x.it.id), del)
+    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...metaOf(db), __rev: rev156, __log: log156 })])
+    for (const { it, str } of changed) {
+      await c.query(
+        `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
+         ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
+        [it.id, it.scrapedAt || 0, it.type, it.status, str],
+      )
+    }
     if (del.length) await c.query(`DELETE FROM listings WHERE id = ANY($1::text[])`, [del])
     return result
   })
@@ -317,7 +397,9 @@ async function mutateMeta<R>(fn: (meta: { sources: Source[]; categories?: string
     const result = fn(box)
     const rev = (meta.__rev || 0) + 1
     revOut = rev
-    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...box, __rev: rev })])
+    // لاگِ خالی: rev بالا رفته ولی هیچ آگهی‌ای عوض نشده، پس خواننده هیچ ردیفی نمی‌خواند.
+    const logMeta = withLog(meta as MetaDoc, rev, [], [])
+    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...box, __rev: rev, __log: logMeta })])
     return result
   })
   pgCache = null
@@ -343,18 +425,17 @@ async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Par
     const items = res.rows.map(x => x.data as Item)
     const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
     const result = fn({ items, meta })
+    const changed = items.filter(it => before.get(it.id) !== JSON.stringify(it))
     const rev = (meta.__rev || 0) + 1
     revOut = rev
-    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...meta, __rev: rev })])
-    for (const it of items) {
-      const str = JSON.stringify(it)
-      if (before.get(it.id) !== str) {
-        await c.query(
-          `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
-           ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
-          [it.id, it.scrapedAt || 0, it.type, it.status, str],
-        )
-      }
+    const logSome = withLog(meta as MetaDoc, rev, changed.map(it => it.id), [])
+    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...meta, __rev: rev, __log: logSome })])
+    for (const it of changed) {
+      await c.query(
+        `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
+         ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
+        [it.id, it.scrapedAt || 0, it.type, it.status, JSON.stringify(it)],
+      )
     }
     return result
   })
