@@ -65,7 +65,8 @@ row('پارک‌شده (۳+ تلاشِ ناتمام)', parked.length, 'منتظ�
 row('دارای خطای آخر', errored.length)
 
 console.log('')
-console.log('— عمرِ آخرین سینکِ موفق —')
+// برچسبِ قبلیِ این بخش «سینکِ موفق» بود و غلط بود: lastRun در شکست هم ست می‌شود.
+console.log('— عمرِ آخرین تلاشِ سینک (موفق یا ناموفق) —')
 const buckets = { 'هیچ‌وقت': 0, '<۱ روز': 0, '۱ تا ۳ روز': 0, '۳ تا ۷ روز': 0, '۷ تا ۳۰ روز': 0, '۳۰+ روز': 0 }
 for (const s of all) {
   if (!s.lastRun) buckets['هیچ‌وقت']++
@@ -74,6 +75,27 @@ for (const s of all) {
     else if (d < 7) buckets['۳ تا ۷ روز']++; else if (d < 30) buckets['۷ تا ۳۰ روز']++; else buckets['۳۰+ روز']++ }
 }
 for (const [k, v] of Object.entries(buckets)) row(k, v)
+
+// «اجرا شد» با «چیزی آورد» یکی نیست. رانی که موفق تمام شود ولی صفر آگهی ببیند
+// (دیوار throttle کرده، پروفایل عوض شده، slug مرده) از بیرون دقیقاً مثلِ «آپدیت نمی‌شود» است.
+console.log('')
+console.log('— دستاوردِ آخرین رانِ موفق —')
+const tb = { 'صفر آگهی': 0, '۱ تا ۵۰': 0, '۵۱ تا ۲۰۰': 0, '۲۰۰+': 0, 'نامعلوم': 0 }
+let advTotal = 0, noAdv = 0
+for (const s2 of all) {
+  const t = s2.lastTotal
+  if (t === undefined || t === null) tb['نامعلوم']++
+  else if (t === 0) tb['صفر آگهی']++
+  else if (t <= 50) tb['۱ تا ۵۰']++
+  else if (t <= 200) tb['۵۱ تا ۲۰۰']++
+  else tb['۲۰۰+']++
+  const n = Array.isArray(s2.advisors) ? s2.advisors.length : 0
+  advTotal += n
+  if (!n) noAdv++
+}
+for (const [k, v] of Object.entries(tb)) row(k, v)
+row('کلِ مشاوران', advTotal)
+row('آژانسِ بدونِ مشاور', noAdv, noAdv ? 'ران تمام شده ولی خروجی نداشته' : '')
 
 const byErr = new Map()
 for (const s of errored) { const k = String(s.lastError).slice(0, 70); byErr.set(k, (byErr.get(k) || 0) + 1) }
