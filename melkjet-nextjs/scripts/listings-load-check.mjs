@@ -61,6 +61,33 @@ for (const mins of [5, 60, 1440]) {
     SELECT data FROM listings WHERE scraped_at > (extract(epoch from now()) * 1000) - $1`, [mins * 60 * 1000])
 }
 
+// نیمهٔ نویسندهٔ بازخوانیِ افزایشی: آیا نویسنده‌ها واقعاً شناسه‌ها را ثبت می‌کنند؟
+// اگر لاگ خالی باشد، خواننده هرگز مسیرِ دلتا را پیدا نمی‌کند و همیشه کامل می‌خواند —
+// بدونِ این بخش، نبودنِ خطِ delta در لاگ دو تفسیرِ مختلف دارد و قابلِ تفکیک نیست.
+console.log('')
+console.log('— لاگِ تغییر در متاداتا (پایهٔ بازخوانیِ افزایشی) —')
+try {
+  const mr = await pgTx(c => c.query("SELECT data->'__rev' AS rev, data->'__log' AS log, pg_column_size(data) AS bytes FROM kv WHERE key='scraper_meta'"))
+  if (!mr.rows.length) console.log('  سندِ scraper_meta نیست — مهاجرت هنوز اجرا نشده؟')
+  else {
+    const rev = mr.rows[0].rev, log = mr.rows[0].log || [], bytes = Number(mr.rows[0].bytes)
+    console.log('  rev کنونی: ' + rev + '   ورودیِ لاگ: ' + log.length + '   حجمِ سند: ' + Math.round(bytes / 1024) + ' KB')
+    if (!log.length) {
+      console.log('  ✗ لاگ خالی است — یا از دیپلوی تا حالا هیچ نوشتنی نبوده، یا نویسنده‌ها ثبت نمی‌کنند.')
+    } else {
+      const withIds = log.filter(e => (e.ids || []).length || (e.del || []).length).length
+      const fulls = log.filter(e => e.full).length
+      console.log('  ورودیِ دارای شناسه: ' + withIds + '   ورودیِ full (درشت، بازخوانیِ کامل): ' + fulls)
+      for (const e of log.slice(-5)) {
+        console.log('    rev ' + e.rev + (e.full ? '  full' : '  ids=' + (e.ids || []).length + ' del=' + (e.del || []).length))
+      }
+      const consecutive = log.every((e, i) => i === 0 || e.rev === log[i - 1].rev + 1)
+      console.log(consecutive ? '  ✓ revها پیوسته‌اند — خواننده می‌تواند به دلتا اعتماد کند.'
+                          : '  ✗ جایِ خالی در revها — یک مسیرِ نوشتن لاگ نمی‌گذارد (باید پیدا شود).')
+    }
+  }
+} catch (e) { console.log('  خطا: ' + (e?.message || e)) }
+
 console.log('')
 const idsPlusDelta = ids.took
 if (idsPlusDelta * 5 < full.took) {

@@ -68,8 +68,12 @@ function lookupFresh(hostname: string): Promise<string> {
 
 function remember(hostname: string, ip: string): void {
   const prev = cache.get(hostname)
-  cache.set(hostname, { ip, exp: Date.now() + TTL })
-  if (!prev || prev.ip !== ip) saveCache()
+  const exp = Date.now() + TTL
+  cache.set(hostname, { ip, exp })
+  // فقط وقتی IP عوض می‌شد می‌نوشتیم، پس expِ روی دیسک هرگز جلو نمی‌رفت و
+  // هر پراسسِ تازه ورودی را «کهنه» می‌دید و بی‌دلیل تازه‌سازی می‌کرد — لاگِ پرود همین را
+  // نشان داد (شش background refresh در هر اینستنس). مهلتِ تازه هم ذخیره می‌شود.
+  if (!prev || prev.ip !== ip || exp - prev.exp > TTL / 6) saveCache()
 }
 
 // تازه‌سازیِ پس‌زمینه — یک بار برای هر هاست، بدونِ معطل‌کردنِ کسی.
