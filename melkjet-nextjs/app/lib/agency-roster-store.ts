@@ -32,7 +32,7 @@ export interface RosterAdvisor {
   transferFrom?: string  // فاز ۲۷۷ — ownerِ موقتِ مبدأ تا وقتی انتقالِ فایل‌ها تمام نشده (ازسرگیریِ امن)
 }
 // کارِ صفِ «ساختِ حساب» — سنگین (انتقالِ فایل‌ها)، روی اینستنسِ ۰ اجرا می‌شود تا درخواستِ ادمین قفل نشود.
-export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; attempts?: number; error?: string }   // attempts: شمارِ خطاهای گذرا (۲۸ سپتامبر)   // فاز ۱۹۹ — claim برای صفِ at-least-once
+export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; attempts?: number; prepared?: boolean; error?: string }   // attempts: شمارِ خطاهای گذرا؛ prepared: بخشِ آنی (حساب+شماره) انجام شده (۲۸ سپتامبر)   // فاز ۱۹۹ — claim برای صفِ at-least-once
 export interface RosterScrape {
   id: string
   slug: string
@@ -647,7 +647,7 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
 }
 
 // ── graduate: به یک مشاورِ کشف‌شده شمارهٔ موبایل بده → حسابِ واقعی بساز و آگهی‌ها را منتقل کن ──
-export async function graduateAdvisor(id: string, key: string, phone: string, role = 'advisor'): Promise<{ ok: boolean; error?: string; moved?: number }> {
+export async function graduateAdvisor(id: string, key: string, phone: string, role = 'advisor', opts?: { deferTransfer?: boolean }): Promise<{ ok: boolean; error?: string; moved?: number; deferred?: boolean }> {
   const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   // مسیرِ graduate همیشه پشتِ گاردِ سوپرادمین/staff است ⇒ ثابت (۰۲۱xxxxxxxx) هم مجاز؛ پیامکی هم نمی‌فرستد.
   if (!/^0\d{10}$/.test(p)) return { ok: false, error: 'شمارهٔ معتبر نیست (موبایل ۰۹… یا ثابت با کدِ شهر)' }
@@ -690,6 +690,13 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
       if (r) { if (!r.transferFrom) r.transferFrom = fromOwner; r.owner = p; r.phone = p; r.graduatedAt = Date.now() }
     }
   })
+
+  // ۲۸ سپتامبر — «بخشِ آنی» از «انتقالِ سنگین» جدا شد. تا این‌جا فقط چند کوئریِ کوچک بود:
+  // حساب ساخته و شماره روی رکورد نشسته (پنل همین حالا ✅ نشان می‌دهد). انتقالِ فایل‌ها با
+  // سینکِ در حالِ اجرا سرِ استخرِ اتصال و قفل‌ها می‌جنگد و statement-timeout می‌خورد
+  // (همان درسِ ۳۰ اوتِ repairOrphanPublishes)، پس وسطِ سینک عقب می‌افتد؛ transferFrom
+  // مبدأ را نگه داشته و تلاشِ بعدیِ صف از همین‌جا ادامه می‌دهد.
+  if (opts?.deferTransfer) return { ok: true, moved: 0, deferred: true }
 
   const moved = await reassignListings(fromOwner, p, scrape.id)
   await mutate(db => {
@@ -790,6 +797,37 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
   // از صف برداشته می‌شد؛ کیلِ وسطِ کار (دیپلوی/reload) = کارِ گم‌شده و پرچمِ ابدی. حالا at-least-once:
   // کار claim می‌شود (startedAt) و فقط بعدِ اتمام حذف؛ claimِ رهاشده (>۱۰د) دوباره برداشته می‌شود —
   // graduateAdvisor هم ایدمپوتنت است (حسابِ موجود دوباره ساخته نمی‌شود، فایل‌های باقی‌مانده منتقل می‌شوند).
+  // ۲۸ سپتامبر — وسطِ سینکِ رُستر فقط «بخشِ آنی» اجرا می‌شود (برای همهٔ کارهای صف، نه یکی):
+  // حساب و شماره در چند کوئریِ کوچک می‌نشیند و «در حال ساخت حساب…» فوراً ✅ می‌شود؛ انتقالِ
+  // سنگینِ فایل‌ها تا پایانِ سینک صبر می‌کند تا با آن سرِ استخر/قفل نجنگد و timeout نخورد.
+  const pre = await load()
+  const preJobs = pre.graduateQueue || []
+  if (!preJobs.length) return { ran: false }
+  if (Object.values(pre.scrapes).some(s => s.running)) {
+    let did = 0
+    for (const job of preJobs) {
+      if (job.prepared) continue
+      try {
+        const r = await graduateAdvisor(job.id, job.key, job.phone, job.role, { deferTransfer: true })
+        if (r.ok) {
+          did++
+          await mutate(db => { const j = (db.graduateQueue || []).find(x => x.jid === job.jid); if (j) j.prepared = true })
+        } else {
+          // خطای قطعی (شمارهٔ نامعتبر/تکراری و…) — همان رفتارِ مسیرِ کامل: کار حذف و علت ثبت می‌شود.
+          console.error(`[roster] graduate prepare FAILED key=${job.key}: ${r.error || 'خطا'}`)
+          await mutate(db => {
+            db.graduateQueue = (db.graduateQueue || []).filter(x => x.jid !== job.jid)
+            const s = db.scrapes[job.id]; if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` }
+          })
+        }
+      } catch (e: any) {
+        // گذرا — تیکِ بعدی (۴۵ث) دوباره تلاش می‌کند؛ بخشِ آنی ایدمپوتنت است.
+        console.error(`[roster] graduate prepare transient key=${job.key}: ${String(e?.message || e).slice(0, 120)}`)
+      }
+    }
+    if (did) console.log(`[roster] graduate: ${did} حسابِ آنی ساخته شد — انتقالِ فایل‌ها بعد از پایانِ سینک`)
+    return { ran: did > 0 }
+  }
   const job = await mutate(db => {
     const q = db.graduateQueue || []
     const now = Date.now()
