@@ -45,6 +45,7 @@ export interface Listing {
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
   published?: boolean; publicId?: string
   unpublishedAt?: number   // فاز ۲۸۴ — unpublishِ عمدیِ مشاور؛ مسیرِ ترمیمِ graduate این را دوباره منتشر نمی‌کند
+  enrichFrom?: string      // فاز ۲۸۷ — publicIdِ قبلیِ همین ملک (انتقالِ رُستر): جارویِ انتشار غنی‌سازی را از آن کپی می‌کند تا دیوار دوباره خوانده نشود
   // اتصال فایل به لیدها: یک لیدِ فروشنده + چند لیدِ خریدار (برای CRM)
   sellerLeadId?: string; buyerLeadIds?: string[]
 }
@@ -323,6 +324,7 @@ export async function addListing(o: string, input: Partial<Listing>): Promise<Li
       phone: input.phone ? String(input.phone) : undefined,
       description: input.description ? String(input.description) : undefined,
       images: Array.isArray(input.images) ? input.images.slice(0, 12).map(String) : [],
+      enrichFrom: input.enrichFrom ? String(input.enrichFrom) : undefined,
     }
     a.listings.unshift(c)
   })

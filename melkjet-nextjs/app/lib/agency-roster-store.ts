@@ -573,44 +573,18 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
 // کدام روی PG یک فول‌اسکنِ جدولِ listings بود (~۵ث/فایل). حالا فایل‌های فعال در چانک‌های
 // ~۱۵تایی جمع و با publishListingsBatch (یک mutateِ اسکرپر برای هر چانک، همان منطقِ
 // prev/twin/remoderate per-item) منتشر می‌شوند. کپی/حذفِ per-file اتمی (فاز ۲۷۷) دست نخورد.
+// ── فاز ۲۸۷ (فیدبک: «اول آگهی‌ها بیاید، نمایش نده؛ بعد صفِ جداگانه تکراری‌نبودن را چک و منتشر کند») ──
+// انتقال و انتشار از هم جدا شدند. این تابع فقط «کپیِ» فایل‌هاست: چند عملیاتِ کوچک روی
+// شاردهای advisor/divar — سبک و سریع. انتشار (که چکِ ضدتکراری و کارِ سنگینِ دیتابیس دارد و
+// با سینک/اسکرِیپر رقابت می‌کرد و statement-timeout می‌خورد) به «جارویِ انتشار»
+// (repairOrphanPublishes، هر تیکِ ۴۵ثانیه‌ای، چندتا-چندتا) سپرده شد. publicIdِ قبلیِ هر
+// فایل در enrichFrom می‌ماند تا جارو غنی‌سازی را از آن کپی کند و دیوار دوباره خوانده نشود.
 async function reassignListings(fromO: string, toO: string, sourceId: string): Promise<number> {
   const from = await getAdvisor(fromO)
   const moved: { oldId: string; newId: string }[] = []
   const t0 = Date.now()
-  // فایل‌های در انتظارِ انتشارِ دسته‌ای: {fid: شناسهٔ فایلِ مقصد، prevEnrichId: publicIdِ قبلی برای کپیِ غنی‌سازی}
-  const pending: { fid: string; prevEnrichId?: string }[] = []
-  const flush = async () => {
-    if (!pending.length) return
-    const chunk = pending.splice(0, pending.length)
-    const rs = await publishListingsBatch(toO, chunk.map(x => x.fid))
-    for (const r of rs) {
-      // فاز ۲۷۷ («فایل‌ها را ده بار می‌گیرد؛ باید یک‌بار بگیرد و نگه دارد») — غنی‌سازیِ آگهیِ
-      // قبلی (گالری/تحلیل/دسترسی‌ها) روی شناسهٔ عمومیِ جدید کپی می‌شود، پس warmEnrichment
-      // آن را «غنی» می‌بیند و هیچ درخواستِ تازه‌ای به دیوار نمی‌زند. قبلاً هر انتقال — و هر
-      // تلاشِ دوبارهٔ صف — همهٔ فایل‌ها را دوباره از دیوار می‌گرفت: هم کند، هم خوردن به
-      // سقفِ ضدِاسکرپِ دیوار.
-      const prevId = chunk.find(x => x.fid === r.fid)?.prevEnrichId
-      const prev = prevId ? getEnrichment(prevId) : null
-      if (prev) patchEnrichment(r.publicId, prev)
-      warmEnrichment(r.publicId)
-    }
-  }
-  // ── مسیرِ ترمیم (پنجرهٔ کرشِ انتشارِ معوق): فایلی که در تلاشِ قبلی copy+delete شد ولی
-  // چانکش publish نشد، این‌جا با «فعال + بدونِ publicId + رکوردِ ایمپورتِ همین sourceId»
-  // شناسایی و به اولین چانک اضافه می‌شود (بدونِ prevEnrichId — فقط warmEnrichment).
-  const impIdsTo = new Set(getDivar(toO).imports.filter(i => i.sourceId === sourceId).map(i => i.listingId))
-  for (const l of (await getAdvisor(toO)).listings) {
-    // فاز ۲۸۴ (یافتهٔ بازبین): unpublishedAt یعنی مشاور «عمداً» از انتشار درآورده — ترمیم نکن.
-    if (l.status === 'active' && !l.publicId && !l.unpublishedAt && impIdsTo.has(l.id)) pending.push({ fid: l.id })
-  }
-  // فاز ۲۷۷ — انتقال «per-فایل اتمی» شد: کپی، سپس بلافاصله حذفِ مبدأ.
-  // قبلاً همهٔ کپی‌ها انجام می‌شد و حذفِ مبدأ *در پایان*. اگر کار وسطِ راه می‌مرد (ری‌لودِ
-  // دیپلوی، یا claimِ دوبارهٔ صف بعد از ۱۰ دقیقه)، مبدأ دست‌نخورده می‌ماند و تلاشِ بعدی
-  // همان فایل‌ها را **دوباره** کپی می‌کرد → آگهیِ تکراری روی حسابِ مشاور. کامنتِ فاز ۱۹۹
-  // ادعای ایدمپوتنت‌بودن داشت ولی این حلقه آن را نقض می‌کرد.
-  // حالا هر فایل که منتقل شد از مبدأ می‌رود؛ پس ازسرگیری فقط باقی‌مانده‌ها را می‌برد.
+  // فاز ۲۷۷ — انتقال «per-فایل اتمی»: کپی، سپس بلافاصله حذفِ مبدأ؛ ازسرگیری فقط باقی‌مانده‌ها را می‌برد.
   const items = [...from.listings]   // اسنپ‌شات: داخلِ حلقه از مبدأ حذف می‌کنیم
-  // رکوردهای ایمپورتِ مبدأ به تفکیکِ listingId — برای انتقالِ per-file (لازمهٔ مسیرِ ترمیمِ بالا)
   const impsByOld = new Map<string, ReturnType<typeof getDivar>['imports']>()
   for (const im of getDivar(fromO).imports.filter(i => i.sourceId === sourceId)) {
     const arr = impsByOld.get(im.listingId) || []; arr.push(im); impsByOld.set(im.listingId, arr)
@@ -620,22 +594,16 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
     const l = items[i]
     const tf = Date.now()
     const { id: _id, publicId: _p, ...fields } = l as Listing & { publicId?: string }
-    const nl = await addListing(toO, fields)
-    // حالا که به کاربرِ واقعی رسید: هر آگهیِ فعال عمومی و با AI تحلیل می‌شود (چیزی که هنگامِ
-    // مالکِ موقت عمداً انجام نشد). آگهیِ فروخته/اجاره‌رفته عمومی نمی‌شود.
+    // آگهیِ فعال بعداً توسطِ جارو عمومی می‌شود؛ publicIdِ قبلی برای کپیِ غنی‌سازی همراهش می‌ماند.
+    const nl = await addListing(toO, l.status === 'active' && _p ? { ...fields, enrichFrom: _p } : fields)
     if (l.status !== 'active') await setListingStatus(toO, nl.id, l.status)
-    else pending.push({ fid: nl.id, prevEnrichId: _p })
-    moved.push({ oldId: l.id, newId: nl.id })
-    // رکوردِ ایمپورتِ همین فایل «همین‌جا» منتقل می‌شود (recordImport بر اساسِ token جایگزین
-    // می‌کند — ایدمپوتنت)؛ وگرنه فایلِ copy+deleteشده که چانکش publish نشده بعدِ کرش با
-    // sourceId قابلِ‌شناسایی نبود و برای همیشه بدونِ publicId می‌ماند.
+    // رکوردِ ایمپورتِ همین فایل «همین‌جا» منتقل می‌شود (recordImport بر اساسِ token جایگزین می‌کند — ایدمپوتنت).
     for (const im of impsByOld.get(l.id) || []) recordImport(toO, { ...im, listingId: nl.id })
+    moved.push({ oldId: l.id, newId: nl.id })
     try { await deleteListing(fromO, l.id) } catch {}   // ← اتمی: مبدأ همین‌جا آزاد می‌شود
-    if (pending.length >= 15) await flush()   // یک mutateِ اسکرپر برای هر ~۱۵ فایل
     const ms = Date.now() - tf
     if (ms > 3000 || (i + 1) % 5 === 0 || i === items.length - 1) console.log(`[roster] reassign ${i + 1}/${items.length} (${ms}ms)`)
   }
-  await flush()   // flushِ پایانی: باقی‌ماندهٔ چانک + فایل‌های مسیرِ ترمیم
   // انتقالِ رکوردهای ایمپورت (توکن→listingId جدید) تا آپدیتِ بعدی همان فایل‌ها را بشناسد.
   for (const im of getDivar(fromO).imports.filter(i => i.sourceId === sourceId)) {
     const m = moved.find(x => x.oldId === im.listingId)
@@ -741,11 +709,11 @@ export async function removeAdvisor(id: string, key: string): Promise<{ ok: bool
   return r
 }
 
-// ── جارویِ ترمیمِ انتشارِ یتیم ────────────────────────────────────────────────
-// فایلِ فعالِ بدونِ publicId یعنی انتقال انجام شده ولی چانکِ انتشار نیمه‌کاره مانده
-// (کیل شدنِ اینستنس وسطِ flush). مسیرِ ترمیمِ داخلِ reassignListings فقط با graduateِ
-// دوباره فعال می‌شود، و آن هم برای مشاورِ دارای حساب مسدود است — پس این فایل‌ها هیچ
-// راهِ برگشتی نداشتند. ۲۹ اوت ۲۰۲۶: ۲۸۳۶ فایل در ۱۹۴ حساب این‌طور یتیم مانده بود.
+// ── جارویِ انتشار (فاز ۲۸۷: صفِ رسمیِ انتشارِ انتقال‌ها) ─────────────────────────
+// reassign فقط کپی می‌کند؛ هر فایلِ «فعال + بدونِ publicId + بدونِ unpublishedAt» را این
+// جارو در تیک‌های ۴۵ثانیه‌ای، چندتا-چندتا، با چکِ ضدتکراری عمومی می‌کند — بیرون از مسیرِ
+// ساختِ حساب، تا خطای دیتابیسیِ انتشار هرگز «در حال ساخت حساب» را گروگان نگیرد.
+// (قبلاً فقط «ترمیمِ» کرش بود؛ ۲۹ اوت: ۲۸۳۶ فایلِ یتیم در ۱۹۴ حساب.)
 // unpublishedAt رعایت می‌شود: آنچه مشاور عمداً از انتشار درآورده دوباره منتشر نمی‌شود.
 // مکان‌نمای چرخشی تا یک حسابِ پرفایل بقیه را گرسنه نگذارد.
 let _orphanCursor = 0
@@ -760,17 +728,26 @@ export async function repairOrphanPublishes(limit = 10): Promise<number> {
   if (!phones.length) return 0
   for (let n = 0; n < phones.length; n++) {
     const p = phones[(_orphanCursor + n) % phones.length]
-    const ids = ((await getAdvisor(p)).listings || [])
+    const pick = ((await getAdvisor(p)).listings || [])
       .filter(l => l.status === 'active' && !l.publicId && !l.unpublishedAt)
-      .slice(0, limit).map(l => l.id)
-    if (!ids.length) continue
+      .slice(0, limit)
+    if (!pick.length) continue
     _orphanCursor = (_orphanCursor + n + 1) % phones.length
     try {
-      const done = await publishListingsBatch(p, ids)
-      console.log(`[roster] orphan-publish phone=${p} n=${done.length}`)
+      const done = await publishListingsBatch(p, pick.map(l => l.id))
+      // فاز ۲۸۷ — این جارو حالا «صفِ رسمیِ انتشارِ» انتقال‌هاست، نه فقط ترمیم. غنی‌سازیِ
+      // publicIdِ قبلی (enrichFrom) کپی می‌شود تا warmEnrichment هیچ درخواستی به دیوار نزند
+      // («یک‌بار بگیر، نگه دار» — فاز ۲۷۷).
+      for (const r of done) {
+        const prevId = pick.find(x => x.id === r.fid)?.enrichFrom
+        const prev = prevId ? getEnrichment(prevId) : null
+        if (prev) patchEnrichment(r.publicId, prev)
+        warmEnrichment(r.publicId)
+      }
+      console.log(`[roster] publish-sweep phone=${p} n=${done.length}`)
       return done.length
     } catch (e) {
-      console.log(`[roster] orphan-publish failed phone=${p}: ${String((e as Error).message).slice(0, 80)}`)
+      console.log(`[roster] publish-sweep failed phone=${p}: ${String((e as Error).message).slice(0, 80)}`)
       return 0
     }
   }

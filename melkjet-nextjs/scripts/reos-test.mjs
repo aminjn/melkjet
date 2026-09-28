@@ -3242,10 +3242,15 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
     console.log = (...a) => { logs285.push(a.join(' ')) }   // لاگ‌های reassign جمع می‌شوند (خلوتیِ خروجیِ تست)
     gr285 = await ros285.graduateAdvisor(sid285, 'akbari', '09001285201')
   } finally { console.log = origLog285 }
+  // فاز ۲۸۷ — انتشار دیگر داخلِ انتقال نیست: reassign فقط کپی می‌کند و «جارویِ انتشار»
+  // (صفِ جداگانه، هر تیک چندتا) عمومی می‌کند. اینجا جارو تا خالی‌شدن اجرا می‌شود.
+  const preSweep285 = await adv285.getAdvisor('09001285201')
+  ok('فاز ۲۸۷: بلافاصله بعدِ انتقال هیچ فایلی هنوز عمومی نیست (انتشار با صفِ جداگانه)', preSweep285.listings.filter(l => l.status === 'active').every(l => !l.publicId))
+  for (let i = 0; i < 10; i++) { if (!(await ros285.repairOrphanPublishes(20))) break }
   const tgt285 = await adv285.getAdvisor('09001285201')
   const act285 = tgt285.listings.filter(l => l.status === 'active')
   ok('graduate: موفق و همهٔ ۱۸ فایل منتقل شد', gr285.ok === true && gr285.moved === 18 && tgt285.listings.length === 18)
-  ok('target: هر ۱۷ فایلِ فعال publicId دارد (انتشارِ دسته‌ای، با flushِ چانک+پایانی)', act285.length === 17 && act285.every(l => l.publicId && l.published))
+  ok('target: هر ۱۷ فایلِ فعال بعدِ جارویِ انتشار publicId دارد', act285.length === 17 && act285.every(l => l.publicId && l.published))
   const soldL285 = tgt285.listings.find(l => l.status === 'sold')
   ok('فایلِ فروخته منتشر نشد و وضعیتش ماند', !!soldL285 && !soldL285.publicId)
   ok('مبدأ (مالکِ موقت) کاملاً خالی شد', (await adv285.getAdvisor(tempO285)).listings.length === 0)
@@ -3269,6 +3274,7 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   try {
     console.log = () => {}
     gr2_285 = await ros285.graduateAdvisor(sid285, 'akbari', '09001285201')
+    for (let i = 0; i < 10; i++) { if (!(await ros285.repairOrphanPublishes(20))) break }   // فاز ۲۸۷: ترمیم هم کارِ جارویِ انتشار است
   } finally { console.log = origLog285 }
   const fixedL285 = (await adv285.getAdvisor('09001285201')).listings.find(l => l.title === crashTitle)
   ok('ترمیم: فایل دوباره publicId گرفت — با بازپس‌گیریِ همان آیتم، نه ردیفِ نو', gr2_285.ok === true && fixedL285.publicId === crashPub && fixedL285.published === true)
