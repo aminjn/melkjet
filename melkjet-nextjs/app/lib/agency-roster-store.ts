@@ -651,6 +651,9 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   // مسیرِ graduate همیشه پشتِ گاردِ سوپرادمین/staff است ⇒ ثابت (۰۲۱xxxxxxxx) هم مجاز؛ پیامکی هم نمی‌فرستد.
   if (!/^0\d{10}$/.test(p)) return { ok: false, error: 'شمارهٔ معتبر نیست (موبایل ۰۹… یا ثابت با کدِ شهر)' }
+  // نامِ مرحله واردِ پیامِ خطا می‌شود تا لاگِ صف بگوید timeout دقیقاً در کدام مرحله بوده (۲۸ سپتامبر).
+  let step = 'scrape'
+  try {
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد' }
   const isAgency = key === '__agency__'
@@ -661,6 +664,7 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   const fromOwner = isAgency ? scrape.agencyOwner : (rec!.transferFrom || rec!.owner)
   if (fromOwner === p) return { ok: false, error: 'این شماره از قبل تنظیم شده' }
 
+  step = 'account'
   if (!accountExists(p)) {
     // فاز ۱۹۸ (فیدبک: «حساب ساخته شد ولی نقشِ مشاور املاک را نداد») — شناسهٔ نقش در role-store تصادفی است؛
     // رشتهٔ ثابتِ 'advisor' هیچ نقشی نبود. نقشِ واقعی با داشبورد پیدا می‌شود: مشاور=/pros، آژانس=/agency.
@@ -675,7 +679,9 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
     if (!cr.ok) return { ok: false, error: cr.error }
     console.log(`[roster] graduate: account created phone=${p} name=${name} role=${roleId || '(نقش پیدا نشد!)'}`)
   }
+  step = 'profile'
   try { await updateAdvisorProfile(p, { name, phone: p, agency: scrape.agencyName }) } catch {}
+  step = 'record'
 
   // فاز ۲۷۷ (فیدبک: «ساخت حساب باید کمتر از ۱ ثانیه باشد») — حساب همین‌جا «تمام‌شده» ثبت می‌شود.
   // قبلاً رکورد فقط *بعد از* انتقالِ همهٔ فایل‌ها به‌روز می‌شد، پس پنل ساعت‌ها «در حال ساخت حساب»
@@ -698,7 +704,9 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   // مبدأ را نگه داشته و تلاشِ بعدیِ صف از همین‌جا ادامه می‌دهد.
   if (opts?.deferTransfer) return { ok: true, moved: 0, deferred: true }
 
+  step = 'transfer'
   const moved = await reassignListings(fromOwner, p, scrape.id)
+  step = 'finalize'
   await mutate(db => {
     const s = db.scrapes[id]; if (!s) return
     const r = s.advisors.find(x => x.key === key)
@@ -707,6 +715,9 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   // یادگیریِ ماشین: تأییدِ ادمین قوی‌ترین سیگنال است → این نام برای همیشه یاد گرفته می‌شود.
   if (!isAgency && name) { try { const { learnName } = await import('./agency-roster-ml'); await learnName(name, 'admin') } catch {} }
   return { ok: true, moved }
+  } catch (e: any) {
+    throw new Error(`${step}: ${String(e?.message || e)}`)
+  }
 }
 
 // ── حذفِ دستیِ یک مشاور از رُستر (برای اسم‌های خراب یا حسابِ حذف‌شده) ──

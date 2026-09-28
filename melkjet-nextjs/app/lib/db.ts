@@ -161,6 +161,12 @@ export async function kvMutate<T, R>(key: string, fallback: T, fn: (data: T) => 
   try {
     await ensureSchema(client)
     await client.query('BEGIN')
+    // ۲۸ سپتامبر — انتظار پشتِ FOR UPDATE «کوئریِ سرکش» نیست؛ صف‌بستن برای نوبت است
+    // (pg_stat_activity: چند اتصال Lock-wait پشتِ یک تراکنشِ idle-in-transaction). سقفِ
+    // سراسریِ ۱۵ث آن انتظار را می‌کُشت و کلِ کار از نو شروع می‌شد → توفانِ retry و بارِ
+    // بیشتر. داخلِ همین تراکنش سقف ۴۵ث است؛ SET LOCAL با COMMIT/ROLLBACK خودش برمی‌گردد
+    // و سقفِ ۱۵ثِ بقیهٔ کوئری‌ها (خواندن‌ها/API) دست‌نخورده می‌ماند.
+    await client.query(`SET LOCAL statement_timeout = '45s'`)
     const r = await client.query('SELECT data FROM kv WHERE key = $1 FOR UPDATE', [key])
     const data: T = r.rows.length ? (r.rows[0].data as T) : fallback
     const result = fn(data)
