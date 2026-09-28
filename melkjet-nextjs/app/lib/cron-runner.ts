@@ -64,6 +64,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
     try { maybeRunScrape(Date.now()) } catch { /* فاز ۲۰۰ — اسکرپِ هفتگیِ فهرستِ پروژه‌های پرشین سازه */ }
     try { maybeCreateAccounts() } catch { /* ساختِ خودکارِ حسابِ سازنده پس از به‌روزشدنِ پروفایل‌ها */ }
     try { maybeAutoScrape(Date.now()) } catch { /* اسکرپِ خودکارِ زمان‌بندی‌شدهٔ کاتالوگ */ }
+    // فاز ۲۸۸ — معماران (طرح‌۲طرح): اسکرپِ تدریجیِ فهرست + پروفایل‌ها (خودِ tick نرخ/قفل دارد).
+    ;(async () => { try { const { tickScrape } = await import('./tarh2tarh-store'); await tickScrape() } catch { /* تیکِ بعد */ } })()
     maybeAutoSyncCost(Date.now()).catch(() => { /* سینکِ هفتگیِ قیمتِ مدل‌های AI از API */ })
     // REOS: تنظیماتِ سوپرادمین را بارگذاری کن + صفِ رویداد را فلاش کن + آموزشِ دوره‌ای طبقِ تنظیمات.
     let reosCfg = { training: { autoHours: 6, enabled: true } }

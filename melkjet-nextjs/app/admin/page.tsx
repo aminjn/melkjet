@@ -19,7 +19,7 @@ import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
-  | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
+  | 'overview' | 'scraper' | 'persiansaze' | 'tarh2tarh' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
   | 'reos' | 'suspension' | 'site' | 'staffCrm'
@@ -75,6 +75,7 @@ const sections: NavSection[] = [
       { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس (دیوار)' },
       { id: 'catalog',     icon: '🧱', label: 'کاتالوگِ مصالح (اسکرپ)' },
       { id: 'persiansaze', icon: '🏗', label: 'سازنده‌ها (پرشین‌سازه)' },
+      { id: 'tarh2tarh', icon: '📐', label: 'معماران (طرح‌۲طرح)' },
     ],
   },
   {
@@ -128,6 +129,7 @@ const viewTitles: Record<View, string> = {
   scraper:    'موتور اسکرپی هوشمند',
   catalog:    'کاتالوگِ مرجعِ مصالح',
   persiansaze: 'سازنده‌ها (پرشین سازه)',
+  tarh2tarh: 'معماران (طرح‌۲طرح)',
   listings:   'مدیریت آگهی‌ها و محتوا',
   products:   'مدیریت محصولات فروشگاه',
   categories: 'دسته‌بندی‌ها',
@@ -1908,6 +1910,126 @@ interface PSState {
   profiles: { builders: number; withPhone: number; projects: number; revealedProjects?: number; pendingProjects?: number; quotaAvailable?: number | null; lastRevealAt?: string; accounts?: number }
   log: string
   revealLog: string
+}
+
+// ─── معماران (طرح‌۲طرح) — فاز ۲۸۸: اسکرپِ بانکِ معمارانِ tarh2tarh ─────────────
+interface T2tStats { handles: number; pageCursor: number; listDoneAt: number | null; fetched: number; errors: number; withPhone: number; lastTickAt: number | null; lastError: string }
+interface T2tRow { handle: string; name: string; title?: string; rank?: number; score?: number; phone?: string; projDone?: number; skills?: string[] }
+function Tarh2tarhView() {
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const [st, setSt] = useState<{ config: { enabled: boolean; cookieSet: boolean; pagesPerTick: number; profilesPerTick: number; delayMs: number }; stats: T2tStats } | null>(null)
+  const [cookie, setCookie] = useState('')
+  const [enabled, setEnabled] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [rows, setRows] = useState<T2tRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
+  const [q, setQ] = useState('')
+  const [onlyPhone, setOnlyPhone] = useState(false)
+  const [busy, setBusy] = useState('')
+  const load = async () => { try { const r = await fetch('/api/admin/tarh2tarh'); if (r.ok) { const j = await r.json(); setSt(j); setEnabled(!!j.config?.enabled) } } catch {} }
+  const loadProfiles = async (pg = 1, qq = q, ph = onlyPhone) => {
+    try { const r = await fetch(`/api/admin/tarh2tarh?view=profiles&page=${pg}&q=${encodeURIComponent(qq)}&withPhone=${ph ? 1 : 0}`); if (r.ok) { const j = await r.json(); setRows(j.items || []); setTotal(j.total || 0); setPage(j.page || 1); setPages(j.pages || 1) } } catch {}
+  }
+  useEffect(() => { load(); loadProfiles(1) }, [])
+  const act = async (action: string, extra: Record<string, unknown> = {}, label = '') => {
+    setBusy(action); setMsg(label || 'در حال اجرا…')
+    try {
+      const r = await fetch('/api/admin/tarh2tarh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...extra }) })
+      const j = await r.json()
+      if (j.ok === false || j.error) setMsg(`✗ ${j.error || 'خطا'}`)
+      else if (action === 'accounts') setMsg(`✓ ${(j.created || 0).toLocaleString('fa-IR')} حساب ساخته شد، ${(j.skipped || 0).toLocaleString('fa-IR')} از قبل بود، ${(j.noPhone || 0).toLocaleString('fa-IR')} بدونِ شماره`)
+      else setMsg('✓ انجام شد')
+      await load(); await loadProfiles(page)
+    } catch { setMsg('✗ خطای شبکه') } finally { setBusy('') }
+  }
+  const saveCfg = () => act('config', { enabled, ...(cookie.trim() ? { cookie: cookie.trim() } : {}) }, 'ذخیره…')
+  const s = st?.stats
+  const tile = (label: string, val: string, color?: string) => (
+    <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 110 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{label}</div><div style={{ fontSize: 22, fontWeight: 900, color: color || 'var(--text)' }}>{val}</div></div>
+  )
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 24 }}>📐</span>
+          <div><div style={{ fontWeight: 900, fontSize: 17 }}>معماران (طرح‌۲طرح)</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.8 }}>بانکِ معمارانِ tarh2tarh — پروفایل، آمار، پروژه‌ها و شماره‌ها اسکرپ و برای دستهٔ «معماران و طراحان» حسابِ معمار ساخته می‌شود. متن‌ها برای سئو با جمله‌بندیِ خودِ ملک‌جت تولید می‌شوند، نه کپی.</div></div>
+        </div>
+      </Card>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>پیکربندی</div>
+        <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 12, lineHeight: 1.9 }}>
+          برای شماره‌ها: یک‌بار در tarh2tarh.com لاگین کن، از DevTools (Network → هر درخواست → Request Headers) مقدارِ کاملِ هدرِ <b>Cookie</b> را کپی و اینجا بگذار. {st?.config.cookieSet ? <span style={{ color: '#5fd98a' }}>✓ کوکی ذخیره شده</span> : <span style={{ color: '#e7674a' }}>کوکی هنوز ذخیره نشده (اسکرپ بدونِ شماره پیش می‌رود)</span>}
+        </div>
+        <textarea style={{ ...inp, direction: 'ltr', textAlign: 'left', minHeight: 60, width: '100%', fontFamily: 'monospace', fontSize: 11 }} placeholder="مثلا: XSRF-TOKEN=…; tarh2tarh_session=…" value={cookie} onChange={e => setCookie(e.target.value)} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} style={{ width: 16, height: 16 }} /> اسکرپِ خودکار (زمان‌بندی‌شده روی سرور)</label>
+          <GoldButton onClick={saveCfg} disabled={busy === 'config'}>ذخیره</GoldButton>
+          {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : msg.startsWith('✗') ? '#e7674a' : 'var(--muted)' }}>{msg}</span>}
+        </div>
+      </Card>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>وضعیت</div>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
+          {tile('هندل‌های یافته', s ? fa(s.handles) : '—')}
+          {tile('پروفایلِ گرفته‌شده', s ? fa(s.fetched) : '—', 'var(--gold)')}
+          {tile('شماره‌دار', s ? fa(s.withPhone) : '—', '#5fd98a')}
+          {tile('خطا', s ? fa(s.errors) : '—', s?.errors ? '#e7674a' : undefined)}
+          {tile('صفحهٔ فهرستِ بعدی', s ? fa(s.pageCursor) : '—')}
+        </div>
+        {s?.lastError && <div style={{ fontSize: 12, color: '#e7674a', marginBottom: 10 }}>آخرین خطا: {s.lastError}</div>}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <GoldButton onClick={() => act('scan', {}, 'در حال اسکن…')} disabled={busy === 'scan'}>{busy === 'scan' ? 'در حال اسکن…' : '🔄 اسکنِ الان (چند صفحه/پروفایل)'}</GoldButton>
+          <GoldButton onClick={() => act('accounts')} disabled={busy === 'accounts'}>👤 ساختِ حسابِ معمار (شماره‌دارها)</GoldButton>
+          <OutlineButton onClick={() => { if (confirm('همهٔ داده‌های اسکرپ‌شدهٔ طرح‌۲طرح پاک شود؟ (حساب‌های ساخته‌شده می‌مانند)')) act('clear') }}>🗑 پاک‌کردنِ داده‌ها</OutlineButton>
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 10, lineHeight: 1.8 }}>اسکرپِ خودکار تدریجی است: هر تیک چند صفحهٔ فهرست و چند پروفایل، با مکث بینِ درخواست‌ها — تا فشار به سایتِ مبدأ نیاید و بلاک نشویم. ~۱۴هزار معمار یعنی چند روز تا تکمیل؛ لازم نیست کاری کنی.</div>
+      </Card>
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>پروفایلِ معماران</div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <input style={{ ...inp, width: 240 }} placeholder="جستجوی نام/هندل…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') loadProfiles(1, q, onlyPhone) }} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={onlyPhone} onChange={e => { setOnlyPhone(e.target.checked); loadProfiles(1, q, e.target.checked) }} /> فقط شماره‌دار</label>
+          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{fa(total)} معمار</span>
+        </div>
+        {rows.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '18px 0', textAlign: 'center' }}>هنوز پروفایلی گرفته نشده — «اسکنِ الان» را بزن.</div>
+        ) : (
+          <div className="mjc-table" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 620 }}>
+              <thead><tr style={{ color: 'var(--muted)', textAlign: 'right' }}>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>نام</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>عنوان</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>رتبه</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>شماره</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}></th>
+              </tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.handle} style={{ borderTop: '1px solid var(--line2)' }}>
+                    <td style={{ padding: '8px 6px', fontWeight: 700 }}>{r.name}</td>
+                    <td style={{ padding: '8px 6px', color: 'var(--muted)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title || '—'}</td>
+                    <td style={{ padding: '8px 6px' }}>{r.rank ? fa(r.rank) : '—'}</td>
+                    <td style={{ padding: '8px 6px', direction: 'ltr', textAlign: 'right', color: r.phone ? '#5fd98a' : 'var(--faint)' }}>{r.phone || '—'}</td>
+                    <td style={{ padding: '8px 6px' }}><a href={`https://www.tarh2tarh.com/@${r.handle}`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)' }}>دیدن در مبدأ ↗</a></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {pages > 1 && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
+            <OutlineButton onClick={() => loadProfiles(page - 1)} disabled={page <= 1}>قبلی</OutlineButton>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{fa(page)} / {fa(pages)}</span>
+            <OutlineButton onClick={() => loadProfiles(page + 1)} disabled={page >= pages}>بعدی</OutlineButton>
+          </div>
+        )}
+      </Card>
+    </div>
+  )
 }
 
 // ── هوشِ آژانس ───────────────────────────────────────────────────────────────
@@ -7329,6 +7451,7 @@ export default function SuperAdminPage() {
       case 'overview':   return <OverviewView />
       case 'scraper':    return <ScraperView />
       case 'persiansaze': return <PersianSazeView />
+      case 'tarh2tarh': return <Tarh2tarhView />
       case 'support':    return <AdminSupportView />
       case 'listings':   return <ListingsView />
       case 'products':   return <ProductsView />
