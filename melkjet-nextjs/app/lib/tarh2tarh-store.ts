@@ -207,8 +207,14 @@ export function parseProfile(handle: string, html: string): T2tProfile {
   const p: T2tProfile = { handle, name, title, avatar, scrapedAt: Date.now() }
   p.rank = numNear(html, 'رتبه'); p.score = numNear(html, 'امتیاز رقابت'); p.credit = numNear(html, 'اعتبار تخصصی')
   p.views = numNear(html, 'بازدید')
-  p.projDone = numNear(html, 'اجرا شده'); p.projDoing = numNear(html, 'در حال اجرا'); p.projPresented = numNear(html, 'ارائه شده')
-  p.honor1 = numNear(html, 'مقام اول'); p.honor2 = numNear(html, 'مقام دوم'); p.honor3 = numNear(html, 'مقام سوم'); p.honorFinal = numNear(html, 'فینالیست')
+  // وضعیت/مقام‌ها: در مارک‌آپِ مبدأ «عدد بالا، برچسب پایین» است (عدد قبل از برچسب). numNear
+  // عددِ کارتِ همسایه را می‌گرفت (۴/۲۹/۲۹ به‌جای ۸/۴/۲۹) — جفتِ صریحِ «عدد→برچسب» جایگزین شد.
+  const pairOf = (label: string): number | undefined => {
+    const m = html.match(new RegExp(`>\\s*([\\d,۰-۹٬]{1,7})\\s*<(?:[^<>]|<[^>]*>){0,120}?>\\s*${label}\\s*<`))
+    return m ? enNum(m[1]) : undefined
+  }
+  p.projDone = pairOf('اجرا شده'); p.projDoing = pairOf('در حال اجرا'); p.projPresented = pairOf('ارائه شده')
+  p.honor1 = pairOf('مقام اول'); p.honor2 = pairOf('مقام دوم'); p.honor3 = pairOf('مقام سوم'); p.honorFinal = pairOf('فینالیست')
   const aboutM = html.match(/درباره من<\/h2>[\s\S]{0,600}?<p[^>]*>([\s\S]*?)<\/p>/)
   const about = aboutM ? strip(aboutM[1]) : ''
   if (about && !about.includes('ثبت نشده')) p.about = about.slice(0, 2000)
@@ -275,7 +281,10 @@ export function parseProfile(handle: string, html: string): T2tProfile {
       const head = w.slice(0, w.indexOf('متراژ'))
       const h3 = [...head.matchAll(/<h[34][^>]*>([\s\S]*?)<\/h[34]>/g)].pop(); if (h3) pr.title = strip(h3[1]).slice(0, 80) || undefined
       const img = [...head.matchAll(/<img[^>]+src="([^"]+)"/g)].pop(); if (img && !img[1].includes('logo')) pr.image = img[1]
-      const cat = w.match(/>\s*((?:طراحی|نظارت|اجرا|بازسازی)[^<>]{0,30}?)\s*</); if (cat) pr.category = strip(cat[1])
+      // چیپِ دسته پایینِ کارت است (بعد از متراژها)؛ جستجو در کلِ پنجره عنوانِ پروژه را می‌گرفت.
+      const tail = w.slice(w.indexOf('متراژ'))
+      const cat = tail.match(/>\s*((?:طراحی|نظارت|اجرا|بازسازی|مشاوره)[^<>]{0,25}?)\s*</)
+      if (cat) { const c = strip(cat[1]); if (c && c !== pr.title && c.length <= 30) pr.category = c }
       projects.push(pr)
     }
   }
@@ -402,13 +411,20 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
 
 // ── بیوی سئو-امن: فقط از واقعیت‌های ساخت‌یافته، با جمله‌بندیِ خودمان ─────────────
 export function seoBio(p: T2tProfile): string {
+  const fa = (n: number) => n.toLocaleString('fa-IR')
   const bits: string[] = []
-  if (p.title) bits.push(`${p.name}، ${p.title} است`)
+  if (p.title && p.officeName && !p.title.includes(p.officeName)) bits.push(`${p.name}، ${p.title} است و در «${p.officeName}» فعالیت می‌کند`)
+  else if (p.title) bits.push(`${p.name}، ${p.title} است`)
+  else if (p.officeName) bits.push(`${p.name} در «${p.officeName}» فعالیت می‌کند`)
   else bits.push(`${p.name} از معماران و طراحانِ فعالِ کشور است`)
   const pr = (p.projDone || 0) + (p.projDoing || 0) + (p.projPresented || 0)
-  if (pr > 0) bits.push(`تاکنون ${pr.toLocaleString('fa-IR')} پروژه در کارنامهٔ حرفه‌ایِ او ثبت شده${p.projDone ? ` که ${p.projDone.toLocaleString('fa-IR')} موردِ آن به مرحلهٔ اجرا رسیده است` : ''}`)
+  if (pr > 0) bits.push(`تاکنون ${fa(pr)} پروژه در کارنامهٔ حرفه‌ایِ او ثبت شده${p.projDone ? ` که ${fa(p.projDone)} موردِ آن به مرحلهٔ اجرا رسیده است` : ''}`)
+  const cities = [...new Set((p.projects || []).map(x => x.city).filter((c): c is string => !!c))].slice(0, 4)
+  if (cities.length) bits.push(`نمونه‌کارهای او در ${cities.join('، ')} ثبت شده است`)
   const honors = (p.honor1 || 0) + (p.honor2 || 0) + (p.honor3 || 0)
-  if (honors > 0) bits.push(`او در مسابقاتِ معماری ${honors.toLocaleString('fa-IR')} مقام کسب کرده${p.honor1 ? ` (از جمله ${p.honor1.toLocaleString('fa-IR')} مقامِ نخست)` : ''}`)
+  if (honors > 0) bits.push(`او در مسابقاتِ معماری ${fa(honors)} مقام کسب کرده${p.honor1 ? ` (از جمله ${fa(p.honor1)} مقامِ نخست)` : ''}`)
+  if (p.rating && p.ratingCount) bits.push(`کارفرمایان به تجربهٔ همکاری با او میانگینِ ${p.rating.toLocaleString('fa-IR')} از ۵ داده‌اند (${fa(p.ratingCount)} بازخورد)`)
+  if (p.edus?.length) bits.push(`تحصیلات: ${p.edus.slice(0, 3).join('، ')}`)
   if (p.skills?.length) bits.push(`حوزه‌های کاریِ او شاملِ ${p.skills.slice(0, 4).join('، ')} می‌شود`)
   return bits.join('. ') + '.'
 }
