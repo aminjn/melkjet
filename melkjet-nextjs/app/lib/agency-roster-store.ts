@@ -32,7 +32,7 @@ export interface RosterAdvisor {
   transferFrom?: string  // فاز ۲۷۷ — ownerِ موقتِ مبدأ تا وقتی انتقالِ فایل‌ها تمام نشده (ازسرگیریِ امن)
 }
 // کارِ صفِ «ساختِ حساب» — سنگین (انتقالِ فایل‌ها)، روی اینستنسِ ۰ اجرا می‌شود تا درخواستِ ادمین قفل نشود.
-export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; error?: string }   // فاز ۱۹۹ — claim برای صفِ at-least-once
+export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; attempts?: number; error?: string }   // attempts: شمارِ خطاهای گذرا (۲۸ سپتامبر)   // فاز ۱۹۹ — claim برای صفِ at-least-once
 export interface RosterScrape {
   id: string
   slug: string
@@ -817,11 +817,17 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
     }
     return { ran: true, ok: r.ok, error: r.error }
   } catch (e: any) {
-    // فاز ۱۹۹: خطای گذرا (شبکه/PG) → کار در صف می‌ماند (claim بعدِ ۱۰د آزاد و دوباره تلاش)؛ خطای قطعی → حذف + پیام
+    // ۲۸ سپتامبر (فیدبک: «ساخت حساب‌ها خیلی طول می‌کشد؛ چند ردیف با هم گیرند») — ریشه: خطای
+    // گذرا کار را در صف نگه می‌داشت ولی claim را آزاد نمی‌کرد، پس تلاشِ بعدی فقط بعدِ انقضای
+    // ۱۰دقیقه‌ایِ claim می‌آمد. آن مهلت برای پروسهٔ «کشته‌شده» است؛ این‌جا خطا را خودمان گرفته‌ایم
+    // و می‌دانیم کار زنده نیست → claim همان لحظه آزاد می‌شود و تیکِ بعدی (۴۵ث) دوباره برمی‌دارد.
+    // شمارندهٔ attempts جلوی حلقهٔ بی‌پایانِ خطای تکرارشونده را می‌گیرد (سقف ۸ ≈ ۶ دقیقه تلاش).
     const msg = String(e?.message || e || 'خطا')
-    const transient = /timeout|connect|ECONN|pool|terminat|socket/i.test(msg)
-    console.error(`[roster] graduate job ${transient ? 'transient-fail (retry later)' : 'FAILED'}: ${msg.slice(0, 150)}`)
-    if (!transient) {
+    const transient = /timeout|connect|ECONN|pool|terminat|socket/i.test(msg) && (job.attempts || 0) < 8
+    console.error(`[roster] graduate job ${transient ? `transient-fail (retry ~45s, attempt ${(job.attempts || 0) + 1}/8)` : 'FAILED'}: ${msg.slice(0, 150)}`)
+    if (transient) {
+      await mutate(db => { const j = (db.graduateQueue || []).find(x => x.jid === job.jid); if (j) { j.startedAt = undefined; j.attempts = (j.attempts || 0) + 1 } })
+    } else {
       await mutate(db => {
         db.graduateQueue = (db.graduateQueue || []).filter(x => x.jid !== job.jid)
         const s = db.scrapes[job.id]; if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; s.lastError = `ساختِ حساب ناموفق: ${msg}` }
