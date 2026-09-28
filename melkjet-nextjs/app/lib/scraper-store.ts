@@ -1028,19 +1028,38 @@ export async function updateUserListing(itemId: string, raw: UserListingRaw, opt
 // همان آیتم است، نه آگهیِ گم‌شده/تکراری.
 export interface PublishUserListingReq { prevId?: string; raw: UserListingRaw }
 const PUBLISH_CHUNK = 15   // قفلِ KV_META را طولانی نکن — بزرگ‌ترش نکنید (هشدارِ CLAUDE.md)
+// ۲۸ سپتامبر — هر چانک قبلاً با mutateِ کامل کلِ جدولِ ~۴۶هزارتایی را داخلِ تراکنش می‌خواند
+// (~۱۶۶MB زیرِ قفلِ KV_META). زیرِ بارِ اسکرِیپرِ زنده (که همین جدول را مدام می‌نویسد) این
+// از سقفِ statement رد می‌شد → «transfer: statement timeout» و تکرارِ کلِ کار؛ اتصال‌های
+// طولانی هم استخر را خشک می‌کردند. حالا ایندکسِ هم‌ملک‌یابی «یک‌بار، بیرونِ تراکنش» از مسیرِ
+// خواندنِ کش‌دار ساخته می‌شود و هر چانک با mutateSome فقط ردیف‌های موردنیازش (prev/twin) را
+// می‌خواند. انحرافِ آگاهانه: هم‌ملک‌یابی روی اسنپ‌شاتِ بیرونِ تراکنش است — تنها مصرف‌کنندهٔ
+// این مسیر صفِ «سریالِ» اینستنسِ ۰ است (انتقال/ترمیمِ رُستر)، پس درجِ هم‌زمانِ هم‌ملک عملاً
+// منتفی است؛ مسیرِ تکیِ ثبتِ کاربر (addUserListing) همچنان داخلِ تراکنش چک می‌کند.
 export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): Promise<{ item: Item; created: boolean }[]> {
   const out: { item: Item; created: boolean }[] = []
+  const idx = buildUserTwinIndex(await load())
+  const probeOf = (raw: UserListingRaw) => simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta })
   for (let c = 0; c < reqs.length; c += PUBLISH_CHUNK) {
     const chunk = reqs.slice(c, c + PUBLISH_CHUNK)
-    const part = await mutate(db => {
-      const idx = buildUserTwinIndex(db)
+    // ردیف‌هایی که این چانک ممکن است دست بزند: prevِ اعلام‌شده + هم‌ملکِ یافته در ایندکس.
+    const cand = new Set<string>()
+    for (const { prevId, raw } of chunk) {
+      if (prevId) cand.add(prevId)
+      const t = idx.find(probeOf(raw))
+      if (t) cand.add(t.id)
+    }
+    const part = await mutateSome([...cand], ({ items, meta }) => {
+      // نمای db برای هسته‌ها: itemsِ همین تراکنش + ownersِ متادیتا (همان مرجع، تا push بنشیند).
+      meta.owners = meta.owners || []
+      const view = { items, owners: meta.owners } as DB
       const res: { item: Item; created: boolean }[] = []
       for (const { prevId, raw } of chunk) {
         // مثلِ publishListing: prev باید آیتمِ listing موجود باشد (وضعیتش هرچه باشد — حتی duplicate)
-        const prev = prevId ? db.items.find(x => x.id === prevId && x.type === 'listing') : undefined
+        const prev = prevId ? items.find(x => x.id === prevId && x.type === 'listing') : undefined
         if (prev) {
           const textChanged = prev.title !== raw.title || (prev.excerpt || '') !== (raw.excerpt || '')
-          const it = updateUserListingCore(db, prev.id, raw, { remoderate: textChanged })
+          const it = updateUserListingCore(view, prev.id, raw, { remoderate: textChanged })
           if (it) {
             // فاز ۲۸۴ — اول اسنپ‌شاتِ کهنهٔ همین آیتم از ایندکس برداشته می‌شود (هم‌رفتاری با مسیرِ تکی
             // که هر بار ایندکس را تازه می‌سازد)، بعد فیلدهای جدید می‌نشیند.
@@ -1051,10 +1070,11 @@ export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): P
           }
         }
         // publicId شکسته/غایب → هم‌ملکِ عمومیِ موجود بازپس گرفته می‌شود (فاز ۱۵۶A4)
-        const twin = idx.find(simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta }))
+        const twin0 = idx.find(probeOf(raw))
+        const twin = twin0 ? items.find(x => x.id === twin0.id && x.type === 'listing') : undefined
         if (twin) {
           const textChanged = twin.title !== raw.title || (twin.excerpt || '') !== (raw.excerpt || '')
-          const it = updateUserListingCore(db, twin.id, raw, { remoderate: textChanged })
+          const it = updateUserListingCore(view, twin.id, raw, { remoderate: textChanged })
           if (it) {
             idx.remove(it)
             if (it.status !== 'duplicate' && it.status !== 'rejected') idx.add(simFieldsOf(it), it)
@@ -1062,7 +1082,7 @@ export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): P
             continue
           }
         }
-        const it = addUserListingCore(db, raw, idx)
+        const it = addUserListingCore(view, raw, idx)
         if (it.status !== 'duplicate') idx.add(simFieldsOf(it), it)
         res.push({ item: it, created: true })
       }
