@@ -10,6 +10,7 @@ import ProInquiryForm from '@/app/components/ProInquiryForm'
 import { resolveProvider, typeLabel } from '@/app/lib/provider-public'
 import { gradientFor, initialsFor } from '@/app/lib/content-display'
 import ProjectsMap from '@/app/components/ProjectsMap'
+import ArchProjects from '@/app/components/ArchProjects'
 
 // Only these provider types have a ProDesk inbox that can receive an inquiry.
 const PRO_INQUIRY_TYPES = ['architect', 'contractor', 'appraiser', 'lawfirm', 'finance', 'notary', 'legal']
@@ -33,7 +34,12 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
   // اعداد و برچسب‌ها واقعیت‌های ساخت‌یافته‌اند؛ هیچ متنِ آزادِ مبدأ عینا نمایش داده نمی‌شود (سئو).
   let arch: import('@/app/lib/tarh2tarh-store').T2tProfile | null = null
   if (type === 'architect' && p.phone) {
-    try { const { getArchitectPublic } = await import('@/app/lib/tarh2tarh-store'); arch = await getArchitectPublic(p.phone) } catch {}
+    try {
+      const { getArchitectPublic } = await import('@/app/lib/tarh2tarh-store')
+      arch = await getArchitectPublic(p.phone)
+      // قانونِ شمارهٔ یک: نبودِ پل نباید بی‌صدا بماند — همین لاگ گفت کدام حساب‌ها وصل نیستند.
+      if (!arch) console.log(`[t2t] bridge-miss architect slug=${slug} phone=${p.phone}`)
+    } catch (e) { console.error('[t2t] arch load failed:', String((e as Error)?.message).slice(0, 120)) }
   }
   const archProjects = (arch?.projects || []).filter(x => x.title || x.image || x.city || x.builtArea)
   const archPins = (arch?.projects || [])
@@ -182,27 +188,11 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
               </div>
             )}
 
-            {/* پروژه‌ها */}
+            {/* پروژه‌ها — کلیک = نمای بزرگ با همهٔ مشخصات و ورق‌زدن (مثلِ سایتِ مبدأ) */}
             {archProjects.length > 0 && (
               <div style={{ marginBottom: 22 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>نمونه‌کارها و پروژه‌ها</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 14 }}>
-                  {archProjects.slice(0, 24).map((pr, i) => (
-                    <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 13, overflow: 'hidden' }}>
-                      <div style={{ height: 140, background: pr.image ? `center/cover no-repeat url(${pr.image})` : gradientFor(pr.title || p.name) }} />
-                      <div style={{ padding: '11px 13px' }}>
-                        {pr.title && <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>{pr.title}</div>}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 11.5, color: 'var(--muted)' }}>
-                          {pr.city && <span>📍 {pr.city}</span>}
-                          {pr.builtArea ? <span>زیربنا {faN(pr.builtArea)} م²</span> : null}
-                          {pr.landArea ? <span>زمین {faN(pr.landArea)} م²</span> : null}
-                          {pr.year && <span>سال {pr.year.toString().replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)])}</span>}
-                        </div>
-                        {pr.category && <div style={{ marginTop: 8 }}><span style={{ fontSize: 11, padding: '3px 10px', background: 'rgba(212,175,55,.12)', border: '1px solid rgba(212,175,55,.3)', borderRadius: 999, color: 'var(--gold)' }}>{pr.category}</span></div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <ArchProjects name={p.name} projects={archProjects.slice(0, 24).map(pr => ({ title: pr.title, image: pr.image, city: pr.city, year: pr.year, landArea: pr.landArea, builtArea: pr.builtArea, category: pr.category }))} />
               </div>
             )}
           </>
