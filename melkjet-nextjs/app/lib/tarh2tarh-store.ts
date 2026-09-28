@@ -110,8 +110,24 @@ export async function clearAll(): Promise<void> {
 
 // ── fetch + پارس ──────────────────────────────────────────────────────────────
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
-async function fetchHtml(url: string, cookie = ''): Promise<string> {
+// کوکی‌های تازهٔ Set-Cookie در کوکیِ ذخیره‌شده ادغام می‌شوند (نشستِ لاراولِ مبدأ ۲ساعته است و
+// با هر پاسخ نو می‌شود؛ بدونِ این، کوکیِ چسبانده‌شدهٔ ادمین بعد از مدتی می‌مُرد).
+function mergeCookieHeader(cur: string, setCookies: string[]): string {
+  if (!setCookies.length) return cur
+  const jar = new Map<string, string>()
+  for (const part of cur.split(/;\s*/)) { const i = part.indexOf('='); if (i > 0) jar.set(part.slice(0, i).trim(), part.slice(i + 1)) }
+  for (const sc of setCookies) { const kv = sc.split(';')[0]; const i = kv.indexOf('='); if (i > 0) jar.set(kv.slice(0, i).trim(), kv.slice(i + 1)) }
+  return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
+}
+async function fetchHtml(url: string, cookie = '', jar?: { cookie: string; dirty?: boolean }): Promise<string> {
   const r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'fa,en;q=0.8', ...(cookie ? { Cookie: cookie } : {}) }, redirect: 'follow', signal: AbortSignal.timeout(30_000) })
+  if (jar) {
+    try {
+      const sc = (r.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.() || []
+      const merged = mergeCookieHeader(jar.cookie, sc)
+      if (merged !== jar.cookie) { jar.cookie = merged; jar.dirty = true }
+    } catch {}
+  }
   if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`)
   return await r.text()
 }
@@ -211,9 +227,10 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
       for (const [h, pr] of have) { if (!pr.phone && !pr.error && (!pr.phoneAt || Date.now() - pr.phoneAt > 7 * 24 * 3600_000)) wants.push(h); if (wants.length >= cfg.profilesPerTick) break }
     }
     let ok = 0, withPhone = 0
+    const jar = { cookie: cfg.cookie.trim(), dirty: false }
     for (const h of wants) {
       try {
-        const html = await fetchHtml(`${BASE}/@${h}`, cfg.cookie.trim())
+        const html = await fetchHtml(`${BASE}/@${h}`, jar.cookie, jar.cookie ? jar : undefined)
         const p = parseProfile(h, html)
         if (!p.name) { p.error = 'نام پیدا نشد (ساختارِ صفحه؟)' } else ok++
         if (!p.phone) p.phoneAt = Date.now()   // با این کوکی شماره نبود — تا ۷ روز دوباره تلاش نکن
@@ -225,6 +242,7 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
       }
       await sleep(cfg.delayMs)
     }
+    if (jar.dirty) await saveConfig({ cookie: jar.cookie })   // کوکیِ تازه‌شده ماندگار شود
     const all = await allProfiles()
     meta.fetched = all.filter(p => p.name).length
     meta.withPhone = all.filter(p => p.phone).length
