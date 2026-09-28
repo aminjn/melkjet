@@ -417,6 +417,17 @@ server-rendered است (HTML، بدونِ React/JSON-LD) → فقط fetch + rege
 - `createArchitectAccounts`: برای شماره‌دارها حساب با نقشِ داشبورد `/architect` + saveProfile
   (displayName/tagline/about/logo/specialties) → در `/architect/[slug]` و دایرکتوری دیده می‌شوند.
 - پنل: «معماران (طرح‌۲طرح)» — کانفیگ/وضعیت/فهرست؛ API: `/api/admin/tarh2tarh`.
+- **شماره‌ها (تاییدشده با پروبِ زنده):** همان درخواستِ دکمهٔ «نمایش شماره»ی مبدأ —
+  `POST /user/contact_number` با `{uuid, contact_type}` (+کوکی و X-XSRF-TOKEN) → `{data:{phone}}`.
+  uuid از `const modelUuid`ِ صفحه. کوکی خودکار با Set-Cookieهای پاسخ تازه می‌ماند.
+  ⚠️ درسِ روزِ اول: «اولین tel:ِ صفحه» شمارهٔ فوترِ خودِ سایت بود، نه معمار.
+- **دادهٔ کامل (فاز ۲۸۸ب):** پروژه‌ها با پنجرهٔ برچسب‌محور دورِ «متراژ زیربنا» (عنوان/عکس/شهر/
+  سال/متراژها/دسته) + مختصات از `const lat_lngs`؛ امتیازِ بازخورد/تعدادِ دیدگاه/NPS/نقاطِ قوت؛
+  دفتر از `currnetUserJobLocation`؛ جوایز از `get_honours_route` (JSON). نمایش در
+  ProviderProfilePage (فقط معمار): آمار/افتخارات/جوایز/تحصیلات/پروژه‌ها + «نقشهٔ پروژه‌ها» با
+  ProjectsMap (NeshanMap چندپینه، lazy). ایندکسِ `t2t:byphone:{phone}`→handle پلِ حساب↔داده.
+- **مقیاسِ ۱۴هزار:** هیچ مسیری «همهٔ ردیف‌ها» را نمی‌خواند — وضعیتِ هر هندل در `meta.state`
+  («e/o/p»+epoch) است؛ tick/stats/فهرستِ پنل/ساختِ حساب همه از state + kvGetِ تک‌ردیف.
 
 ### آرشیو — تشخیصِ اولیهٔ فاز ۲۸۳ (انجام شد، برای تاریخچه)
 ۱. **عکس‌های جست‌وجو دقیقه‌ها طول می‌کشند.** ریشه: `CardImg.tsx` تصویر را از `previewSrc()` یعنی

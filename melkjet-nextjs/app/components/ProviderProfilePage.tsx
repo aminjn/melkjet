@@ -9,6 +9,7 @@ import RepBadges from '@/app/components/RepBadges'
 import ProInquiryForm from '@/app/components/ProInquiryForm'
 import { resolveProvider, typeLabel } from '@/app/lib/provider-public'
 import { gradientFor, initialsFor } from '@/app/lib/content-display'
+import ProjectsMap from '@/app/components/ProjectsMap'
 
 // Only these provider types have a ProDesk inbox that can receive an inquiry.
 const PRO_INQUIRY_TYPES = ['architect', 'contractor', 'appraiser', 'lawfirm', 'finance', 'notary', 'legal']
@@ -27,6 +28,18 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
   const p = await resolveProvider(type, slug)
   if (!p) notFound()
   if (p.type !== type) redirect(`/${p.type}/${p.slug}`)   // canonicalِ نوعِ درست
+
+  // فاز ۲۸۸ — دادهٔ کاملِ معمارِ اسکرپ‌شده (طرح‌۲طرح): آمار، پروژه‌ها، نقشه، افتخارات.
+  // اعداد و برچسب‌ها واقعیت‌های ساخت‌یافته‌اند؛ هیچ متنِ آزادِ مبدأ عینا نمایش داده نمی‌شود (سئو).
+  let arch: import('@/app/lib/tarh2tarh-store').T2tProfile | null = null
+  if (type === 'architect' && p.phone) {
+    try { const { getArchitectPublic } = await import('@/app/lib/tarh2tarh-store'); arch = await getArchitectPublic(p.phone) } catch {}
+  }
+  const archProjects = (arch?.projects || []).filter(x => x.title || x.image || x.city || x.builtArea)
+  const archPins = (arch?.projects || [])
+    .map((x, i) => ({ id: 'pr' + i, lat: x.lat as number, lng: x.lng as number, title: x.title }))
+    .filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lng))
+  const faN = (n?: number) => (n ?? 0).toLocaleString('fa-IR')
 
   // فاز ۲۵۴ (سئو L4): فیلدهای خالی از JSON-LD حذف می‌شوند (description=""" اسکیمای نامعتبر می‌ساخت).
   const bio = (p.bio || '').replace(/<[^>]+>/g, '').trim().slice(0, 300)
@@ -83,6 +96,105 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
             <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>تخصص‌ها</h2>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{p.specialties.map((s, i) => <span key={i} style={{ fontSize: 12.5, padding: '5px 12px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)' }}>{s}</span>)}</div>
           </div>
+        )}
+
+        {arch && (
+          <>
+            {/* آمارِ حرفه‌ای */}
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 22 }}>
+              {[
+                arch.credit != null && { l: 'اعتبار تخصصی', v: faN(arch.credit) },
+                arch.score != null && { l: 'امتیاز رقابت', v: faN(arch.score) },
+                arch.rank != null && { l: 'رتبه در معماران', v: faN(arch.rank) },
+                arch.rating != null && { l: 'امتیاز بازخوردها', v: `${arch.rating.toLocaleString('fa-IR')} از ۵${arch.ratingCount ? ` (${faN(arch.ratingCount)} دیدگاه)` : ''}` },
+                arch.nps != null && { l: 'تمایلِ کارفرمایان (NPS)', v: `${arch.nps > 0 ? '+' : ''}${faN(arch.nps)}` },
+              ].filter(Boolean).map((t, i) => {
+                const tt = t as { l: string; v: string }
+                return (
+                  <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '12px 18px', minWidth: 130 }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{tt.l}</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', marginTop: 4 }}>{tt.v}</div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* وضعیتِ پروژه‌ها و افتخارات */}
+            {((arch.projDone || 0) + (arch.projDoing || 0) + (arch.projPresented || 0) > 0 || (arch.honor1 || 0) + (arch.honor2 || 0) + (arch.honor3 || 0) + (arch.honorFinal || 0) > 0) && (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 22 }}>
+                {[
+                  ['اجراشده', arch.projDone], ['در حال اجرا', arch.projDoing], ['ارائه‌شده', arch.projPresented],
+                  ['🥇 مقام اول', arch.honor1], ['🥈 مقام دوم', arch.honor2], ['🥉 مقام سوم', arch.honor3], ['فینالیست', arch.honorFinal],
+                ].filter(([, v]) => (v as number || 0) > 0).map(([l, v], i) => (
+                  <span key={i} style={{ fontSize: 12.5, padding: '7px 14px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999 }}>
+                    <b style={{ color: 'var(--gold)' }}>{faN(v as number)}</b> {l as string}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* نقاطِ قوت از دیدِ کارفرمایان */}
+            {(arch.strengths?.length || 0) > 0 && (
+              <div style={{ marginBottom: 22 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>نقاطِ قوت از دیدِ کارفرمایان</h2>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{arch.strengths!.map((s, i) => <span key={i} style={{ fontSize: 12.5, padding: '5px 12px', background: 'rgba(95,217,138,.1)', border: '1px solid rgba(95,217,138,.35)', borderRadius: 999 }}>✓ {s}</span>)}</div>
+              </div>
+            )}
+
+            {/* جوایز */}
+            {(arch.honours?.length || 0) > 0 && (
+              <div style={{ marginBottom: 22 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>جوایز و افتخارات</h2>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {arch.honours!.slice(0, 10).map((hn, i) => (
+                    <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px', fontSize: 13 }}>
+                      🏆 {hn.title}{hn.rank ? <span style={{ color: 'var(--gold)', marginInlineStart: 8, fontSize: 12 }}>{hn.rank}</span> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* تحصیلات و همکاری‌ها */}
+            {(arch.edus?.length || 0) > 0 && (
+              <div style={{ marginBottom: 22 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>تحصیلات و سوابق</h2>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{arch.edus!.slice(0, 10).map((s, i) => <span key={i} style={{ fontSize: 12.5, padding: '5px 12px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)' }}>{s}</span>)}</div>
+              </div>
+            )}
+
+            {/* نقشهٔ پروژه‌ها — روی نقشهٔ خودِ ملک‌جت */}
+            {archPins.length > 0 && (
+              <div style={{ marginBottom: 22 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>موقعیتِ پروژه‌ها روی نقشه</h2>
+                <ProjectsMap points={archPins} />
+              </div>
+            )}
+
+            {/* پروژه‌ها */}
+            {archProjects.length > 0 && (
+              <div style={{ marginBottom: 22 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>نمونه‌کارها و پروژه‌ها</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 14 }}>
+                  {archProjects.slice(0, 24).map((pr, i) => (
+                    <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 13, overflow: 'hidden' }}>
+                      <div style={{ height: 140, background: pr.image ? `center/cover no-repeat url(${pr.image})` : gradientFor(pr.title || p.name) }} />
+                      <div style={{ padding: '11px 13px' }}>
+                        {pr.title && <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>{pr.title}</div>}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 11.5, color: 'var(--muted)' }}>
+                          {pr.city && <span>📍 {pr.city}</span>}
+                          {pr.builtArea ? <span>زیربنا {faN(pr.builtArea)} م²</span> : null}
+                          {pr.landArea ? <span>زمین {faN(pr.landArea)} م²</span> : null}
+                          {pr.year && <span>سال {pr.year.toString().replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)])}</span>}
+                        </div>
+                        {pr.category && <div style={{ marginTop: 8 }}><span style={{ fontSize: 11, padding: '3px 10px', background: 'rgba(212,175,55,.12)', border: '1px solid rgba(212,175,55,.3)', borderRadius: 999, color: 'var(--gold)' }}>{pr.category}</span></div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {p.listings.length > 0 && (

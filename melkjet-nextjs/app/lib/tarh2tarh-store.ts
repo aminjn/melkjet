@@ -28,13 +28,16 @@ export interface T2tConfig {
   profilesPerTick: number   // چند پروفایل در هر تیک
   delayMs: number           // مکثِ مؤدبانه بین درخواست‌ها
 }
-export interface T2tProject { image?: string; lat?: number; lng?: number }
+export interface T2tProject { title?: string; image?: string; lat?: number; lng?: number; city?: string; year?: string; landArea?: number; builtArea?: number; category?: string }
 export interface T2tProfile {
   handle: string; name: string; title?: string; avatar?: string
   uuid?: string; userId?: number; officePhone?: string
+  officeName?: string; managerName?: string
   rank?: number; score?: number; credit?: number; views?: number
+  rating?: number; ratingCount?: number; nps?: number; strengths?: string[]
   projDone?: number; projDoing?: number; projPresented?: number
   honor1?: number; honor2?: number; honor3?: number; honorFinal?: number
+  honours?: { title: string; rank?: string }[]
   about?: string            // متنِ خامِ مبدأ — فقط برای مرجع؛ منتشر نمی‌شود
   skills?: string[]; edus?: string[]; engagements?: string[]
   instagram?: string; linkedin?: string
@@ -52,12 +55,16 @@ interface T2tMeta {
   fetched?: number                  // شمارِ پروفایل‌های گرفته‌شده (کشِ آمار)
   withPhone?: number
   accounted?: number                // تا این تعداد شماره‌دار، حسابِ خودکار ساخته شده
+  // وضعیتِ سبکِ هر هندل: '<code><epochSec>' — e=خطا، o=گرفته بدونِ شماره، p=گرفته با شماره.
+  // تیک با همین تصمیم می‌گیرد چه چیزی را بگیرد؛ دیگر لازم نیست هر دور ۱۴هزار ردیفِ کامل
+  // از دیتابیس خوانده شود (همان اشتباهِ «کلِ جدول زیرِ قفل» که فاز ۲۸۷ جای دیگر جمعش کرد).
+  state?: Record<string, string>
 }
 
 const DEF_CFG: T2tConfig = { enabled: false, cookie: '', pagesPerTick: 2, profilesPerTick: 15, delayMs: 1500 }
 
 // ── لایهٔ ذخیره (PG: هر پروفایل یک ردیفِ kv؛ فایل: یک JSON برای dev) ─────────────
-interface FileDb { config: T2tConfig; meta: T2tMeta; profiles: Record<string, T2tProfile> }
+interface FileDb { config: T2tConfig; meta: T2tMeta; profiles: Record<string, T2tProfile>; byPhone?: Record<string, string> }
 function fileLoad(): FileDb {
   try { return { config: { ...DEF_CFG }, meta: { handles: [], pageCursor: 1 }, profiles: {}, ...JSON.parse(fs.readFileSync(FILE, 'utf-8')) } }
   catch { return { config: { ...DEF_CFG }, meta: { handles: [], pageCursor: 1 }, profiles: {} } }
@@ -100,10 +107,9 @@ export async function getProfileByHandle(handle: string): Promise<T2tProfile | n
 async function saveProfileRow(p: T2tProfile) {
   if (!pgEnabled()) { const d = fileLoad(); d.profiles[p.handle] = p; fileSave(d) } else await kvSet(KV_P + p.handle, p)
 }
-async function allProfiles(): Promise<T2tProfile[]> {
-  if (!pgEnabled()) return Object.values(fileLoad().profiles)
-  return (await kvGetPrefix<T2tProfile>(KV_P)).map(r => r.data)
-}
+// ⚠️ عمداً تابعِ «همهٔ پروفایل‌ها» نداریم: با ۱۴هزار ردیفِ چندکیلوبایتی، هر بار صدها مگابایت
+// می‌شد (همان الگوی «کلِ جدول» که فاز ۲۸۷ جای دیگر جمع کرد). همه‌چیز از meta.state + kvGetِ
+// هدفمندِ تک‌ردیف می‌گذرد.
 export async function clearAll(): Promise<void> {
   if (!pgEnabled()) { fileSave({ config: (fileLoad().config), meta: { handles: [], pageCursor: 1 }, profiles: {} }); return }
   for (const { key } of await kvGetPrefix<unknown>(KV_P)) await kvDelete(key)
@@ -212,14 +218,72 @@ export function parseProfile(handle: string, html: string): T2tProfile {
     return items.length ? [...new Set(items)].slice(0, 25) : undefined
   }
   p.skills = lines('section-skill'); p.edus = lines('section-edu'); p.engagements = lines('section-engagment')
-  // پروژه‌ها: مختصاتِ پین‌ها + تصاویرِ بخشِ پروژه
-  const coords = [...html.matchAll(/"lat":\s*([\d.]+)\s*,\s*"lng":\s*([\d.]+)/g)].map(m => ({ lat: Number(m[1]), lng: Number(m[2]) }))
-  const projSec = sectionOf(html, 'section-project')
-  const imgs = [...projSec.matchAll(/<img[^>]+src="([^"]+)"/g)].map(m => m[1]).filter(u => !u.includes('logo')).slice(0, 24)
+  // دفتر/شرکت — JSONِ داخلِ صفحه
+  try {
+    const om = html.match(/const currnetUserJobLocation = (\{[\s\S]*?\});/)?.[1]
+    if (om) { const o = JSON.parse(om); if (o?.office_name) p.officeName = strip(String(o.office_name)); if (o?.manager_name) p.managerName = strip(String(o.manager_name)) }
+  } catch {}
+  // بازخوردها: امتیاز (x از ۵)، تعدادِ دیدگاه، NPS، نقاطِ قوت
+  const rat = html.match(/امتیاز بازخوردها[^0-9.۰-۹]{0,20}([\d.۰-۹]{1,4})/)?.[1]
+  if (rat) { const v = Number(String(rat).replace(FA_DIGITS, faDigit)); if (v > 0 && v <= 5) p.rating = v }
+  const rc = html.match(/([\d۰-۹]{1,5})\s*دیدگاه/)?.[1]; if (rc) p.ratingCount = enNum(rc)
+  const nps = html.match(/NPS\s*=\s*([+-]?\s*[\d۰-۹]{1,3})/)?.[1]
+  if (nps != null) { const v = Number(String(nps).replace(/\s/g, '').replace(FA_DIGITS, faDigit)); if (Number.isFinite(v)) p.nps = v }
+  {
+    const i = html.indexOf('نقاط قوت')
+    if (i > 0) {
+      const w = html.slice(i, i + 1600)
+      const chips = [...w.matchAll(/>([^<>]{6,60})</g)].map(m => strip(m[1]))
+        .filter(s => s && !/^[\d۰-۹\s.,]+$/.test(s) && !s.includes('نقاط قوت'))
+      if (chips.length) p.strengths = [...new Set(chips)].slice(0, 8)
+    }
+  }
+  // مختصاتِ پروژه‌ها: اول JSONِ lat_lngs (دقیق)، وگرنه اسکنِ عمومی
+  let coords: { lat: number; lng: number }[] = []
+  try {
+    const ll = html.match(/const lat_lngs = (\[[\s\S]*?\]);/)?.[1]
+    if (ll) {
+      const arr = JSON.parse(ll) as unknown[]
+      coords = arr.map((x): { lat: number; lng: number } | null => {
+        if (Array.isArray(x) && x.length >= 2) return { lat: Number(x[0]), lng: Number(x[1]) }
+        if (x && typeof x === 'object') { const o = x as { lat?: unknown; lng?: unknown }; return { lat: Number(o.lat), lng: Number(o.lng) } }
+        return null
+      }).filter((c): c is { lat: number; lng: number } => !!c && Number.isFinite(c.lat) && Number.isFinite(c.lng))
+    }
+  } catch {}
+  if (!coords.length) coords = [...html.matchAll(/"lat":\s*([\d.]+)\s*,\s*"lng":\s*([\d.]+)/g)].map(m => ({ lat: Number(m[1]), lng: Number(m[2]) }))
+  // کارت‌های پروژه: پنجرهٔ متنی دورِ هر «متراژ زیربنا» — برچسب‌محور، در برابرِ تغییرِ ظاهرِ صفحه مقاوم
+  const textNear = (w: string, label: string): string | undefined => {
+    const i = w.indexOf(label); if (i < 0) return undefined
+    const after = w.slice(i + label.length, i + label.length + 220)
+    const m = after.match(/>\s*([^<>]{1,40}?)\s*</)
+    const v = m ? strip(m[1]) : ''
+    return v && !/^(متراژ|شهر|سال|دسته)/.test(v) ? v : undefined
+  }
   const projects: T2tProject[] = []
-  const n = Math.max(coords.length, imgs.length)
-  for (let i = 0; i < n && i < 40; i++) projects.push({ image: imgs[i], lat: coords[i]?.lat, lng: coords[i]?.lng })
-  if (projects.length) p.projects = projects
+  {
+    let idx = 0
+    while (projects.length < 60) {
+      const at = html.indexOf('متراژ زیربنا', idx)
+      if (at < 0) break
+      idx = at + 10
+      const w = html.slice(Math.max(0, at - 1600), at + 1000)
+      const pr: T2tProject = {}
+      pr.builtArea = numNear(w, 'متراژ زیربنا'); pr.landArea = numNear(w, 'متراژ زمین')
+      const yr = textNear(w, 'سال انجام'); if (yr && /^[\d۰-۹]{4}$/.test(yr)) pr.year = String(yr).replace(FA_DIGITS, faDigit)
+      const city = textNear(w, 'شهر'); if (city && !/^[\d۰-۹]/.test(city)) pr.city = city
+      const head = w.slice(0, w.indexOf('متراژ'))
+      const h3 = [...head.matchAll(/<h[34][^>]*>([\s\S]*?)<\/h[34]>/g)].pop(); if (h3) pr.title = strip(h3[1]).slice(0, 80) || undefined
+      const img = [...head.matchAll(/<img[^>]+src="([^"]+)"/g)].pop(); if (img && !img[1].includes('logo')) pr.image = img[1]
+      const cat = w.match(/>\s*((?:طراحی|نظارت|اجرا|بازسازی)[^<>]{0,30}?)\s*</); if (cat) pr.category = strip(cat[1])
+      projects.push(pr)
+    }
+  }
+  for (let i = 0; i < coords.length && i < 60; i++) {
+    if (projects[i]) { projects[i].lat = coords[i].lat; projects[i].lng = coords[i].lng }
+    else projects.push({ lat: coords[i].lat, lng: coords[i].lng })
+  }
+  if (projects.length) p.projects = projects.slice(0, 60)
   // شبکه‌های اجتماعیِ خودِ معمار (فوترِ سایت لینک‌های خودِ tarh2tarh را دارد — حذف)
   const insta = [...html.matchAll(/href="(https?:\/\/(?:www\.)?instagram\.com\/[^"]+)"/g)].map(m => m[1]).find(u => !/tarh2tarh/i.test(u))
   const li = [...html.matchAll(/href="(https?:\/\/(?:www\.)?linkedin\.com\/[^"]+)"/g)].map(m => m[1]).find(u => !/tarh2tarh/i.test(u))
@@ -258,19 +322,19 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
       else meta.pageCursor++
       await sleep(cfg.delayMs)
     }
-    // ۲) چند پروفایل (گرفته‌نشده‌ها؛ بعد آنهایی که کوکی داریم و شماره ندارند)
-    const have = new Map((await allProfiles()).map(p => [p.handle, p]))
+    // ۲) چند پروفایل — انتخاب از روی وضعیتِ سبکِ meta.state، نه خواندنِ همهٔ ردیف‌های کامل
+    meta.state = meta.state || {}
+    const stOf = (h: string) => { const s = meta.state![h]; return s ? { code: s[0], at: Number(s.slice(1)) || 0 } : null }
+    const nowSec = Math.floor(Date.now() / 1000)
+    const errRetry = force ? 0 : 3600                 // خطا: تلاشِ دوباره بعد از ۱ ساعت (اسکنِ دستی: فوری)
+    const phoneRetry = force ? 0 : 7 * 24 * 3600      // بی‌شماره با کوکی: بعد از ۷ روز (اسکنِ دستی: فوری)
     const wants: string[] = []
-    // گرفته‌نشده‌ها + شکست‌خورده‌ها (تلاشِ دوباره بعد از ۱ ساعت — وگرنه خطا برای همیشه می‌ماند)
-    const retryAfter = force ? 0 : 3600_000   // اسکنِ دستی = تلاشِ فوریِ شکست‌خورده‌ها
     for (const h of meta.handles) {
-      const pr = have.get(h)
-      if (!pr || (pr.error && !pr.name && Date.now() - pr.scrapedAt >= retryAfter)) wants.push(h)
+      const st = stOf(h)
+      if (!st) wants.push(h)
+      else if (st.code === 'e' && nowSec - st.at >= errRetry) wants.push(h)
+      else if (st.code === 'o' && cfg.cookie.trim() && nowSec - st.at >= phoneRetry) wants.push(h)
       if (wants.length >= cfg.profilesPerTick) break
-    }
-    if (wants.length < cfg.profilesPerTick && cfg.cookie.trim()) {
-      const phoneRetry = force ? 0 : 7 * 24 * 3600_000   // اسکنِ دستی = تلاشِ فوریِ شماره برای گرفته‌شده‌های بی‌شماره
-      for (const [h, pr] of have) { if (!pr.phone && !pr.error && (!pr.phoneAt || Date.now() - pr.phoneAt >= phoneRetry)) wants.push(h); if (wants.length >= cfg.profilesPerTick) break }
     }
     let ok = 0, withPhone = 0
     const jar = { cookie: cfg.cookie.trim(), dirty: false }
@@ -290,18 +354,37 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
           if (land && land.length >= 8 && land !== p.phone) p.officePhone = land.startsWith('0') ? land : '0' + land
         }
         p.phoneAt = Date.now()   // شماره‌گیری انجام شد (موفق یا نه) — تا ۷ روز دوباره تلاش نکن
+        // جوایز و افتخارات — مسیرِ JSONِ خودِ صفحه (get_honours_route)
+        const hrRoute = html.match(/const get_honours_route = "([^"]+)"/)?.[1]
+        if (hrRoute && p.name && hrRoute.startsWith(BASE)) {
+          try {
+            const j = JSON.parse(await fetchHtml(hrRoute, jar.cookie, jar.cookie ? jar : undefined)) as unknown
+            const arr = Array.isArray(j) ? j : Array.isArray((j as { data?: unknown[] })?.data) ? (j as { data: unknown[] }).data : []
+            const hs = arr.slice(0, 25).map(raw => {
+              const it = raw as Record<string, unknown>
+              return {
+                title: strip(String(it?.title ?? it?.name ?? it?.competition_title ?? it?.project_title ?? '')).slice(0, 120),
+                rank: it?.rank != null ? String(it.rank).slice(0, 30) : (it?.honour_title ? strip(String(it.honour_title)).slice(0, 40) : undefined),
+              }
+            }).filter(x => x.title)
+            if (hs.length) p.honours = hs
+          } catch { /* اختیاری */ }
+          await sleep(300)
+        }
         await saveProfileRow(p)   // بازنویسیِ کامل: شمارهٔ غلطِ قبلی هم با همین پاک می‌شود
+        meta.state[h] = (p.error ? 'e' : p.phone ? 'p' : 'o') + Math.floor(Date.now() / 1000)
       } catch (e: any) {
         const msg = String(e?.message || e).slice(0, 100)
         console.error(`[t2t] profile @${h} failed: ${msg}`)
         await saveProfileRow({ handle: h, name: '', scrapedAt: Date.now(), error: msg })
+        meta.state[h] = 'e' + Math.floor(Date.now() / 1000)
       }
       await sleep(cfg.delayMs)
     }
     if (jar.dirty) await saveConfig({ cookie: jar.cookie })   // کوکیِ تازه‌شده ماندگار شود
-    const all = await allProfiles()
-    meta.fetched = all.filter(p => p.name).length
-    meta.withPhone = all.filter(p => p.phone).length
+    let fetchedN = 0, phoneN = 0
+    for (const v of Object.values(meta.state)) { if (v[0] !== 'e') fetchedN++; if (v[0] === 'p') phoneN++ }
+    meta.fetched = fetchedN; meta.withPhone = phoneN
     withPhone = meta.withPhone
     // ساختِ حسابِ خودکار: شمارهٔ تازه که آمد، حسابش هم خودش ساخته می‌شود (بدونِ دکمه).
     if ((meta.withPhone || 0) > (meta.accounted || 0)) {
@@ -337,11 +420,18 @@ export async function createArchitectAccounts(): Promise<{ created: number; skip
   if (!roleId) return { created: 0, skipped: 0, noPhone: 0, total: 0, noRole: true }
   const { bulkCreate } = await import('./account-store')
   const { saveProfile } = await import('./profile-store')
-  const profiles = (await allProfiles()).filter(p => p.name)
-  let noPhone = 0
+  // فقط ردیف‌های شماره‌دار (state='p') خوانده می‌شوند — نه همهٔ ۱۴هزار پروفایل.
+  const meta = await getMeta()
+  const st = meta.state || {}
+  let total = 0, noPhone = 0
   const rows: { phone: string; name?: string; role?: string }[] = []
   const byPhone = new Map<string, T2tProfile>()
-  for (const p of profiles) {
+  for (const [h, v] of Object.entries(st)) {
+    if (v[0] === 'e') continue
+    total++
+    if (v[0] !== 'p') { noPhone++; continue }
+    const p = await getProfileByHandle(h)
+    if (!p?.name) continue
     const ph = (p.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
     if (!/^09\d{9}$/.test(ph)) { noPhone++; continue }
     rows.push({ phone: ph, name: p.name, role: roleId })
@@ -349,6 +439,7 @@ export async function createArchitectAccounts(): Promise<{ created: number; skip
   }
   const r = bulkCreate(rows)
   // پروفایلِ عمومی: بیوی تولیدیِ خودمان (نه متنِ مبدأ) + مهارت‌ها + لینک‌ها
+  // + ایندکسِ شماره→هندل تا صفحهٔ معمارِ ملک‌جت دادهٔ کامل (پروژه‌ها/نقشه/آمار) را با یک kvGet بردارد.
   for (const [ph, p] of byPhone) {
     try {
       saveProfile(ph, {
@@ -356,28 +447,61 @@ export async function createArchitectAccounts(): Promise<{ created: number; skip
         about: seoBio(p), logo: p.avatar || undefined,
         specialties: p.skills?.slice(0, 8), contactPhone: ph,
       } as any)
+      if (!pgEnabled()) { const d = fileLoad(); d.byPhone = d.byPhone || {}; d.byPhone[ph] = p.handle; fileSave(d) }
+      else await kvSet('t2t:byphone:' + ph, p.handle)
     } catch {}
   }
-  return { created: r.created, skipped: r.skipped + r.invalid, noPhone, total: profiles.length }
+  return { created: r.created, skipped: r.skipped + r.invalid, noPhone, total }
+}
+
+/** دادهٔ کاملِ معمارِ اسکرپ‌شده برای صفحهٔ عمومیِ ملک‌جت (بر اساسِ شمارهٔ حساب). */
+export async function getArchitectPublic(phone: string): Promise<T2tProfile | null> {
+  const ph = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+  if (!ph) return null
+  const handle = !pgEnabled() ? ((fileLoad().byPhone || {})[ph] || '') : await kvGet<string>('t2t:byphone:' + ph, '')
+  if (!handle) return null
+  return getProfileByHandle(handle)
 }
 
 // ── آمار برای پنل ────────────────────────────────────────────────────────────
 export async function stats() {
   const meta = await getMeta()
-  const all = await allProfiles()
+  const st = meta.state || {}
+  let fetched = 0, withPhone = 0, errors = 0
+  const errHandles: string[] = []
+  for (const [h, v] of Object.entries(st)) {
+    if (v[0] === 'e') { errors++; if (errHandles.length < 3) errHandles.push(h) }
+    else { fetched++; if (v[0] === 'p') withPhone++ }
+  }
+  const sampleErrors: string[] = []
+  for (const h of errHandles) { const p = await getProfileByHandle(h); if (p?.error) sampleErrors.push(`@${h}: ${p.error}`) }
   return {
     handles: meta.handles.length, pageCursor: meta.pageCursor, listDoneAt: meta.listDoneAt || null,
-    fetched: all.filter(p => p.name).length, errors: all.filter(p => p.error).length,
-    withPhone: all.filter(p => p.phone).length, lastTickAt: meta.lastTickAt || null, lastError: meta.lastError || '',
-    sampleErrors: all.filter(p => p.error).slice(0, 3).map(p => `@${p.handle}: ${p.error}`),
+    fetched, errors, withPhone, lastTickAt: meta.lastTickAt || null, lastError: meta.lastError || '',
+    sampleErrors,
   }
 }
 export async function listProfilesView(opts: { q?: string; withPhone?: boolean; page?: number }) {
+  const meta = await getMeta()
+  const st = meta.state || {}
+  let hs = meta.handles.filter(h => st[h] && st[h][0] !== 'e')
+  if (opts.withPhone) hs = hs.filter(h => st[h][0] === 'p')
   const q = (opts.q || '').trim()
-  let all = (await allProfiles()).filter(p => p.name)
-  if (opts.withPhone) all = all.filter(p => p.phone)
-  if (q) all = all.filter(p => p.name.includes(q) || p.handle.includes(q) || (p.title || '').includes(q))
-  all.sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9))
-  const page = Math.max(1, opts.page || 1), per = 30
-  return { total: all.length, page, pages: Math.ceil(all.length / per), items: all.slice((page - 1) * per, page * per) }
+  const per = 30, page = Math.max(1, opts.page || 1)
+  if (!q) {
+    // بدونِ جستجو فقط ۳۰ ردیفِ همین صفحه خوانده می‌شود (ترتیب = ترتیبِ فهرستِ مبدأ، که خودش رتبه‌ای است)
+    const slice = hs.slice((page - 1) * per, page * per)
+    const items: T2tProfile[] = []
+    for (const h of slice) { const p = await getProfileByHandle(h); if (p?.name) items.push(p) }
+    return { total: hs.length, page, pages: Math.max(1, Math.ceil(hs.length / per)), items }
+  }
+  // جستجو: پیمایشِ هدفمند با سقف (نه بارکردنِ همهٔ ردیف‌ها)
+  const items: T2tProfile[] = []
+  let scanned = 0
+  for (const h of hs) {
+    if (scanned++ >= 1200 || items.length >= per * page + per) break
+    const p = await getProfileByHandle(h)
+    if (p?.name && (p.name.includes(q) || p.handle.includes(q) || (p.title || '').includes(q))) items.push(p)
+  }
+  return { total: items.length, page, pages: Math.max(1, Math.ceil(items.length / per)), items: items.slice((page - 1) * per, page * per) }
 }
