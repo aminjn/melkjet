@@ -31,6 +31,7 @@ export interface T2tConfig {
 export interface T2tProject { image?: string; lat?: number; lng?: number }
 export interface T2tProfile {
   handle: string; name: string; title?: string; avatar?: string
+  uuid?: string; userId?: number; officePhone?: string
   rank?: number; score?: number; credit?: number; views?: number
   projDone?: number; projDoing?: number; projPresented?: number
   honor1?: number; honor2?: number; honor3?: number; honorFinal?: number
@@ -133,6 +134,40 @@ async function fetchHtml(url: string, cookie = '', jar?: { cookie: string; dirty
   return await r.text()
 }
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+// ── شمارهٔ خودِ معمار — همان درخواستی که دکمهٔ «نمایش شماره»ی سایت می‌سازد ────────
+// (از باندلِ JSِ مبدأ: POST /user/contact_number با {uuid, contact_type} → {data:{phone}}).
+// لاراول CSRF را از هدرِ X-XSRF-TOKEN (کوکیِ XSRF-TOKEN، URL-decoded) می‌پذیرد.
+function xsrfOf(cookie: string): string {
+  const m = cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
+  try { return m ? decodeURIComponent(m[1]) : '' } catch { return m?.[1] || '' }
+}
+async function fetchContactNumber(uuid: string, contactType: string, jar: { cookie: string; dirty?: boolean }, referer: string): Promise<string> {
+  const base: Record<string, string> = {
+    'User-Agent': UA, Cookie: jar.cookie, 'X-XSRF-TOKEN': xsrfOf(jar.cookie),
+    'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json', Referer: referer,
+  }
+  // اول JSON، بعد فرم — هر کدام که سرورِ مبدأ بپذیرد.
+  const tries: [string, string][] = [
+    ['application/json', JSON.stringify({ uuid, contact_type: contactType })],
+    ['application/x-www-form-urlencoded', `uuid=${encodeURIComponent(uuid)}&contact_type=${encodeURIComponent(contactType)}`],
+  ]
+  for (const [ct, body] of tries) {
+    try {
+      const r = await fetch(`${BASE}/user/contact_number`, { method: 'POST', headers: { ...base, 'Content-Type': ct }, body, signal: AbortSignal.timeout(20_000) })
+      try {
+        const sc = (r.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.() || []
+        const merged = mergeCookieHeader(jar.cookie, sc)
+        if (merged !== jar.cookie) { jar.cookie = merged; jar.dirty = true }
+      } catch {}
+      if (!r.ok) continue
+      const j = await r.json().catch(() => null) as { data?: { phone?: string }; phone?: string } | null
+      const ph = String(j?.data?.phone ?? j?.phone ?? '').trim()
+      if (ph) return ph
+    } catch { /* تلاشِ بعدی */ }
+  }
+  return ''
+}
 const enNum = (s: string) => Number(String(s).replace(FA_DIGITS, faDigit).replace(/[,٬\s]/g, '')) || undefined
 const strip = (s: string) => s.replace(/<[^>]+>/g, ' ').replace(/&(zwnj|nbsp);/g, ' ').replace(/\s+/g, ' ').trim()
 
@@ -190,10 +225,10 @@ export function parseProfile(handle: string, html: string): T2tProfile {
   const li = [...html.matchAll(/href="(https?:\/\/(?:www\.)?linkedin\.com\/[^"]+)"/g)].map(m => m[1]).find(u => !/tarh2tarh/i.test(u))
   if (insta) p.instagram = insta
   if (li) p.linkedin = li
-  // ⚠️ شماره فعلاً عمداً برداشته نمی‌شود. نسخهٔ اول «اولین tel:ِ صفحه» را می‌گرفت که
-  // شمارهٔ حسابِ لاگین‌شدهٔ خودِ ادمین در هدرِ سایت بود — هر ۱۵ پروفایل یک شماره گرفتند.
-  // تا وقتی جای دقیقِ شمارهٔ خودِ معمار در مارک‌آپ معلوم شود (پروب)، هیچ شماره‌ای بهتر
-  // از شمارهٔ غلط است.
+  // شناسه‌های JSONِ صفحه — شماره با POST به /user/contact_number با همین uuid گرفته می‌شود.
+  p.uuid = html.match(/const modelUuid = "([0-9a-f-]{20,50})"/)?.[1]
+  const uid = html.match(/"user_id":(\d{1,10})/)?.[1]
+  if (uid) p.userId = Number(uid)
   return p
 }
 
@@ -234,7 +269,8 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
       if (wants.length >= cfg.profilesPerTick) break
     }
     if (wants.length < cfg.profilesPerTick && cfg.cookie.trim()) {
-      for (const [h, pr] of have) { if (!pr.phone && !pr.error && (!pr.phoneAt || Date.now() - pr.phoneAt > 7 * 24 * 3600_000)) wants.push(h); if (wants.length >= cfg.profilesPerTick) break }
+      const phoneRetry = force ? 0 : 7 * 24 * 3600_000   // اسکنِ دستی = تلاشِ فوریِ شماره برای گرفته‌شده‌های بی‌شماره
+      for (const [h, pr] of have) { if (!pr.phone && !pr.error && (!pr.phoneAt || Date.now() - pr.phoneAt >= phoneRetry)) wants.push(h); if (wants.length >= cfg.profilesPerTick) break }
     }
     let ok = 0, withPhone = 0
     const jar = { cookie: cfg.cookie.trim(), dirty: false }
@@ -243,7 +279,17 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
         const html = await fetchHtml(`${BASE}/@${h}`, jar.cookie, jar.cookie ? jar : undefined)
         const p = parseProfile(h, html)
         if (!p.name) { p.error = 'نام پیدا نشد (ساختارِ صفحه؟)' } else ok++
-        if (!p.phone) p.phoneAt = Date.now()   // با این کوکی شماره نبود — تا ۷ روز دوباره تلاش نکن
+        // شماره‌ها از endpointِ «نمایش شماره» — فقط با کوکیِ لاگین و uuidِ صفحه.
+        if (jar.cookie && p.uuid && p.name) {
+          const referer = `${BASE}/@${h}`
+          const mob = (await fetchContactNumber(p.uuid, 'display_phone', jar, referer)).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+          if (/^0?9\d{9}$/.test(mob)) { p.phone = mob.startsWith('0') ? mob : '0' + mob }
+          await sleep(400)
+          // نامِ contact_typeِ ثابت حدسی است؛ اگر مبدأ نپذیرد، خالی برمی‌گردد و بی‌ضرر است.
+          const land = (await fetchContactNumber(p.uuid, 'display_landline', jar, referer)).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+          if (land && land.length >= 8 && land !== p.phone) p.officePhone = land.startsWith('0') ? land : '0' + land
+        }
+        p.phoneAt = Date.now()   // شماره‌گیری انجام شد (موفق یا نه) — تا ۷ روز دوباره تلاش نکن
         await saveProfileRow(p)   // بازنویسیِ کامل: شمارهٔ غلطِ قبلی هم با همین پاک می‌شود
       } catch (e: any) {
         const msg = String(e?.message || e).slice(0, 100)
