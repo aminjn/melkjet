@@ -159,7 +159,9 @@ function sectionOf(html: string, id: string): string {
 
 export function parseProfile(handle: string, html: string): T2tProfile {
   const name = strip(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1] || '')
-  const title = strip(html.match(/<\/h1>\s*<p[^>]*>([\s\S]*?)<\/p>/)?.[1] || '') || undefined
+  // pِ بعد از h1 گاهی شمارندهٔ بازدید است (وقتی معمار عنوان ندارد) — آن عنوان نیست.
+  const titleRaw = strip(html.match(/<\/h1>\s*<p[^>]*>([\s\S]*?)<\/p>/)?.[1] || '')
+  const title = titleRaw && !/^بازدید/.test(titleRaw) ? titleRaw : undefined
   const avatar = html.match(/property="og:image"\s+content="([^"]+)"/)?.[1] || html.match(/content="([^"]+)"\s+property="og:image"/)?.[1]
   const p: T2tProfile = { handle, name, title, avatar, scrapedAt: Date.now() }
   p.rank = numNear(html, 'رتبه'); p.score = numNear(html, 'امتیاز رقابت'); p.credit = numNear(html, 'اعتبار تخصصی')
@@ -188,9 +190,10 @@ export function parseProfile(handle: string, html: string): T2tProfile {
   const li = [...html.matchAll(/href="(https?:\/\/(?:www\.)?linkedin\.com\/[^"]+)"/g)].map(m => m[1]).find(u => !/tarh2tarh/i.test(u))
   if (insta) p.instagram = insta
   if (li) p.linkedin = li
-  // شماره: فقط لینکِ tel: (متنِ آزاد شماره‌های خودِ سایت را هم دارد)
-  const tel = html.match(/href="tel:\+?9?8?(0?9\d{9})"/)?.[1]
-  if (tel) { p.phone = tel.startsWith('0') ? tel : '0' + tel; p.phoneAt = Date.now() }
+  // ⚠️ شماره فعلاً عمداً برداشته نمی‌شود. نسخهٔ اول «اولین tel:ِ صفحه» را می‌گرفت که
+  // شمارهٔ حسابِ لاگین‌شدهٔ خودِ ادمین در هدرِ سایت بود — هر ۱۵ پروفایل یک شماره گرفتند.
+  // تا وقتی جای دقیقِ شمارهٔ خودِ معمار در مارک‌آپ معلوم شود (پروب)، هیچ شماره‌ای بهتر
+  // از شمارهٔ غلط است.
   return p
 }
 
@@ -241,9 +244,7 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
         const p = parseProfile(h, html)
         if (!p.name) { p.error = 'نام پیدا نشد (ساختارِ صفحه؟)' } else ok++
         if (!p.phone) p.phoneAt = Date.now()   // با این کوکی شماره نبود — تا ۷ روز دوباره تلاش نکن
-        const prev = have.get(h)
-        if (prev?.phone && !p.phone) { p.phone = prev.phone; p.phoneAt = prev.phoneAt }   // شمارهٔ قبلاً گرفته‌شده گم نشود
-        await saveProfileRow(p)
+        await saveProfileRow(p)   // بازنویسیِ کامل: شمارهٔ غلطِ قبلی هم با همین پاک می‌شود
       } catch (e: any) {
         const msg = String(e?.message || e).slice(0, 100)
         console.error(`[t2t] profile @${h} failed: ${msg}`)
