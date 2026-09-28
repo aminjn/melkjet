@@ -1913,7 +1913,7 @@ interface PSState {
 }
 
 // ─── معماران (طرح‌۲طرح) — فاز ۲۸۸: اسکرپِ بانکِ معمارانِ tarh2tarh ─────────────
-interface T2tStats { handles: number; pageCursor: number; listDoneAt: number | null; fetched: number; errors: number; withPhone: number; lastTickAt: number | null; lastError: string }
+interface T2tStats { handles: number; pageCursor: number; listDoneAt: number | null; fetched: number; errors: number; withPhone: number; lastTickAt: number | null; lastError: string; sampleErrors?: string[] }
 interface T2tRow { handle: string; name: string; title?: string; rank?: number; score?: number; phone?: string; projDone?: number; skills?: string[] }
 function Tarh2tarhView() {
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -1980,6 +1980,11 @@ function Tarh2tarhView() {
           {tile('صفحهٔ فهرستِ بعدی', s ? fa(s.pageCursor) : '—')}
         </div>
         {s?.lastError && <div style={{ fontSize: 12, color: '#e7674a', marginBottom: 10 }}>آخرین خطا: {s.lastError}</div>}
+        {(s?.sampleErrors?.length || 0) > 0 && (
+          <div style={{ fontSize: 11.5, color: '#e7674a', marginBottom: 10, lineHeight: 1.9, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px' }}>
+            {s!.sampleErrors!.map((e, i) => <div key={i}>{e}</div>)}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <GoldButton onClick={() => act('scan', {}, 'در حال اسکن…')} disabled={busy === 'scan'}>{busy === 'scan' ? 'در حال اسکن…' : '🔄 اسکنِ الان (چند صفحه/پروفایل)'}</GoldButton>
           <GoldButton onClick={() => act('accounts')} disabled={busy === 'accounts'}>👤 ساختِ حسابِ معمار (شماره‌دارها)</GoldButton>

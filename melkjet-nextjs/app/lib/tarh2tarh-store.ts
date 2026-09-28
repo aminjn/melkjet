@@ -50,6 +50,7 @@ interface T2tMeta {
   lastError?: string
   fetched?: number                  // شمارِ پروفایل‌های گرفته‌شده (کشِ آمار)
   withPhone?: number
+  accounted?: number                // تا این تعداد شماره‌دار، حسابِ خودکار ساخته شده
 }
 
 const DEF_CFG: T2tConfig = { enabled: false, cookie: '', pagesPerTick: 2, profilesPerTick: 15, delayMs: 1500 }
@@ -222,7 +223,12 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
     // ۲) چند پروفایل (گرفته‌نشده‌ها؛ بعد آنهایی که کوکی داریم و شماره ندارند)
     const have = new Map((await allProfiles()).map(p => [p.handle, p]))
     const wants: string[] = []
-    for (const h of meta.handles) { if (!have.has(h)) wants.push(h); if (wants.length >= cfg.profilesPerTick) break }
+    // گرفته‌نشده‌ها + شکست‌خورده‌ها (تلاشِ دوباره بعد از ۱ ساعت — وگرنه خطا برای همیشه می‌ماند)
+    for (const h of meta.handles) {
+      const pr = have.get(h)
+      if (!pr || (pr.error && !pr.name && Date.now() - pr.scrapedAt > 3600_000)) wants.push(h)
+      if (wants.length >= cfg.profilesPerTick) break
+    }
     if (wants.length < cfg.profilesPerTick && cfg.cookie.trim()) {
       for (const [h, pr] of have) { if (!pr.phone && !pr.error && (!pr.phoneAt || Date.now() - pr.phoneAt > 7 * 24 * 3600_000)) wants.push(h); if (wants.length >= cfg.profilesPerTick) break }
     }
@@ -238,7 +244,9 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
         if (prev?.phone && !p.phone) { p.phone = prev.phone; p.phoneAt = prev.phoneAt }   // شمارهٔ قبلاً گرفته‌شده گم نشود
         await saveProfileRow(p)
       } catch (e: any) {
-        await saveProfileRow({ handle: h, name: '', scrapedAt: Date.now(), error: String(e?.message).slice(0, 100) })
+        const msg = String(e?.message || e).slice(0, 100)
+        console.error(`[t2t] profile @${h} failed: ${msg}`)
+        await saveProfileRow({ handle: h, name: '', scrapedAt: Date.now(), error: msg })
       }
       await sleep(cfg.delayMs)
     }
@@ -247,6 +255,14 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
     meta.fetched = all.filter(p => p.name).length
     meta.withPhone = all.filter(p => p.phone).length
     withPhone = meta.withPhone
+    // ساختِ حسابِ خودکار: شمارهٔ تازه که آمد، حسابش هم خودش ساخته می‌شود (بدونِ دکمه).
+    if ((meta.withPhone || 0) > (meta.accounted || 0)) {
+      try {
+        const r = await createArchitectAccounts()
+        if (r.created) console.log(`[t2t] auto-accounts: +${r.created} حسابِ معمار`)
+        if (!r.noRole) meta.accounted = meta.withPhone
+      } catch (e: any) { console.error(`[t2t] auto-accounts failed: ${String(e?.message).slice(0, 80)}`) }
+    }
     await saveMeta(meta)
     if (wants.length || !listDone) console.log(`[t2t] tick: +${ok} fetched=${meta.fetched}/${meta.handles.length} phones=${withPhone}`)
     return { ran: true }
@@ -305,6 +321,7 @@ export async function stats() {
     handles: meta.handles.length, pageCursor: meta.pageCursor, listDoneAt: meta.listDoneAt || null,
     fetched: all.filter(p => p.name).length, errors: all.filter(p => p.error).length,
     withPhone: all.filter(p => p.phone).length, lastTickAt: meta.lastTickAt || null, lastError: meta.lastError || '',
+    sampleErrors: all.filter(p => p.error).slice(0, 3).map(p => `@${p.handle}: ${p.error}`),
   }
 }
 export async function listProfilesView(opts: { q?: string; withPhone?: boolean; page?: number }) {
