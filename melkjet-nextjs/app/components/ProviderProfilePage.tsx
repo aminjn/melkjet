@@ -71,8 +71,13 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
           <span style={{ color: 'var(--gold)' }}>{p.typeLabel}</span>
         </nav>
 
+        {/* کاورِ پروفایل (معمارِ اسکرپ‌شده) */}
+        {arch?.cover && (
+          <div style={{ height: 180, borderRadius: 18, marginBottom: -46, background: `linear-gradient(rgba(10,10,14,.25), rgba(10,10,14,.55)), url(${arch.cover}) center/cover no-repeat`, border: '1px solid var(--line)' }} />
+        )}
+
         {/* هدر */}
-        <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22, marginBottom: 22 }}>
+        <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22, marginBottom: 22, position: 'relative' }}>
           {p.photo
             ? <img src={p.photo} alt={p.name} style={{ width: 88, height: 88, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--gold)', flexShrink: 0 }} />
             : <div style={{ width: 88, height: 88, borderRadius: '50%', background: gradientFor(p.name, 'avatar'), border: '2px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 800, flexShrink: 0 }}>{initialsFor(p.name)}</div>}
@@ -155,11 +160,17 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
               </div>
             )}
 
-            {/* تحصیلات و همکاری‌ها */}
-            {(arch.edus?.length || 0) > 0 && (
-              <div style={{ marginBottom: 22 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>تحصیلات و سوابق</h2>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{arch.edus!.slice(0, 10).map((s, i) => <span key={i} style={{ fontSize: 12.5, padding: '5px 12px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)' }}>{s}</span>)}</div>
+            {/* تحصیلات، مهارت‌ها و همکاری‌ها — همهٔ بخش‌های پروفایلِ مبدأ */}
+            {([['تحصیلات و سوابق', arch.edus], ['مهارت‌ها و خدمات', arch.skills], ['تخصص‌ها و همکاری‌ها', arch.engagements]] as [string, string[] | undefined][])
+              .filter(([, arr]) => (arr?.length || 0) > 0).map(([ttl, arr], k) => (
+                <div key={k} style={{ marginBottom: 22 }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>{ttl}</h2>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{arr!.slice(0, 20).map((s, i) => <span key={i} style={{ fontSize: 12.5, padding: '5px 12px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)' }}>{s}</span>)}</div>
+                </div>
+              ))}
+            {(arch.officeName || arch.managerName) && (
+              <div style={{ marginBottom: 22, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '14px 18px', fontSize: 13.5 }}>
+                🏢 {arch.officeName || ''}{arch.managerName ? <span style={{ color: 'var(--muted)' }}> · مدیریت: {arch.managerName}</span> : null}
               </div>
             )}
 

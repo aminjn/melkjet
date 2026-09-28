@@ -30,7 +30,7 @@ export interface T2tConfig {
 }
 export interface T2tProject { title?: string; image?: string; lat?: number; lng?: number; city?: string; year?: string; landArea?: number; builtArea?: number; category?: string }
 export interface T2tProfile {
-  handle: string; name: string; title?: string; avatar?: string
+  handle: string; name: string; title?: string; avatar?: string; cover?: string
   uuid?: string; userId?: number; officePhone?: string
   officeName?: string; managerName?: string
   rank?: number; score?: number; credit?: number; views?: number
@@ -55,6 +55,7 @@ interface T2tMeta {
   fetched?: number                  // شمارِ پروفایل‌های گرفته‌شده (کشِ آمار)
   withPhone?: number
   accounted?: number                // تا این تعداد شماره‌دار، حسابِ خودکار ساخته شده
+  accountsAt?: number               // آخرین به‌روزرسانیِ خودکارِ حساب/پروفایل‌ها
   // وضعیتِ سبکِ هر هندل: '<code><epochSec>' — e=خطا، o=گرفته بدونِ شماره، p=گرفته با شماره.
   // تیک با همین تصمیم می‌گیرد چه چیزی را بگیرد؛ دیگر لازم نیست هر دور ۱۴هزار ردیفِ کامل
   // از دیتابیس خوانده شود (همان اشتباهِ «کلِ جدول زیرِ قفل» که فاز ۲۸۷ جای دیگر جمعش کرد).
@@ -203,8 +204,11 @@ export function parseProfile(handle: string, html: string): T2tProfile {
   // pِ بعد از h1 گاهی شمارندهٔ بازدید است (وقتی معمار عنوان ندارد) — آن عنوان نیست.
   const titleRaw = strip(html.match(/<\/h1>\s*<p[^>]*>([\s\S]*?)<\/p>/)?.[1] || '')
   const title = titleRaw && !/^بازدید/.test(titleRaw) ? titleRaw : undefined
-  const avatar = html.match(/property="og:image"\s+content="([^"]+)"/)?.[1] || html.match(/content="([^"]+)"\s+property="og:image"/)?.[1]
-  const p: T2tProfile = { handle, name, title, avatar, scrapedAt: Date.now() }
+  // بینِ property و content اتریبیوت‌های دیگری هم هست (itemprop) — رگکسِ سخت‌گیرِ قبلی رد می‌شد.
+  const avatar = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/)?.[1]
+    || html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/)?.[1]
+  const cover = html.match(/<img[^>]+src="([^"]*tarh2tarh-profile\/cover-[^"]+)"/)?.[1]
+  const p: T2tProfile = { handle, name, title, avatar, cover, scrapedAt: Date.now() }
   p.rank = numNear(html, 'رتبه'); p.score = numNear(html, 'امتیاز رقابت'); p.credit = numNear(html, 'اعتبار تخصصی')
   p.views = numNear(html, 'بازدید')
   // وضعیت/مقام‌ها: در مارک‌آپِ مبدأ «عدد بالا، برچسب پایین» است (عدد قبل از برچسب). numNear
@@ -251,6 +255,8 @@ export function parseProfile(handle: string, html: string): T2tProfile {
     if (ll) {
       const arr = JSON.parse(ll) as unknown[]
       coords = arr.map((x): { lat: number; lng: number } | null => {
+        // فرمِ واقعیِ مبدأ: آرایهٔ رشته‌ای «"lat,lng"» (گاهی با فاصله بعد از کاما)
+        if (typeof x === 'string') { const [a, b] = x.split(',').map(s => Number(s.trim())); return { lat: a, lng: b } }
         if (Array.isArray(x) && x.length >= 2) return { lat: Number(x[0]), lng: Number(x[1]) }
         if (x && typeof x === 'object') { const o = x as { lat?: unknown; lng?: unknown }; return { lat: Number(o.lat), lng: Number(o.lng) } }
         return null
@@ -258,34 +264,25 @@ export function parseProfile(handle: string, html: string): T2tProfile {
     }
   } catch {}
   if (!coords.length) coords = [...html.matchAll(/"lat":\s*([\d.]+)\s*,\s*"lng":\s*([\d.]+)/g)].map(m => ({ lat: Number(m[1]), lng: Number(m[2]) }))
-  // کارت‌های پروژه: پنجرهٔ متنی دورِ هر «متراژ زیربنا» — برچسب‌محور، در برابرِ تغییرِ ظاهرِ صفحه مقاوم
-  const textNear = (w: string, label: string): string | undefined => {
-    const i = w.indexOf(label); if (i < 0) return undefined
-    const after = w.slice(i + label.length, i + label.length + 220)
-    const m = after.match(/>\s*([^<>]{1,40}?)\s*</)
-    const v = m ? strip(m[1]) : ''
-    return v && !/^(متراژ|شهر|سال|دسته)/.test(v) ? v : undefined
-  }
+  // کارت‌های پروژه: هر کارت یک <article class="…activity-item…"> با ساختارِ ثابت است
+  // (h3 عنوان، imgِ نمونه‌کار با alt، جفت‌های <span>برچسب</span><span>مقدار</span>، چیپِ دسته).
   const projects: T2tProject[] = []
   {
-    let idx = 0
-    while (projects.length < 60) {
-      const at = html.indexOf('متراژ زیربنا', idx)
-      if (at < 0) break
-      idx = at + 10
-      const w = html.slice(Math.max(0, at - 1600), at + 1000)
+    const chunks = html.split(/<article[^>]*activity-item/).slice(1)
+    for (const raw of chunks.slice(0, 60)) {
+      const end = raw.indexOf('</article>')
+      const c = end > 0 ? raw.slice(0, end) : raw.slice(0, 4000)
       const pr: T2tProject = {}
-      pr.builtArea = numNear(w, 'متراژ زیربنا'); pr.landArea = numNear(w, 'متراژ زمین')
-      const yr = textNear(w, 'سال انجام'); if (yr && /^[\d۰-۹]{4}$/.test(yr)) pr.year = String(yr).replace(FA_DIGITS, faDigit)
-      const city = textNear(w, 'شهر'); if (city && !/^[\d۰-۹]/.test(city)) pr.city = city
-      const head = w.slice(0, w.indexOf('متراژ'))
-      const h3 = [...head.matchAll(/<h[34][^>]*>([\s\S]*?)<\/h[34]>/g)].pop(); if (h3) pr.title = strip(h3[1]).slice(0, 80) || undefined
-      const img = [...head.matchAll(/<img[^>]+src="([^"]+)"/g)].pop(); if (img && !img[1].includes('logo')) pr.image = img[1]
-      // چیپِ دسته پایینِ کارت است (بعد از متراژها)؛ جستجو در کلِ پنجره عنوانِ پروژه را می‌گرفت.
-      const tail = w.slice(w.indexOf('متراژ'))
-      const cat = tail.match(/>\s*((?:طراحی|نظارت|اجرا|بازسازی|مشاوره)[^<>]{0,25}?)\s*</)
-      if (cat) { const c = strip(cat[1]); if (c && c !== pr.title && c.length <= 30) pr.category = c }
-      projects.push(pr)
+      const h3 = c.match(/<h3[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/) || c.match(/<h3[^>]*>([\s\S]*?)<\/h3>/)
+      if (h3) pr.title = strip(h3[1]).slice(0, 90) || undefined
+      const img = c.match(/<img[^>]+src="([^"]+)"/); if (img && !img[1].includes('logo')) pr.image = img[1]
+      const lbl = (l: string) => { const m = c.match(new RegExp(`${l}<\\/span>\\s*<span[^>]*>\\s*([^<]{1,60}?)\\s*<`)); return m ? strip(m[1]) : undefined }
+      pr.builtArea = enNum(lbl('متراژ زیربنا') || ''); pr.landArea = enNum(lbl('متراژ زمین') || '')
+      const yr = lbl('سال انجام'); if (yr && /^[\d۰-۹]{4}$/.test(yr)) pr.year = yr.replace(FA_DIGITS, faDigit)
+      const city = lbl('شهر'); if (city && !/^[\d۰-۹]/.test(city)) pr.city = city
+      const cat = c.match(/rounded-full[^>]*>\s*([^<>]{2,35}?)\s*</)
+      if (cat) { const cc = strip(cat[1]); if (cc && cc !== pr.title) pr.category = cc }
+      if (pr.title || pr.image || pr.builtArea) projects.push(pr)
     }
   }
   for (let i = 0; i < coords.length && i < 60; i++) {
@@ -395,12 +392,15 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
     for (const v of Object.values(meta.state)) { if (v[0] !== 'e') fetchedN++; if (v[0] === 'p') phoneN++ }
     meta.fetched = fetchedN; meta.withPhone = phoneN
     withPhone = meta.withPhone
-    // ساختِ حسابِ خودکار: شمارهٔ تازه که آمد، حسابش هم خودش ساخته می‌شود (بدونِ دکمه).
-    if ((meta.withPhone || 0) > (meta.accounted || 0)) {
+    // ساختِ حسابِ خودکار + تازه‌سازیِ پروفایل‌ها (عکس/بیو/تخصص) — بدونِ هیچ دکمه‌ای.
+    // هم با آمدنِ شمارهٔ تازه، هم حداکثر ساعتی یک‌بار وقتی پروفایلی به‌روز شده (تا مثلا
+    // آواتارِ تازه‌پارس‌شده روی حساب‌های موجود هم بنشیند).
+    const accountsStale = ok > 0 && Date.now() - (meta.accountsAt || 0) > 3600_000
+    if ((meta.withPhone || 0) !== (meta.accounted || 0) || accountsStale) {
       try {
         const r = await createArchitectAccounts()
         if (r.created) console.log(`[t2t] auto-accounts: +${r.created} حسابِ معمار`)
-        if (!r.noRole) meta.accounted = meta.withPhone
+        if (!r.noRole) { meta.accounted = meta.withPhone; meta.accountsAt = Date.now() }
       } catch (e: any) { console.error(`[t2t] auto-accounts failed: ${String(e?.message).slice(0, 80)}`) }
     }
     await saveMeta(meta)
