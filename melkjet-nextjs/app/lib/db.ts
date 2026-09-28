@@ -194,6 +194,19 @@ export async function kvGetPrefix<T>(prefix: string): Promise<{ key: string; dat
   } finally { client.release() }
 }
 
+/** خواندنِ «فقط یک فیلدِ» سندِ همهٔ کلیدهای یک prefix — سمتِ سرور بریده می‌شود، انتقال سبک است.
+ *  فاز ۲۸۹: دایرکتوری برای غنی‌سازیِ مشاورها کلِ سندها (با آرایه‌های آگهیِ چندمگابایتی) را
+ *  می‌کشید؛ با این، همان اطلاعات در چند کیلوبایت می‌آید. */
+export async function kvGetPrefixField<T>(prefix: string, field: string): Promise<{ key: string; data: T | null }[]> {
+  const client = await getPool().connect()
+  try {
+    await ensureSchema(client)
+    const like = prefix.replace(/([%_\\])/g, '\\$1') + '%'
+    const r = await client.query(`SELECT key, data -> $2 AS f FROM kv WHERE key LIKE $1 ESCAPE '\\'`, [like, field])
+    return r.rows.map(x => ({ key: x.key as string, data: (x.f ?? null) as T | null }))
+  } finally { client.release() }
+}
+
 /** حذفِ یک کلید از kv. */
 export async function kvDelete(key: string): Promise<void> {
   const client = await getPool().connect()

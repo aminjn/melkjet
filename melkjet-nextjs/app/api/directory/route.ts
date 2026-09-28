@@ -3,7 +3,7 @@ import { listAccounts } from '@/app/lib/account-store'
 import { listRoles } from '@/app/lib/role-store'
 import { getProfile } from '@/app/lib/profile-store'
 import { allApprovedReviews } from '@/app/lib/reviews-store'
-import { allAdvisorProfiles } from '@/app/lib/advisor-store'
+import { allAdvisorProfilesLean } from '@/app/lib/advisor-store'
 import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 // دایرکتوریِ متخصصانِ «ثبت‌شده در سایت» — تا کاربران واقعیِ نقش‌دار (مشاور/آژانس/سازنده/
@@ -27,8 +27,24 @@ const ROLE_CAT: Record<string, string> = {
 
 // فاز ۱۳۲ — کشِ درون‌حافظه‌ایِ ۶۰ثانیه‌ای: بدونِ آن، هر بازدید/کلیکِ دسته = اسکنِ کاملِ اکانت‌ها +
 // پرشین‌سازه (~۶MB) + آگهی‌ها؛ روی prod چند ثانیه طول می‌کشید («خیلی طول می‌کشد لود کند»).
-const DIR_TTL = 60_000
+// فاز ۲۸۹ — کشِ «کهنه بده، در پس‌زمینه تازه کن»: کاربر هیچ‌وقت پشتِ ساختِ فهرست نمی‌ماند؛
+// فقط اولین درخواستِ هر اینستنس بعد از ری‌استارت هزینهٔ ساخت را می‌دهد.
+const DIR_TTL = 5 * 60_000
 const dirCache = new Map<string, { at: number; body: any }>()
+const dirInflight = new Set<string>()
+async function dirCached(key: string, build: () => Promise<any>): Promise<any> {
+  const hit = dirCache.get(key)
+  if (hit) {
+    if (Date.now() - hit.at > DIR_TTL && !dirInflight.has(key)) {
+      dirInflight.add(key)
+      build().then(b => dirCache.set(key, { at: Date.now(), body: b })).catch(() => {}).finally(() => dirInflight.delete(key))
+    }
+    return hit.body
+  }
+  const b = await build()
+  dirCache.set(key, { at: Date.now(), body: b })
+  return b
+}
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
@@ -38,8 +54,7 @@ export async function GET(req: NextRequest) {
 
   // فاز ۱۳۰ — شمارشِ واقعیِ هر دسته برای سایدبارِ دایرکتوری (اکانت‌های نقش‌دار + سازنده‌های پرشین‌سازه + اسکرپ)
   if (url.searchParams.get('counts') === '1') {
-    const hit = dirCache.get('counts')
-    if (hit && Date.now() - hit.at < DIR_TTL) return NextResponse.json(hit.body, { headers: { 'Cache-Control': 'no-store, private' } })
+    const body = await dirCached('counts', async () => {
     const counts: Record<string, number> = {}
     for (const a of listAccounts()) {
       const cat = ROLE_CAT[roleName(a.role)]
@@ -59,17 +74,15 @@ export async function GET(req: NextRequest) {
         if (c) counts[c] = (counts[c] || 0) + 1
       }
     } catch {}
-    dirCache.set('counts', { at: Date.now(), body: { counts } })
-    return NextResponse.json({ counts }, { headers: { 'Cache-Control': 'no-store, private' } })
+    return { counts }
+    })
+    return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store, private' } })
   }
 
-  const cacheKey = 'cat:' + category
-  const hit = dirCache.get(cacheKey)
-  if (hit && Date.now() - hit.at < DIR_TTL) return NextResponse.json(hit.body, { headers: { 'Cache-Control': 'no-store, private' } })
-
+  const body = await dirCached('cat:' + category, async () => {
   const items: any[] = []
   // فاز ۱۳۲ — یک خواندن برای همه: پروفایل‌های مشاور (قبلاً برای هر مشاور یک کوئریِ PG!) و نظراتِ تأییدشده
-  const advisors132 = await allAdvisorProfiles().catch(() => ({} as Awaited<ReturnType<typeof allAdvisorProfiles>>))
+  const advisors132 = await allAdvisorProfilesLean().catch(() => ({} as Awaited<ReturnType<typeof allAdvisorProfilesLean>>))
   const reviewsByOwner = new Map<string, { n: number; rated: number; sum: number }>()
   for (const r of allApprovedReviews()) {
     const cur = reviewsByOwner.get(r.ownerPhone) || { n: 0, rated: 0, sum: 0 }
@@ -132,7 +145,7 @@ export async function GET(req: NextRequest) {
     // غنی‌سازیِ مشاور از advisor-store (نام/عکس/تخصص/منطقه).
     if (cat === 'مشاور') {
       try {
-        const ap = advisors132[a.phone]?.profile
+        const ap = advisors132[a.phone]
         if (ap) {
           if (!name && ap.name) name = ap.name.trim()
           if (!photo && ap.photo) photo = ap.photo
@@ -197,6 +210,7 @@ export async function GET(req: NextRequest) {
   } catch { /* پروموت در دسترس نبود */ }
   // ویژه‌ها اول، سپس تازه‌ترها / کامل‌ترها (عکس‌دار/تخصص‌دار).
   items.sort((x, y) => (Number(!!y.promoted) - Number(!!x.promoted)) || (Number(!!y.image) - Number(!!x.image)) || (y.scrapedAt - x.scrapedAt))
-  dirCache.set(cacheKey, { at: Date.now(), body: { items } })
-  return NextResponse.json({ items }, { headers: { 'Cache-Control': 'no-store, private' } })
+  return { items }
+  })
+  return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store, private' } })
 }

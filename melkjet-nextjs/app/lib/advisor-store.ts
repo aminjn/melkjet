@@ -166,6 +166,24 @@ export async function allAdvisorProfiles(): Promise<Record<string, AdvisorData>>
   return fileLoad().advisors || {}
 }
 
+export type AdvisorProfileLean = AdvisorData['profile']
+// فاز ۲۸۹ (پرفِ دایرکتوری) — فقط فیلدِ profile از همهٔ شاردها. allAdvisorProfiles سندهای کامل
+// (با آرایه‌های آگهی، بعضی‌ها چند مگابایت) را می‌کشید و هر کلیکِ دستهٔ دایرکتوری ثانیه‌ها/دقیقه‌ها
+// «در حال بارگذاری» می‌ماند. اینجا برش سمتِ خودِ پستگرس است و کلِ انتقال چند کیلوبایت.
+export async function allAdvisorProfilesLean(): Promise<Record<string, AdvisorProfileLean>> {
+  if (!pgEnabled()) {
+    const out: Record<string, AdvisorProfileLean> = {}
+    for (const [k, v] of Object.entries(fileLoad().advisors || {})) out[k] = v.profile
+    return out
+  }
+  await ensureMigratedPg()
+  const { kvGetPrefixField } = await import('./db')
+  const rows = await kvGetPrefixField<AdvisorProfileLean>(OWNER_PREFIX, 'profile')
+  const out: Record<string, AdvisorProfileLean> = {}
+  for (const { key, data } of rows) if (data) out[key.slice(OWNER_PREFIX.length)] = data
+  return out
+}
+
 export async function getAdvisor(o: string): Promise<AdvisorData> {
   if (pgEnabled()) {
     await ensureMigratedPg()
