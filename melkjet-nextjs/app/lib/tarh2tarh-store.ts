@@ -360,6 +360,9 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
           if (land && land.length >= 8 && land !== p.phone) p.officePhone = land.startsWith('0') ? land : '0' + land
         }
         p.phoneAt = Date.now()   // شماره‌گیری انجام شد (موفق یا نه) — تا ۷ روز دوباره تلاش نکن
+        // پلِ داده↔حساب همان لحظه نوشته می‌شود — نه فقط موقعِ ساختِ حساب؛ وگرنه پنجره‌ای بود
+        // که بیو/عکس روی حساب می‌نشست ولی صفحهٔ معمار به دادهٔ کامل (آمار/پروژه/نقشه) وصل نبود.
+        if (p.phone) { try { await setByPhone(p.phone, h) } catch {} }
         // جوایز و افتخارات — مسیرِ JSONِ خودِ صفحه (get_honours_route)
         const hrRoute = html.match(/const get_honours_route = "([^"]+)"/)?.[1]
         if (hrRoute && p.name && hrRoute.startsWith(BASE)) {
@@ -463,11 +466,15 @@ export async function createArchitectAccounts(): Promise<{ created: number; skip
         about: seoBio(p), logo: p.avatar || undefined,
         specialties: p.skills?.slice(0, 8), contactPhone: ph,
       } as any)
-      if (!pgEnabled()) { const d = fileLoad(); d.byPhone = d.byPhone || {}; d.byPhone[ph] = p.handle; fileSave(d) }
-      else await kvSet('t2t:byphone:' + ph, p.handle)
+      await setByPhone(ph, p.handle)
     } catch {}
   }
   return { created: r.created, skipped: r.skipped + r.invalid, noPhone, total }
+}
+
+async function setByPhone(ph: string, handle: string): Promise<void> {
+  if (!pgEnabled()) { const d = fileLoad(); d.byPhone = d.byPhone || {}; d.byPhone[ph] = handle; fileSave(d) }
+  else await kvSet('t2t:byphone:' + ph, handle)
 }
 
 /** دادهٔ کاملِ معمارِ اسکرپ‌شده برای صفحهٔ عمومیِ ملک‌جت (بر اساسِ شمارهٔ حساب). */
