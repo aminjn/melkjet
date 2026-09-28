@@ -814,10 +814,14 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
   const pre = await load()
   const preJobs = pre.graduateQueue || []
   if (!preJobs.length) return { ran: false }
-  if (Object.values(pre.scrapes).some(s => s.running)) {
+  const syncRunning = Object.values(pre.scrapes).some(s => s.running)
+  // «بخشِ آنی» برای همهٔ کارهای منتظر همیشه اول اجرا می‌شود — نه فقط وسطِ سینک. وگرنه
+  // انتقالِ سنگینِ نفرِ اول (~۱ دقیقه)، ثبتِ شمارهٔ نفرهای بعدی را پشتِ خودش نگه می‌داشت
+  // و پنل برای آنها دقیقه‌ها «در حال ساخت حساب…» می‌ماند (فیدبکِ ۲۸ سپتامبر).
+  {
     let did = 0
     for (const job of preJobs) {
-      if (job.prepared) continue
+      if (job.prepared || job.startedAt) continue
       try {
         const r = await graduateAdvisor(job.id, job.key, job.phone, job.role, { deferTransfer: true })
         if (r.ok) {
@@ -836,8 +840,9 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
         console.error(`[roster] graduate prepare transient key=${job.key}: ${String(e?.message || e).slice(0, 120)}`)
       }
     }
-    if (did) console.log(`[roster] graduate: ${did} حسابِ آنی ساخته شد — انتقالِ فایل‌ها بعد از پایانِ سینک`)
-    return { ran: did > 0 }
+    if (did) console.log(`[roster] graduate: ${did} حسابِ آنی ساخته شد${syncRunning ? ' — انتقالِ فایل‌ها بعد از پایانِ سینک' : ' — انتقالِ فایل‌ها در پس‌زمینه'}`)
+    // وسطِ سینک انتقالِ سنگین اجرا نمی‌شود (رقابتِ استخر/قفل — درسِ ۳۰ اوت)؛ فقط بخشِ آنی.
+    if (syncRunning) return { ran: did > 0 }
   }
   const job = await mutate(db => {
     const q = db.graduateQueue || []

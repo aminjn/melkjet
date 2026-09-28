@@ -317,6 +317,9 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   await ensureMigrated()
   let revOut = 0   // فاز ۲۴۰: revِ جدید برای انتشار در Redis (چکِ ارزانِ بین‌اینستنسی)
   const r = await pgTx(async (c) => {
+    // مثلِ kvMutate (۲۸ سپتامبر): خواندنِ کاملِ جدول + انتظارِ صفِ قفل زیرِ بار از ۱۵ث رد
+    // می‌شود و کشته‌شدنش یعنی تکرارِ کلِ کار (توفانِ retry). داخلِ همین تراکنش سقف ۴۵ث.
+    await c.query(`SET LOCAL statement_timeout = '45s'`)
     // سریالایزِ نویسنده‌ها روی ردیفِ کوچکِ متادیتا (KV_META، نه بلابِ بزرگ).
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
     const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
@@ -386,6 +389,7 @@ async function mutateMeta<R>(fn: (meta: { sources: Source[]; categories?: string
   await ensureMigrated()
   let revOut = 0
   const r = await pgTx(async (c) => {
+    await c.query(`SET LOCAL statement_timeout = '45s'`)   // انتظارِ صفِ قفل ≠ کوئریِ سرکش (۲۸ سپتامبر)
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
     const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
     const meta = (metaRow.rows[0]?.data || {}) as Partial<DB> & { __rev?: number }
@@ -418,6 +422,7 @@ async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Par
   await ensureMigrated()
   let revOut = 0
   const r = await pgTx(async (c) => {
+    await c.query(`SET LOCAL statement_timeout = '45s'`)   // انتظارِ صفِ قفل ≠ کوئریِ سرکش (۲۸ سپتامبر)
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
     const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
     const meta = (metaRow.rows[0]?.data || {}) as Partial<DB> & { __rev?: number }
