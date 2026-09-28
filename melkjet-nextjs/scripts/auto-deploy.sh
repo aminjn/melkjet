@@ -38,38 +38,53 @@ else
 fi
 echo "$REMOTE" > "$FAILED_MARK"   # تا وقتی build+reload موفق نشده، «ناتمام» حساب می‌شود
 
+# ⚠️ بیلد باید در «اسلاتِ خاموش» انجام شود، دقیقاً مثلِ deploy.sh.
+# ecosystem.config.js پوشهٔ سِرو را از `.next-current` می‌خواند (.next-a/.next-b).
+# نسخهٔ قبلیِ این اسکریپت در `.next` بیلد می‌کرد و به اشاره‌گر دست نمی‌زد؛ نتیجه
+# (۲۸ سپتامبر ۲۰۲۶): بیلدِ سالمِ ۱۰ دقیقه‌ای در پوشه‌ای نشست که هیچ اینستنسی از آن
+# سِرو نمی‌کرد، «✓ دیپلوی انجام شد» چاپ شد ولی سایت روی کدِ قدیمی ماند — دیپلویِ
+# دروغین، بدترین نوعِ «کارِ بی‌صدا مرده»ی قانونِ شمارهٔ یک.
+CUR=".next"
+if [ -f "$APP_DIR/.next-current" ]; then CUR="$(cat "$APP_DIR/.next-current")"; fi
+[ -f "$APP_DIR/$CUR/BUILD_ID" ] || CUR=".next"
+case "$CUR" in .next-a) NEW=".next-b" ;; *) NEW=".next-a" ;; esac
+echo "$(date) → بیلد در اسلاتِ خاموش: $NEW   (زنده: $CUR)"
+
 # nice/ionice مثلِ deploy.sh: build تمامِ ۴ هسته را نمی‌بلعد و سایت وسطِ دیپلویِ خودکار ۵۰۴ نمی‌دهد.
-# هرسِ کشِ اجراییِ ISR پیش از بیلد. سایت زنده است و خزنده‌ها مدام زیرِ
-# .next/server/app فایل می‌سازند؛ اگر فقط فایل‌ها پاک شوند پوشه‌های خالی
-# می‌مانند و next build با ENOTEMPTY روی rmdir شکست می‌خورد.
-# ۲۹ اوت ۲۰۲۶: دو بیلدِ پشتِ سرِ هم به همین دلیل شکست خوردند.
-prune_isr() {
-  [ -f "$APP_DIR/.next/BUILD_ID" ] || return 0
-  find "$APP_DIR/.next/server/app" -type f -newer "$APP_DIR/.next/BUILD_ID" -delete 2>/dev/null || true
-  find "$APP_DIR/.next/server/app" -depth -type d -empty -delete 2>/dev/null || true
-}
-build() { prune_isr; NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build; }
-# ENOTEMPTY (`rmdir … not empty`) گلیچِ `.next`ِ کهنهٔ توربوپک است، نه ایرادِ کد — درمانش پاک‌کردنِ
-# `.next` و buildِ دوباره است. پس خودمان یک‌بار همین کار را می‌کنیم به‌جای مردن.
+# اسلاتِ خاموش هر بار از صفر ساخته می‌شود، پس ENOTEMPTY/ISRِ کهنه اصلاً پیش نمی‌آید.
+build() { rm -rf "$APP_DIR/$NEW"; NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build; }
 if ! build; then
-  echo "$(date) ✗ build شکست خورد — .next پاک می‌شود و یک‌بارِ دیگر تلاش می‌کنم (گلیچِ ENOTEMPTY)"
-  rm -rf .next
+  echo "$(date) ✗ build شکست خورد — یک‌بارِ دیگر تلاش می‌کنم"
   if ! build; then
     echo "$(date) ✗✗ buildِ دوم هم شکست خورد. سرور روی نسخهٔ قبلی است و کرون خودکار باز تلاش می‌کند."
-    echo "$(date)    اگر تکرار شد دستی ببین:  cd $APP_DIR && rm -rf .next && npm run build"
+    echo "$(date)    اگر تکرار شد دستی ببین:  cd $APP_DIR && sudo scripts/deploy.sh"
+    rm -rf "$APP_DIR/$NEW"
     exit 1                                              # مارکر می‌ماند → دورِ بعد دوباره تلاش
   fi
-  echo "$(date) ✓ تلاشِ دوم پس از پاک‌کردنِ .next موفق شد"
+  echo "$(date) ✓ تلاشِ دوم موفق شد"
 fi
-# restart نه reload: سرورِ زندهٔ Next فایل‌های .next را باز نگه می‌دارد و بعد از
-# جایگزینیِ بیلد، reload خطای «client reference manifest does not exist» می‌دهد.
-pm2 restart ecosystem.config.js --update-env
+# اسلاتِ نیمه‌ساخته هرگز نباید زنده شود.
+if [ ! -f "$APP_DIR/$NEW/BUILD_ID" ]; then
+  echo "$(date) ✗ بیلد ناقص ماند (BUILD_ID نیست) — اشاره‌گر عوض نشد و سایت روی نسخهٔ قبلی ماند."
+  rm -rf "$APP_DIR/$NEW"
+  exit 1
+fi
+echo "$NEW" > "$APP_DIR/.next-current"
+# reload (نه restart): با اسلات‌ها پوشهٔ در حالِ سِرو هیچ‌وقت دست نمی‌خورد، پس
+# reloadِ نوبتی امن است و داون‌تایم صفر — همان کاری که deploy.sh می‌کند.
+pm2 reload ecosystem.config.js --update-env
 rm -f "$FAILED_MARK"                                     # از این‌جا به بعد دیپلوی تمام‌شده است
 
 # چکِ سلامت: اگر اینستنسی ۲۰۰ نداد، در لاگ فریاد بزن (ولی خروجی را غیرصفر نکن تا کرون هی هشدار نفرستد).
 sleep 3
+ok=1
 for port in 3001 3002 3003; do
   code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 12 "http://localhost:$port/" || echo "000")
-  [ "$code" = "200" ] && echo "$(date)   ✓ $port=$code" || echo "$(date)   ✗ $port=$code — بررسی کن: pm2 logs --err"
+  [ "$code" = "200" ] && echo "$(date)   ✓ $port=$code" || { echo "$(date)   ✗ $port=$code — بررسی کن: pm2 logs --err"; ok=0; }
 done
-echo "$(date) ✓ دیپلوی انجام شد"
+# فقط وقتی همه سالم‌اند اسلاتِ قدیمی پاک می‌شود (دیسک محدود است؛ دو اسلات نباید بمانند).
+if [ "$ok" = "1" ] && [ "$CUR" != "$NEW" ] && [ -d "$APP_DIR/$CUR" ]; then
+  rm -rf "$APP_DIR/$CUR"
+  echo "$(date)   ✓ اسلاتِ قدیمی پاک شد: $CUR"
+fi
+echo "$(date) ✓ دیپلوی انجام شد — سِرو از $NEW"
