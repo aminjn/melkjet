@@ -33,6 +33,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const action = String(body.action || '')
   if (action === 'config') {
+    // کوکیِ HTTP فقط ASCII است؛ نویسهٔ غیر از آن (مثل «…» از کپیِ متنِ نمونه) یعنی مقدارِ
+    // واقعی کپی نشده و هر درخواست با ByteString error می‌ترکید — با پیامِ روشن رد می‌کنیم.
+    if (typeof body.cookie === 'string' && body.cookie.trim() && /[^\x20-\x7E]/.test(body.cookie)) {
+      return NextResponse.json({ ok: false, error: 'کوکی نویسهٔ نامعتبر دارد (مثل «…») — یعنی از روی متنِ نمونه کپی شده، نه از DevTools. مقدارِ واقعی و کاملِ هدرِ cookie را کپی کن.' })
+    }
     const cfg = await saveConfig({
       enabled: body.enabled !== undefined ? !!body.enabled : undefined as any,
       cookie: typeof body.cookie === 'string' ? body.cookie : undefined as any,

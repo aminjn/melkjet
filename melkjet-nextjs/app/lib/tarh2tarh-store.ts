@@ -224,9 +224,10 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
     const have = new Map((await allProfiles()).map(p => [p.handle, p]))
     const wants: string[] = []
     // گرفته‌نشده‌ها + شکست‌خورده‌ها (تلاشِ دوباره بعد از ۱ ساعت — وگرنه خطا برای همیشه می‌ماند)
+    const retryAfter = force ? 0 : 3600_000   // اسکنِ دستی = تلاشِ فوریِ شکست‌خورده‌ها
     for (const h of meta.handles) {
       const pr = have.get(h)
-      if (!pr || (pr.error && !pr.name && Date.now() - pr.scrapedAt > 3600_000)) wants.push(h)
+      if (!pr || (pr.error && !pr.name && Date.now() - pr.scrapedAt >= retryAfter)) wants.push(h)
       if (wants.length >= cfg.profilesPerTick) break
     }
     if (wants.length < cfg.profilesPerTick && cfg.cookie.trim()) {
