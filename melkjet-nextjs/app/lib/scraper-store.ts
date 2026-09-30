@@ -156,10 +156,17 @@ let pgCache: { loadedAt: number; checkedAt: number; fullAt: number; data: DB; re
 // انجام می‌شود. پلِ ایمنیِ دوم: هر FULL_RESYNC_MS یک بازخوانیِ کامل، حتی اگر لاگ سالم باشد.
 interface RevLog { rev: number; ids?: string[]; del?: string[]; full?: boolean }
 type MetaDoc = Partial<DB> & { __rev?: number; __log?: RevLog[] }
-const LOG_MAX = 120          // چند rev اخیر نگه داشته می‌شود
-const LOG_IDS_MAX = 200      // بیش از این شناسه در یک rev → برای آن rev بازخوانیِ کامل
-const LOG_IDS_BUDGET = 2000  // سقفِ مجموعِ شناسه‌های کلِ لاگ
-const FULL_RESYNC_MS = 10 * 60_000
+// فاز ۲۹۳ج (۳۰ سپتامبر — لاگِ [mem]: «۶ بازخوانیِ کاملِ ۵۲هزارتایی در ۲ دقیقه»): وسطِ سینکِ
+// رُستر، عمل‌های دسته‌ای (finalize/publish/lexicon) بیش از ۲۰۰ شناسه داشتند → revشان مارکرِ
+// full می‌گرفت → «هر» تلاشِ دلتا به بازخوانیِ کامل سقوط می‌کرد؛ هر بازخوانی چند ثانیه event loop
+// را برای پارسِ صدها مگابایت فریز می‌کرد و همان لحظه‌ها بقیهٔ کوئری‌ها «timeout exceeded when
+// trying to connect» می‌خوردند. سقف‌ها بالا رفتند تا دستهٔ چندصدتایی هم «دلتا» بماند (کوئریِ
+// چندصد ردیف ≪ ۵۲هزار)، و پلِ ایمنیِ کامل از ۱۰ دقیقه به ۱ ساعت رفت (درستی با rev/log است؛
+// پل فقط بیمهٔ رانش است). بازخوانیِ کاملِ باقی‌مانده علتش را لاگ می‌کند (قانونِ شمارهٔ یک).
+const LOG_MAX = 240          // چند rev اخیر نگه داشته می‌شود
+const LOG_IDS_MAX = 600      // بیش از این شناسه در یک rev → برای آن rev بازخوانیِ کامل
+const LOG_IDS_BUDGET = 4000  // سقفِ مجموعِ شناسه‌های کلِ لاگ
+const FULL_RESYNC_MS = 60 * 60_000
 
 // لاگ در همان سندِ متاداتاست که هر نویسنده زیرِ قفل می‌خواند، پس رشدِ بی‌مرزش
 // خودش گلوگاهِ بعدی می‌شد — همان اشتباهی که با بلابِ آگهی‌ها یک بار کردیم. دو سقف:
@@ -181,7 +188,9 @@ function withLog(meta: MetaDoc, rev: number, ids: string[], del: string[]): RevL
 // حالا: چکِ rev حداکثر هر REV_CHECK_MS؛ بازخوانیِ کامل حداکثر هر RELOAD_FLOOR_MS (سِروِ stale
 // در این پنجره عمدی و بی‌ضرر است). نوشتنِ همین instance همچنان فوری کش را باطل می‌کند (read-your-writes).
 const REV_CHECK_MS = 5_000
-const RELOAD_FLOOR_MS = 15_000
+// فاز ۲۹۳ج — کفِ ۱۵ث یعنی مجوزِ بازخوانیِ کاملِ ۵۲هزارتایی هر ۱۵ ثانیه؛ با دلتاهای سالم‌شده
+// این کف فقط تازگیِ فهرست‌ها را تا ۳۰ث عقب می‌اندازد ولی بدترین حالتِ فریز را نصف می‌کند.
+const RELOAD_FLOOR_MS = 30_000
 
 // ── معماریِ دائمی: آگهی‌ها در جدولِ نرمالِ `listings` (هر ردیف یک آگهی)، متادیتای کوچک
 // (sources/categories/owners) در kv['scraper']. خواندن از جدول (کش‌شده)، نوشتن فقط روی
@@ -227,16 +236,19 @@ async function ensureMigrated(): Promise<void> {
  * وگرنه تأییدِ ادمین روی یک اینستنس تا ~۲۰ث در اینستنسِ دیگر دیده نمی‌شد و آگهی «برمی‌گشت» به لیست. */
 // تلاش برای به‌روزرسانیِ افزایشی. null یعنی نشد — صدازننده بازخوانیِ کامل می‌کند.
 async function applyDelta(cache: NonNullable<typeof pgCache>, now: number): Promise<DB | null> {
-  if (now - cache.fullAt > FULL_RESYNC_MS) return null   // پلِ ایمنی: دوره‌ای کامل بخوان
+  // فاز ۲۹۳ج — هر سقوط به بازخوانیِ کامل باید علتش را بگوید؛ «چرا full شد» قبلاً نامرئی بود.
+  const bail = (why: string): null => { console.log(`[scraper-store] full reload (${why})`); return null }
+  if (now - cache.fullAt > FULL_RESYNC_MS) return bail('پلِ ایمنیِ دوره‌ای')
   const meta = await kvGet<MetaDoc>(KV_META, {})
   const cur = meta.__rev || 0
-  if (cur < cache.rev) return null                       // rev عقب رفته (بازگردانی/مهاجرت) — اعتماد نکن
+  if (cur < cache.rev) return bail(`rev عقب رفت ${cache.rev}→${cur}`)   // بازگردانی/مهاجرت — اعتماد نکن
   const gap = cur - cache.rev
   if (gap === 0) { cache.loadedAt = now; return cache.data }
   const log = Array.isArray(meta.__log) ? meta.__log : []
   const span = log.filter(e => e.rev > cache.rev && e.rev <= cur)
   // لاگ باید تمامِ فاصله را پوشش دهد؛ یک revِ ثبت‌نشده کافی است تا به دلتا اعتماد نکنیم.
-  if (span.length !== gap || span.some(e => e.full)) return null
+  if (span.length !== gap) return bail(`لاگ فاصله را نمی‌پوشاند gap=${gap} span=${span.length}`)
+  if (span.some(e => e.full)) return bail(`revِ درشت (full) در فاصله، gap=${gap}`)
   const ids = [...new Set(span.flatMap(e => e.ids || []))]
   const del = new Set(span.flatMap(e => e.del || []))
   let items = cache.data.items
