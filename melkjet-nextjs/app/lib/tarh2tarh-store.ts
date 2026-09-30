@@ -313,6 +313,13 @@ export async function tickScrape(force = false): Promise<{ ran: boolean; note?: 
   ticking = true
   try {
     meta.lastTickAt = Date.now(); meta.lastError = ''
+    // قرنطینهٔ کوکیِ آلوده: کوکیِ قدیمیِ حاویِ «…» از قبل از گاردِ ذخیره مانده بود و
+    // تازه‌سازیِ خودکار هم روی همان بنا می‌شد → هر درخواستِ کوکی‌دار با ByteString می‌ترکید.
+    if (/[^\x20-\x7E]/.test(cfg.cookie)) {
+      cfg.cookie = ''
+      meta.lastError = 'کوکی نویسهٔ نامعتبر داشت و کنار گذاشته شد — از DevTools دوباره کپی و ذخیره کن'
+      console.error('[t2t] cookie قرنطینه شد (نویسهٔ غیرASCII) — شماره‌ها تا کوکیِ تازه صبر می‌کنند')
+    }
     const known = new Set(meta.handles)
     // ۱) چند صفحهٔ فهرست
     let listDone = !!meta.listDoneAt && Date.now() - (meta.listDoneAt || 0) < 7 * 24 * 3600_000

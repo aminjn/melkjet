@@ -13,9 +13,12 @@ export function pgEnabled(): boolean { return !!process.env.DATABASE_URL }
 let pool: Pool | null = null
 function getPool(): Pool {
   if (!pool) {
-    // max: هر instance تا ۱۵ connection (۴ instance × ۱۵ = ۶۰ < سقفِ پیش‌فرضِ ۱۰۰ پستگرس).
-    // statement_timeout: یک کوئریِ کندِ سرکش نباید connection را تا ابد بگیرد (۱۵ث سقف).
-    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 15, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 8_000, statement_timeout: 15_000 })
+    // ۳۰ سپتامبر — اندازهٔ استخر بر اساسِ «نقش»: اینستنسِ ۰ همهٔ کارهای پس‌زمینه را می‌دواند
+    // (سینکِ رُستر + صفِ حساب + t2t + غنی‌سازی + کرون) و با ۱۵ اتصال دو روز تمام همه‌چیز با
+    // «timeout exceeded when trying to connect» می‌مرد — اتصال‌ها پشتِ قفل‌ها پارک بودند.
+    // ۳۰ برای اینستنسِ ۰ + ۱۲×۳ سرویس‌ده = ۶۶ < سقفِ ۱۰۰ پستگرس.
+    const poolMax = process.env.NODE_APP_INSTANCE === '0' ? 30 : 12
+    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: poolMax, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 8_000, statement_timeout: 15_000 })
     pool.on('error', () => { /* خطای idle client، pool خودش بازیابی می‌کند */ })
   }
   return pool
