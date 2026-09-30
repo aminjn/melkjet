@@ -301,6 +301,9 @@ async function load(fresh = false): Promise<DB> {
       owners: m.owners || [],
     }
     pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), fullAt: Date.now(), data, rev: meta.__rev || 0 }
+    // فاز ۲۹۳ — اسناددهیِ وزنِ حافظه (ری‌استارت‌های سقفِ ۱۸۰۰M وسطِ سینک، ۳۰ سپتامبر):
+    // این کش بعد از اولین لمس دائمی است؛ این خط می‌گوید «کی» بار شد و heap بعدش چند شد.
+    try { console.log(`[mem] scraper corpus full load: ${items.length} items, heapUsed=${Math.round(process.memoryUsage().heapUsed / 1048576)}MB`) } catch {}
     // فاز ۲۴۰ (خودترمیم): بعدِ هر بازخوانیِ کامل، revِ Redis با kv همگام می‌شود (اگر Redis تازه روشن/کهنه بود).
     try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled()) void rSetMax('scraper_rev', meta.__rev || 0) } catch {}
     return data
