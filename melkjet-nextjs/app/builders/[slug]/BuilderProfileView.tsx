@@ -36,6 +36,7 @@ export default function BuilderProfileView({ profile, initialFollowing, loggedIn
   const [rating, setRating] = useState(profile.rating)
   const [reviewsCount, setReviewsCount] = useState(profile.reviewsCount)
   const [showReview, setShowReview] = useState(false)
+  const [rvMsg, setRvMsg] = useState('')   // فاز ۲۹۲ — پیامِ «در انتظارِ تاییدِ ادمین»
   const [rvName, setRvName] = useState('')
   const [rvText, setRvText] = useState('')
   const [rvRating, setRvRating] = useState(5)
@@ -59,10 +60,9 @@ export default function BuilderProfileView({ profile, initialFollowing, loggedIn
     try {
       const r = await fetch('/api/public/builder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: profile.id, action: 'review', name: rvName || 'کاربر', rating: rvRating, text: rvText.trim() }) })
       const d = await r.json()
-      if (d.ok && d.review) {
-        const next = [d.review, ...reviews]; setReviews(next)
-        const cnt = reviewsCount + 1; setReviewsCount(cnt)
-        setRating(Math.round((next.reduce((s, x) => s + x.rating, 0) / next.length) * 10) / 10)
+      if (d.ok) {
+        // فاز ۲۹۲ — دیگر فوری منتشر نمی‌شود: بعد از تاییدِ ادمین در فهرست می‌آید.
+        setRvMsg(d.message || 'نظرِ شما ثبت شد و پس از تاییدِ مدیر نمایش داده می‌شود.')
         setShowReview(false); setRvText(''); setRvName('')
       }
     } catch {} finally { setBusy(false) }
@@ -150,6 +150,7 @@ export default function BuilderProfileView({ profile, initialFollowing, loggedIn
                 <div style={{ fontSize: 14, color: 'var(--muted)' }}>{reviewsCount ? `${fa(reviewsCount)} نظر · میانگین ★ ${fa(rating)}` : 'هنوز نظری ثبت نشده'}</div>
                 <button onClick={() => setShowReview(s => !s)} style={{ background: 'var(--goldDim)', color: 'var(--gold)', border: '1px solid var(--gold)', borderRadius: 11, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>ثبتِ نظر</button>
               </div>
+              {rvMsg && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 11, fontSize: 13, border: '1px solid rgba(95,217,138,.4)', background: 'rgba(95,217,138,.08)', color: '#5fd98a' }}>{rvMsg}</div>}
               {showReview && (
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 16, padding: 18, marginBottom: 16, display: 'grid', gap: 11 }}>
                   <input value={rvName} onChange={e => setRvName(e.target.value)} placeholder="نامِ شما" style={inp} />

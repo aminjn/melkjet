@@ -5,6 +5,8 @@ import type { CSSProperties } from 'react'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import { getLawyerProfile } from '@/app/lib/bonyad-profiles'
+import { listReviews } from '@/app/lib/reviews-store'
+import ProviderReviews from '@/app/components/ProviderReviews'
 
 export const revalidate = 1800
 export function generateStaticParams() { return [] }
@@ -41,6 +43,8 @@ export default async function LawyerProfilePage({ params }: Props) {
   const p = await getLawyerProfile(slug)
   if (!p) notFound()
   const ratingNum = Number(p.rating) || 0
+  // فاز ۲۹۲ — نظراتِ ثبت‌شده در خودِ ملک‌جت (تاییدِ ادمین)؛ جدا از دیدگاه‌های منبع.
+  const ourReviews = listReviews('lw:' + slug).slice(0, 30).map(r => ({ name: r.name, text: r.text, rating: Math.max(0, Math.min(5, Number(r.rating) || 0)), createdAt: r.createdAt }))
 
   const ld = {
     '@context': 'https://schema.org', '@type': 'Person', name: p.name, jobTitle: p.jobTitle,
@@ -131,6 +135,10 @@ export default async function LawyerProfilePage({ params }: Props) {
                 )}
               </section>
             )}
+            {/* فاز ۲۹۲ — نظراتِ کاربرانِ ملک‌جت (ثبت با فرم، انتشار با تاییدِ ادمین) */}
+            <section style={card}>
+              <ProviderReviews ptype="lawyer" pslug={slug} reviews={ourReviews} />
+            </section>
           </div>
 
           <div style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>

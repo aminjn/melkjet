@@ -29,10 +29,20 @@ export async function POST(req: NextRequest) {
   // فاز ۲۹۲ — نظر روی صفحهٔ متخصصِ دایرکتوری (/{type}/{slug}): شمارهٔ مالک سمتِ سرور
   // از slug حل می‌شود (لو نمی‌رود) و انتشار فقط با تاییدِ ادمین است؛ AI صرفاً پیشنهاد می‌دهد.
   if (b.ptype && b.pslug) {
-    const { resolveProvider } = await import('@/app/lib/provider-public')
-    const p = await resolveProvider(String(b.ptype), String(b.pslug)).catch(() => null)
-    if (!p) return NextResponse.json({ error: 'متخصص یافت نشد' }, { status: 404 })
-    const r = addReview(p.phone, { name: b.name, text: b.text, rating: b.rating })
+    // وکیلِ اسکرپ‌شده (بدونِ حسابِ ملک‌جتی) → کلیدِ عمومیِ lw:{slug}؛ بقیه → شمارهٔ حساب از slug.
+    let owner292 = ''
+    if (b.ptype === 'lawyer') {
+      const { getLawyerProfile } = await import('@/app/lib/bonyad-profiles')
+      const lw = await getLawyerProfile(String(b.pslug)).catch(() => null)
+      if (!lw) return NextResponse.json({ error: 'متخصص یافت نشد' }, { status: 404 })
+      owner292 = 'lw:' + String(b.pslug)
+    } else {
+      const { resolveProvider } = await import('@/app/lib/provider-public')
+      const p = await resolveProvider(String(b.ptype), String(b.pslug)).catch(() => null)
+      if (!p) return NextResponse.json({ error: 'متخصص یافت نشد' }, { status: 404 })
+      owner292 = p.phone
+    }
+    const r = addReview(owner292, { name: b.name, text: b.text, rating: b.rating })
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
     try {
       const v = await moderateReview(r.review!.name, r.review!.text)

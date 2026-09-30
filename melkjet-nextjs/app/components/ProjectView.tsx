@@ -7,6 +7,7 @@ import StaticMap from './StaticMap'
 import NeshanMap from './NeshanMap'
 import RevealPhone from './RevealPhone'
 import CompareButton from './CompareButton'
+import BuilderReviews, { type BuilderReviewItem } from './BuilderReviews'
 
 const fa = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const faNum = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -22,6 +23,7 @@ interface ViewProject {
   amenities: string[]; plans: { label: string; url: string }[]; usage?: string
   priceText?: string; salesProgress?: number
   builder: { id: string; name: string; hasPhone: boolean; projectCount: number; regions: string[] }
+  builderReviews?: BuilderReviewItem[]   // فاز ۲۹۲ — نظراتِ تاییدشدهٔ سازنده
   similar: { hashId: string; address: string; region: string; photo: string; builderName: string; slug?: string }[]
 }
 interface Intel {
@@ -295,6 +297,12 @@ export default function ProjectView({ p }: { p: ViewProject }) {
                 </div>
               </div>
             </div>
+          </section>
+
+          {/* فاز ۲۹۲ — نظراتِ کاربران دربارهٔ سازنده (انتشار با تاییدِ ادمین) */}
+          <section style={card}>
+            <div style={h}>نظراتِ کاربران</div>
+            <BuilderReviews builderId={p.builder.id} builderName={p.builder.name} projectName={p.title} reviews={p.builderReviews || []} />
           </section>
 
           {/* Similar */}

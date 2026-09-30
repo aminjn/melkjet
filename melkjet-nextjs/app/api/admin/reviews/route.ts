@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { pendingReviews, adminSetApproved, adminDeleteReview, allApprovedReviews } from '@/app/lib/reviews-store'
+import { pendingBuilderReviews, setBuilderReviewApproved, deleteBuilderReview } from '@/app/lib/builder-public-store'
 import { getProfile, setVerified, listVerifiedPhones } from '@/app/lib/profile-store'
 import { getAccount } from '@/app/lib/account-store'
 import { FA_DIGITS, faDigit } from '@/app/lib/digits'
@@ -11,6 +12,7 @@ export const runtime = 'nodejs'
 async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 function ownerLabel(phone: string): string {
+  if (phone.startsWith('lw:')) return `وکیل: ${decodeURIComponent(phone.slice(3))}`
   const p = getProfile(phone)
   const a = getAccount(phone)
   return (p.businessName || p.displayName || a?.name || '').trim() || phone
@@ -18,10 +20,21 @@ function ownerLabel(phone: string): string {
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const pending = pendingReviews().slice(0, 100).map(r => ({
-    id: r.id, ownerPhone: r.ownerPhone, ownerName: ownerLabel(r.ownerPhone),
-    name: r.name, text: r.text, rating: r.rating, createdAt: r.createdAt, aiHint: r.reason || '',
-  }))
+  const pending = [
+    ...pendingReviews().slice(0, 100).map(r => ({
+      id: r.id, source: 'pro' as const, ownerPhone: r.ownerPhone, ownerName: ownerLabel(r.ownerPhone),
+      name: r.name, text: r.text, rating: r.rating, createdAt: r.createdAt, aiHint: r.reason || '',
+    })),
+    // فاز ۲۹۲ — نظراتِ سازنده‌ها (پرشین‌سازه) هم از همین صف تایید می‌شوند.
+    ...await Promise.all(pendingBuilderReviews().slice(0, 100).map(async pr => {
+      let bName = 'سازنده'
+      try { const { getProfile: bProf } = await import('@/app/lib/persiansaze-store'); bName = bProf(pr.builderId)?.name || 'سازنده' } catch {}
+      return {
+        id: pr.review.id, source: 'builder' as const, ownerPhone: pr.builderId, ownerName: bName + (pr.review.projectName ? ` — پروژهٔ ${pr.review.projectName}` : ''),
+        name: pr.review.name, text: pr.review.text, rating: pr.review.rating, createdAt: pr.review.at, aiHint: '',
+      }
+    })),
+  ].sort((a, b) => b.createdAt - a.createdAt)
   const approvedCount = allApprovedReviews().length
   const verified = listVerifiedPhones().map(ph => ({ phone: ph, name: ownerLabel(ph) }))
   return NextResponse.json({ pending, approvedCount, verified }, { headers: { 'Cache-Control': 'no-store, private' } })
@@ -32,11 +45,17 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   const action = String(b.action || '')
   if (action === 'approve') {
-    if (!adminSetApproved(String(b.id), true)) return NextResponse.json({ error: 'نظر یافت نشد' }, { status: 404 })
+    const ok = b.source === 'builder'
+      ? setBuilderReviewApproved(String(b.ownerPhone), String(b.id), true)
+      : adminSetApproved(String(b.id), true)
+    if (!ok) return NextResponse.json({ error: 'نظر یافت نشد' }, { status: 404 })
     return NextResponse.json({ ok: true })
   }
   if (action === 'reject') {
-    if (!adminDeleteReview(String(b.id))) return NextResponse.json({ error: 'نظر یافت نشد' }, { status: 404 })
+    const ok = b.source === 'builder'
+      ? deleteBuilderReview(String(b.ownerPhone), String(b.id))
+      : adminDeleteReview(String(b.id))
+    if (!ok) return NextResponse.json({ error: 'نظر یافت نشد' }, { status: 404 })
     return NextResponse.json({ ok: true })
   }
   if (action === 'verify') {

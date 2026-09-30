@@ -1,5 +1,5 @@
 import { getProfile, regionLabel, phaseLabel, type PSProfile } from './persiansaze-store'
-import { getPublic, reviewStats, followerCount, STATUS_LABEL, type ProjStatus, type Review } from './builder-public-store'
+import { getPublic, reviewStats, approvedBuilderReviews, followerCount, STATUS_LABEL, type ProjStatus, type Review } from './builder-public-store'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ─── سرهم‌کردنِ پروفایلِ عمومیِ سازنده از دادهٔ واقعیِ پرشین سازه + ورودیِ خودِ سازنده ──
@@ -87,6 +87,6 @@ export function assembleBuilderProfile(id: string): BuilderProfile | null {
     tags: pub.tags || [], activeRegionsText: regionsText,
     followers: followerCount(id), rating: rs.avg, reviewsCount: rs.count,
     unitsDelivered, activeCount: current.length,
-    current, past, reviews: pub.reviews || [],
+    current, past, reviews: approvedBuilderReviews(id),   // فاز ۲۹۲ — فقط تاییدشده‌ها
   }
 }

@@ -111,19 +111,22 @@ export async function GET(req: NextRequest) {
   if (!category || category === 'سازنده') {
     try {
       const { getProfiles, regionLabel } = await import('@/app/lib/persiansaze-store')
+      const { allBuilderReviewStats } = await import('@/app/lib/builder-public-store')
+      const bStats292 = allBuilderReviewStats()   // فاز ۲۹۲ — امتیازِ نظراتِ تاییدشدهٔ سازنده‌ها (یک خواندن)
       const profs = getProfiles()
       for (const key in profs) {
         const b = profs[key]
         if (!b || !b.name) continue
         const region = (b.regions && b.regions.length) ? regionLabel({ cityId: 1, regionId: b.regions[0] }) : ''
         const pc = Number(b.projectCount) || 0
+        const brv = bStats292.get(String(b.id))
         items.push({
           id: b.id, sourceName: 'ملک‌جت', type: 'directory', category: 'سازنده',
           title: b.name, location: region, image: '',
           excerpt: pc ? `${pc.toLocaleString('fa-IR')} پروژه` : '',
           tags: pc ? [`${pc.toLocaleString('fa-IR')} پروژه`] : [],
           hasPhone: !!(b.phone || (b.phones && b.phones.length)),
-          stats: { projects: pc },   // فاز ۱۳۰ — پروژه‌های واقعیِ ثبت‌شدهٔ سازنده
+          stats: { projects: pc, rating: brv?.avg || 0, reviews: brv?.count || 0 },   // فاز ۱۳۰/۲۹۲ — پروژه‌ها و امتیازِ واقعی
           url: `/builders/${encodeURIComponent(b.id)}`,
           revealKind: 'builder', revealId: String(b.id),   // شمارهٔ سازنده از /api/contact-reveal
           scrapedAt: 0, status: 'approved', registered: true,

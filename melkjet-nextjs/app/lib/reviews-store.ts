@@ -25,10 +25,19 @@ function save(db: DB) { writeFileSync(FILE, JSON.stringify(db, null, 2)) }
 
 function clampRating(v: any): number { const n = Math.round(Number(v) || 5); return Math.max(1, Math.min(5, n)) }
 
+// فاز ۲۹۲ — کلیدِ صاحبِ نظر: شمارهٔ حساب (۰۹…) یا کلیدِ عمومیِ «lw:{slug}» برای وکلای
+// اسکرپ‌شده (صفحهٔ /lawyers که حسابِ ملک‌جتی ندارند). کلیدهای lw: نرمال‌سازیِ رقمی نمی‌شوند.
+const ownerKey = (k: string): string => {
+  const s = String(k || '')
+  if (s.startsWith('lw:')) return s.slice(0, 90)
+  return s.replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+}
+const validOwner = (k: string) => /^09\d{9}$/.test(k) || /^lw:.{2,}$/.test(k)
+
 // ثبتِ نظرِ جدید توسطِ بازدیدکننده — به‌صورتِ پیش‌فرض نمایش داده می‌شود (مالک می‌تواند حذف کند).
 export function addReview(ownerPhone: string, input: { name?: string; text?: string; rating?: any }): { ok: boolean; error?: string; review?: Review } {
-  const phone = String(ownerPhone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
-  if (!/^09\d{9}$/.test(phone)) return { ok: false, error: 'صاحبِ سایت نامعتبر است' }
+  const phone = ownerKey(ownerPhone)
+  if (!validOwner(phone)) return { ok: false, error: 'صاحبِ سایت نامعتبر است' }
   const name = String(input.name || '').trim().slice(0, 60)
   const text = String(input.text || '').trim().slice(0, 600)
   if (name.length < 2) return { ok: false, error: 'نام را وارد کنید' }
@@ -52,7 +61,7 @@ export function applyReviewModeration(id: string, approved: boolean, reason: str
 export function allApprovedReviews(): Review[] { return load().reviews.filter(r => r.approved) }
 
 export function listReviews(ownerPhone: string, opts?: { all?: boolean }): Review[] {
-  const phone = String(ownerPhone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+  const phone = ownerKey(ownerPhone)
   if (!phone) return []
   return load().reviews.filter(r => r.ownerPhone === phone && (opts?.all || r.approved)).sort((a, b) => b.createdAt - a.createdAt)
 }

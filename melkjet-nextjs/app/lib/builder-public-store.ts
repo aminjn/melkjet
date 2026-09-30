@@ -28,7 +28,9 @@ export type ProjMeta = ProjEnrich
 export interface ManualProject extends ProjEnrich {
   id: string; name: string; location: string; status: ProjStatus; createdAt: number
 }
-export interface Review { id: string; name: string; rating: number; text: string; projectName?: string; phone?: string; at: number }
+// فاز ۲۹۲ — approved: نظرِ جدید تا تاییدِ ادمین پنهان است. رکوردهای قدیمی (بدونِ فیلد)
+// «تاییدشده» حساب می‌شوند تا نظراتِ موجودِ سایت با این تغییر ناپدید نشوند.
+export interface Review { id: string; name: string; rating: number; text: string; projectName?: string; phone?: string; at: number; approved?: boolean }
 
 export interface BuilderPublic {
   tagline?: string; sinceYear?: string; about?: string; website?: string
@@ -104,16 +106,45 @@ export function updateManual(builderId: string, mid: string, patch: Partial<Manu
 }
 export function deleteManual(builderId: string, mid: string) { const db = load(); const e = ent(db, String(builderId)); if (e.manual) { e.manual = e.manual.filter(x => x.id !== mid); save(db) } }
 
-// نظرات (عمومی — توسطِ کاربرانِ واردشده).
+// نظرات (عمومی — توسطِ کاربرانِ واردشده). فاز ۲۹۲: انتشار فقط با تاییدِ ادمین.
 export function addReview(builderId: string, r: { name: string; rating: number; text: string; projectName?: string; phone?: string }): Review {
   const db = load(); const e = ent(db, String(builderId)); if (!e.reviews) e.reviews = []
-  const rev: Review = { id: id(), name: String(r.name || 'کاربر').slice(0, 40), rating: Math.max(1, Math.min(5, Number(r.rating) || 5)), text: String(r.text || '').slice(0, 600), projectName: r.projectName?.slice(0, 60), phone: r.phone, at: Date.now() }
+  const rev: Review = { id: id(), name: String(r.name || 'کاربر').slice(0, 40), rating: Math.max(1, Math.min(5, Number(r.rating) || 5)), text: String(r.text || '').slice(0, 600), projectName: r.projectName?.slice(0, 60), phone: r.phone, at: Date.now(), approved: false }
   e.reviews.unshift(rev); save(db); return rev
 }
+export function approvedBuilderReviews(builderId: string): Review[] {
+  return (getPublic(builderId).reviews || []).filter(r => r.approved !== false)
+}
 export function reviewStats(builderId: string): { avg: number; count: number } {
-  const rs = getPublic(builderId).reviews || []
+  const rs = approvedBuilderReviews(builderId)
   if (!rs.length) return { avg: 0, count: 0 }
   return { avg: Math.round((rs.reduce((s, r) => s + r.rating, 0) / rs.length) * 10) / 10, count: rs.length }
+}
+// فاز ۲۹۲ — آمارِ نظرِ همهٔ سازنده‌ها با «یک» خواندنِ فایل (برای کارت‌های دایرکتوری؛
+// reviewStats به‌ازای هر سازنده فایل را دوباره می‌خوانْد و با هزاران سازنده O(n²) می‌شد).
+export function allBuilderReviewStats(): Map<string, { avg: number; count: number }> {
+  const out = new Map<string, { avg: number; count: number }>()
+  for (const [bid, e] of Object.entries(load())) {
+    const rs = (e.reviews || []).filter(r => r.approved !== false)
+    if (rs.length) out.set(bid, { avg: Math.round((rs.reduce((s, r) => s + r.rating, 0) / rs.length) * 10) / 10, count: rs.length })
+  }
+  return out
+}
+// فاز ۲۹۲ — صفِ تاییدِ ادمین (پنلِ «نظرات و تیک آبی»).
+export function pendingBuilderReviews(): { builderId: string; review: Review }[] {
+  const db = load()
+  const out: { builderId: string; review: Review }[] = []
+  for (const [bid, e] of Object.entries(db)) for (const r of e.reviews || []) if (r.approved === false) out.push({ builderId: bid, review: r })
+  return out.sort((a, b) => b.review.at - a.review.at)
+}
+export function setBuilderReviewApproved(builderId: string, rid: string, approved: boolean): boolean {
+  const db = load(); const r = (db[String(builderId)]?.reviews || []).find(x => x.id === rid); if (!r) return false
+  r.approved = approved; save(db); return true
+}
+export function deleteBuilderReview(builderId: string, rid: string): boolean {
+  const db = load(); const e = db[String(builderId)]; if (!e?.reviews) return false
+  const n = e.reviews.length; e.reviews = e.reviews.filter(x => x.id !== rid); save(db)
+  return e.reviews.length < n
 }
 
 // دنبال‌کردن.

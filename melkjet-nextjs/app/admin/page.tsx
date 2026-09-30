@@ -1915,7 +1915,7 @@ interface PSState {
 }
 
 // ─── نظراتِ متخصصان و تیکِ آبی — فاز ۲۹۲ ─────────────────────────────────────
-interface DirPendingReview { id: string; ownerPhone: string; ownerName: string; name: string; text: string; rating: number; createdAt: number; aiHint: string }
+interface DirPendingReview { id: string; source?: string; ownerPhone: string; ownerName: string; name: string; text: string; rating: number; createdAt: number; aiHint: string }
 function DirReviewsView() {
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
@@ -1984,13 +1984,14 @@ function DirReviewsView() {
                   <b>{r.name}</b>
                   {stars(r.rating)}
                   <span style={{ color: 'var(--muted)' }}>برای <b style={{ color: 'var(--goldText)' }}>{r.ownerName}</b></span>
+                  {r.source === 'builder' && <span style={{ fontSize: 10.5, color: '#e7a14a', background: 'rgba(231,161,74,.1)', border: '1px solid rgba(231,161,74,.35)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>🏗 سازنده</span>}
                   <span style={{ color: 'var(--faint)', fontSize: 11.5 }}>{new Date(r.createdAt).toLocaleDateString('fa-IR')}</span>
                   {r.aiHint && <span style={{ fontSize: 11, color: r.aiHint.includes('تایید') ? '#5fd98a' : '#e7a14a', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, padding: '2px 10px' }}>{r.aiHint.slice(0, 80)}</span>}
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.9, marginBottom: 10 }}>{r.text}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button disabled={!!busy} onClick={() => act('approve', { id: r.id })} style={{ padding: '7px 20px', borderRadius: 9, border: 'none', background: 'rgba(95,217,138,.15)', color: '#5fd98a', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', outline: '1px solid rgba(95,217,138,.4)' }}>✓ تایید و انتشار</button>
-                  <button disabled={!!busy} onClick={() => act('reject', { id: r.id })} style={{ padding: '7px 20px', borderRadius: 9, border: 'none', background: 'rgba(231,103,74,.12)', color: '#e7674a', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', outline: '1px solid rgba(231,103,74,.35)' }}>✕ رد و حذف</button>
+                  <button disabled={!!busy} onClick={() => act('approve', { id: r.id, source: r.source, ownerPhone: r.ownerPhone })} style={{ padding: '7px 20px', borderRadius: 9, border: 'none', background: 'rgba(95,217,138,.15)', color: '#5fd98a', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', outline: '1px solid rgba(95,217,138,.4)' }}>✓ تایید و انتشار</button>
+                  <button disabled={!!busy} onClick={() => act('reject', { id: r.id, source: r.source, ownerPhone: r.ownerPhone })} style={{ padding: '7px 20px', borderRadius: 9, border: 'none', background: 'rgba(231,103,74,.12)', color: '#e7674a', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', outline: '1px solid rgba(231,103,74,.35)' }}>✕ رد و حذف</button>
                 </div>
               </div>
             ))}

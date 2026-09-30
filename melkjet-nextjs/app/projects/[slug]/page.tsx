@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { publicProject, publicQuery, regionLabel, phaseLabel, getProfile } from '@/app/lib/persiansaze-store'
-import { getPublic, findManual, STATUS_LABEL } from '@/app/lib/builder-public-store'
+import { getPublic, findManual, STATUS_LABEL, approvedBuilderReviews } from '@/app/lib/builder-public-store'
 import { unitStatusesForHash } from '@/app/lib/builder-store'
 import { hashForProjectSlug, ensureProjectSlug } from '@/app/lib/project-slug-store'
 import ProjectView from '@/app/components/ProjectView'
@@ -125,6 +125,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
     amenities: enrich.amenities || [], plans: enrich.plans || [],
     priceText: enrich.priceText, salesProgress: enrich.salesProgress,
     builder: { id: builderId, name: builderName, hasPhone: !!builderPhones[0], projectCount: builderProjectCount, regions: builderRegions.map(r => regionLabel({ cityId: 1, regionId: r })).filter(Boolean).slice(0, 6) },
+    // فاز ۲۹۲ — نظراتِ تاییدشدهٔ سازنده روی صفحهٔ پروژه (رندرِ سروری، سئو).
+    builderReviews: approvedBuilderReviews(builderId).slice(0, 10).map(r => ({ name: r.name, text: r.text, rating: r.rating, projectName: r.projectName, at: r.at })),
     similar,
   }
 
