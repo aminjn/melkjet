@@ -17,6 +17,9 @@ export interface ImportResult {
   reason?: string
   listing?: Listing
   token?: string
+  // فاز ۲۹۳ب — تفکیکِ زمان: fetch=دیوار، img=دانلود/کشِ عکس، بقیه=دیتابیس/پردازش.
+  // ترمزِ تطبیقیِ رُستر فقط باید روی «کندیِ دیوار» ترمز کند، نه کندیِ DB خودمان.
+  t?: { fetch: number; img: number }
 }
 
 // محله را به «مناطق فعالیتِ» مشاور اضافه می‌کند (برای کشف‌شدن در صفحات پابلیک).
@@ -49,9 +52,11 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   // فاز ۱۷۶ (پورت از خودروجت): انتشار قابلِ‌override — رُستر آگهیِ مالکِ موقت را عمومی نمی‌کند تا کاربر ساخته شود (graduate)
   const doPublish = opts?.publish !== undefined ? opts.publish : cfg.autoPublish
   let post
-  try { post = await (opts?.fetchPost || fetchDivarPost)(token) } catch (e: any) { return { ok: false, reason: e?.message || 'اتصال به دیوار ناموفق بود', token } }
+  const tFetch0 = Date.now()
+  try { post = await (opts?.fetchPost || fetchDivarPost)(token) } catch (e: any) { return { ok: false, reason: e?.message || 'اتصال به دیوار ناموفق بود', token, t: { fetch: Date.now() - tFetch0, img: 0 } } }
+  const tFetch = Date.now() - tFetch0
   if (post.reason && !post.images.length && !post.title && !hint?.title) {
-    return { ok: false, reason: `آگهی از دیوار خوانده نشد (${post.reason})`, token }
+    return { ok: false, reason: `آگهی از دیوار خوانده نشد (${post.reason})`, token, t: { fetch: tFetch, img: 0 } }
   }
 
   // محلهٔ دیوار را به محله‌های موجودِ سایتِ خودمان نگاشت کن (هیچ محلهٔ جدیدی ساخته نمی‌شود).
@@ -64,7 +69,9 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   // عکسِ کارت محلی می‌شود: آدرسِ CDN دیوار پایدار نیست و آگهی بعد از مدتی بی‌عکس
   // می‌ماند. فقط اولی — بیست عکس در هر آگهی یعنی صدها هزار فایل، و آنچه در فهرست و
   // نتایجِ جست‌وجو دیده می‌شود همین یکی است. اگر کش نشد، آدرسِ راه‌دور باقی می‌ماند.
+  const tImg0 = Date.now()
   const images = rawImages.length ? [(await cacheRemote(rawImages[0])) || rawImages[0], ...rawImages.slice(1)] : []
+  const t293 = { fetch: tFetch, img: Date.now() - tImg0 }
   const advisorPhone = (await getAdvisor(o)).profile.phone || ''
 
   const payload: Partial<Listing> = {
@@ -112,7 +119,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
     // فاز ۱۹۶ — at «تازه» می‌شود: قبلاً existing.at می‌ماند و skipFreshMs هرگز فعال نمی‌شد → هر پاسِ رُستر همهٔ
     // توکن‌ها را دوباره از دیوار می‌گرفت و بودجه همیشه می‌بُرید (لوپِ دوروزه). at = زمانِ آخرین همگام‌سازی.
     recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId: sourceId || existing.sourceId })
-    return { ok: true, updated: true, listing: updated, token }
+    return { ok: true, updated: true, listing: updated, token, t: t293 }
   }
 
   // ── جلوگیری از تکراری: دیوار اغلب همان ملک را با «توکنِ جدید» بازنشر می‌کند (توکنِ قبلی می‌میرد)،
@@ -135,7 +142,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
     let published = updated?.published || false
     if (doPublish && updated) { const pub = await publishListing(o, twin.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }
     recordImport(o, { token, listingId: twin.id, title: (updated || twin).title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
-    return { ok: true, updated: true, listing: updated || twin, token }
+    return { ok: true, updated: true, listing: updated || twin, token, t: t293 }
   }
 
   // ── افزودنِ آگهیِ جدید ──
@@ -143,7 +150,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   let published = false
   if (doPublish) { const pub = await publishListing(o, listing.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // پیش‌گرمِ تحلیل (ممیزی دسته‌ای توسطِ کرون)
   recordImport(o, { token, listingId: listing.id, title: listing.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
-  return { ok: true, listing, token }
+  return { ok: true, listing, token, t: t293 }
 }
 
 function normName(s: string): string {

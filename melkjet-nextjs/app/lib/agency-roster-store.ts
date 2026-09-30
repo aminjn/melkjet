@@ -436,9 +436,14 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
           new Promise<{ ok: false; reason: string }>(r => setTimeout(() => r({ ok: false, reason: 'timeout 2min — رد شد' }), 120_000)),   // فاز ۱۹۵
         ])
         const ms = Date.now() - t0
-        if (ms > 30_000 || !res.ok) console.log(`[roster] token=${token} ms=${ms} ok=${res.ok}${!res.ok && 'reason' in res ? ' reason=' + String((res as any).reason).slice(0, 80) : ''}`)
+        // فاز ۲۹۳ب — ترمز فقط با «زمانِ دیوار» (fetch)، نه کلِ ms که کندیِ DB/عکسِ خودمان را هم دارد.
+        // ۳۰ سپتامبر: طوفانِ DB باعث می‌شد ms>20s شود، ترمز دیوار را مقصر بداند و ۲۵ث خوابِ بی‌جا
+        // به هر توکن اضافه کند — مارپیچِ «سینکِ خزنده». بدونِ تفکیک (timeout race) همان ms مبناست.
+        const t293 = (res as { t?: { fetch: number; img: number } }).t
+        const netMs = t293 ? t293.fetch : ms
+        if (ms > 30_000 || !res.ok) console.log(`[roster] token=${token} ms=${ms}${t293 ? ` fetch=${t293.fetch} img=${t293.img} db=${ms - t293.fetch - t293.img}` : ''} ok=${res.ok}${!res.ok && 'reason' in res ? ' reason=' + String((res as any).reason).slice(0, 80) : ''}`)
         // موفقِ سریع → کاهشِ تدریجیِ استرِیک (نه صفرِ ناگهانی) تا نوسانِ backoff کم شود
-        if (!res.ok || ms > 20_000) slowStreak193 = Math.min(slowStreak193 + 1, 5)
+        if (!res.ok || netMs > 20_000) slowStreak193 = Math.min(slowStreak193 + 1, 5)
         else slowStreak193 = Math.max(0, slowStreak193 - 1)
         // pace به‌ازای هر کارگر؛ چون CONC کارگر موازی داریم، فاصلهٔ مؤثر ~CONC برابر کمتر است.
         const pace = slowStreak193 === 0 ? 250 : [1_500, 4_000, 8_000, 15_000, 25_000][slowStreak193 - 1]
