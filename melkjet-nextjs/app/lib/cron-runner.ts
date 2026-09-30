@@ -302,6 +302,8 @@ async function queueTick(): Promise<void> {
     }
     if (!rosterRunning) {
       rosterRunning = true
+      // (این بلوک آخرِ تیک است؛ اگر هرگز به اینجا نرسیدیم یعنی یکی از awaitهای بالاتر مرده —
+      //  catchِ سراسریِ پایینِ همین تابع حالا آن را فریاد می‌زند.)
       ;(async () => {
         try {
           const { listDueRosters, syncRoster, listScrapes } = await import('./agency-roster-store')
@@ -323,9 +325,17 @@ async function queueTick(): Promise<void> {
               }
             }
           }
-        } catch { /* اسکرپِ بعدی در تیکِ بعد */ } finally { rosterRunning = false }
+        } catch (e) {
+          // قانونِ شمارهٔ یک: راه‌اندازِ سینک اگر بمیرد باید فریاد بزند — سکوتِ این catch
+          // یعنی «در صف» ماندنِ ابدیِ آژانس‌ها بدونِ هیچ ردی (۳۰ سپتامبر).
+          console.error(`[cron] roster launcher failed: ${String((e as Error)?.message || e).slice(0, 200)}`)
+        } finally { rosterRunning = false }
       })()
     }
+  } catch (e) {
+    // قانونِ شمارهٔ یک: هر throw بی‌محافظ در بدنهٔ تیک (heartbeat، import، drain و…) کلِ ادامهٔ
+    // تیک را می‌کُشت و چون فراخوان‌ها catch(() => {}) دارند، هیچ ردی نمی‌ماند — «هیچ اتفاقی نمیوفته».
+    console.error(`[cron] queueTick failed: ${String((e as Error)?.message || e).slice(0, 200)}`)
   } finally { queueRunning = false }
 }
 
