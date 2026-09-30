@@ -17,6 +17,7 @@ export interface Review {
   approved: boolean      // نمایش روی سایت
   moderated?: boolean    // آیا هوش مصنوعی بررسی کرده
   reason?: string        // علتِ تأیید/رد
+  byPhone?: string       // فاز ۲۹۲ — شمارهٔ کاربرِ واردشده که نظر را ثبت کرد (ضدِ اسپم/ردگیری)
 }
 type DB = { reviews: Review[] }
 
@@ -35,7 +36,7 @@ const ownerKey = (k: string): string => {
 const validOwner = (k: string) => /^09\d{9}$/.test(k) || /^lw:.{2,}$/.test(k)
 
 // ثبتِ نظرِ جدید توسطِ بازدیدکننده — به‌صورتِ پیش‌فرض نمایش داده می‌شود (مالک می‌تواند حذف کند).
-export function addReview(ownerPhone: string, input: { name?: string; text?: string; rating?: any }): { ok: boolean; error?: string; review?: Review } {
+export function addReview(ownerPhone: string, input: { name?: string; text?: string; rating?: any; byPhone?: string }): { ok: boolean; error?: string; review?: Review } {
   const phone = ownerKey(ownerPhone)
   if (!validOwner(phone)) return { ok: false, error: 'صاحبِ سایت نامعتبر است' }
   const name = String(input.name || '').trim().slice(0, 60)
@@ -45,8 +46,11 @@ export function addReview(ownerPhone: string, input: { name?: string; text?: str
   const db = load()
   // ضدِ اسپامِ ساده: یک نظر با همان نام و متن تکراری نباشد
   if (db.reviews.some(r => r.ownerPhone === phone && r.name === name && r.text === text)) return { ok: false, error: 'این نظر قبلاً ثبت شده است' }
+  // فاز ۲۹۲ — از هر کاربر برای هر کسب‌وکار فقط یک نظرِ «در انتظارِ تایید» (ضدِ سیل‌کردنِ صفِ ادمین).
+  const by = String(input.byPhone || '').trim() || undefined
+  if (by && db.reviews.some(r => r.ownerPhone === phone && r.byPhone === by && !r.approved)) return { ok: false, error: 'نظرِ قبلیِ شما هنوز در انتظارِ تایید است' }
   // پیش‌فرض: در انتظارِ ممیزی (approved=false) تا هوش مصنوعی/مالک تأیید کند.
-  const review: Review = { id: 'rv_' + randomBytes(5).toString('hex'), ownerPhone: phone, name, text, rating: clampRating(input.rating), createdAt: Date.now(), approved: false }
+  const review: Review = { id: 'rv_' + randomBytes(5).toString('hex'), ownerPhone: phone, name, text, rating: clampRating(input.rating), createdAt: Date.now(), approved: false, byPhone: by }
   db.reviews.unshift(review); save(db)
   return { ok: true, review }
 }

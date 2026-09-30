@@ -37,6 +37,7 @@ export default function ProviderReviews({ ptype, pslug, reviews }: { ptype: stri
         body: JSON.stringify({ ptype, pslug, name, text, rating }),
       })
       const j = await r.json().catch(() => ({}))
+      if (r.status === 401) { window.location.href = '/auth' ; return }   // فاز ۲۹۲ب — ورود اجباری (ضدِ اسپم)
       if (r.ok && j.ok) { setMsg({ ok: true, text: j.message || 'نظرِ شما ثبت شد و پس از تاییدِ مدیر نمایش داده می‌شود.' }); setName(''); setText(''); setRating(5); setOpen(false) }
       else setMsg({ ok: false, text: j.error || 'ثبتِ نظر ناموفق بود — دوباره تلاش کنید' })
     } catch { setMsg({ ok: false, text: 'خطای شبکه — دوباره تلاش کنید' }) }
@@ -67,7 +68,7 @@ export default function ProviderReviews({ ptype, pslug, reviews }: { ptype: stri
           <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} placeholder="تجربهٔ خود از همکاری با این متخصص را بنویسید…" value={text} onChange={e => setText(e.target.value)} maxLength={600} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <button disabled={busy} onClick={submit} style={{ padding: '10px 26px', borderRadius: 11, fontSize: 13.5, fontWeight: 800, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', border: 'none', background: 'var(--gold)', color: '#1a1508', opacity: busy ? 0.6 : 1 }}>{busy ? 'در حال ثبت…' : 'ثبتِ نظر'}</button>
-            <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>نظر پس از تاییدِ مدیر نمایش داده می‌شود.</span>
+            <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>برای ثبتِ نظر باید وارد باشید؛ نظر پس از تاییدِ مدیر نمایش داده می‌شود.</span>
           </div>
         </div>
       )}

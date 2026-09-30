@@ -23,7 +23,7 @@ export async function GET() {
   const pending = [
     ...pendingReviews().slice(0, 100).map(r => ({
       id: r.id, source: 'pro' as const, ownerPhone: r.ownerPhone, ownerName: ownerLabel(r.ownerPhone),
-      name: r.name, text: r.text, rating: r.rating, createdAt: r.createdAt, aiHint: r.reason || '',
+      name: r.name, text: r.text, rating: r.rating, createdAt: r.createdAt, aiHint: r.reason || '', byPhone: r.byPhone || '',
     })),
     // فاز ۲۹۲ — نظراتِ سازنده‌ها (پرشین‌سازه) هم از همین صف تایید می‌شوند.
     ...await Promise.all(pendingBuilderReviews().slice(0, 100).map(async pr => {
@@ -31,7 +31,7 @@ export async function GET() {
       try { const { getProfile: bProf } = await import('@/app/lib/persiansaze-store'); bName = bProf(pr.builderId)?.name || 'سازنده' } catch {}
       return {
         id: pr.review.id, source: 'builder' as const, ownerPhone: pr.builderId, ownerName: bName + (pr.review.projectName ? ` — پروژهٔ ${pr.review.projectName}` : ''),
-        name: pr.review.name, text: pr.review.text, rating: pr.review.rating, createdAt: pr.review.at, aiHint: '',
+        name: pr.review.name, text: pr.review.text, rating: pr.review.rating, createdAt: pr.review.at, aiHint: '', byPhone: pr.review.phone || '',
       }
     })),
   ].sort((a, b) => b.createdAt - a.createdAt)

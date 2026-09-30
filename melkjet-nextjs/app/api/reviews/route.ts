@@ -23,8 +23,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ reviews: listReviews(s.phone, { all: true }) }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
 
-// ثبتِ نظر توسطِ بازدیدکننده (عمومی) — با slugِ سایت، یا (فاز ۲۹۲) با متخصصِ دایرکتوری.
+// ثبتِ نظر — با slugِ سایت، یا (فاز ۲۹۲) با متخصصِ دایرکتوری.
+// فاز ۲۹۲ب — «همه‌جا» نیازمندِ ورود (خواستِ صریح: ضدِ اسپم)؛ شمارهٔ ثبت‌کننده هم ذخیره می‌شود.
 export async function POST(req: NextRequest) {
+  const sess = await getSession()
+  if (!sess) return NextResponse.json({ error: 'برای ثبتِ نظر ابتدا وارد شوید' }, { status: 401 })
   const b = await req.json().catch(() => ({} as any))
   // فاز ۲۹۲ — نظر روی صفحهٔ متخصصِ دایرکتوری (/{type}/{slug}): شمارهٔ مالک سمتِ سرور
   // از slug حل می‌شود (لو نمی‌رود) و انتشار فقط با تاییدِ ادمین است؛ AI صرفاً پیشنهاد می‌دهد.
@@ -42,7 +45,7 @@ export async function POST(req: NextRequest) {
       if (!p) return NextResponse.json({ error: 'متخصص یافت نشد' }, { status: 404 })
       owner292 = p.phone
     }
-    const r = addReview(owner292, { name: b.name, text: b.text, rating: b.rating })
+    const r = addReview(owner292, { name: b.name, text: b.text, rating: b.rating, byPhone: sess.phone })
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
     try {
       const v = await moderateReview(r.review!.name, r.review!.text)
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest) {
   }
   const owner = await ownerOfSlug(b.slug)
   if (!owner) return NextResponse.json({ error: 'سایت یافت نشد' }, { status: 404 })
-  const r = addReview(owner, { name: b.name, text: b.text, rating: b.rating })
+  const r = addReview(owner, { name: b.name, text: b.text, rating: b.rating, byPhone: sess.phone })
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
   // ممیزیِ هوش مصنوعی: تأیید/رد. در صورتِ نبودِ مدل → در انتظارِ تأییدِ دستیِ مالک می‌ماند.
   let published = false

@@ -1915,7 +1915,7 @@ interface PSState {
 }
 
 // ─── نظراتِ متخصصان و تیکِ آبی — فاز ۲۹۲ ─────────────────────────────────────
-interface DirPendingReview { id: string; source?: string; ownerPhone: string; ownerName: string; name: string; text: string; rating: number; createdAt: number; aiHint: string }
+interface DirPendingReview { id: string; source?: string; ownerPhone: string; ownerName: string; name: string; text: string; rating: number; createdAt: number; aiHint: string; byPhone?: string }
 function DirReviewsView() {
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
@@ -1986,6 +1986,7 @@ function DirReviewsView() {
                   <span style={{ color: 'var(--muted)' }}>برای <b style={{ color: 'var(--goldText)' }}>{r.ownerName}</b></span>
                   {r.source === 'builder' && <span style={{ fontSize: 10.5, color: '#e7a14a', background: 'rgba(231,161,74,.1)', border: '1px solid rgba(231,161,74,.35)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>🏗 سازنده</span>}
                   <span style={{ color: 'var(--faint)', fontSize: 11.5 }}>{new Date(r.createdAt).toLocaleDateString('fa-IR')}</span>
+                  {r.byPhone && <span title="شمارهٔ کاربرِ ثبت‌کننده" style={{ color: 'var(--faint)', fontSize: 11, direction: 'ltr' }}>👤 {r.byPhone}</span>}
                   {r.aiHint && <span style={{ fontSize: 11, color: r.aiHint.includes('تایید') ? '#5fd98a' : '#e7a14a', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, padding: '2px 10px' }}>{r.aiHint.slice(0, 80)}</span>}
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.9, marginBottom: 10 }}>{r.text}</div>
