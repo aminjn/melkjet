@@ -159,9 +159,18 @@ async function mutateQueue<R>(fn: (jobs: GradJob[]) => R): Promise<R> {
   return kvMutate<{ jobs?: GradJob[] }, R>(QK, { jobs: [] }, box => { box.jobs = box.jobs || []; return fn(box.jobs) })
 }
 async function anyScrapeRunning(): Promise<boolean> {
-  if (!pgEnabled()) return Object.values(fileLoad().scrapes).some(s => !!s.running)
+  const now = Date.now()
+  if (!pgEnabled()) return Object.values(fileLoad().scrapes).some(s => !!s.running && !isStale(s, now))
   await ensureRosterShards()
-  return (await kvGetPrefixField<boolean>('roster:s:', 'running')).some(r => r.data === true)
+  // فاز ۲۹۱ب — رانِ مرده (running=true از پروسهٔ کشته‌شده) «در جریان» نیست: بدونِ این چک، یک
+  // پرچمِ مرده جارویِ enrich و انتقالِ فایل‌های ساختِ حساب را ابدی متوقف می‌کرد (۳۰ سپتامبر).
+  // پرچم‌خورده‌ها معمولاً ۰-۳ ردیف‌اند؛ فقط برای همان‌ها سندِ کامل خوانده می‌شود.
+  const flagged = (await kvGetPrefixField<boolean>('roster:s:', 'running')).filter(r => r.data === true)
+  for (const r of flagged) {
+    const s = await kvGet<RosterScrape | null>(r.key, null)
+    if (s?.id && !isStale(s, now)) return true
+  }
+  return false
 }
 
 // ── چک‌پوینتِ ازسرگیری: متنِ آگهی‌های اسکرپ‌شده (توکن→{title,desc}) در یک کلیدِ جدا، برای هر اسکرپ ──

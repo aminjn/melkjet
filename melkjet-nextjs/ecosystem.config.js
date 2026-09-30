@@ -75,6 +75,9 @@ function instance(port, idx) {
     max_restarts: 15,
     restart_delay: 2000,
     merge_logs: true,
+    // ۳۰ سپتامبر — بدونِ تاریخ روی خط‌های لاگ، «این خطا مالِ الان است یا دیروز؟» جواب ندارد
+    // و عیب‌یابیِ خاموشی‌ها کور پیش می‌رود. (اعمال فقط با pm2 startOrRestart، نه reload.)
+    log_date_format: 'YYYY-MM-DD HH:mm:ss',
   }
 }
 
