@@ -63,3 +63,17 @@ export function setReviewApproved(ownerPhone: string, id: string, approved: bool
 export function deleteReview(ownerPhone: string, id: string) {
   const db = load(); db.reviews = db.reviews.filter(r => !(r.id === id && r.ownerPhone === ownerPhone)); save(db)
 }
+
+// ── فاز ۲۹۲ — نظراتِ دایرکتوری با تاییدِ ادمین ──────────────────────────────
+// نظراتِ صفحاتِ متخصصانِ دایرکتوری (مشاور/آژانس/معمار و…) فقط بعد از تاییدِ ادمین
+// نمایش داده می‌شوند؛ ادمین بدونِ قیدِ مالک روی هر نظری تصمیم می‌گیرد.
+export function pendingReviews(): Review[] { return load().reviews.filter(r => !r.approved).sort((a, b) => b.createdAt - a.createdAt) }
+export function adminSetApproved(id: string, approved: boolean): boolean {
+  const db = load(); const r = db.reviews.find(x => x.id === id); if (!r) return false
+  r.approved = approved; r.moderated = true; save(db); return true
+}
+export function adminDeleteReview(id: string): boolean {
+  const db = load(); const n = db.reviews.length
+  db.reviews = db.reviews.filter(r => r.id !== id); save(db)
+  return db.reviews.length < n
+}

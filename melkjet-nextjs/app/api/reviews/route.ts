@@ -23,9 +23,23 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ reviews: listReviews(s.phone, { all: true }) }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
 
-// ثبتِ نظر توسطِ بازدیدکننده (عمومی) — با slugِ سایت.
+// ثبتِ نظر توسطِ بازدیدکننده (عمومی) — با slugِ سایت، یا (فاز ۲۹۲) با متخصصِ دایرکتوری.
 export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
+  // فاز ۲۹۲ — نظر روی صفحهٔ متخصصِ دایرکتوری (/{type}/{slug}): شمارهٔ مالک سمتِ سرور
+  // از slug حل می‌شود (لو نمی‌رود) و انتشار فقط با تاییدِ ادمین است؛ AI صرفاً پیشنهاد می‌دهد.
+  if (b.ptype && b.pslug) {
+    const { resolveProvider } = await import('@/app/lib/provider-public')
+    const p = await resolveProvider(String(b.ptype), String(b.pslug)).catch(() => null)
+    if (!p) return NextResponse.json({ error: 'متخصص یافت نشد' }, { status: 404 })
+    const r = addReview(p.phone, { name: b.name, text: b.text, rating: b.rating })
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
+    try {
+      const v = await moderateReview(r.review!.name, r.review!.text)
+      applyReviewModeration(r.review!.id, false, `پیشنهادِ AI: ${v.verdict === 'approve' ? 'تایید' : 'رد'} — ${v.reason}`)
+    } catch { /* بدونِ AI هم در صفِ ادمین می‌ماند */ }
+    return NextResponse.json({ ok: true, published: false, message: 'نظرِ شما ثبت شد و پس از تاییدِ مدیر نمایش داده می‌شود. سپاسگزاریم!' })
+  }
   const owner = await ownerOfSlug(b.slug)
   if (!owner) return NextResponse.json({ error: 'سایت یافت نشد' }, { status: 404 })
   const r = addReview(owner, { name: b.name, text: b.text, rating: b.rating })

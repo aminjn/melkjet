@@ -176,6 +176,7 @@ export async function GET(req: NextRequest) {
       title: name, location: city, image: photo, excerpt: tagline,
       tags: specialties.slice(0, 4), hasPhone, url: `/profile/${encodeURIComponent(a.phone)}`,
       badges,
+      verified: !!p.verified,   // فاز ۲۹۲ — تیکِ آبیِ ملک‌جت (پولی، از پنلِ ادمین)
       stats: { reviews: rv.n, rating: avgRating, deals: agg.sold, listings: agg.count, memberYears, memberSince: a.createdAt || 0 },
       // شماره از /api/listing-reveal با kind=advisor — برای هر اکانت (مشاور یا غیرِ آن) خودِ
       // شمارهٔ اکانت را برمی‌گرداند (اگر پروفایلِ مشاور نباشد). شناسه = تلفنِ اکانت.

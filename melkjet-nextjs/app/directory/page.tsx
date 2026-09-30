@@ -51,6 +51,8 @@ function toProfessional(it: ContentItem) {
     image: it.image,
     stats,
     registered: !!(it as any).registered,
+    verified: !!(it as any).verified,   // فاز ۲۹۲ — تیکِ آبی
+    memberSince: Number((it as any).stats?.memberSince) || Number(it.scrapedAt) || 0,
     revealKind: (it as any).revealKind as ('item' | 'advisor' | 'builder' | undefined),
     revealId: (it as any).revealId as (string | undefined),
   }
@@ -70,6 +72,7 @@ export default function DirectoryPage() {
     return () => clearTimeout(t)
   }, [searchQuery, activeCategory, serviceTag])
   const [promoted, setPromoted] = useState<ContentItem[]>([])
+  const [sortBy, setSortBy] = useState<'top' | 'reviews' | 'newest'>('top')   // فاز ۲۹۲
   const [loading, setLoading] = useState(true)
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [extraCats, setExtraCats] = useState<string[]>([])
@@ -137,12 +140,18 @@ export default function DirectoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, promoted])
 
-  // مرتب‌سازی طبقِ اعلامِ صفحه: اول پروموت‌شده‌ها، بعد بالاترین امتیازِ واقعی، بعد پرنظرترین‌ها
+  // فاز ۲۹۲ — مرتب‌سازیِ قابلِ انتخاب. پروموت‌شده‌ها همیشه اول (تعهدِ فروش)؛ بعد معیارِ کاربر:
+  // برترین‌ها = امتیازِ واقعی و بعد پرنظرترین‌ها؛ پرنظرترین‌ها = تعدادِ نظرِ تاییدشده؛ جدیدترین‌ها = تاریخِ عضویت.
+  const cmp: Record<string, (x: Professional, y: Professional) => number> = {
+    top: (x, y) => ((y.rating || 0) - (x.rating || 0)) || ((y.stats.reviews || 0) - (x.stats.reviews || 0)),
+    reviews: (x, y) => ((y.stats.reviews || 0) - (x.stats.reviews || 0)) || ((y.rating || 0) - (x.rating || 0)),
+    newest: (x, y) => (y.memberSince || 0) - (x.memberSince || 0),
+  }
   const filteredProfessionals = all
     .filter((p) => !searchQuery || p.name.includes(searchQuery) || (p.area || '').includes(searchQuery))
     .filter((p) => !serviceTag || p.tags.some(t => String(t).trim() === serviceTag))
     .filter((p) => !city || (p.area || '').split(/[،,]/)[0].trim() === city)
-    .sort((x, y) => (Number(y.promoted) - Number(x.promoted)) || ((y.rating || 0) - (x.rating || 0)) || ((y.stats.reviews || 0) - (x.stats.reviews || 0)))
+    .sort((x, y) => (Number(y.promoted) - Number(x.promoted)) || (cmp[sortBy] || cmp.top)(x, y))
 
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit' }}>
@@ -200,8 +209,16 @@ export default function DirectoryPage() {
             <h2 style={{ fontSize: '1.08rem', fontWeight: 800, color: 'var(--text)', margin: 0 }}>
               {loading ? 'در حال بارگذاری…' : <><span style={{ color: 'var(--goldText)' }}>{fa(filteredProfessionals.length)}</span> {catLabelOf(activeCategory)} فعال</>}
             </h2>
-            <span style={{ fontSize: '.8rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 7, color: 'var(--gold)' }}>●</span> مرتب: پروموت‌شده و بالاترین امتیاز
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {([['top', '⭐ برترین‌ها'], ['reviews', '💬 پرنظرترین‌ها'], ['newest', '🆕 جدیدترین‌ها']] as ['top' | 'reviews' | 'newest', string][]).map(([id, label]) => {
+                const active = sortBy === id
+                return (
+                  <button key={id} onClick={() => setSortBy(id)}
+                    style={{ padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: active ? 800 : 500, cursor: 'pointer', fontFamily: 'inherit', border: active ? '1px solid var(--gold)' : '1px solid var(--line2)', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--goldText)' : 'var(--muted)', transition: 'all .15s' }}>
+                    {label}
+                  </button>
+                )
+              })}
             </span>
           </div>
 
@@ -310,7 +327,8 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
         }}>{!pro.image && pro.initials}</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <span style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</span>
-          {pro.badges?.some(b => b.id === 'verified') && <span title="پروفایلِ کامل و تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', fontSize: 10, fontWeight: 800 }}>✓</span>}
+          {pro.verified && <span title="تاییدشدهٔ ملک‌جت" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: '#2f81f7', color: '#fff', fontSize: 10.5, fontWeight: 900 }}>✓</span>}
+          {!pro.verified && pro.badges?.some(b => b.id === 'verified') && <span title="پروفایلِ کامل و تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', fontSize: 10, fontWeight: 800 }}>✓</span>}
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
           <span style={{ color: 'var(--goldText)', fontWeight: 700 }}>{pro.role}</span>

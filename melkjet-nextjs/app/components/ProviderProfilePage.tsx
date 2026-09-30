@@ -11,6 +11,8 @@ import { resolveProvider, typeLabel } from '@/app/lib/provider-public'
 import { gradientFor, initialsFor } from '@/app/lib/content-display'
 import ProjectsMap from '@/app/components/ProjectsMap'
 import ArchProjects from '@/app/components/ArchProjects'
+import ProviderReviews from '@/app/components/ProviderReviews'
+import { listReviews } from '@/app/lib/reviews-store'
 
 // Only these provider types have a ProDesk inbox that can receive an inquiry.
 const PRO_INQUIRY_TYPES = ['architect', 'contractor', 'appraiser', 'lawfirm', 'finance', 'notary', 'legal']
@@ -47,12 +49,19 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
     .filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lng))
   const faN = (n?: number) => (n ?? 0).toLocaleString('fa-IR')
 
+  // فاز ۲۹۲ — نظراتِ تاییدشده (تاییدِ ادمین) سمتِ سرور رندر می‌شوند (سئو) + فرمِ ثبتِ کلاینتی.
+  const approved292 = (p.phone ? listReviews(p.phone) : []).slice(0, 30)
+    .map(r => ({ name: r.name, text: r.text, rating: Math.max(0, Math.min(5, Number(r.rating) || 0)), createdAt: r.createdAt }))
+  const rated292 = approved292.filter(r => r.rating >= 1)
+  const avg292 = rated292.length ? Math.round(rated292.reduce((s, r) => s + r.rating, 0) / rated292.length * 10) / 10 : 0
+
   // فاز ۲۵۴ (سئو L4): فیلدهای خالی از JSON-LD حذف می‌شوند (description=""" اسکیمای نامعتبر می‌ساخت).
   const bio = (p.bio || '').replace(/<[^>]+>/g, '').trim().slice(0, 300)
   const ld: Record<string, unknown> = {
     '@context': 'https://schema.org', '@type': type === 'agency' ? 'RealEstateAgent' : 'LocalBusiness',
     name: p.name, image: p.photo || undefined, description: bio || undefined,
     areaServed: p.city || undefined, url: `https://melkjet.com/${p.type}/${p.slug}`,
+    aggregateRating: rated292.length ? { '@type': 'AggregateRating', ratingValue: avg292, reviewCount: rated292.length, bestRating: 5, worstRating: 1 } : undefined,
   }
   Object.keys(ld).forEach(k => ld[k] === undefined && delete ld[k])
   const crumbLd = {
@@ -88,7 +97,10 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
             ? <img src={p.photo} alt={p.name} style={{ width: 88, height: 88, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--gold)', flexShrink: 0 }} />
             : <div style={{ width: 88, height: 88, borderRadius: '50%', background: gradientFor(p.name, 'avatar'), border: '2px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 800, flexShrink: 0 }}>{initialsFor(p.name)}</div>}
           <div style={{ flex: 1, minWidth: 200 }}>
-            <h1 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 900, margin: '0 0 6px' }}>{p.name}</h1>
+            <h1 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 900, margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {p.name}
+              {p.verified && <span title="تاییدشدهٔ ملک‌جت" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#2f81f7', color: '#fff', fontSize: 12, fontWeight: 900, flexShrink: 0 }}>✓</span>}
+            </h1>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13, color: 'var(--muted)' }}>
               <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{p.typeLabel}</span>
               {p.city && <><span style={{ color: 'var(--faint)' }}>·</span><span>{p.city}</span></>}
@@ -197,6 +209,9 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
             )}
           </>
         )}
+
+        {/* فاز ۲۹۲ — نظراتِ کاربران: نمایشِ تاییدشده‌ها + فرمِ ثبت (انتشار با تاییدِ ادمین) */}
+        {p.phone && <ProviderReviews ptype={p.type} pslug={p.slug} reviews={approved292} />}
 
         {p.listings.length > 0 && (
           <div>

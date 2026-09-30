@@ -22,7 +22,7 @@ type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'tarh2tarh' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
-  | 'reos' | 'suspension' | 'site' | 'staffCrm'
+  | 'reos' | 'suspension' | 'site' | 'staffCrm' | 'dirReviews'
   | 'empire' | 'empirePlayers' | 'empireEconomy' | 'empireCapital' | 'empireMissions' | 'empireEngage' | 'empireWorld' | 'empireLiveops' | 'empireAccess' | 'empireMetrics' | 'empireAi' | 'empireRewards'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string; accent?: boolean }
@@ -83,6 +83,7 @@ const sections: NavSection[] = [
     items: [
       { id: 'users',       icon: '◍',  label: 'کاربران' },
       { id: 'profiles',    icon: '👁', label: 'پروفایل‌ها' },
+      { id: 'dirReviews',  icon: '💬', label: 'نظرات و تیک آبی' },
       { id: 'staffCrm',    icon: '📞', label: 'CRM مرکزی (مشتریان)', accent: true },
       { id: 'crm',         icon: '👁',  label: 'نظارت بر CRM کاربران' },
       { id: 'roles',       icon: '🛡', label: 'نقش‌ها و دسترسی' },
@@ -130,6 +131,7 @@ const viewTitles: Record<View, string> = {
   catalog:    'کاتالوگِ مرجعِ مصالح',
   persiansaze: 'سازنده‌ها (پرشین سازه)',
   tarh2tarh: 'معماران (طرح‌۲طرح)',
+  dirReviews: 'نظراتِ متخصصان و تیکِ آبی',
   listings:   'مدیریت آگهی‌ها و محتوا',
   products:   'مدیریت محصولات فروشگاه',
   categories: 'دسته‌بندی‌ها',
@@ -1910,6 +1912,93 @@ interface PSState {
   profiles: { builders: number; withPhone: number; projects: number; revealedProjects?: number; pendingProjects?: number; quotaAvailable?: number | null; lastRevealAt?: string; accounts?: number }
   log: string
   revealLog: string
+}
+
+// ─── نظراتِ متخصصان و تیکِ آبی — فاز ۲۹۲ ─────────────────────────────────────
+interface DirPendingReview { id: string; ownerPhone: string; ownerName: string; name: string; text: string; rating: number; createdAt: number; aiHint: string }
+function DirReviewsView() {
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const [pending, setPending] = useState<DirPendingReview[]>([])
+  const [approvedCount, setApprovedCount] = useState(0)
+  const [verified, setVerified] = useState<{ phone: string; name: string }[]>([])
+  const [tickPhone, setTickPhone] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState('')
+  const load = async () => {
+    try { const r = await fetch('/api/admin/reviews'); if (r.ok) { const j = await r.json(); setPending(j.pending || []); setApprovedCount(j.approvedCount || 0); setVerified(j.verified || []) } } catch {}
+  }
+  useEffect(() => { load() }, [])
+  const act = async (action: string, extra: Record<string, unknown> = {}) => {
+    setBusy(action + (extra.id || extra.phone || '')); setMsg('')
+    try {
+      const r = await fetch('/api/admin/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...extra }) })
+      const j = await r.json()
+      if (j.error) setMsg(`✗ ${j.error}`)
+      else setMsg(action === 'verify' ? (extra.on ? `✓ تیکِ آبی برای ${j.name || extra.phone} فعال شد` : `✓ تیکِ آبی برداشته شد`) : '✓ انجام شد')
+      await load()
+    } catch { setMsg('✗ خطای شبکه') } finally { setBusy('') }
+  }
+  const stars = (n: number) => <span style={{ color: 'var(--gold)', whiteSpace: 'nowrap' }}>{'★'.repeat(Math.max(1, Math.min(5, Math.round(n))))}<span style={{ color: 'var(--line2)' }}>{'★'.repeat(5 - Math.max(1, Math.min(5, Math.round(n))))}</span></span>
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(47,129,247,.08), transparent 60%), var(--surface)', borderColor: 'rgba(47,129,247,.35)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 24 }}>💬</span>
+          <div><div style={{ fontWeight: 900, fontSize: 17 }}>نظراتِ متخصصان و تیکِ آبی</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.8 }}>نظراتی که کاربران روی صفحاتِ دایرکتوری (مشاور/آژانس/معمار و…) ثبت می‌کنند فقط بعد از تاییدِ شما نمایش داده می‌شوند و در امتیاز/مرتب‌سازیِ دایرکتوری اثر می‌گذارند. تیکِ آبی نشانِ پولیِ تاییدِ ملک‌جت است — بعد از دریافتِ وجه، اینجا برای شمارهٔ حساب فعالش کن.</div></div>
+        </div>
+      </Card>
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>🔵 تیکِ آبی (نشانِ پولی)</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <input style={{ ...inp, direction: 'ltr', width: 180 }} placeholder="۰۹… شمارهٔ حساب" value={tickPhone} onChange={e => setTickPhone(e.target.value)} />
+          <button disabled={!!busy} onClick={() => { act('verify', { phone: tickPhone, on: true }); setTickPhone('') }} style={{ padding: '9px 20px', borderRadius: 10, border: 'none', background: '#2f81f7', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>فعال‌سازی تیک</button>
+        </div>
+        {verified.length > 0 ? (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {verified.map(v => (
+              <span key={v.phone} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '7px 12px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: '#2f81f7', color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>
+                <b>{v.name}</b><span style={{ color: 'var(--faint)', direction: 'ltr' }}>{v.phone}</span>
+                <button disabled={!!busy} onClick={() => act('verify', { phone: v.phone, on: false })} title="برداشتنِ تیک" style={{ background: 'none', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 13, fontWeight: 800 }}>✕</button>
+              </span>
+            ))}
+          </div>
+        ) : <div style={{ fontSize: 12.5, color: 'var(--faint)' }}>هنوز هیچ حسابی تیکِ آبی ندارد.</div>}
+      </Card>
+
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>در انتظارِ تایید {pending.length > 0 && <span style={{ fontSize: 12, color: '#e7a14a', fontWeight: 800 }}>({fa(pending.length)})</span>}</div>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(approvedCount)} نظرِ تاییدشده روی سایت</span>
+        </div>
+        {msg && <div style={{ marginBottom: 10, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
+        {pending.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--faint)', padding: '18px 0', textAlign: 'center' }}>صفِ تایید خالی است ✓</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 10 }}>
+            {pending.map(r => (
+              <div key={r.id} style={{ background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 12, padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6, fontSize: 12.5 }}>
+                  <b>{r.name}</b>
+                  {stars(r.rating)}
+                  <span style={{ color: 'var(--muted)' }}>برای <b style={{ color: 'var(--goldText)' }}>{r.ownerName}</b></span>
+                  <span style={{ color: 'var(--faint)', fontSize: 11.5 }}>{new Date(r.createdAt).toLocaleDateString('fa-IR')}</span>
+                  {r.aiHint && <span style={{ fontSize: 11, color: r.aiHint.includes('تایید') ? '#5fd98a' : '#e7a14a', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, padding: '2px 10px' }}>{r.aiHint.slice(0, 80)}</span>}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.9, marginBottom: 10 }}>{r.text}</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button disabled={!!busy} onClick={() => act('approve', { id: r.id })} style={{ padding: '7px 20px', borderRadius: 9, border: 'none', background: 'rgba(95,217,138,.15)', color: '#5fd98a', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', outline: '1px solid rgba(95,217,138,.4)' }}>✓ تایید و انتشار</button>
+                  <button disabled={!!busy} onClick={() => act('reject', { id: r.id })} style={{ padding: '7px 20px', borderRadius: 9, border: 'none', background: 'rgba(231,103,74,.12)', color: '#e7674a', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', outline: '1px solid rgba(231,103,74,.35)' }}>✕ رد و حذف</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  )
 }
 
 // ─── معماران (طرح‌۲طرح) — فاز ۲۸۸: اسکرپِ بانکِ معمارانِ tarh2tarh ─────────────
@@ -7457,6 +7546,7 @@ export default function SuperAdminPage() {
       case 'scraper':    return <ScraperView />
       case 'persiansaze': return <PersianSazeView />
       case 'tarh2tarh': return <Tarh2tarhView />
+      case 'dirReviews': return <DirReviewsView />
       case 'support':    return <AdminSupportView />
       case 'listings':   return <ListingsView />
       case 'products':   return <ProductsView />

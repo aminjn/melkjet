@@ -34,6 +34,10 @@ export interface BusinessProfile {
   areas: string[]                       // مناطقِ فعالیت
   social: { instagram?: string; telegram?: string; whatsapp?: string; eitaa?: string; linkedin?: string }
   updatedAt: number
+  // فاز ۲۹۲ — تیکِ آبی (نشانِ پولیِ تاییدِ ملک‌جت). فقط ادمین با setVerified می‌دهد/می‌گیرد؛
+  // saveProfile عمداً به آن دست نمی‌زند (با ...cur حفظ می‌شود) تا کاربر نتواند به خودش تیک بدهد.
+  verified?: boolean
+  verifiedAt?: number
 }
 
 type DB = Record<string, BusinessProfile>
@@ -93,6 +97,19 @@ export function saveProfile(phone: string, patch: Partial<BusinessProfile>): Bus
   }
   db[phone] = p; save(db)
   return p
+}
+
+// فاز ۲۹۲ — تیکِ آبی: فقط از پنلِ ادمین (پرداختِ دستی تایید و اینجا ثبت می‌شود).
+export function setVerified(phone: string, on: boolean): void {
+  const db = load()
+  const cur = { ...emptyProfile(), ...(db[phone] || {}) }
+  cur.verified = !!on
+  cur.verifiedAt = on ? Date.now() : 0
+  db[phone] = cur; save(db)
+}
+export function listVerifiedPhones(): string[] {
+  const db = load()
+  return Object.keys(db).filter(ph => db[ph]?.verified)
 }
 
 // درصدِ تکمیلِ پروفایل (برای نوارِ پیشرفت)
