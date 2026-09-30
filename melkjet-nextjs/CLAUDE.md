@@ -422,6 +422,11 @@ was rejected by the user (consent-per-ad model + they say it's down) → **direc
   بی‌محافظ (heartbeat/import/درینِ صف) ادامهٔ تیک را هر ۴۵ ثانیه بی‌صدا می‌کُشت و آژانس‌ها
   ابدی «در صف» می‌ماندند بدونِ هیچ لاگی. حالا catchِ سراسریِ تیک + catchِ راه‌اندازِ رُستر
   خطا را با `[cron] queueTick failed:` / `[cron] roster launcher failed:` فریاد می‌زنند.
+- **ریشهٔ اصلیِ «کلا گیر کرده»:** ensureCronStarted فقط از ۳ مسیرِ API صدا زده می‌شد و nginx به
+  پورتِ ۳۰۰۰ ترافیک نمی‌دهد — بعد از هر ری‌استارتِ اینستنسِ ۰، کرون تا رسیدنِ یک درخواستِ
+  شانسی خاموش می‌ماند. حالا instrumentation.register در بوت روشنش می‌کند و «scheduler armed»
+  در لاگ می‌آید. anyScrapeRunning هم رانِ مرده (stale) را دیگر «در جریان» حساب نمی‌کند.
+  لاگ‌های pm2 تاریخ دارند (log_date_format — اعمال فقط با pm2 startOrRestart).
 
 ### فاز ۲۸۸ — معماران (طرح‌۲طرح)
 دستهٔ «معماران و طراحان» دایرکتوری از بانکِ ۱۴هزارتاییِ tarh2tarh.com پر می‌شود. سایتِ مبدأ
