@@ -157,6 +157,8 @@ export function ensureCronStarted() {
   const g = globalThis.__mjCron!
   if (g.started) return
   g.started = true
+  // قانونِ شمارهٔ یک: روشن‌شدنِ زمان‌بند باید در لاگ رد بگذارد — «کرونِ خاموش» ماه‌ها نامرئی بود.
+  console.log(`[cron] scheduler armed (instance=${inst ?? 'dev'}, queueTick=${QUEUE_TICK_MS / 1000}s, tick=${TICK_MS / 60000}m)`)
   setTimeout(() => { warmUp().catch(() => {}) }, 8_000)         // یک‌بار گرم‌کردنِ سبک پس از بوت
   setTimeout(() => { tick().catch(() => {}) }, 30_000)          // کمی بعد از بوت
   setInterval(() => { tick().catch(() => {}) }, TICK_MS)

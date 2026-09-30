@@ -5,6 +5,12 @@
 // خواندن:  sudo grep -a '\[mem\]' /root/.pm2/logs/melkjet-300*-out.log | tail -40
 export async function register() {
   if (process.env.NEXT_RUNTIME && process.env.NEXT_RUNTIME !== 'nodejs') return
+  // فاز ۲۹۱ب — کرون در «بوت» روشن می‌شود، نه با شانس. ensureCronStarted فقط از ۳ مسیرِ API صدا
+  // زده می‌شد؛ nginx به پورتِ ۳۰۰۰ (اینستنسِ کرون) ترافیک نمی‌دهد، پس بعد از هر ری‌استارت
+  // (سقفِ حافظه/دیپلوی/شبانه) کرون خاموش می‌ماند تا یک درخواستِ اتفاقی برسد — ریشهٔ
+  // «آژانس‌ها ابدی در صف‌اند و هیچ لاگی نیست» (۳۰ سپتامبر). خودِ تابع به اینستنسِ ۰ گِیت دارد.
+  try { const { ensureCronStarted } = await import('./app/lib/cron-runner'); ensureCronStarted() }
+  catch (e) { console.error(`[cron] boot-start failed: ${String((e as Error)?.message || e).slice(0, 200)}`) }
   const mb = (n: number) => Math.round(n / 1048576)
   const t = setInterval(() => {
     try {
