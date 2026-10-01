@@ -103,12 +103,15 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
-// Make a url-safe slug: lowercase, keep a-z0-9 and dash only.
+// Make a url-safe slug: lowercase, keep a-z0-9, Persian letters and dash.
+// فاز ۲۹۶ — حروفِ فارسی مجازند: اسلاگِ سایتِ خودکار باید «نامِ خودِ شخص» باشد
+// (melkjet.com/علی-رضایی) تا جست‌وجوی نامِ او در گوگل به همین صفحه برسد.
 export function sanitizeSlug(raw: string): string {
   return String(raw || '')
     .toLowerCase()
+    .replace(/[‌‏‎]/g, '-')   // نیم‌فاصله/نشانه‌های جهت → خط‌تیره
     .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
+    .replace(/[^a-z0-9؀-ۿ-]/g, '')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
 }

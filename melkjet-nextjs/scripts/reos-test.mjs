@@ -3294,5 +3294,20 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('برچسبِ خارج از ناحیهٔ امضا (۶ خطِ آخر) نادیده می‌ماند', labeledName('کارشناس: قاسمی\n۱\n۲\n۳\n۴\n۵\n۶\n۷') === null)
 }
 
+// ── فاز ۲۹۶ — سایت‌سازِ خودکار: اسلاگِ فارسی + بدنهٔ سایت از دادهٔ واقعی ──
+{
+  const { sanitizeSlug } = await import('../app/lib/sites-store.ts')
+  const { buildAutoSitePayload } = await import('../app/lib/auto-site.ts')
+  ok('اسلاگِ فارسی: «علی رضایی» → علی-رضایی', sanitizeSlug('علی رضایی') === 'علی-رضایی')
+  ok('اسلاگِ قدیمیِ لاتین مثلِ قبل کار می‌کند', sanitizeSlug('My Site! 22') === 'my-site-22')
+  const pay296 = buildAutoSitePayload({ phone: '09120000296', name: 'علی رضایی', roleType: 'pros', city: 'تهران', tagline: '', about: 'بیش از ده سال تجربهٔ مشاورهٔ املاک در غرب تهران و همراهیِ صدها معامله.', logo: '', specialties: ['آپارتمان', 'ویلایی'], contactPhone: '', address: '' })
+  const types296 = pay296.pages[0].blocks.map(b => b.type)
+  ok('سایتِ مشاور: hero/about/services/listings/contact/footer', ['hero', 'about', 'services', 'listings', 'contact', 'footer'].every(t => types296.includes(t)))
+  ok('عنوانِ سئو با نامِ شخص شروع می‌شود و شهر دارد', pay296.seo.title.startsWith('علی رضایی') && pay296.seo.title.includes('تهران'))
+  ok('توضیحِ سئو از واقعیت‌ها ساخته شده (تخصص‌ها) و ≤۱۶۰', pay296.seo.description.includes('آپارتمان') && pay296.seo.description.length <= 160)
+  const pay296b = buildAutoSitePayload({ phone: '09120000297', name: 'استودیو معماری نو', roleType: 'architect', specialties: [], about: '', logo: '', contactPhone: '', address: '' })
+  ok('معمار بلوکِ آگهی ندارد (دادهٔ ملکی ندارد)', !pay296b.pages[0].blocks.some(b => b.type === 'listings'))
+}
+
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
 process.exit(fail === 0 ? 0 : 1)

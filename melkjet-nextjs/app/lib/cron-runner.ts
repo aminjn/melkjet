@@ -186,6 +186,7 @@ let moderatingSince = 0
 let rosterRunning = false
 let graduateRunning = false   // فاز ۱۷۶ — صفِ ساختِ حساب، مستقل از سینکِ رُستر
 let enrichSweeping = false    // فاز ۱۹۱ — جارویِ تحلیلِ هوشمند
+let autoSiting = false        // فاز ۲۹۶ — سایت‌سازِ خودکارِ اهالیِ دایرکتوری
 
 async function queueTick(): Promise<void> {
   if (queueRunning) {
@@ -300,6 +301,20 @@ async function queueTick(): Promise<void> {
           const { touchCron } = await import('./cron-heartbeat')
           await touchCron({ enrichPending: missing.length })
         } catch { /* جاروی بعدی در تیکِ بعد */ } finally { enrichSweeping = false }
+      })()
+    }
+    // فاز ۲۹۶ — سایت‌سازِ خودکار: هر تیک چند سایتِ اختصاصی برای حساب‌های نقش‌دارِ بدونِ سایت
+    // + پیامکِ خوش‌آمدِ معوق (سقف‌دار). جارو همیشگی است → حسابِ تازه هم خودکار سایت می‌گیرد.
+    if (!autoSiting) {
+      autoSiting = true
+      ;(async () => {
+        try {
+          const { sweepAutoSites } = await import('./auto-site')
+          const r = await sweepAutoSites()
+          if (r.created || r.sms) console.log(`[autosite] +${r.created} سایت، +${r.sms} پیامک — در صف: ${r.pending}`)
+        } catch (e) {
+          console.error(`[autosite] sweep failed: ${String((e as Error)?.message || e).slice(0, 150)}`)
+        } finally { autoSiting = false }
       })()
     }
     if (!rosterRunning) {

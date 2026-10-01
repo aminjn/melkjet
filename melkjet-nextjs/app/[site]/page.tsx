@@ -28,9 +28,14 @@ export async function generateMetadata(
   const { site: slug } = await params
   const site = await getSite(slug)
   if (!site) return {}
+  // فاز ۲۹۶ (سئو): canonical + openGraph تا صفحهٔ اختصاصیِ شخص در گوگل درست ایندکس شود.
+  const url = `https://melkjet.com/${encodeURIComponent(site.slug)}`
+  const title = site.seo?.title || site.title
+  const description = site.seo?.description || undefined
   return {
-    title: site.seo?.title || site.title,
-    description: site.seo?.description || undefined,
+    title, description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, type: 'website' },
   }
 }
 
@@ -910,5 +915,18 @@ export default async function PublishedSitePage(
   if (!site) notFound()
 
   const home = getSitePage(site, 'home')
-  return <SiteShell site={site} page={home} />
+  // فاز ۲۹۶ (سئو): دادهٔ ساخت‌یافتهٔ کسب‌وکار — نام/آدرسِ صفحه برای جست‌وجوی نامِ شخص.
+  const ld296: Record<string, unknown> = {
+    '@context': 'https://schema.org', '@type': 'RealEstateAgent',
+    name: site.ownerName || site.title,
+    url: `https://melkjet.com/${encodeURIComponent(site.slug)}`,
+    description: site.seo?.description || undefined,
+  }
+  Object.keys(ld296).forEach(k => ld296[k] === undefined && delete ld296[k])
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld296) }} />
+      <SiteShell site={site} page={home} />
+    </>
+  )
 }
