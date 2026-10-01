@@ -18,7 +18,7 @@ const CFG_KV = 'autosite_cfg'
 const META_KV = 'autosite_meta'
 
 export interface AutoSiteCfg { enabled: boolean; sms: boolean }
-interface DoneRec { at: number; slug: string; smsAt?: number; smsTries?: number; manual?: boolean }
+interface DoneRec { at: number; slug: string; smsAt?: number; smsTries?: number; manual?: boolean; lastErr?: string }
 interface Meta { done: Record<string, DoneRec> }
 
 // حالتِ فایل/تست: متای درون‌حافظه‌ای (جارو فقط روی سرورِ PG معنا دارد).
@@ -138,8 +138,13 @@ export async function sweepAutoSites(maxCreate = 8, maxSms = 4): Promise<{ creat
       try {
         const { sendServiceSms } = await import('./sms')
         const r = await sendServiceSms(phone, `سلام ${name} عزیز؛ سایت اختصاصی شما در ملک‌جت آماده شد:\nhttps://melkjet.com/${encodeURIComponent(rec.slug)}\nآگهی‌ها و پروفایل شما در آن به‌روز نمایش داده می‌شود.`, 'سایت‌ساز ملک‌جت', name)
-        if (r.ok) { rec.smsAt = Date.now(); sms++ } else { rec.smsTries = (rec.smsTries || 0) + 1 }
-      } catch { rec.smsTries = (rec.smsTries || 0) + 1 }
+        if (r.ok) { rec.smsAt = Date.now(); rec.lastErr = ''; sms++ }
+        else {
+          rec.smsTries = (rec.smsTries || 0) + 1; rec.lastErr = String(r.error || 'خطا').slice(0, 120)
+          // قانونِ شمارهٔ یک: پیامکِ نرفته باید فریاد بزند، نه اینکه ۳ تلاش بی‌صدا بسوزد.
+          console.error(`[autosite] sms failed phone=${phone} try=${rec.smsTries}: ${rec.lastErr}`)
+        }
+      } catch (e) { rec.smsTries = (rec.smsTries || 0) + 1; rec.lastErr = String((e as Error)?.message || e).slice(0, 120); console.error(`[autosite] sms threw phone=${phone}: ${rec.lastErr}`) }
       dirty = true
     }
   }
@@ -147,4 +152,27 @@ export async function sweepAutoSites(maxCreate = 8, maxSms = 4): Promise<{ creat
   if (dirty) await saveMeta(meta)
   const pending = listAccounts().filter(a => !meta.done[a.phone] && urlTypeForRole(a.role)).length
   return { created, sms, pending }
+}
+
+/** فاز ۲۹۶د — بعد از درست‌شدنِ پیکربندیِ پیامک (پترنِ اتوماسیون)، ناموفق‌ها دوباره در صف می‌آیند. */
+export async function resetFailedSms(): Promise<number> {
+  const meta = await loadMeta()
+  let n = 0
+  for (const rec of Object.values(meta.done)) {
+    if (!rec.manual && !rec.smsAt && (rec.smsTries || 0) > 0) { rec.smsTries = 0; n++ }
+  }
+  if (n) await saveMeta(meta)
+  return n
+}
+
+/** وضعیتِ پیامک‌ها برای پنل: چندتا ناموفقِ قطعی و نمونهٔ آخرین خطا. */
+export async function smsStatus(): Promise<{ failed: number; waiting: number; sampleErr: string }> {
+  const meta = await loadMeta()
+  let failed = 0, waiting = 0, sampleErr = ''
+  for (const rec of Object.values(meta.done)) {
+    if (rec.manual || rec.smsAt) continue
+    if ((rec.smsTries || 0) >= 3) { failed++; if (!sampleErr && rec.lastErr) sampleErr = rec.lastErr }
+    else waiting++
+  }
+  return { failed, waiting, sampleErr }
 }

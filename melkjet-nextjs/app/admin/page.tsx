@@ -1922,7 +1922,8 @@ function UserSitesView() {
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   const [rows, setRows] = useState<UserSiteRow[]>([])
-  const [totals, setTotals] = useState<{ sites: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number; loggedInEver: number; loggedIn7d: number } | null>(null)
+  const [totals, setTotals] = useState<{ sites: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number; loggedInEver: number; loggedIn7d: number; smsFailed: number; smsWaiting: number; smsSampleErr: string } | null>(null)
+  const [smsMsg, setSmsMsg] = useState('')
   const [q, setQ] = useState('')
   const [open, setOpen] = useState('')
   const [loading, setLoading] = useState(true)
@@ -1956,7 +1957,23 @@ function UserSitesView() {
           {tile('جستجو ۷ روز', fa(totals.searches7d))}
           {tile('ورودِ کاربر (کل)', fa(totals.loggedInEver))}
           {tile('ورودِ ۷ روز', fa(totals.loggedIn7d), '#5fd98a')}
+          {tile('پیامکِ ناموفق', fa(totals.smsFailed), totals.smsFailed ? '#e7674a' : undefined)}
         </div>
+      )}
+      {totals && totals.smsFailed > 0 && (
+        <Card style={{ marginBottom: 14, borderColor: 'rgba(231,103,74,.4)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
+            <span style={{ color: '#e7674a', fontWeight: 800 }}>⚠ {fa(totals.smsFailed)} پیامکِ سایت‌ساز نرفته است.</span>
+            {totals.smsSampleErr && <span style={{ color: 'var(--muted)' }}>آخرین خطا: <code style={{ direction: 'ltr', display: 'inline-block' }}>{totals.smsSampleErr}</code></span>}
+            <span style={{ color: 'var(--faint)', fontSize: 12 }}>معمولاً یعنی «کد پترنِ اتوماسیون» در بخشِ «پیامک و الگوها» تنظیم نشده. بعد از تنظیم، این دکمه را بزن:</span>
+            <button disabled={!!smsMsg} onClick={async () => {
+              setSmsMsg('در حال بازنشانی…')
+              try { const r = await fetch('/api/admin/sites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resetSms' }) }); const j = await r.json(); setSmsMsg(j.ok ? `✓ ${fa(j.reset || 0)} پیامک دوباره در صفِ ارسال رفت (هر ۴۵ ثانیه چندتا می‌رود)` : '✗ خطا') } catch { setSmsMsg('✗ خطای شبکه') }
+              await load()
+            }} style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: '#e7a14a', color: '#241d00', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>🔁 تلاشِ دوباره برای همه</button>
+            {smsMsg && <span style={{ fontSize: 12.5, color: smsMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{smsMsg}</span>}
+          </div>
+        </Card>
       )}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>

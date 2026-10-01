@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { resetFailedSms, smsStatus } from '@/app/lib/auto-site'
 import { getSession } from '@/app/lib/session'
 import { listSites } from '@/app/lib/sites-store'
 import { allSiteStats, summarize } from '@/app/lib/site-stats-store'
@@ -54,5 +55,17 @@ export async function GET() {
     loggedInEver: rows.filter(r => r.lastLogin).length,
     loggedIn7d: rows.filter(r => r.lastLogin && Date.now() - r.lastLogin < 7 * 864e5).length,
   }
-  return NextResponse.json({ rows, totals }, { headers: { 'Cache-Control': 'no-store, private' } })
+  // فاز ۲۹۶د — وضعیتِ پیامک‌های سایت‌ساز: ناموفقِ قطعی + نمونهٔ خطا (تا علت در پنل دیده شود).
+  const smsSt = await smsStatus()
+  return NextResponse.json({ rows, totals: { ...totals, smsFailed: smsSt.failed, smsWaiting: smsSt.waiting, smsSampleErr: smsSt.sampleErr } }, { headers: { 'Cache-Control': 'no-store, private' } })
+}
+
+export async function POST(req: NextRequest) {
+  if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  const b = await req.json().catch(() => ({} as any))
+  if (b.action === 'resetSms') {
+    const n = await resetFailedSms()
+    return NextResponse.json({ ok: true, reset: n })
+  }
+  return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
 }
