@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
@@ -22,7 +22,7 @@ type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'tarh2tarh' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
-  | 'reos' | 'suspension' | 'site' | 'staffCrm' | 'dirReviews'
+  | 'reos' | 'suspension' | 'site' | 'staffCrm' | 'dirReviews' | 'userSites'
   | 'empire' | 'empirePlayers' | 'empireEconomy' | 'empireCapital' | 'empireMissions' | 'empireEngage' | 'empireWorld' | 'empireLiveops' | 'empireAccess' | 'empireMetrics' | 'empireAi' | 'empireRewards'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string; accent?: boolean }
@@ -84,6 +84,7 @@ const sections: NavSection[] = [
       { id: 'users',       icon: '◍',  label: 'کاربران' },
       { id: 'profiles',    icon: '👁', label: 'پروفایل‌ها' },
       { id: 'dirReviews',  icon: '💬', label: 'نظرات و تیک آبی' },
+      { id: 'userSites',   icon: '🌐', label: 'سایت‌سازها' },
       { id: 'staffCrm',    icon: '📞', label: 'CRM مرکزی (مشتریان)', accent: true },
       { id: 'crm',         icon: '👁',  label: 'نظارت بر CRM کاربران' },
       { id: 'roles',       icon: '🛡', label: 'نقش‌ها و دسترسی' },
@@ -132,6 +133,7 @@ const viewTitles: Record<View, string> = {
   persiansaze: 'سازنده‌ها (پرشین سازه)',
   tarh2tarh: 'معماران (طرح‌۲طرح)',
   dirReviews: 'نظراتِ متخصصان و تیکِ آبی',
+  userSites: 'سایت‌سازها — سایت‌های اختصاصیِ کاربران',
   listings:   'مدیریت آگهی‌ها و محتوا',
   products:   'مدیریت محصولات فروشگاه',
   categories: 'دسته‌بندی‌ها',
@@ -1912,6 +1914,91 @@ interface PSState {
   profiles: { builders: number; withPhone: number; projects: number; revealedProjects?: number; pendingProjects?: number; quotaAvailable?: number | null; lastRevealAt?: string; accounts?: number }
   log: string
   revealLog: string
+}
+
+// ─── سایت‌سازها — فاز ۲۹۶ب: سایت‌های اختصاصیِ کاربران + آمارِ بازدید/جستجو ────────
+interface UserSiteRow { slug: string; title: string; owner: string; ownerName: string; role: string; auto: boolean; smsAt: number; createdAt: number; updatedAt: number; today: number; d7v: number; d7s: number; totalV: number; totalS: number; lastAt: number; topQueries: string[] }
+function UserSitesView() {
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const [rows, setRows] = useState<UserSiteRow[]>([])
+  const [totals, setTotals] = useState<{ sites: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number } | null>(null)
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState('')
+  const [loading, setLoading] = useState(true)
+  const load = async () => {
+    setLoading(true)
+    try { const r = await fetch('/api/admin/sites'); if (r.ok) { const j = await r.json(); setRows(j.rows || []); setTotals(j.totals || null) } } catch {}
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+  const filtered = rows.filter(r => !q || r.ownerName.includes(q) || r.title.includes(q) || r.slug.includes(q) || r.owner.includes(q))
+  const tile = (label: string, val: string, color?: string) => (
+    <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 110 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{label}</div><div style={{ fontSize: 22, fontWeight: 900, color: color || 'var(--text)' }}>{val}</div></div>
+  )
+  const ago = (ts: number) => { if (!ts) return '—'; const m = Math.floor((Date.now() - ts) / 60000); if (m < 60) return `${fa(m)} دقیقه پیش`; const h = Math.floor(m / 60); if (h < 24) return `${fa(h)} ساعت پیش`; return `${fa(Math.floor(h / 24))} روز پیش` }
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(95,217,138,.08), transparent 60%), var(--surface)', borderColor: 'rgba(95,217,138,.35)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 24 }}>🌐</span>
+          <div><div style={{ fontWeight: 900, fontSize: 17 }}>سایت‌سازها</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.8 }}>سایتِ اختصاصیِ هر کاربر (خودکار یا دست‌ساز) با آمارِ بازدید و جستجوی داخلِ سایت. بازدید از مرورگرِ واقعیِ بازدیدکننده شمرده می‌شود.</div></div>
+        </div>
+      </Card>
+      {totals && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+          {tile('کل سایت‌ها', fa(totals.sites))}
+          {tile('خودکار', fa(totals.auto), '#5fd98a')}
+          {tile('دست‌ساز', fa(totals.manual))}
+          {tile('پیامک رفته', fa(totals.smsSent), 'var(--gold)')}
+          {tile('بازدید امروز', fa(totals.viewsToday), '#60a5fa')}
+          {tile('بازدید ۷ روز', fa(totals.views7d), '#60a5fa')}
+          {tile('جستجو ۷ روز', fa(totals.searches7d))}
+        </div>
+      )}
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+          <input style={{ ...inp, flex: '1 1 220px' }} placeholder="جستجو: نام، شماره، اسلاگ…" value={q} onChange={e => setQ(e.target.value)} />
+          <button onClick={load} style={{ padding: '9px 18px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>↻ تازه‌سازی</button>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(filtered.length)} سایت</span>
+        </div>
+        {loading ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>در حال بارگذاری…</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead><tr style={{ color: 'var(--muted)', fontSize: 11.5, textAlign: 'right' }}>
+                <th style={{ padding: '8px 6px' }}>کاربر</th><th style={{ padding: '8px 6px' }}>نقش</th><th style={{ padding: '8px 6px' }}>سایت</th><th style={{ padding: '8px 6px' }}>نوع</th><th style={{ padding: '8px 6px' }}>امروز</th><th style={{ padding: '8px 6px' }}>۷ روز</th><th style={{ padding: '8px 6px' }}>جستجو ۷ر</th><th style={{ padding: '8px 6px' }}>کل</th><th style={{ padding: '8px 6px' }}>آخرین بازدید</th>
+              </tr></thead>
+              <tbody>
+                {filtered.slice(0, 300).map(r => (
+                  <Fragment key={r.slug}>
+                    <tr onClick={() => setOpen(open === r.slug ? '' : r.slug)} style={{ borderTop: '1px solid var(--line)', cursor: 'pointer' }}>
+                      <td style={{ padding: '9px 6px' }}><b>{r.ownerName}</b><div style={{ fontSize: 10.5, color: 'var(--faint)', direction: 'ltr', textAlign: 'right' }}>{r.owner}</div></td>
+                      <td style={{ padding: '9px 6px', color: 'var(--muted)' }}>{r.role || '—'}</td>
+                      <td style={{ padding: '9px 6px' }}><a href={`/${encodeURIComponent(r.slug)}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--gold)', textDecoration: 'none' }}>{r.slug} ↗</a></td>
+                      <td style={{ padding: '9px 6px' }}>{r.auto ? <span style={{ fontSize: 10.5, color: '#5fd98a', background: 'rgba(95,217,138,.1)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>خودکار{r.smsAt ? ' · 📩' : ''}</span> : <span style={{ fontSize: 10.5, color: 'var(--muted)', background: 'var(--bg2)', borderRadius: 999, padding: '2px 9px' }}>دست‌ساز</span>}</td>
+                      <td style={{ padding: '9px 6px', fontWeight: 800, color: r.today ? '#60a5fa' : 'var(--faint)' }}>{fa(r.today)}</td>
+                      <td style={{ padding: '9px 6px', fontWeight: 800 }}>{fa(r.d7v)}</td>
+                      <td style={{ padding: '9px 6px' }}>{fa(r.d7s)}</td>
+                      <td style={{ padding: '9px 6px', color: 'var(--muted)' }}>{fa(r.totalV)}</td>
+                      <td style={{ padding: '9px 6px', color: 'var(--faint)', fontSize: 11.5 }}>{ago(r.lastAt)}</td>
+                    </tr>
+                    {open === r.slug && (
+                      <tr style={{ background: 'var(--bg2)' }}><td colSpan={9} style={{ padding: '10px 14px', fontSize: 12 }}>
+                        <b style={{ color: 'var(--muted)' }}>جستجوهای اخیرِ بازدیدکننده‌ها:</b>{' '}
+                        {r.topQueries.length ? r.topQueries.map((x, i) => <span key={i} style={{ display: 'inline-block', margin: '2px 4px', padding: '3px 10px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999 }}>{x}</span>) : <span style={{ color: 'var(--faint)' }}>هنوز جستجویی ثبت نشده</span>}
+                        <span style={{ marginInlineStart: 14, color: 'var(--faint)' }}>ساخت: {new Date(r.createdAt).toLocaleDateString('fa-IR')} · کل جستجو: {fa(r.totalS)}</span>
+                      </td></tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+            {filtered.length > 300 && <div style={{ padding: 10, fontSize: 11.5, color: 'var(--faint)' }}>۳۰۰ ردیفِ اول نمایش داده شد — با جستجو محدود کن.</div>}
+          </div>
+        )}
+      </Card>
+    </div>
+  )
 }
 
 // ─── نظراتِ متخصصان و تیکِ آبی — فاز ۲۹۲ ─────────────────────────────────────
@@ -7549,6 +7636,7 @@ export default function SuperAdminPage() {
       case 'persiansaze': return <PersianSazeView />
       case 'tarh2tarh': return <Tarh2tarhView />
       case 'dirReviews': return <DirReviewsView />
+      case 'userSites': return <UserSitesView />
       case 'support':    return <AdminSupportView />
       case 'listings':   return <ListingsView />
       case 'products':   return <ProductsView />

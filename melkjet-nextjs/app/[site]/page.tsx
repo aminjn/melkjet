@@ -13,6 +13,7 @@ import GallerySlider from './GallerySlider'
 import BlogFull, { type BlogArticle } from './BlogFull'
 import NavBar from './NavBar'
 import ReviewForm from './ReviewForm'
+import Beacon from './Beacon'
 
 // Public renderer for builder-published sites living at melkjet.com/{slug}.
 // Existing static single-segment routes (search, owner, ...) take precedence;
@@ -902,6 +903,8 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
   const primary = site.theme?.primary || '#c9a84c'
   return (
     <SiteChrome site={site} currentSlug={page.slug}>
+      {/* فاز ۲۹۶ب — آمارِ بازدیدِ سایتِ اختصاصی (پنلِ «سایت‌سازها»ی ادمین) */}
+      <Beacon slug={site.slug} />
       {page.blocks.map(block => renderBlock(block, primary, site.ownerName, site.owner, site.slug))}
     </SiteChrome>
   )

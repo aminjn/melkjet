@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { listingHref } from '@/app/lib/listing-url'
 
 // آگهیِ غنی‌شده برای صفحهٔ جستجو/فیلترِ سایت‌ساز (مثلِ صفحهٔ اصلیِ آگهی‌ها).
@@ -33,6 +33,16 @@ export default function SiteListings({ items, primary, siteSlug = '' }: { items:
   const [rooms, setRooms] = useState('all')
   const [sort, setSort] = useState<'new' | 'priceAsc' | 'priceDesc' | 'areaDesc'>('new')
   const [showFilters, setShowFilters] = useState(false)
+
+  // فاز ۲۹۶ب — آمارِ جستجوی داخلِ سایت: عبارتِ تایپ‌شده با تاخیر (debounce) یک‌بار ثبت می‌شود.
+  useEffect(() => {
+    const qq = q.trim()
+    if (!siteSlug || qq.length < 2) return
+    const t = setTimeout(() => {
+      fetch('/api/sites/hit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: siteSlug, kind: 'search', q: qq }), keepalive: true }).catch(() => {})
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [q, siteSlug])
 
   const ptypes = uniq(items.map(i => i.ptype))
   const cities = uniq(items.map(i => i.city))
