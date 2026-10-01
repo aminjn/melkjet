@@ -159,8 +159,12 @@ export async function listSites(): Promise<Site[]> {
   return (await load()).sites.map(migrateSite).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+// فاز ۲۹۶ج — پارامترِ مسیر در این نسخهٔ Next «درصد-کدشده» می‌رسد (مثلِ صفحهٔ وکلا که صریحاً
+// decode می‌کند). بدونِ decode، اسلاگِ فارسی هرگز با نسخهٔ ذخیره‌شده match نمی‌شد → ۴۰۴ِ همگانی.
+const safeDecode = (s: string): string => { try { return decodeURIComponent(String(s || '')) } catch { return String(s || '') } }
+
 export async function getSite(slug: string): Promise<Site | null> {
-  const s = sanitizeSlug(slug)
+  const s = sanitizeSlug(safeDecode(slug))
   if (!s) return null
   const site = (await load()).sites.find(site => site.slug === s) ?? null
   if (!site) return null
@@ -180,7 +184,7 @@ export async function getSiteByOwner(owner: string): Promise<Site | null> {
 
 // Find a page within a site by slug; falls back to the home page (pages[0]).
 export function getSitePage(site: Site, pageSlug: string): SitePage {
-  const want = sanitizeSlug(pageSlug)
+  const want = sanitizeSlug(safeDecode(pageSlug))
   return site.pages.find(p => p.slug === want) || site.pages[0]
 }
 

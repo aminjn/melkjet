@@ -3309,5 +3309,15 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('معمار بلوکِ آگهی ندارد (دادهٔ ملکی ندارد)', !pay296b.pages[0].blocks.some(b => b.type === 'listings'))
 }
 
+// ── فاز ۲۹۶ج — اسلاگِ فارسیِ سایت از پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود ──
+{
+  const { saveSite, getSite } = await import('../app/lib/sites-store.ts')
+  await saveSite({ slug: 'آژانس املاک تستی', title: 'آژانس املاک تستی', owner: '09000000296', ownerName: 'آژانس املاک تستی', pages: [{ slug: 'home', title: 'خانه', blocks: [] }] })
+  const direct = await getSite('آژانس-املاک-تستی')
+  const encoded = await getSite(encodeURIComponent('آژانس-املاک-تستی'))
+  ok('اسلاگِ فارسی مستقیم پیدا می‌شود', !!direct && direct.owner === '09000000296')
+  ok('پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود (ریشهٔ ۴۰۴ همگانی)', !!encoded && encoded.slug === direct.slug)
+}
+
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
 process.exit(fail === 0 ? 0 : 1)
