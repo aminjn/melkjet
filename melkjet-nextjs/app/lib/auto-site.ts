@@ -70,7 +70,7 @@ export function buildAutoSitePayload(s: AutoSiteSeed) {
   const blocks: SiteBlock[] = []
   const a = s.arch
 
-  blocks.push({ id: id++, type: 'hero', props: { heading: s.name, subheading: `${roleLabel}${inCity}${s.tagline ? ' — ' + s.tagline : ''}`, align: 'center', ...(a?.cover ? { image: a.cover } : {}) } })
+  blocks.push({ id: id++, type: 'hero', props: { heading: s.name, subheading: `${roleLabel}${inCity}${s.tagline ? ' — ' + s.tagline : ''}`, align: 'center', badge: roleLabel, ...(a?.cover ? { image: a.cover } : {}) } })
   if (s.about && s.about.trim().length >= 20) blocks.push({ id: id++, type: 'about', props: { heading: `دربارهٔ ${s.name}`, text: s.about.trim().slice(0, 1500), ...(s.logo ? { image: s.logo } : {}) } })
 
   // آمارِ واقعی (فقط عددهای ناصفر — هیچ عددِ ساختگی)

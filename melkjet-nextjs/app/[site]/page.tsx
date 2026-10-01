@@ -23,6 +23,10 @@ import Beacon from './Beacon'
 // Rendering mirrors the builder's BlockBody (app/components/tools/WebsiteBuilderTool.tsx),
 // reading each block's `props` and the site `theme.primary`.
 
+// فاز ۲۹۶و — بدونِ revalidate، نکست HTML صفحه را «تا دیپلویِ بعدی» کش می‌کرد: سایتِ
+// ارتقایافته/ویرایش‌شده هرگز به بازدیدکننده نمی‌رسید («هیچ تغییری نکرد»). هر ۵ دقیقه تازه می‌شود.
+export const revalidate = 300
+
 export async function generateMetadata(
   { params }: { params: Promise<{ site: string }> }
 ): Promise<Metadata> {
@@ -155,11 +159,15 @@ function HeroBlock({ block, primary }: { block: SiteBlock; primary: string }) {
         maxWidth: 1000, margin: '0 auto', width: '100%', textAlign: align as any,
         display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start',
       }}>
-        <span className="mjs-hero-badge" style={{
-          display: 'inline-block', fontSize: 13, fontWeight: 700, color: textColor,
-          background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.22)',
-          padding: '7px 16px', borderRadius: 999, marginBottom: 22, backdropFilter: 'blur(4px)',
-        }}>املاک و مستغلات</span>
+        {/* فاز ۲۹۶و — نشانِ هیرو قابلِ‌تنظیم شد: برای معمار «املاک و مستغلات» غلط بود.
+            بدونِ prop همان متنِ قدیمی می‌ماند (سایت‌های دست‌سازِ موجود عوض نمی‌شوند)؛ خالی = حذف. */}
+        {(props.badge !== undefined ? String(props.badge).trim() : 'املاک و مستغلات') ? (
+          <span className="mjs-hero-badge" style={{
+            display: 'inline-block', fontSize: 13, fontWeight: 700, color: textColor,
+            background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.22)',
+            padding: '7px 16px', borderRadius: 999, marginBottom: 22, backdropFilter: 'blur(4px)',
+          }}>{props.badge !== undefined ? String(props.badge).trim() : 'املاک و مستغلات'}</span>
+        ) : null}
         <h1 className="mjs-hero-h1" style={{
           fontSize: 'clamp(32px,6vw,60px)', fontWeight: 900, color: textColor,
           margin: 0, marginBottom: 18, letterSpacing: '-1px', lineHeight: 1.15, maxWidth: 900,
