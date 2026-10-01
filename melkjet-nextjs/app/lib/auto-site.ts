@@ -18,7 +18,7 @@ const CFG_KV = 'autosite_cfg'
 const META_KV = 'autosite_meta'
 
 export interface AutoSiteCfg { enabled: boolean; sms: boolean }
-interface DoneRec { at: number; slug: string; smsAt?: number; smsTries?: number; manual?: boolean; lastErr?: string }
+interface DoneRec { at: number; slug: string; smsAt?: number; smsTries?: number; manual?: boolean; lastErr?: string; v?: number }
 interface Meta { done: Record<string, DoneRec> }
 
 // حالتِ فایل/تست: متای درون‌حافظه‌ای (جارو فقط روی سرورِ PG معنا دارد).
@@ -45,20 +45,63 @@ export interface AutoSiteSeed {
   specialties: string[]
   contactPhone?: string
   address?: string
+  providerUrl?: string    // صفحهٔ دایرکتوریِ همین شخص (مقصدِ CTA — لینکِ داخلیِ سئو)
+  // دادهٔ غنیِ معمار (طرح‌۲طرح) — همه واقعی
+  arch?: {
+    cover?: string
+    images: string[]
+    projDone?: number; projDoing?: number; honors?: number
+    rating?: number; ratingCount?: number
+    edus: string[]; skills: string[]; engagements: string[]
+    officeName?: string
+  }
 }
 
-/** بدنهٔ سایتِ خودکار از دادهٔ واقعی — خالص و تست‌پذیر. */
+// نسخهٔ سازنده — بالارفتنش یعنی سایت‌های خودکارِ «دست‌نخورده» در جاروِ بعدی بازسازی می‌شوند.
+export const AUTO_SITE_V = 2
+
+/** بدنهٔ سایتِ خودکار از دادهٔ واقعی — خالص و تست‌پذیر. فاز ۲۹۶هـ: چیدمانِ کامل
+ *  («سایتِ خالی جذابیت ندارد»): جستجو/فیلترِ کاملِ آگهی‌ها، نظراتِ واقعی، CTA، و برای
+ *  معماران کلِ دادهٔ طرح‌۲طرح (نمونه‌کارها/آمار/تحصیلات/مهارت‌ها/دفتر). */
 export function buildAutoSitePayload(s: AutoSiteSeed) {
   const roleLabel = typeLabel(s.roleType)
   const inCity = s.city ? ` در ${s.city}` : ''
   let id = 1
   const blocks: SiteBlock[] = []
-  blocks.push({ id: id++, type: 'hero', props: { heading: s.name, subheading: `${roleLabel}${inCity}${s.tagline ? ' — ' + s.tagline : ''}`, align: 'center' } })
+  const a = s.arch
+
+  blocks.push({ id: id++, type: 'hero', props: { heading: s.name, subheading: `${roleLabel}${inCity}${s.tagline ? ' — ' + s.tagline : ''}`, align: 'center', ...(a?.cover ? { image: a.cover } : {}) } })
   if (s.about && s.about.trim().length >= 20) blocks.push({ id: id++, type: 'about', props: { heading: `دربارهٔ ${s.name}`, text: s.about.trim().slice(0, 1500), ...(s.logo ? { image: s.logo } : {}) } })
-  if (s.specialties.length) blocks.push({ id: id++, type: 'services', props: { heading: 'خدمات و تخصص‌ها', items: s.specialties.slice(0, 8).map(t => ({ title: t })) } })
-  if (LISTING_TYPES.has(s.roleType)) blocks.push({ id: id++, type: 'listings', props: { heading: `آگهی‌های ${s.name}`, total: 12, perSlide: 3 } })
+
+  // آمارِ واقعی (فقط عددهای ناصفر — هیچ عددِ ساختگی)
+  if (a) {
+    const items: { label: string; value: string }[] = []
+    if (a.projDone) items.push({ label: 'پروژهٔ اجراشده', value: a.projDone.toLocaleString('fa-IR') })
+    if (a.projDoing) items.push({ label: 'در حال اجرا', value: a.projDoing.toLocaleString('fa-IR') })
+    if (a.honors) items.push({ label: 'جایزه و مقام', value: a.honors.toLocaleString('fa-IR') })
+    if (a.rating) items.push({ label: 'امتیاز بازخوردها', value: `${a.rating.toLocaleString('fa-IR')} از ۵` })
+    if (items.length >= 2) blocks.push({ id: id++, type: 'stats', props: { items } })
+  }
+
+  if (s.specialties.length) blocks.push({ id: id++, type: 'services', props: { heading: 'خدمات و تخصص‌ها', items: s.specialties.slice(0, 9).map(t => ({ title: t })), perSlide: 3 } })
+
+  if (LISTING_TYPES.has(s.roleType)) {
+    // جستجو/فیلترِ کاملِ آگهی‌های خودِ شخص (نه فقط اسلایدر) — «فیلتر و امکانات کامل».
+    blocks.push({ id: id++, type: 'searchlist', props: { heading: `جستجو در آگهی‌های ${s.name}`, total: 120 } })
+    if (s.roleType === 'agency') blocks.push({ id: id++, type: 'team', props: { heading: 'مشاوران ما' } })
+  }
   if (CATALOG_TYPES.has(s.roleType)) blocks.push({ id: id++, type: 'catalog', props: { heading: `محصولات ${s.name}` } })
-  blocks.push({ id: id++, type: 'contact', props: { heading: 'تماس با ما', phone: s.contactPhone || s.phone, ...(s.address || s.city ? { address: s.address || s.city } : {}) } })
+
+  if (a) {
+    if (a.images.length) blocks.push({ id: id++, type: 'gallery', props: { heading: 'نمونه‌کارها و پروژه‌ها', images: a.images.slice(0, 12), perSlide: 3 } })
+    if (a.skills.length || a.engagements.length) blocks.push({ id: id++, type: 'services', props: { heading: 'مهارت‌ها و حوزه‌های همکاری', items: [...a.skills, ...a.engagements].slice(0, 9).map(t => ({ title: t })), perSlide: 3 } })
+    if (a.edus.length) blocks.push({ id: id++, type: 'services', props: { heading: 'تحصیلات و سوابق', items: a.edus.slice(0, 6).map(t => ({ title: t })), perSlide: 3 } })
+  }
+
+  // نظراتِ واقعیِ تاییدشده (بلوک خودش از store می‌خواند — همیشه تازه) + فرمِ ثبت
+  blocks.push({ id: id++, type: 'testimonials', props: { heading: 'نظرات مشتریان' } })
+  blocks.push({ id: id++, type: 'cta', props: { heading: s.roleType === 'architect' ? 'پروژه‌ای در ذهن دارید؟' : 'به دنبال خرید، فروش یا اجاره هستید؟', subheading: `همین حالا با ${s.name} در ارتباط باشید`, buttonText: s.providerUrl ? 'مشاهدهٔ پروفایل و درخواست مشاوره' : 'تماس با ما', buttonLink: s.providerUrl || '#contact' } })
+  blocks.push({ id: id++, type: 'contact', props: { heading: 'تماس با ما', phone: s.contactPhone || s.phone, ...(s.address || s.city || a?.officeName ? { address: [a?.officeName, s.address || s.city].filter(Boolean).join(' — ') } : {}) } })
   blocks.push({ id: id++, type: 'footer', props: {} })
 
   // سئو از واقعیت‌های ساخت‌یافته — عنوانی که با «نامِ شخص» شروع می‌شود (هدف: جست‌وجوی نام).
@@ -98,7 +141,33 @@ async function seedOf(acc: Account): Promise<AutoSiteSeed | null> {
     }
   } catch { /* بدونِ پروفایلِ مشاور */ }
   if (!name) return null   // بی‌نام سایت نمی‌گیرد (صفحهٔ خالی = سمِ سئو)
-  return { phone: acc.phone, name, roleType, city, tagline, about, logo, specialties, contactPhone: p.contactPhone || p.landline || '', address: p.address || '' }
+
+  // لینکِ CTA به صفحهٔ دایرکتوریِ خودِ شخص (فرمِ درخواست/پروفایلِ کامل + لینکِ داخلیِ سئو)
+  let providerUrl = ''
+  try { const { ensureProviderSlug } = await import('./provider-slug-store'); providerUrl = `/${roleType}/${encodeURIComponent(await ensureProviderSlug(acc.phone, name))}` } catch {}
+
+  // فاز ۲۹۶هـ — دادهٔ کاملِ معمار از طرح‌۲طرح: نمونه‌کارها، آمار، تحصیلات، مهارت‌ها، دفتر.
+  let arch: AutoSiteSeed['arch']
+  if (roleType === 'architect') {
+    try {
+      const { getArchitectPublic } = await import('./tarh2tarh-store')
+      const t = await getArchitectPublic(acc.phone)
+      if (t) {
+        arch = {
+          cover: t.cover || '',
+          images: (t.projects || []).map(pr => pr.image || '').filter(Boolean),
+          projDone: t.projDone, projDoing: t.projDoing,
+          honors: (t.honor1 || 0) + (t.honor2 || 0) + (t.honor3 || 0) + (t.honorFinal || 0) || undefined,
+          rating: t.rating, ratingCount: t.ratingCount,
+          edus: t.edus || [], skills: t.skills || [], engagements: t.engagements || [],
+          officeName: t.officeName || '',
+        }
+        if (!logo && t.avatar) logo = t.avatar
+      }
+    } catch { /* بدونِ دادهٔ طرح‌۲طرح — سایتِ پایه ساخته می‌شود */ }
+  }
+
+  return { phone: acc.phone, name, roleType, city, tagline, about, logo, specialties, contactPhone: p.contactPhone || p.landline || '', address: p.address || '', providerUrl, arch }
 }
 
 /** جاروِ کرون: هر تیک چند سایتِ جدید + چند پیامکِ معوق. خروجی برای لاگِ عملیاتی. */
@@ -109,25 +178,44 @@ export async function sweepAutoSites(maxCreate = 8, maxSms = 4): Promise<{ creat
   let created = 0, sms = 0, dirty = false
 
   // یک خواندنِ store برای کلِ تیک (نه به‌ازای هر کاندید).
-  const byOwner = new Map<string, { slug: string }>()
-  for (const st of await listSites()) if (st.owner) byOwner.set(String(st.owner), { slug: st.slug })
+  const byOwner = new Map<string, { slug: string; updatedAt: number }>()
+  for (const st of await listSites()) if (st.owner) byOwner.set(String(st.owner), { slug: st.slug, updatedAt: st.updatedAt })
 
-  const candidates = listAccounts().filter(a => !meta.done[a.phone] && urlTypeForRole(a.role))
+  const accounts = listAccounts()
+  const candidates = accounts.filter(a => !meta.done[a.phone] && urlTypeForRole(a.role))
   for (const acc of candidates) {
     if (created >= maxCreate) break
     const existing = byOwner.get(acc.phone)
     if (existing) {
       // سایتِ دست‌ساز دارد — فقط ثبت می‌کنیم؛ نه بازنویسی، نه پیامک.
-      meta.done[acc.phone] = { at: Date.now(), slug: existing.slug, manual: true, smsAt: 0 }
+      meta.done[acc.phone] = { at: Date.now(), slug: existing.slug, manual: true, smsAt: 0, v: AUTO_SITE_V }
       dirty = true
       continue
     }
     const seed = await seedOf(acc)
     if (!seed) continue   // بی‌نام — تیکِ بعد دوباره دیده می‌شود (شاید پروفایل کامل شود)
     const site = await saveSite(buildAutoSitePayload(seed))
-    meta.done[acc.phone] = { at: Date.now(), slug: site.slug }
+    meta.done[acc.phone] = { at: Date.now(), slug: site.slug, v: AUTO_SITE_V }
     created++; dirty = true
   }
+
+  // فاز ۲۹۶هـ — ارتقای خودکار: سازنده نسخهٔ جدید گرفت → سایت‌های خودکارِ «دست‌نخورده» با
+  // چیدمانِ کامل بازسازی می‌شوند. سایتی که صاحبش ویرایش کرده هرگز دست نمی‌خورد.
+  let upgraded = 0
+  for (const [phone, rec] of Object.entries(meta.done)) {
+    if (upgraded >= maxCreate || created >= maxCreate * 2) break
+    if (rec.manual || (rec.v || 1) >= AUTO_SITE_V) continue
+    const st = byOwner.get(phone)
+    if (!st) { rec.v = AUTO_SITE_V; dirty = true; continue }           // سایت حذف شده — کاری نیست
+    if (st.updatedAt > rec.at + 120_000) { rec.v = AUTO_SITE_V; dirty = true; continue }   // صاحبش ویرایش کرده — دست نزن
+    const acc = accounts.find(x => x.phone === phone)
+    if (!acc) { rec.v = AUTO_SITE_V; dirty = true; continue }
+    const seed = await seedOf(acc)
+    if (!seed) { rec.v = AUTO_SITE_V; dirty = true; continue }
+    await saveSite(buildAutoSitePayload(seed))                          // با ownerِ موجود همان slug آپدیت می‌شود
+    rec.v = AUTO_SITE_V; rec.at = Date.now(); upgraded++; dirty = true
+  }
+  if (upgraded) console.log(`[autosite] ${upgraded} سایت به چیدمانِ v${AUTO_SITE_V} ارتقا یافت`)
 
   // پیامکِ خوش‌آمد — فقط برای سایت‌های خودکار، با سقفِ هر تیک و حداکثر ۳ تلاش.
   if (cfg.sms) {

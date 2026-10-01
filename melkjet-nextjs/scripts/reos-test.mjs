@@ -3302,11 +3302,15 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('اسلاگِ قدیمیِ لاتین مثلِ قبل کار می‌کند', sanitizeSlug('My Site! 22') === 'my-site-22')
   const pay296 = buildAutoSitePayload({ phone: '09120000296', name: 'علی رضایی', roleType: 'pros', city: 'تهران', tagline: '', about: 'بیش از ده سال تجربهٔ مشاورهٔ املاک در غرب تهران و همراهیِ صدها معامله.', logo: '', specialties: ['آپارتمان', 'ویلایی'], contactPhone: '', address: '' })
   const types296 = pay296.pages[0].blocks.map(b => b.type)
-  ok('سایتِ مشاور: hero/about/services/listings/contact/footer', ['hero', 'about', 'services', 'listings', 'contact', 'footer'].every(t => types296.includes(t)))
+  ok('سایتِ مشاور کامل است: hero/about/services/searchlist/testimonials/cta/contact/footer', ['hero', 'about', 'services', 'searchlist', 'testimonials', 'cta', 'contact', 'footer'].every(t => types296.includes(t)))
   ok('عنوانِ سئو با نامِ شخص شروع می‌شود و شهر دارد', pay296.seo.title.startsWith('علی رضایی') && pay296.seo.title.includes('تهران'))
   ok('توضیحِ سئو از واقعیت‌ها ساخته شده (تخصص‌ها) و ≤۱۶۰', pay296.seo.description.includes('آپارتمان') && pay296.seo.description.length <= 160)
-  const pay296b = buildAutoSitePayload({ phone: '09120000297', name: 'استودیو معماری نو', roleType: 'architect', specialties: [], about: '', logo: '', contactPhone: '', address: '' })
-  ok('معمار بلوکِ آگهی ندارد (دادهٔ ملکی ندارد)', !pay296b.pages[0].blocks.some(b => b.type === 'listings'))
+  const pay296b = buildAutoSitePayload({ phone: '09120000297', name: 'استودیو معماری نو', roleType: 'architect', specialties: [], about: '', logo: '', contactPhone: '', address: '', arch: { cover: 'https://x/c.jpg', images: ['https://x/1.jpg', 'https://x/2.jpg'], projDone: 8, projDoing: 2, honors: 3, rating: 4.6, edus: ['لیسانس معماری'], skills: ['طراحی داخلی'], engagements: ['نظارت'], officeName: 'دفتر نو' } })
+  const types296b = pay296b.pages[0].blocks.map(b => b.type)
+  ok('معمار بلوکِ آگهی ندارد (دادهٔ ملکی ندارد)', !types296b.includes('listings') && !types296b.includes('searchlist'))
+  ok('سایتِ معمار دادهٔ کاملِ طرح‌۲طرح را دارد: stats/gallery/services×۲', types296b.includes('stats') && types296b.includes('gallery') && types296b.filter(t => t === 'services').length >= 2)
+  const st296 = pay296b.pages[0].blocks.find(b => b.type === 'stats')
+  ok('آمارِ معمار فقط عددهای واقعیِ ناصفر است', Array.isArray(st296.props.items) && st296.props.items.length === 4 && st296.props.items.every(i => i.value && i.label))
 }
 
 // ── فاز ۲۹۶ج — اسلاگِ فارسیِ سایت از پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود ──
