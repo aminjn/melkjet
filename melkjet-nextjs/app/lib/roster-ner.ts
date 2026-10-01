@@ -123,9 +123,33 @@ export function trainNer(X: number[][], y: number[], epochs = 500, lr = 0.5, l2 
 
 export const NER_THRESHOLD = 0.55
 
+// ── فاز ۲۹۵ — امضای «برچسب‌دار»: مشاور/کارشناس … : نام ────────────────────────
+// وقتی خودِ آگهی صریح نوشته «مشاور و کارشناس منطقه:رها» دیگر جای حدسِ مدل نیست؛
+// مدل برای این شکل (نامِ چسبیده به دونقطه، نامِ کوتاه/کم‌تکرار) نمره نمی‌داد و آگهی
+// بی‌نام می‌ماند (۱ اکتبر — «اسم کارشناس همچنان هست و نمی‌فهمه»). قاعدهٔ دقتِ بالا،
+// فقط در ناحیهٔ امضا (۶ خطِ پایانی) و با ردِ واژه‌های نقشی/نویز تا مثبتِ کاذب نسازد.
+const LABELED_RE = /(?:مشاور|کارشناس)[^:：\n]{0,25}[:：][ \t]*([ء-ی]{2,}(?:[ ‌][ء-ی]{2,})?)/
+const LABELED_REJECT = /^(?:ملک|املاک|مسکن|خرید|فروش|رهن|اجاره|قیمت|بازدید|پاسخگویی|شماره|منطقه|محدوده|تخصصی|رسمی|ارشد|فایل|شما)$/
+export function labeledName(desc: string): string | null {
+  const lines = deEmoji(String(desc || '')).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
+  for (const line of lines.slice(-6)) {
+    const m = line.match(LABELED_RE)
+    if (!m) continue
+    const name = m[1].replace(/‌/g, ' ').trim()
+    const toks = name.split(/\s+/)
+    if (!toks.length) continue
+    if (toks.some(w => KEYW.test(w) || VERBISH.test(w) || LABELED_REJECT.test(w) || isNoiseWord(w))) continue
+    return name
+  }
+  return null
+}
+
 /** نامِ مشاورِ این آگهی، یا خالی. نامِ دوبخشی وقتی ساخته می‌شود که توکنِ همسایه هم
  *  نمرهٔ بالایی داشته باشد — نه با قاعده، بلکه با همان نمرهٔ مدل. */
 export function bestName(title: string, desc: string): { name: string; p: number } | null {
+  // فاز ۲۹۵ — امضای برچسب‌دارِ صریح بر مدل مقدم است (دقتِ بالا، بدونِ حدس).
+  const ln = labeledName(desc)
+  if (ln) return { name: ln, p: 0.98 }
   // مدلِ خلوت (۹۵.۲٪) اگر بارگذاری شده باشد، مرجع است؛ چگال (۹۰.۴٪) تورِ ایمنی.
   if (hasSparse()) return bestNameSparse(title, desc)
   const m = NER
