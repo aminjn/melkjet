@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { pgEnabled, kvGet, kvMutate } from './db'
+import { pgEnabled, kvGet, kvSet, kvMutate, kvGetPrefix } from './db'
 
 // Dependency-free JSON-file store for published builder sites.
 // Mirrors the persistence style of crm-store.ts.
@@ -103,6 +103,53 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
+// ─── فاز ۲۹۷ — شاردِ سایت‌ها: «هر سایت ردیفِ خودش» (درسِ رُستر/اسکرپر، این‌بار پیشگیرانه) ───
+// سایت‌سازِ خودکار یعنی هزاران سایت؛ بلابِ واحد با هر ساخت/ویرایش کلِ چندمگابایت را زیرِ
+// FOR UPDATE بازنویسی می‌کرد — همان الگویی که دو بار استخرِ PG را خشکاند. حالا:
+//   site:{slug}  ← سندِ کاملِ هر سایت (خواندنِ صفحه = یک ردیفِ کوچک)
+//   sites_idx    ← فهرستِ سبک: slug → {o:مالک, u:updatedAt, t:عنوان, c:createdAt}
+// تخصیصِ slug و نگاشتِ مالک زیرِ قفلِ همین ایندکسِ کوچک اتمیک می‌شود؛ مهاجرتِ تنبل از
+// بلابِ قدیمی با «کپی فقط اگر غایب» (ضدِ مسابقه)؛ بلابِ قدیمی پشتیبانِ دست‌نخورده می‌ماند.
+// حالتِ فایل (تست/dev) همان مسیرِ قدیمی است.
+const ROW = (slug: string) => 'site:' + slug
+const IDX_KV = 'sites_idx'
+const MIG_KV = 'sites_shard_meta'
+export interface SiteHead { slug: string; owner: string; updatedAt: number; title: string; createdAt: number }
+interface IdxDoc { m: Record<string, { o?: string; u: number; t: string; c: number }> }
+
+let shardReady: Promise<void> | null = null
+async function ensureSitesSharded(): Promise<void> {
+  if (!pgEnabled()) return
+  if (!shardReady) shardReady = (async () => {
+    const meta = await kvGet<{ migratedAt?: number }>(MIG_KV, {})
+    if (meta.migratedAt) return
+    const legacy = await kvGet<DB>(KV_KEY, { sites: [] })
+    for (const raw of legacy.sites || []) {
+      const slug = String(raw?.slug || ''); if (!slug) continue
+      const cur = await kvGet<Site | null>(ROW(slug), null)
+      if (!cur) await kvSet(ROW(slug), raw)
+    }
+    await kvMutate<IdxDoc, void>(IDX_KV, { m: {} }, idx => {
+      idx.m = idx.m || {}
+      for (const raw of legacy.sites || []) {
+        const slug = String(raw?.slug || ''); if (!slug || idx.m[slug]) continue
+        idx.m[slug] = { o: raw.owner ? String(raw.owner) : undefined, u: Number(raw.updatedAt) || Date.now(), t: String(raw.title || ''), c: Number(raw.createdAt) || Date.now() }
+      }
+    })
+    await kvSet(MIG_KV, { migratedAt: Date.now(), n: (legacy.sites || []).length })
+    console.log(`[sites] shard migration: ${(legacy.sites || []).length} سایت به ردیف‌های مستقل منتقل شد`)
+  })().catch(e => { shardReady = null; throw e })
+  return shardReady
+}
+
+/** فهرستِ سبکِ همهٔ سایت‌ها (یک خواندنِ کوچک) — برای جارو/سایت‌مپ/پنل؛ نه سندهای کامل. */
+export async function listSiteHeads(): Promise<SiteHead[]> {
+  if (!pgEnabled()) return fileLoad().sites.map(s => ({ slug: s.slug, owner: String(s.owner || ''), updatedAt: Number(s.updatedAt) || 0, title: String(s.title || ''), createdAt: Number(s.createdAt) || 0 }))
+  await ensureSitesSharded()
+  const idx = await kvGet<IdxDoc>(IDX_KV, { m: {} })
+  return Object.entries(idx.m || {}).map(([slug, e]) => ({ slug, owner: e.o || '', updatedAt: e.u || 0, title: e.t || '', createdAt: e.c || 0 }))
+}
+
 // Make a url-safe slug: lowercase, keep a-z0-9, Persian letters and dash.
 // فاز ۲۹۶ — حروفِ فارسی مجازند: اسلاگِ سایتِ خودکار باید «نامِ خودِ شخص» باشد
 // (melkjet.com/علی-رضایی) تا جست‌وجوی نامِ او در گوگل به همین صفحه برسد.
@@ -156,7 +203,11 @@ function migrateSite(site: any): Site {
 }
 
 export async function listSites(): Promise<Site[]> {
-  return (await load()).sites.map(migrateSite).sort((a, b) => b.updatedAt - a.updatedAt)
+  if (!pgEnabled()) return fileLoad().sites.map(migrateSite).sort((a, b) => b.updatedAt - a.updatedAt)
+  // سنگین (همهٔ سندها) — فقط مصرفِ نادرِ ادمین/ابزار؛ مسیرهای داغ از listSiteHeads می‌خوانند.
+  await ensureSitesSharded()
+  const rows = await kvGetPrefix<Site>(ROW(''))
+  return rows.map(r => migrateSite(r.data)).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
 // فاز ۲۹۶ج — پارامترِ مسیر در این نسخهٔ Next «درصد-کدشده» می‌رسد (مثلِ صفحهٔ وکلا که صریحاً
@@ -166,20 +217,29 @@ const safeDecode = (s: string): string => { try { return decodeURIComponent(Stri
 export async function getSite(slug: string): Promise<Site | null> {
   const s = sanitizeSlug(safeDecode(slug))
   if (!s) return null
-  const site = (await load()).sites.find(site => site.slug === s) ?? null
-  if (!site) return null
-  return migrateSite(site)
+  if (!pgEnabled()) {
+    const site = fileLoad().sites.find(site => site.slug === s) ?? null
+    return site ? migrateSite(site) : null
+  }
+  await ensureSitesSharded()
+  const row = await kvGet<Site | null>(ROW(s), null)
+  return row ? migrateSite(row) : null
 }
 
 // سایتِ متعلق به یک مالک (شمارهٔ حساب) — تازه‌ترین. برای «سایتِ من» در سایت‌ساز که باید
 // مستقل از slug، همان سایتِ ذخیره‌شدهٔ کاربر را برگرداند (نه قالبِ پیش‌فرض).
 export async function getSiteByOwner(owner: string): Promise<Site | null> {
   const o = String(owner || '').trim(); if (!o) return null
-  const mine = (await load()).sites.filter(s => String(s.owner || '') === o)
-  if (!mine.length) return null
-  // تازه‌ترین (بیشترین updatedAt/createdAt)
-  mine.sort((a, b) => (Number((b as any).updatedAt || (b as any).createdAt || 0)) - (Number((a as any).updatedAt || (a as any).createdAt || 0)))
-  return migrateSite(mine[0])
+  if (!pgEnabled()) {
+    const mine = fileLoad().sites.filter(s => String(s.owner || '') === o)
+    if (!mine.length) return null
+    mine.sort((a, b) => (Number((b as any).updatedAt || (b as any).createdAt || 0)) - (Number((a as any).updatedAt || (a as any).createdAt || 0)))
+    return migrateSite(mine[0])
+  }
+  // ایندکسِ سبک → یک ردیف؛ تازه‌ترین سایتِ مالک.
+  const heads = (await listSiteHeads()).filter(h => h.owner === o).sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))
+  if (!heads.length) return null
+  return getSite(heads[0].slug)
 }
 
 // Find a page within a site by slug; falls back to the home page (pages[0]).
@@ -190,7 +250,7 @@ export function getSitePage(site: Site, pageSlug: string): SitePage {
 
 interface SavePageInput { slug?: string; title?: string; blocks?: any[]; inMenu?: boolean; menuLabel?: string }
 
-export async function saveSite(input: {
+interface SaveSiteInput {
   slug?: string
   title: string
   owner?: string
@@ -200,88 +260,122 @@ export async function saveSite(input: {
   blocks?: SiteBlock[]
   seo?: Partial<SiteSeo>
   theme?: Partial<SiteTheme>
-}): Promise<Site> {
-  return mutate((db) => {
-    const now = Date.now()
-    // سایت per-user است: هر کاربر یک سایتِ خودش دارد. slug را طوری حل می‌کنیم که کاربر همیشه
-    // سایتِ خودش را آپدیت کند و هرگز سایتِ کاربرِ دیگر یا قالبِ نمونه را رونویسی نکند
-    // (باگِ گم‌شدنِ سایت: چند کاربرِ یک صنف روی slugِ پیش‌فرضِ مشترک همدیگر را پاک می‌کردند).
-    const owner = input.owner ? String(input.owner) : undefined
-    let slug = sanitizeSlug(input.slug || '')
-    let existing: Site | undefined
-    if (owner) {
-      const mineExisting = db.sites.find(s => String(s.owner || '') === owner)
-      if (mineExisting) {
-        slug = mineExisting.slug            // سایتِ خودش را در جا آپدیت کن (مستقلِ از slugِ ارسالی)
-        existing = mineExisting
+}
+
+// بدنهٔ سندِ سایت از ورودی + سندِ قبلی — مشترک بینِ مسیرِ فایل و PGِ شاردشده.
+function buildSiteDoc(input: SaveSiteInput, slug: string, existing: Site | null | undefined): Site {
+  const now = Date.now()
+  const primary = String(input.theme?.primary || '').trim()
+
+  // Build the pages array. Prefer `pages`; fall back to a legacy single `blocks` array.
+  let rawPages: SavePageInput[]
+  if (Array.isArray(input.pages) && input.pages.length) {
+    rawPages = input.pages
+  } else {
+    rawPages = [{ slug: 'home', title: input.title, blocks: Array.isArray(input.blocks) ? input.blocks : [] }]
+  }
+
+  // Sanitize/validate pages: first page is always home; slugs url-safe + unique.
+  const used = new Set<string>()
+  const pages: SitePage[] = rawPages.map((pg, i) => {
+    let s = i === 0 ? 'home' : sanitizeSlug(pg?.slug || '')
+    if (!s) s = `page-${i}`
+    let candidate = s
+    let n = 2
+    while (used.has(candidate)) { candidate = `${s}-${n++}` }
+    used.add(candidate)
+    return {
+      slug: candidate,
+      title: String(pg?.title || '').trim() || (i === 0 ? 'خانه' : `صفحه ${i + 1}`),
+      inMenu: (pg as { inMenu?: boolean })?.inMenu !== false,
+      menuLabel: (pg as { menuLabel?: string })?.menuLabel ? String((pg as { menuLabel?: string }).menuLabel) : undefined,
+      blocks: Array.isArray(pg?.blocks) ? pg.blocks.map(normalizeBlock) : [],
+    }
+  })
+  if (!pages.length) {
+    pages.push({ slug: 'home', title: String(input.title || '').trim() || 'خانه', blocks: [] })
+  }
+
+  return {
+    slug,
+    title: String(input.title || '').trim() || 'سایت بدون عنوان',
+    owner: input.owner ? String(input.owner) : (existing?.owner),
+    ownerName: input.ownerName !== undefined ? String(input.ownerName).trim() : (existing?.ownerName),
+    theme: normTheme({ ...input.theme, primary: HEX.test(primary) ? primary : (input.theme?.primary || '#c9a84c') }),
+    pages,
+    seo: {
+      title: String(input.seo?.title || '').trim(),
+      description: String(input.seo?.description || '').trim(),
+    },
+    createdAt: existing ? existing.createdAt : now,
+    updatedAt: now,
+  }
+}
+
+export async function saveSite(input: SaveSiteInput): Promise<Site> {
+  const owner = input.owner ? String(input.owner) : undefined
+
+  if (!pgEnabled()) {
+    // مسیرِ فایل (تست/dev) — همان منطقِ قدیمی روی آرایه.
+    return mutate((db) => {
+      let slug = sanitizeSlug(input.slug || '')
+      let existing: Site | undefined
+      if (owner) {
+        const mineExisting = db.sites.find(s => String(s.owner || '') === owner)
+        if (mineExisting) { slug = mineExisting.slug; existing = mineExisting }
+        else {
+          const taken = slug ? db.sites.find(s => s.slug === slug) : undefined
+          if (!slug || (taken && String(taken.owner || '') !== owner)) {
+            const base = sanitizeSlug(input.ownerName || input.title || slug || 'site') || 'site'
+            let cand = base, n = 2
+            while (db.sites.some(s => s.slug === cand)) cand = `${base}-${n++}`
+            slug = cand
+          }
+          existing = undefined
+        }
       } else {
-        // کاربرِ جدید: اگر slug خالی است یا متعلق به دیگری/نمونه است، یک slugِ یکتا بساز.
-        const taken = slug ? db.sites.find(s => s.slug === slug) : undefined
-        if (!slug || (taken && String(taken.owner || '') !== owner)) {
+        if (!slug) slug = sanitizeSlug(input.title || '') || randomSlug()
+        existing = db.sites.find(s => s.slug === slug)
+      }
+      const site = buildSiteDoc(input, slug, existing)
+      if (existing) { const i = db.sites.findIndex(s => s.slug === slug); db.sites[i] = site }
+      else db.sites.unshift(site)
+      return site
+    })
+  }
+
+  // ─── PG شاردشده (فاز ۲۹۷): تخصیصِ slug زیرِ قفلِ ایندکسِ «کوچک»، سند در ردیفِ خودش ───
+  await ensureSitesSharded()
+  const res = await kvMutate<IdxDoc, { slug: string; existed: boolean }>(IDX_KV, { m: {} }, idx => {
+    idx.m = idx.m || {}
+    let slug = sanitizeSlug(input.slug || '')
+    let existed = false
+    if (owner) {
+      // سایتِ خودش را در جا آپدیت کن (مستقل از slugِ ارسالی) — هرگز سایتِ دیگری را رونویسی نکن.
+      const mine = Object.entries(idx.m).filter(([, e]) => e.o === owner)
+        .sort((a, b) => ((b[1].u || b[1].c) - (a[1].u || a[1].c)))
+      if (mine.length) { slug = mine[0][0]; existed = true }
+      else {
+        const taken = slug ? idx.m[slug] : undefined
+        if (!slug || (taken && taken.o !== owner)) {
           const base = sanitizeSlug(input.ownerName || input.title || slug || 'site') || 'site'
           let cand = base, n = 2
-          while (db.sites.some(s => s.slug === cand)) cand = `${base}-${n++}`
+          while (idx.m[cand]) cand = `${base}-${n++}`
           slug = cand
         }
-        existing = undefined
+        existed = !!idx.m[slug]
       }
     } else {
       if (!slug) slug = sanitizeSlug(input.title || '') || randomSlug()
-      existing = db.sites.find(s => s.slug === slug)
+      existed = !!idx.m[slug]
     }
-    const primary = String(input.theme?.primary || '').trim()
-
-    // Build the pages array. Prefer `pages`; fall back to a legacy single `blocks` array.
-    let rawPages: SavePageInput[]
-    if (Array.isArray(input.pages) && input.pages.length) {
-      rawPages = input.pages
-    } else {
-      rawPages = [{ slug: 'home', title: input.title, blocks: Array.isArray(input.blocks) ? input.blocks : [] }]
-    }
-
-    // Sanitize/validate pages: first page is always home; slugs url-safe + unique.
-    const used = new Set<string>()
-    const pages: SitePage[] = rawPages.map((pg, i) => {
-      let s = i === 0 ? 'home' : sanitizeSlug(pg?.slug || '')
-      if (!s) s = `page-${i}`
-      // ensure uniqueness within the site
-      let candidate = s
-      let n = 2
-      while (used.has(candidate)) { candidate = `${s}-${n++}` }
-      used.add(candidate)
-      return {
-        slug: candidate,
-        title: String(pg?.title || '').trim() || (i === 0 ? 'خانه' : `صفحه ${i + 1}`),
-        inMenu: (pg as { inMenu?: boolean })?.inMenu !== false,
-        menuLabel: (pg as { menuLabel?: string })?.menuLabel ? String((pg as { menuLabel?: string }).menuLabel) : undefined,
-        blocks: Array.isArray(pg?.blocks) ? pg.blocks.map(normalizeBlock) : [],
-      }
-    })
-    // Always at least one page (home).
-    if (!pages.length) {
-      pages.push({ slug: 'home', title: String(input.title || '').trim() || 'خانه', blocks: [] })
-    }
-
-    const site: Site = {
-      slug,
-      title: String(input.title || '').trim() || 'سایت بدون عنوان',
-      owner: input.owner ? String(input.owner) : (existing?.owner),
-      ownerName: input.ownerName !== undefined ? String(input.ownerName).trim() : (existing?.ownerName),
-      theme: normTheme({ ...input.theme, primary: HEX.test(primary) ? primary : (input.theme?.primary || '#c9a84c') }),
-      pages,
-      seo: {
-        title: String(input.seo?.title || '').trim(),
-        description: String(input.seo?.description || '').trim(),
-      },
-      createdAt: existing ? existing.createdAt : now,
-      updatedAt: now,
-    }
-    if (existing) {
-      const idx = db.sites.findIndex(s => s.slug === slug)
-      db.sites[idx] = site
-    } else {
-      db.sites.unshift(site)
-    }
-    return site
+    const now = Date.now()
+    const prev = idx.m[slug]
+    idx.m[slug] = { o: owner ?? prev?.o, u: now, t: String(input.title || '').trim() || prev?.t || '', c: prev?.c || now }
+    return { slug, existed }
   })
+  const prevRow = res.existed ? await kvGet<Site | null>(ROW(res.slug), null) : null
+  const site = buildSiteDoc(input, res.slug, prevRow ? migrateSite(prevRow) : undefined)
+  await kvSet(ROW(res.slug), site)
+  return site
 }

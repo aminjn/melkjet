@@ -190,8 +190,8 @@ export async function buildShards(force = false): Promise<Shard[]> {
   // ── فاز ۲۹۶ — سایت‌های اختصاصیِ اشخاص (melkjet.com/{نام}) — هدف: رتبهٔ جست‌وجوی نام ──
   if (enabled(sections, 'sites')) {
     try {
-      const { listSites } = await import('./sites-store')
-      const s = (await listSites()).filter(x => x.slug).map(x => ({
+      const { listSiteHeads } = await import('./sites-store')
+      const s = (await listSiteHeads()).filter(x => x.slug).map(x => ({
         url: `${BASE}/${encodeURIComponent(x.slug)}`, lastModified: iso(x.updatedAt), priority: 0.75, changeFrequency: 'weekly' as ChangeFreq,
       }))
       addSection('sites', 'سایتِ اختصاصی', s)

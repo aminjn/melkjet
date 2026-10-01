@@ -1,7 +1,7 @@
 import { listAgencyMembers } from './agency-link-store'
 import { getAdvisor } from './advisor-store'
 import { getProfile } from './profile-store'
-import { listSites } from './sites-store'
+import { listSiteHeads } from './sites-store'
 
 // اطلاعاتِ کاملِ یک عضوِ تیمِ آژانس برای نمایش در سایت‌ساز و سایتِ منتشرشده.
 export interface TeamMember {
@@ -19,7 +19,7 @@ export interface TeamMember {
 // آدرسِ سایتِ منتشرشدهٔ خودِ مشاور (در صورتِ وجود) — منبعِ واقعی به‌جای slugِ دستی در پروفایل.
 async function siteSlugFor(phone: string): Promise<string> {
   if (!phone) return ''
-  try { const s = (await listSites()).find(s => s.owner === phone); return s?.slug || '' } catch { return '' }
+  try { const s = (await listSiteHeads()).find(s => s.owner === phone); return s?.slug || '' } catch { return '' }
 }
 
 // اعضای تیمِ یک آژانس را با اطلاعاتِ کاملشان برمی‌گرداند (از رابطهٔ واقعیِ مشاور↔آژانس).

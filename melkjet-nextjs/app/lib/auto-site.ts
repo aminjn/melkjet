@@ -1,7 +1,7 @@
 import { kvGet, kvSet, pgEnabled } from './db'
 import { listAccounts, type Account } from './account-store'
 import { getProfile, type BusinessProfile } from './profile-store'
-import { listSites, saveSite, sanitizeSlug, type SiteBlock } from './sites-store'
+import { listSiteHeads, saveSite, sanitizeSlug, type SiteBlock } from './sites-store'
 import { urlTypeForRole, typeLabel } from './provider-public'
 
 // ─── فاز ۲۹۶ — سایت‌سازِ خودکار برای همهٔ اهالیِ دایرکتوری ────────────────────────
@@ -177,9 +177,9 @@ export async function sweepAutoSites(maxCreate = 8, maxSms = 4): Promise<{ creat
   const meta = await loadMeta()
   let created = 0, sms = 0, dirty = false
 
-  // یک خواندنِ store برای کلِ تیک (نه به‌ازای هر کاندید).
+  // فاز ۲۹۷ — فقط سرصفحه‌های سبک (یک ردیفِ ایندکس)، نه سندهای کاملِ هزاران سایت.
   const byOwner = new Map<string, { slug: string; updatedAt: number }>()
-  for (const st of await listSites()) if (st.owner) byOwner.set(String(st.owner), { slug: st.slug, updatedAt: st.updatedAt })
+  for (const st of await listSiteHeads()) if (st.owner) byOwner.set(st.owner, { slug: st.slug, updatedAt: st.updatedAt })
 
   const accounts = listAccounts()
   const candidates = accounts.filter(a => !meta.done[a.phone] && urlTypeForRole(a.role))

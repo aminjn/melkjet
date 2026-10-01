@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resetFailedSms, smsStatus } from '@/app/lib/auto-site'
 import { getSession } from '@/app/lib/session'
-import { listSites } from '@/app/lib/sites-store'
+import { listSiteHeads } from '@/app/lib/sites-store'
 import { allSiteStats, summarize } from '@/app/lib/site-stats-store'
 import { getProfile } from '@/app/lib/profile-store'
 import { getAccount } from '@/app/lib/account-store'
@@ -15,7 +15,7 @@ async function guard() { const s = await getSession(); return s && (s.role === '
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const [sites, stats] = await Promise.all([listSites(), allSiteStats()])
+  const [sites, stats] = await Promise.all([listSiteHeads(), allSiteStats()])
   const autoMeta = pgEnabled() ? await kvGet<{ done?: Record<string, { at: number; smsAt?: number; manual?: boolean }> }>('autosite_meta', {}) : {}
   const done = autoMeta.done || {}
   const roles = listRoles()
@@ -31,7 +31,7 @@ export async function GET() {
       slug: st.slug,
       title: st.title,
       owner,
-      ownerName: (p?.businessName || p?.displayName || acc?.name || st.ownerName || '').trim() || owner,
+      ownerName: (p?.businessName || p?.displayName || acc?.name || '').trim() || owner,
       role: roleName(acc?.role),
       auto: !!rec && !rec.manual,
       smsAt: rec?.smsAt || 0,
