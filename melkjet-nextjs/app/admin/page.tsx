@@ -1922,9 +1922,15 @@ function UserSitesView() {
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   const [rows, setRows] = useState<UserSiteRow[]>([])
-  const [totals, setTotals] = useState<{ sites: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number; loggedInEver: number; loggedIn7d: number; smsFailed: number; smsWaiting: number; smsSampleErr: string } | null>(null)
+  const [totals, setTotals] = useState<{ sites: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number; loggedInEver: number; loggedIn7d: number; smsFailed: number; smsInvalid: number; smsWaiting: number; smsSampleErr: string } | null>(null)
   const [smsMsg, setSmsMsg] = useState('')
   const [q, setQ] = useState('')
+  // فاز ۲۹۷ج — فیلترهای پنل (خواستهٔ صریح: «تو سوپرادمین فیلتر بزار»)
+  const [fType, setFType] = useState<'all' | 'auto' | 'manual'>('all')
+  const [fSms, setFSms] = useState<'all' | 'sent' | 'not'>('all')
+  const [fLogin, setFLogin] = useState<'all' | 'yes' | 'never'>('all')
+  const [fVisit, setFVisit] = useState<'all' | 'has' | 'zero'>('all')
+  const [fRole, setFRole] = useState('')
   const [open, setOpen] = useState('')
   const [loading, setLoading] = useState(true)
   const load = async () => {
@@ -1933,7 +1939,24 @@ function UserSitesView() {
     setLoading(false)
   }
   useEffect(() => { load() }, [])
-  const filtered = rows.filter(r => !q || r.ownerName.includes(q) || r.title.includes(q) || r.slug.includes(q) || r.owner.includes(q))
+  const roles297 = Array.from(new Set(rows.map(r => r.role).filter(Boolean))).sort()
+  const filtered = rows.filter(r =>
+    (!q || r.ownerName.includes(q) || r.title.includes(q) || r.slug.includes(q) || r.owner.includes(q)) &&
+    (fType === 'all' || (fType === 'auto' ? r.auto : !r.auto)) &&
+    (fSms === 'all' || (fSms === 'sent' ? !!r.smsAt : !r.smsAt)) &&
+    (fLogin === 'all' || (fLogin === 'yes' ? !!r.lastLogin : !r.lastLogin)) &&
+    (fVisit === 'all' || (fVisit === 'has' ? r.totalV > 0 : r.totalV === 0)) &&
+    (!fRole || r.role === fRole)
+  )
+  // گروهِ چیپ‌های یک فیلتر — گزینهٔ فعال طلایی است
+  const chips = <V extends string>(label: string, value: V, set: (v: V) => void, opts: [V, string][]) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, color: 'var(--faint)' }}>{label}:</span>
+      {opts.map(([v, t]) => (
+        <button key={v} onClick={() => set(v)} style={{ padding: '4px 11px', borderRadius: 999, border: '1px solid ' + (value === v ? 'var(--gold)' : 'var(--line2)'), background: value === v ? 'rgba(201,168,76,.14)' : 'var(--bg2)', color: value === v ? 'var(--gold)' : 'var(--muted)', fontSize: 11.5, fontWeight: value === v ? 800 : 600, cursor: 'pointer', fontFamily: 'inherit' }}>{t}</button>
+      ))}
+    </span>
+  )
   const tile = (label: string, val: string, color?: string) => (
     <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 110 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{label}</div><div style={{ fontSize: 22, fontWeight: 900, color: color || 'var(--text)' }}>{val}</div></div>
   )
@@ -1958,6 +1981,7 @@ function UserSitesView() {
           {tile('ورودِ کاربر (کل)', fa(totals.loggedInEver))}
           {tile('ورودِ ۷ روز', fa(totals.loggedIn7d), '#5fd98a')}
           {tile('پیامکِ ناموفق', fa(totals.smsFailed), totals.smsFailed ? '#e7674a' : undefined)}
+          {totals.smsInvalid > 0 && tile('شمارهٔ ثابت (پیامک‌ناپذیر)', fa(totals.smsInvalid), 'var(--muted)')}
         </div>
       )}
       {totals && totals.smsFailed > 0 && (
@@ -1965,7 +1989,7 @@ function UserSitesView() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
             <span style={{ color: '#e7674a', fontWeight: 800 }}>⚠ {fa(totals.smsFailed)} پیامکِ سایت‌ساز نرفته است.</span>
             {totals.smsSampleErr && <span style={{ color: 'var(--muted)' }}>آخرین خطا: <code style={{ direction: 'ltr', display: 'inline-block' }}>{totals.smsSampleErr}</code></span>}
-            <span style={{ color: 'var(--faint)', fontSize: 12 }}>معمولاً یعنی «کد پترنِ اتوماسیون» در بخشِ «پیامک و الگوها» تنظیم نشده. بعد از تنظیم، این دکمه را بزن:</span>
+            <span style={{ color: 'var(--faint)', fontSize: 12 }}>معمولاً یعنی «کد پترنِ سایت‌ساز» در بخشِ «پیامک و الگوها» تنظیم نشده. بعد از تنظیم، این دکمه را بزن (شماره‌های ثابت که پیامک‌ناپذیرند جداگانه شمرده می‌شوند و دوباره تلاش نمی‌شوند):</span>
             <button disabled={!!smsMsg} onClick={async () => {
               setSmsMsg('در حال بازنشانی…')
               try { const r = await fetch('/api/admin/sites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resetSms' }) }); const j = await r.json(); setSmsMsg(j.ok ? `✓ ${fa(j.reset || 0)} پیامک دوباره در صفِ ارسال رفت (هر ۴۵ ثانیه چندتا می‌رود)` : '✗ خطا') } catch { setSmsMsg('✗ خطای شبکه') }
@@ -1976,10 +2000,26 @@ function UserSitesView() {
         </Card>
       )}
       <Card>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
           <input style={{ ...inp, flex: '1 1 220px' }} placeholder="جستجو: نام، شماره، اسلاگ…" value={q} onChange={e => setQ(e.target.value)} />
           <button onClick={load} style={{ padding: '9px 18px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>↻ تازه‌سازی</button>
           <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(filtered.length)} سایت</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 12, padding: '10px 12px', background: 'var(--bg2)', borderRadius: 12 }}>
+          {chips('نوع', fType, setFType, [['all', 'همه'], ['auto', 'خودکار'], ['manual', 'دست‌ساز']])}
+          {chips('پیامک', fSms, setFSms, [['all', 'همه'], ['sent', 'رفته 📩'], ['not', 'نرفته']])}
+          {chips('ورودِ کاربر', fLogin, setFLogin, [['all', 'همه'], ['yes', 'وارد شده'], ['never', 'هرگز']])}
+          {chips('بازدید', fVisit, setFVisit, [['all', 'همه'], ['has', 'بازدیددار'], ['zero', 'صفر']])}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--faint)' }}>نقش:</span>
+            <select value={fRole} onChange={e => setFRole(e.target.value)} style={{ ...inp, padding: '5px 10px', fontSize: 11.5, borderRadius: 999 }}>
+              <option value="">همه</option>
+              {roles297.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </span>
+          {(fType !== 'all' || fSms !== 'all' || fLogin !== 'all' || fVisit !== 'all' || fRole) && (
+            <button onClick={() => { setFType('all'); setFSms('all'); setFLogin('all'); setFVisit('all'); setFRole('') }} style={{ padding: '4px 11px', borderRadius: 999, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--faint)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✕ پاک‌کردن فیلترها</button>
+          )}
         </div>
         {loading ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>در حال بارگذاری…</div> : (
           <div style={{ overflowX: 'auto' }}>

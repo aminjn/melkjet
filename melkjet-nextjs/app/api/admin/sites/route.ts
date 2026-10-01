@@ -57,7 +57,7 @@ export async function GET() {
   }
   // فاز ۲۹۶د — وضعیتِ پیامک‌های سایت‌ساز: ناموفقِ قطعی + نمونهٔ خطا (تا علت در پنل دیده شود).
   const smsSt = await smsStatus()
-  return NextResponse.json({ rows, totals: { ...totals, smsFailed: smsSt.failed, smsWaiting: smsSt.waiting, smsSampleErr: smsSt.sampleErr } }, { headers: { 'Cache-Control': 'no-store, private' } })
+  return NextResponse.json({ rows, totals: { ...totals, smsFailed: smsSt.failed, smsInvalid: smsSt.invalid, smsWaiting: smsSt.waiting, smsSampleErr: smsSt.sampleErr } }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
 
 export async function POST(req: NextRequest) {

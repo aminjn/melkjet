@@ -58,51 +58,95 @@ export interface AutoSiteSeed {
 }
 
 // نسخهٔ سازنده — بالارفتنش یعنی سایت‌های خودکارِ «دست‌نخورده» در جاروِ بعدی بازسازی می‌شوند.
-export const AUTO_SITE_V = 2
+export const AUTO_SITE_V = 3
 
 /** بدنهٔ سایتِ خودکار از دادهٔ واقعی — خالص و تست‌پذیر. فاز ۲۹۶هـ: چیدمانِ کامل
  *  («سایتِ خالی جذابیت ندارد»): جستجو/فیلترِ کاملِ آگهی‌ها، نظراتِ واقعی، CTA، و برای
- *  معماران کلِ دادهٔ طرح‌۲طرح (نمونه‌کارها/آمار/تحصیلات/مهارت‌ها/دفتر). */
+ *  معماران کلِ دادهٔ طرح‌۲طرح (نمونه‌کارها/آمار/تحصیلات/مهارت‌ها/دفتر).
+ *  فاز ۲۹۷ج: چندصفحه‌ای («کلی صفحه داریم تو سایت‌ساز چرا ندارند») — خانه + صفحه‌های
+ *  جداگانهٔ آگهی‌ها/نمونه‌کارها/درباره/نظرات/تماس در منوی سایت. */
 export function buildAutoSitePayload(s: AutoSiteSeed) {
   const roleLabel = typeLabel(s.roleType)
   const inCity = s.city ? ` در ${s.city}` : ''
   let id = 1
-  const blocks: SiteBlock[] = []
   const a = s.arch
-
-  blocks.push({ id: id++, type: 'hero', props: { heading: s.name, subheading: `${roleLabel}${inCity}${s.tagline ? ' — ' + s.tagline : ''}`, align: 'center', badge: roleLabel, ...(a?.cover ? { image: a.cover } : {}) } })
-  if (s.about && s.about.trim().length >= 20) blocks.push({ id: id++, type: 'about', props: { heading: `دربارهٔ ${s.name}`, text: s.about.trim().slice(0, 1500), ...(s.logo ? { image: s.logo } : {}) } })
+  const footer = (): SiteBlock => ({ id: id++, type: 'footer', props: {} })
+  const contactBlock = (): SiteBlock => ({ id: id++, type: 'contact', props: { heading: 'تماس با ما', phone: s.contactPhone || s.phone, ...(s.address || s.city || a?.officeName ? { address: [a?.officeName, s.address || s.city].filter(Boolean).join(' — ') } : {}) } })
+  const ctaBlock = (): SiteBlock => ({ id: id++, type: 'cta', props: { heading: s.roleType === 'architect' ? 'پروژه‌ای در ذهن دارید؟' : 'به دنبال خرید، فروش یا اجاره هستید؟', subheading: `همین حالا با ${s.name} در ارتباط باشید`, buttonText: s.providerUrl ? 'مشاهدهٔ پروفایل و درخواست مشاوره' : 'تماس با ما', buttonLink: s.providerUrl || '#contact' } })
+  const aboutBlock = (): SiteBlock => ({ id: id++, type: 'about', props: { heading: `دربارهٔ ${s.name}`, text: s.about!.trim().slice(0, 1500), ...(s.logo ? { image: s.logo } : {}) } })
 
   // آمارِ واقعی (فقط عددهای ناصفر — هیچ عددِ ساختگی)
+  const statItems: { label: string; value: string }[] = []
   if (a) {
-    const items: { label: string; value: string }[] = []
-    if (a.projDone) items.push({ label: 'پروژهٔ اجراشده', value: a.projDone.toLocaleString('fa-IR') })
-    if (a.projDoing) items.push({ label: 'در حال اجرا', value: a.projDoing.toLocaleString('fa-IR') })
-    if (a.honors) items.push({ label: 'جایزه و مقام', value: a.honors.toLocaleString('fa-IR') })
-    if (a.rating) items.push({ label: 'امتیاز بازخوردها', value: `${a.rating.toLocaleString('fa-IR')} از ۵` })
-    if (items.length >= 2) blocks.push({ id: id++, type: 'stats', props: { items } })
+    if (a.projDone) statItems.push({ label: 'پروژهٔ اجراشده', value: a.projDone.toLocaleString('fa-IR') })
+    if (a.projDoing) statItems.push({ label: 'در حال اجرا', value: a.projDoing.toLocaleString('fa-IR') })
+    if (a.honors) statItems.push({ label: 'جایزه و مقام', value: a.honors.toLocaleString('fa-IR') })
+    if (a.rating) statItems.push({ label: 'امتیاز بازخوردها', value: `${a.rating.toLocaleString('fa-IR')} از ۵` })
   }
+  const statsBlock = (): SiteBlock => ({ id: id++, type: 'stats', props: { items: statItems } })
 
+  const hasAbout = !!(s.about && s.about.trim().length >= 20)
+
+  // ── صفحهٔ خانه ──
+  const blocks: SiteBlock[] = []
+  blocks.push({ id: id++, type: 'hero', props: { heading: s.name, subheading: `${roleLabel}${inCity}${s.tagline ? ' — ' + s.tagline : ''}`, align: 'center', badge: roleLabel, ...(a?.cover ? { image: a.cover } : {}) } })
+  if (hasAbout) blocks.push(aboutBlock())
+  if (statItems.length >= 2) blocks.push(statsBlock())
   if (s.specialties.length) blocks.push({ id: id++, type: 'services', props: { heading: 'خدمات و تخصص‌ها', items: s.specialties.slice(0, 9).map(t => ({ title: t })), perSlide: 3 } })
 
   if (LISTING_TYPES.has(s.roleType)) {
-    // جستجو/فیلترِ کاملِ آگهی‌های خودِ شخص (نه فقط اسلایدر) — «فیلتر و امکانات کامل».
-    blocks.push({ id: id++, type: 'searchlist', props: { heading: `جستجو در آگهی‌های ${s.name}`, total: 120 } })
+    // خانه: اسلایدرِ آخرین آگهی‌ها؛ جستجو/فیلترِ کامل در صفحهٔ اختصاصیِ «آگهی‌ها».
+    blocks.push({ id: id++, type: 'listings', props: { heading: `آخرین آگهی‌های ${s.name}`, total: 9, perSlide: 3 } })
     if (s.roleType === 'agency') blocks.push({ id: id++, type: 'team', props: { heading: 'مشاوران ما' } })
   }
   if (CATALOG_TYPES.has(s.roleType)) blocks.push({ id: id++, type: 'catalog', props: { heading: `محصولات ${s.name}` } })
 
   if (a) {
-    if (a.images.length) blocks.push({ id: id++, type: 'gallery', props: { heading: 'نمونه‌کارها و پروژه‌ها', images: a.images.slice(0, 12), perSlide: 3 } })
+    if (a.images.length) blocks.push({ id: id++, type: 'gallery', props: { heading: 'نمونه‌کارها و پروژه‌ها', images: a.images.slice(0, 6), perSlide: 3 } })
     if (a.skills.length || a.engagements.length) blocks.push({ id: id++, type: 'services', props: { heading: 'مهارت‌ها و حوزه‌های همکاری', items: [...a.skills, ...a.engagements].slice(0, 9).map(t => ({ title: t })), perSlide: 3 } })
     if (a.edus.length) blocks.push({ id: id++, type: 'services', props: { heading: 'تحصیلات و سوابق', items: a.edus.slice(0, 6).map(t => ({ title: t })), perSlide: 3 } })
   }
 
   // نظراتِ واقعیِ تاییدشده (بلوک خودش از store می‌خواند — همیشه تازه) + فرمِ ثبت
   blocks.push({ id: id++, type: 'testimonials', props: { heading: 'نظرات مشتریان' } })
-  blocks.push({ id: id++, type: 'cta', props: { heading: s.roleType === 'architect' ? 'پروژه‌ای در ذهن دارید؟' : 'به دنبال خرید، فروش یا اجاره هستید؟', subheading: `همین حالا با ${s.name} در ارتباط باشید`, buttonText: s.providerUrl ? 'مشاهدهٔ پروفایل و درخواست مشاوره' : 'تماس با ما', buttonLink: s.providerUrl || '#contact' } })
-  blocks.push({ id: id++, type: 'contact', props: { heading: 'تماس با ما', phone: s.contactPhone || s.phone, ...(s.address || s.city || a?.officeName ? { address: [a?.officeName, s.address || s.city].filter(Boolean).join(' — ') } : {}) } })
-  blocks.push({ id: id++, type: 'footer', props: {} })
+  blocks.push(ctaBlock())
+  blocks.push(contactBlock())
+  blocks.push(footer())
+
+  // ── صفحه‌های منو — سایتِ واقعی چندصفحه است، نه یک اسکرولِ بلند ──
+  const pages: { slug: string; title: string; menuLabel?: string; blocks: SiteBlock[] }[] = [{ slug: 'home', title: 'خانه', blocks }]
+  if (LISTING_TYPES.has(s.roleType)) {
+    pages.push({ slug: 'listings', title: `آگهی‌های ${s.name}`, menuLabel: 'آگهی‌ها', blocks: [
+      { id: id++, type: 'searchlist', props: { heading: `جستجو در آگهی‌های ${s.name}`, total: 150 } },
+      footer(),
+    ] })
+  }
+  if (CATALOG_TYPES.has(s.roleType)) {
+    pages.push({ slug: 'products', title: `محصولات ${s.name}`, menuLabel: 'محصولات', blocks: [
+      { id: id++, type: 'catalog', props: { heading: `محصولات ${s.name}` } },
+      footer(),
+    ] })
+  }
+  if (a && a.images.length) {
+    pages.push({ slug: 'portfolio', title: 'نمونه‌کارها و پروژه‌ها', menuLabel: 'نمونه‌کارها', blocks: [
+      { id: id++, type: 'gallery', props: { heading: 'نمونه‌کارها و پروژه‌ها', images: a.images.slice(0, 24), perSlide: 3 } },
+      ...(a.skills.length || a.engagements.length ? [{ id: id++, type: 'services', props: { heading: 'مهارت‌ها و حوزه‌های همکاری', items: [...a.skills, ...a.engagements].slice(0, 9).map(t => ({ title: t })), perSlide: 3 } } as SiteBlock] : []),
+      footer(),
+    ] })
+  }
+  if (hasAbout || a?.edus.length || statItems.length >= 2) {
+    pages.push({ slug: 'about', title: `دربارهٔ ${s.name}`, menuLabel: 'درباره', blocks: [
+      ...(hasAbout ? [aboutBlock()] : []),
+      ...(statItems.length >= 2 ? [statsBlock()] : []),
+      ...(a?.edus.length ? [{ id: id++, type: 'services', props: { heading: 'تحصیلات و سوابق', items: a.edus.slice(0, 6).map(t => ({ title: t })), perSlide: 3 } } as SiteBlock] : []),
+      footer(),
+    ] })
+  }
+  pages.push({ slug: 'reviews', title: 'نظرات مشتریان', menuLabel: 'نظرات', blocks: [
+    { id: id++, type: 'testimonials', props: { heading: 'نظرات مشتریان' } },
+    footer(),
+  ] })
+  pages.push({ slug: 'contact', title: 'تماس با ما', menuLabel: 'تماس', blocks: [contactBlock(), ctaBlock(), footer()] })
 
   // سئو از واقعیت‌های ساخت‌یافته — عنوانی که با «نامِ شخص» شروع می‌شود (هدف: جست‌وجوی نام).
   const seoTitle = `${s.name} | ${roleLabel}${inCity}`.slice(0, 70)
@@ -112,7 +156,7 @@ export function buildAutoSitePayload(s: AutoSiteSeed) {
     title: s.name,
     owner: s.phone,
     ownerName: s.name,
-    pages: [{ slug: 'home', title: 'خانه', blocks }],
+    pages,
     seo: { title: seoTitle, description: seoDesc },
   }
 }
@@ -222,6 +266,9 @@ export async function sweepAutoSites(maxCreate = 8, maxSms = 4): Promise<{ creat
     for (const [phone, rec] of Object.entries(meta.done)) {
       if (sms >= maxSms) break
       if (rec.manual || rec.smsAt || (rec.smsTries || 0) >= 3) continue
+      // فاز ۲۹۷ج — حسابِ با کلیدِ شمارهٔ ثابت (مثلاً آژانسِ ۰۲۱…) هرگز پیامک نمی‌گیرد؛
+      // تلاش برایش فقط «شمارهٔ نامعتبر» و چرخیدنِ بی‌پایانِ صفِ retry است → ناموفقِ قطعی.
+      if (!/^09\d{9}$/.test(phone)) { rec.smsTries = 3; rec.lastErr = 'شمارهٔ ثابت/غیرموبایل — پیامک ممکن نیست'; dirty = true; continue }
       const name = (getProfile(phone).businessName || getProfile(phone).displayName || listAccounts().find(a => a.phone === phone)?.name || '').trim() || 'همکار'
       try {
         // فاز ۲۹۷ب — پترنِ اختصاصیِ سایت‌ساز (متنِ پیامک از خودِ پترنِ ثبت‌شده می‌آید).
@@ -243,25 +290,28 @@ export async function sweepAutoSites(maxCreate = 8, maxSms = 4): Promise<{ creat
   return { created, sms, pending }
 }
 
-/** فاز ۲۹۶د — بعد از درست‌شدنِ پیکربندیِ پیامک (پترنِ اتوماسیون)، ناموفق‌ها دوباره در صف می‌آیند. */
+/** فاز ۲۹۶د — بعد از درست‌شدنِ پیکربندیِ پیامک (پترنِ اتوماسیون)، ناموفق‌ها دوباره در صف می‌آیند.
+ *  فاز ۲۹۷ج: شماره‌های ثابت/غیرموبایل بازنشانی نمی‌شوند — پیامک به آنها هرگز ممکن نیست. */
 export async function resetFailedSms(): Promise<number> {
   const meta = await loadMeta()
   let n = 0
-  for (const rec of Object.values(meta.done)) {
-    if (!rec.manual && !rec.smsAt && (rec.smsTries || 0) > 0) { rec.smsTries = 0; n++ }
+  for (const [phone, rec] of Object.entries(meta.done)) {
+    if (!rec.manual && !rec.smsAt && (rec.smsTries || 0) > 0 && /^09\d{9}$/.test(phone)) { rec.smsTries = 0; n++ }
   }
   if (n) await saveMeta(meta)
   return n
 }
 
-/** وضعیتِ پیامک‌ها برای پنل: چندتا ناموفقِ قطعی و نمونهٔ آخرین خطا. */
-export async function smsStatus(): Promise<{ failed: number; waiting: number; sampleErr: string }> {
+/** وضعیتِ پیامک‌ها برای پنل: ناموفقِ قطعی (تفکیکِ شمارهٔ ثابت) و نمونهٔ آخرین خطا. */
+export async function smsStatus(): Promise<{ failed: number; invalid: number; waiting: number; sampleErr: string }> {
   const meta = await loadMeta()
-  let failed = 0, waiting = 0, sampleErr = ''
-  for (const rec of Object.values(meta.done)) {
+  let failed = 0, invalid = 0, waiting = 0, sampleErr = ''
+  for (const [phone, rec] of Object.entries(meta.done)) {
     if (rec.manual || rec.smsAt) continue
-    if ((rec.smsTries || 0) >= 3) { failed++; if (!sampleErr && rec.lastErr) sampleErr = rec.lastErr }
-    else waiting++
+    if ((rec.smsTries || 0) >= 3) {
+      if (!/^09\d{9}$/.test(phone)) invalid++
+      else { failed++; if (!sampleErr && rec.lastErr) sampleErr = rec.lastErr }
+    } else waiting++
   }
-  return { failed, waiting, sampleErr }
+  return { failed, invalid, waiting, sampleErr }
 }

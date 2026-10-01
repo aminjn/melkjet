@@ -3302,15 +3302,28 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('اسلاگِ قدیمیِ لاتین مثلِ قبل کار می‌کند', sanitizeSlug('My Site! 22') === 'my-site-22')
   const pay296 = buildAutoSitePayload({ phone: '09120000296', name: 'علی رضایی', roleType: 'pros', city: 'تهران', tagline: '', about: 'بیش از ده سال تجربهٔ مشاورهٔ املاک در غرب تهران و همراهیِ صدها معامله.', logo: '', specialties: ['آپارتمان', 'ویلایی'], contactPhone: '', address: '' })
   const types296 = pay296.pages[0].blocks.map(b => b.type)
-  ok('سایتِ مشاور کامل است: hero/about/services/searchlist/testimonials/cta/contact/footer', ['hero', 'about', 'services', 'searchlist', 'testimonials', 'cta', 'contact', 'footer'].every(t => types296.includes(t)))
+  ok('خانهٔ سایتِ مشاور کامل است: hero/about/services/listings/testimonials/cta/contact/footer', ['hero', 'about', 'services', 'listings', 'testimonials', 'cta', 'contact', 'footer'].every(t => types296.includes(t)))
   ok('عنوانِ سئو با نامِ شخص شروع می‌شود و شهر دارد', pay296.seo.title.startsWith('علی رضایی') && pay296.seo.title.includes('تهران'))
   ok('توضیحِ سئو از واقعیت‌ها ساخته شده (تخصص‌ها) و ≤۱۶۰', pay296.seo.description.includes('آپارتمان') && pay296.seo.description.length <= 160)
   const pay296b = buildAutoSitePayload({ phone: '09120000297', name: 'استودیو معماری نو', roleType: 'architect', specialties: [], about: '', logo: '', contactPhone: '', address: '', arch: { cover: 'https://x/c.jpg', images: ['https://x/1.jpg', 'https://x/2.jpg'], projDone: 8, projDoing: 2, honors: 3, rating: 4.6, edus: ['لیسانس معماری'], skills: ['طراحی داخلی'], engagements: ['نظارت'], officeName: 'دفتر نو' } })
   const types296b = pay296b.pages[0].blocks.map(b => b.type)
-  ok('معمار بلوکِ آگهی ندارد (دادهٔ ملکی ندارد)', !types296b.includes('listings') && !types296b.includes('searchlist'))
+  ok('معمار بلوکِ آگهی ندارد (دادهٔ ملکی ندارد)', !types296b.includes('listings') && !types296b.includes('searchlist') && !pay296b.pages.some(p => p.slug === 'listings'))
   ok('سایتِ معمار دادهٔ کاملِ طرح‌۲طرح را دارد: stats/gallery/services×۲', types296b.includes('stats') && types296b.includes('gallery') && types296b.filter(t => t === 'services').length >= 2)
   const st296 = pay296b.pages[0].blocks.find(b => b.type === 'stats')
   ok('آمارِ معمار فقط عددهای واقعیِ ناصفر است', Array.isArray(st296.props.items) && st296.props.items.length === 4 && st296.props.items.every(i => i.value && i.label))
+
+  // ── فاز ۲۹۷ج — سایتِ خودکار چندصفحه‌ای است («کلی صفحه داریم تو سایت‌ساز چرا ندارند») ──
+  const slugs297 = pay296.pages.map(p => p.slug)
+  ok('سایتِ مشاور صفحه‌های منو دارد: آگهی‌ها/درباره/نظرات/تماس', ['home', 'listings', 'about', 'reviews', 'contact'].every(s => slugs297.includes(s)))
+  const lp297 = pay296.pages.find(p => p.slug === 'listings')
+  ok('صفحهٔ «آگهی‌ها» جستجو/فیلترِ کامل با سقفِ ۱۵۰ دارد', lp297.blocks.some(b => b.type === 'searchlist' && b.props.total === 150))
+  const slugs297b = pay296b.pages.map(p => p.slug)
+  ok('سایتِ معمار صفحهٔ «نمونه‌کارها» دارد و مشاور ندارد', slugs297b.includes('portfolio') && !slugs297.includes('portfolio'))
+  ok('صفحهٔ نمونه‌کارها گالریِ کامل دارد', pay296b.pages.find(p => p.slug === 'portfolio').blocks.some(b => b.type === 'gallery' && b.props.images.length === 2))
+  const allIds297 = pay296.pages.flatMap(p => p.blocks.map(b => b.id))
+  ok('شناسهٔ بلوک‌ها در کلِ سایت یکتاست', new Set(allIds297).size === allIds297.length)
+  const agency297 = buildAutoSitePayload({ phone: '02112345678', name: 'آژانس تست', roleType: 'agency', specialties: [], about: '', logo: '', contactPhone: '', address: '' })
+  ok('خانهٔ آژانس بلوکِ تیمِ «مشاوران ما» دارد', agency297.pages[0].blocks.some(b => b.type === 'team'))
 }
 
 // ── فاز ۲۹۶ج — اسلاگِ فارسیِ سایت از پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود ──
@@ -3321,6 +3334,22 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   const encoded = await getSite(encodeURIComponent('آژانس-املاک-تستی'))
   ok('اسلاگِ فارسی مستقیم پیدا می‌شود', !!direct && direct.owner === '09000000296')
   ok('پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود (ریشهٔ ۴۰۴ همگانی)', !!encoded && encoded.slug === direct.slug)
+}
+
+// ── فاز ۲۹۷ج — تیمِ آژانسِ اسکرپی: fallback به مشاورانِ graduateشدهٔ رُستر ──
+{
+  const { addScrape, patchScrape } = await import('../app/lib/agency-roster-store.ts')
+  const { getTeamMembers } = await import('../app/lib/team-members.ts')
+  const r297 = await addScrape({ slug: 'team-fallback-297' })
+  await patchScrape(r297.scrape.id, {
+    agencyOwner: '09127772970',
+    advisors: [
+      { key: 'k1', name: 'رضا تیمی', owner: '09127772971', phone: '09127772971', listingCount: 3 },
+      { key: 'k2', name: 'بی‌حساب', owner: 'adv:x:k2', listingCount: 1 },   // graduate نشده — نباید بیاید
+    ],
+  })
+  const team297 = await getTeamMembers('09127772970')
+  ok('آژانسِ بدونِ رابطهٔ رسمی، تیمش از رُستر می‌آید (فقط حساب‌دارها)', team297.length === 1 && team297[0].phone === '09127772971' && team297[0].name === 'رضا تیمی')
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
