@@ -84,11 +84,10 @@ export default function BuilderProfileView({ profile, initialFollowing, loggedIn
 
   return (
     <div dir="rtl" style={{
-      '--bg': '#0d0d0f', '--bg2': '#141417', '--surface': '#18181c', '--line': 'rgba(255,255,255,0.08)',
-      '--line2': 'rgba(255,255,255,0.14)', '--text': '#f2f1ee', '--muted': '#9a9a98', '--faint': '#6a6a68',
-      '--gold': '#c9a96a', '--gold2': '#e0c489', '--goldDim': 'rgba(201,169,106,0.12)',
+      // فاز ۲۹۴ — پالتِ تیرهٔ میخ‌شدهٔ inline حذف شد: متغیرها از تمِ سراسری (html.light) می‌آیند
+      // تا سوییچِ دارک/لایت روی این صفحه هم اثر کند («دارک و لایت می‌کنیم هیچی تغییر نمی‌کنه»).
       minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', system-ui, sans-serif",
-    } as React.CSSProperties}>
+    }}>
 
       <Nav />
 
