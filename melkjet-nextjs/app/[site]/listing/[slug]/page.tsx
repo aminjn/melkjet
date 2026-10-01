@@ -1,13 +1,22 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getSite } from '@/app/lib/sites-store'
-import { getItemById, type Item } from '@/app/lib/scraper-store'
+import { getSite, type Site } from '@/app/lib/sites-store'
+import { getItemById } from '@/app/lib/scraper-store'
 import { idFromListingSlug, listingHref } from '@/app/lib/listing-url'
+import { listingSeoText, buildListingDetailData } from '@/app/lib/listing-detail-data'
 import { SiteChrome } from '../../page'
-import ListingDetail, { type DetailItem } from '../../ListingDetail'
+import Beacon from '../../Beacon'
+import PropertyClient from '@/app/listing/[slug]/PropertyClient'
 
 export const revalidate = 300
 const MAIN = 'https://melkjet.com'
+
+// ─── فاز ۲۹۷د — صفحهٔ آگهیِ داخلِ سایت‌ساز = «خودِ» صفحهٔ آگهیِ سایتِ اصلی ────────────
+// قبلاً یک کپیِ موازیِ فقیر (ListingDetail) بود که همیشه از سایتِ اصلی عقب می‌افتاد
+// («امکانات دقیقا مثل سایت اصلی باشه»). حالا همان موتور (PropertyClient + کلِ منطقِ
+// سرورسایدِ listing-detail-data: سئوی بازساخته، JSON-LDها، امتیازِ اصالت، enrich در
+// HTMLِ اولیه) داخلِ پوستهٔ همان سایت (NavBar/فوتر/تمِ خودش) رندر می‌شود — یک موتور،
+// دو پوسته؛ هر امکانِ تازهٔ صفحهٔ اصلی خودکار اینجا هم هست.
 
 async function load(siteSlug: string, slug: string) {
   const site = await getSite(siteSlug); if (!site) return null
@@ -16,36 +25,56 @@ async function load(siteSlug: string, slug: string) {
   return { site, it }
 }
 
-// نگاشتِ آیتم به دادهٔ نمایش (عکس‌ها + مشخصات) — کلیدهای داخلی (__) و شهر/محلهٔ تکراری حذف می‌شوند.
-function toDetail(it: Item): DetailItem {
-  const gallery = (it.meta?.['__gallery'] || '').split('\n').map(s => s.trim()).filter(Boolean)
-  const images = (gallery.length ? gallery : (it.image ? [it.image] : [])).slice(0, 12)
-  const specs: { k: string; v: string }[] = []
-  for (const [k, v] of Object.entries(it.meta || {})) { if (!v || k.startsWith('__') || ['شهر', 'محله', 'استان', 'منطقه'].includes(k)) continue; specs.push({ k, v: String(v) }) }
-  const lat = Number(it.meta?.['__lat']); const lng = Number(it.meta?.['__lng'])
-  return { id: it.id, title: it.title, price: it.price, location: it.location, images, description: it.excerpt, specs: specs.slice(0, 16), lat: lat || undefined, lng: lng || undefined }
-}
-
 export async function generateMetadata({ params }: { params: Promise<{ site: string; slug: string }> }): Promise<Metadata> {
   const { site: siteSlug, slug } = await params
   const r = await load(siteSlug, slug)
   if (!r) return { title: 'آگهی یافت نشد' }
+  // همان سئوی بازساختهٔ سایتِ اصلی (فاز ۲۲۸ + سئوِ محله‌ای)، با برندِ خودِ سایت.
+  const { title, desc } = await listingSeoText(r.it)
   const canonical = `${MAIN}${listingHref(r.it.id, r.it.title, r.it.location)}`   // مرجع = صفحهٔ اصلی → گوگل تکراری نمی‌بیند
   return {
-    title: `${r.it.title} | ${r.site.seo?.title || r.site.title}`,
-    description: (r.it.excerpt || r.it.title).slice(0, 160),
+    title: `${title} | ${r.site.seo?.title || r.site.title}`,
+    description: desc,
     alternates: { canonical },
-    openGraph: { title: r.it.title, images: r.it.image ? [r.it.image] : undefined },
+    openGraph: { title, images: r.it.image ? [r.it.image] : undefined },
   }
+}
+
+// پالتِ سایتِ اصلی (تمِ روشن) با طلاییِ برندِ همان سایت — تا اجزای مشترکِ صفحهٔ آگهی
+// داخلِ سایتِ شخصی درست رنگ بگیرند. پینِ inline اینجا «عمدی» است (استثنای قاعدهٔ فاز ۲۹۴،
+// مثلِ empRoot): سایتِ منتشرشده تمِ ثابتِ خودش را دارد و سوییچِ دارک/لایتِ ملک‌جت رویش معنا ندارد.
+function themeVars(site: Site): React.CSSProperties {
+  const t = site.theme
+  const primary = t?.primary || '#c9a84c'
+  return {
+    '--bg': t?.bg || '#faf8f3', '--bg2': '#f5f2ea', '--surface': t?.surface || '#ffffff',
+    '--line': 'rgba(0,0,0,0.08)', '--line2': 'rgba(0,0,0,0.14)',
+    '--text': t?.heading || '#1a1712', '--muted': 'rgba(26,23,18,0.66)', '--faint': 'rgba(26,23,18,0.4)',
+    '--gold': primary, '--gold2': primary, '--goldText': primary, '--goldDim': `${primary}1f`,
+    '--navbg': 'rgba(250,248,243,0.92)', '--shadow': '0 24px 60px -28px rgba(40,30,10,0.18)',
+  } as React.CSSProperties
 }
 
 export default async function InSiteListing({ params }: { params: Promise<{ site: string; slug: string }> }) {
   const { site: siteSlug, slug } = await params
   const r = await load(siteSlug, slug)
   if (!r) notFound()
+  const d = await buildListingDetailData(r.it)
   return (
     <SiteChrome site={r.site} appendFooter>
-      <ListingDetail item={toDetail(r.it)} siteSlug={r.site.slug} backLabel={`بازگشت به ${r.site.title}`} />
+      <Beacon slug={r.site.slug} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(d.ld) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(d.breadcrumbLd) }} />
+      {d.nearbyLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(d.nearbyLd) }} />}
+      <div style={themeVars(r.site)}>
+        <PropertyClient
+          id={String(r.it.id)}
+          initial={d.initial as any}
+          originality={d.originality}
+          initialEnrich={d.initialEnrich as any}
+          site={{ slug: r.site.slug, title: r.site.title, hasListingsPage: r.site.pages.some(p => p.slug === 'listings') }}
+        />
+      </div>
     </SiteChrome>
   )
 }
