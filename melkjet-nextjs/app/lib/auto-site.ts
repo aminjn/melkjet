@@ -224,8 +224,9 @@ export async function sweepAutoSites(maxCreate = 8, maxSms = 4): Promise<{ creat
       if (rec.manual || rec.smsAt || (rec.smsTries || 0) >= 3) continue
       const name = (getProfile(phone).businessName || getProfile(phone).displayName || listAccounts().find(a => a.phone === phone)?.name || '').trim() || 'همکار'
       try {
-        const { sendServiceSms } = await import('./sms')
-        const r = await sendServiceSms(phone, `سلام ${name} عزیز؛ سایت اختصاصی شما در ملک‌جت آماده شد:\nhttps://melkjet.com/${encodeURIComponent(rec.slug)}\nآگهی‌ها و پروفایل شما در آن به‌روز نمایش داده می‌شود.`, 'سایت‌ساز ملک‌جت', name)
+        // فاز ۲۹۷ب — پترنِ اختصاصیِ سایت‌ساز (متنِ پیامک از خودِ پترنِ ثبت‌شده می‌آید).
+        const { sendAutoSiteSms } = await import('./sms')
+        const r = await sendAutoSiteSms(phone, name, `https://melkjet.com/${encodeURIComponent(rec.slug)}`)
         if (r.ok) { rec.smsAt = Date.now(); rec.lastErr = ''; sms++ }
         else {
           rec.smsTries = (rec.smsTries || 0) + 1; rec.lastErr = String(r.error || 'خطا').slice(0, 120)

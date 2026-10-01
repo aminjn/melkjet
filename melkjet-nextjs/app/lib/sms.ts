@@ -39,3 +39,33 @@ export async function sendServiceSms(phone: string, text: string, summary = 'ا�
     return ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` }
   } catch (e: any) { return { ok: false, error: e?.message || 'خطا' } }
 }
+
+// ─── فاز ۲۹۷ب — پیامکِ سایت‌ساز: پترنِ «اختصاصیِ» خودش ───────────────────────────
+// سایت‌ساز نباید پترنِ عمومیِ اتوماسیون (با متنِ «کارشناس تماس می‌گیرد») را بدزدد؛
+// متنِ پیامکِ پترنی از خودِ پترنِ ثبت‌شده می‌آید، پس هر کارکرد پترنِ خودش را می‌خواهد.
+// اولویت: autositePattern؛ نبود → متنِ آزادِ bulk (فقط خطِ تبلیغاتی).
+export async function sendAutoSiteSms(phone: string, name: string, url: string): Promise<{ ok: boolean; error?: string }> {
+  const a = getAdminData()
+  const apiKey = process.env.IPPANEL_API_KEY || a.ippanel?.apiKey
+  const sender = process.env.IPPANEL_SENDER || a.ippanel?.sender
+  if (!apiKey || !sender) return { ok: false, error: 'پیامک پیکربندی نشده' }
+  const recipient = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+  if (!/^09\d{9}$/.test(recipient)) return { ok: false, error: 'شمارهٔ نامعتبر' }
+  const patternCode = (a.ippanel?.autositePattern || '').trim()
+  const nameVar = (a.ippanel?.autositeVar || 'name').trim() || 'name'
+  try {
+    if (patternCode) {
+      // لینک کوتاه/ردگیری می‌شود و در متغیرِ لینکِ پترن می‌نشیند (همان سازوکارِ بقیهٔ پترن‌ها).
+      const short = await shortenLinksInText(url, { channel: 'autosite', phone: recipient })
+      const variable: Record<string, string> = { [nameVar]: String(name || 'همکار').slice(0, 60) }
+      const lv = linkVarName()
+      if (lv) variable[lv] = firstUrl(short) || short || siteBase()
+      const body = { code: patternCode, sender, recipient, variable }
+      const res = await shecanRequest('https://api2.ippanel.com/api/v1/sms/pattern/normal/send', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
+      const ok = res.status >= 200 && res.status < 300
+      return ok ? { ok: true } : { ok: false, error: `HTTP ${res.status} (پترن سایت‌ساز)` }
+    }
+    // بدونِ پترنِ اختصاصی → متنِ آزاد (خطِ تبلیغاتی لازم دارد؛ خطِ خدماتی رد می‌کند)
+    return sendServiceSms(recipient, `سلام ${name} عزیز؛ سایت اختصاصی شما در ملک‌جت آماده شد:\n${url}\nملک‌جت`, 'سایت‌ساز ملک‌جت', name)
+  } catch (e: any) { return { ok: false, error: e?.message || 'خطا' } }
+}

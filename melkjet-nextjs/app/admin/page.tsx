@@ -3878,13 +3878,13 @@ function ModelSelect({ models, value, onChange, only }: { models: string[]; valu
 
 // ─── IPPanel SMS config ───────────────────────────────────────────────────
 function IPPanelConfig() {
-  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code', automationPattern: '', automationVar: 'name', outreachPattern: '', outreachVar: 'name', linkVar: '' })
+  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code', automationPattern: '', automationVar: 'name', outreachPattern: '', outreachVar: 'name', autositePattern: '', autositeVar: 'name', linkVar: '' })
   const [masked, setMasked] = useState('')
   const [msg, setMsg] = useState('')
-  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code', automationPattern: d.automationPattern || '', automationVar: d.automationVar || 'name', outreachPattern: d.outreachPattern || '', outreachVar: d.outreachVar || 'name', linkVar: d.linkVar || '' })) } }) }, [])
+  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code', automationPattern: d.automationPattern || '', automationVar: d.automationVar || 'name', outreachPattern: d.outreachPattern || '', outreachVar: d.outreachVar || 'name', autositePattern: d.autositePattern || '', autositeVar: d.autositeVar || 'name', linkVar: d.linkVar || '' })) } }) }, [])
   const save = async () => {
     setMsg('')
-    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar, automationPattern: f.automationPattern, automationVar: f.automationVar, outreachPattern: f.outreachPattern, outreachVar: f.outreachVar, linkVar: f.linkVar }
+    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar, automationPattern: f.automationPattern, automationVar: f.automationVar, outreachPattern: f.outreachPattern, outreachVar: f.outreachVar, autositePattern: f.autositePattern, autositeVar: f.autositeVar, linkVar: f.linkVar }
     if (f.apiKey.trim()) payload.apiKey = f.apiKey.trim()
     const r = await fetch('/api/admin/ippanel-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     const d = await r.json()
@@ -3908,6 +3908,8 @@ function IPPanelConfig() {
         <div><label style={lab}>نام متغیرِ پترنِ اتوماسیون</label><input style={inp} placeholder="name" value={f.automationVar} onChange={e => setF({ ...f, automationVar: e.target.value })} /></div>
         <div><label style={lab}>کد پترنِ دعوت (مالکانِ آگهی)</label><input style={inp} placeholder="کدِ پترنِ دعوت/ثبت‌نام" value={f.outreachPattern} onChange={e => setF({ ...f, outreachPattern: e.target.value })} /></div>
         <div><label style={lab}>نام متغیرِ پترنِ دعوت</label><input style={inp} placeholder="name" value={f.outreachVar} onChange={e => setF({ ...f, outreachVar: e.target.value })} /></div>
+        <div><label style={lab}>کد پترنِ سایت‌ساز (اعلامِ «سایتِ شما آماده شد»)</label><input style={inp} placeholder="کدِ پترنِ سایت‌ساز" value={f.autositePattern} onChange={e => setF({ ...f, autositePattern: e.target.value })} /></div>
+        <div><label style={lab}>نام متغیرِ پترنِ سایت‌ساز</label><input style={inp} placeholder="name" value={f.autositeVar} onChange={e => setF({ ...f, autositeVar: e.target.value })} /></div>
         <div style={{ gridColumn: '1 / -1' }}><label style={lab}>نام متغیرِ لینک در پترن‌ها (مثلاً link) — برای کوتاه‌کنندهٔ لینک</label><input style={inp} placeholder="link" value={f.linkVar} onChange={e => setF({ ...f, linkVar: e.target.value })} /></div>
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: -4, marginBottom: 10, lineHeight: 1.8 }}>پترنِ اتوماسیون و دعوت برای خطِ خدماتی‌اند (متنِ ثابت + متغیرِ کوتاهِ نام). اگر خالی بمانند و خطِ تبلیغاتی داشته باشی، متنِ آزاد فرستاده می‌شود.</div>
@@ -3982,6 +3984,7 @@ function SmsView() {
     { ch: 'تکمیل پروفایل', v: 'message', text: 'کاربر گرامی ملک‌جت، وضعیت پروفایل کسب‌وکار شما: %message%. برای رفع، وارد پنل شوید.' },
     { ch: 'اتوماسیون گردش‌کار', v: 'name', text: 'سلام %name%، کارشناسِ ملک‌جت به‌زودی با شما تماس می‌گیرد. با تشکر.' },
     { ch: 'دعوت مالکانِ آگهی', v: 'name', text: '%name% گرامی، آگهی‌های شما رایگان و خودکار در ملک‌جت منتشر می‌شود! پنل اختصاصی، وب‌سایت‌ساز، CRM و دستیار هوش مصنوعی — همگی رایگان. همین حالا ثبت‌نام کنید: melkjet.com' },
+    { ch: 'سایت‌ساز (سایتِ اختصاصی آماده شد)', v: 'name + link', text: 'سلام %name% عزیز؛ سایت اختصاصی شما در ملک‌جت آماده شد: %link%\nملک‌جت' },
   ]
   return (
     <div style={{ animation: 'fade .35s ease' }}>
