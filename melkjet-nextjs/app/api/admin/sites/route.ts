@@ -34,6 +34,7 @@ export async function GET() {
       role: roleName(acc?.role),
       auto: !!rec && !rec.manual,
       smsAt: rec?.smsAt || 0,
+      lastLogin: acc?.lastLogin || 0,   // فاز ۲۹۶ب — آخرین ورودِ صاحبِ سایت به پنلش
       createdAt: st.createdAt,
       updatedAt: st.updatedAt,
       today: sm.today, d7v: sm.d7v, d7s: sm.d7s, totalV: sm.totalV, totalS: sm.totalS, lastAt: sm.lastAt,
@@ -49,6 +50,9 @@ export async function GET() {
     viewsToday: rows.reduce((s, r) => s + r.today, 0),
     views7d: rows.reduce((s, r) => s + r.d7v, 0),
     searches7d: rows.reduce((s, r) => s + r.d7s, 0),
+    // فاز ۲۹۶ب — فعالیتِ صاحبانِ سایت: چندتا اصلاً وارد شده‌اند و چندتا در ۷ روزِ اخیر
+    loggedInEver: rows.filter(r => r.lastLogin).length,
+    loggedIn7d: rows.filter(r => r.lastLogin && Date.now() - r.lastLogin < 7 * 864e5).length,
   }
   return NextResponse.json({ rows, totals }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
