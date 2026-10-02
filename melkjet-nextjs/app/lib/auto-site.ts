@@ -59,7 +59,7 @@ export interface AutoSiteSeed {
 }
 
 // نسخهٔ سازنده — بالارفتنش یعنی سایت‌های خودکارِ «دست‌نخورده» در جاروِ بعدی بازسازی می‌شوند.
-export const AUTO_SITE_V = 4
+export const AUTO_SITE_V = 5
 
 // نگاشتِ نوعِ دایرکتوری → پروفایلِ قالب‌های سایت‌ساز (همان گروه‌هایی که ابزار دارد).
 const TYPE_TO_PROFILE: Record<string, string> = {

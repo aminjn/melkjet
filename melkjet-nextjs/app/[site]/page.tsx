@@ -159,15 +159,20 @@ function HeroBlock({ block, primary }: { block: SiteBlock; primary: string }) {
         maxWidth: 1000, margin: '0 auto', width: '100%', textAlign: align as any,
         display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start',
       }}>
-        {/* فاز ۲۹۶و — نشانِ هیرو قابلِ‌تنظیم شد: برای معمار «املاک و مستغلات» غلط بود.
-            بدونِ prop همان متنِ قدیمی می‌ماند (سایت‌های دست‌سازِ موجود عوض نمی‌شوند)؛ خالی = حذف. */}
-        {(props.badge !== undefined ? String(props.badge).trim() : 'املاک و مستغلات') ? (
-          <span className="mjs-hero-badge" style={{
-            display: 'inline-block', fontSize: 13, fontWeight: 700, color: textColor,
-            background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.22)',
-            padding: '7px 16px', borderRadius: 999, marginBottom: 22, backdropFilter: 'blur(4px)',
-          }}>{props.badge !== undefined ? String(props.badge).trim() : 'املاک و مستغلات'}</span>
-        ) : null}
+        {/* فاز ۲۹۶و/۲۹۷و — نشانِ هیرو: سایت‌ساز این را در eyebrow می‌نویسد (BLOCK_DEFAULTS)؛
+            رندر فقط badge را می‌خواند و برای همه «املاک و مستغلات» می‌افتاد (برای سازنده/معمار غلط).
+            ترتیب: eyebrow → badge → متنِ قدیمی. رشتهٔ خالی = حذفِ نشان. */}
+        {(() => {
+          const badge297 = props.eyebrow !== undefined ? String(props.eyebrow).trim()
+            : props.badge !== undefined ? String(props.badge).trim() : 'املاک و مستغلات'
+          return badge297 ? (
+            <span className="mjs-hero-badge" style={{
+              display: 'inline-block', fontSize: 13, fontWeight: 700, color: textColor,
+              background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.22)',
+              padding: '7px 16px', borderRadius: 999, marginBottom: 22, backdropFilter: 'blur(4px)',
+            }}>{badge297}</span>
+          ) : null
+        })()}
         <h1 className="mjs-hero-h1" style={{
           fontSize: 'clamp(32px,6vw,60px)', fontWeight: 900, color: textColor,
           margin: 0, marginBottom: 18, letterSpacing: '-1px', lineHeight: 1.15, maxWidth: 900,

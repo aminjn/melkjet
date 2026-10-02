@@ -3331,6 +3331,16 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   const agency297 = buildAutoSitePayload({ phone: '02112345678', name: 'آژانس تست', roleType: 'agency', specialties: [], about: '', logo: '', contactPhone: '', address: '' })
   ok('سایتِ آژانس بلوکِ تیم و صفحهٔ «تیمِ ما» دارد', agency297.pages.some(p => p.blocks.some(b => b.type === 'team')) && agency297.pages.some(p => p.slug === 'team'))
   ok('انتخابِ قالب قطعی است (بازسازی همان سایت را می‌دهد)', JSON.stringify(buildAutoSitePayload({ phone: '09120000296', name: 'علی رضایی', roleType: 'pros', city: 'تهران', tagline: '', about: 'بیش از ده سال تجربهٔ مشاورهٔ املاک در غرب تهران و همراهیِ صدها معامله.', logo: '', specialties: ['آپارتمان', 'ویلایی'], contactPhone: '', address: '' })) === JSON.stringify(pay296))
+
+  // ── فاز ۲۹۷و — محتوای هر صنف باید «مالِ همان صنف» باشد (سازنده متنِ خرید/فروش نگیرد) ──
+  const { PROFILE_PRESETS, buildProfileSite } = await import('../app/lib/site-templates.ts')
+  ok('هر ۱۲ صنف preset صنفی دارند (قبلاً ۶ تا به متنِ عمومیِ املاک می‌افتادند)', ['مشاور', 'آژانس', 'سازنده', 'فروشگاه', 'سرمایه‌گذار', 'حقوقی', 'معمار', 'پیمانکار', 'کارشناس', 'دفتر حقوقی', 'بانک و بیمه', 'دفترخانه'].every(k => PROFILE_PRESETS[k]?.services?.length >= 4 && PROFILE_PRESETS[k].about && PROFILE_PRESETS[k].eyebrow))
+  const bld297 = buildProfileSite('سازنده')
+  const bldAbout = bld297.pages.flatMap(p => p.blocks).find(b => b.type === 'about')
+  const bldHero = bld297.pages[0].blocks.find(b => b.type === 'hero')
+  ok('قالبِ سازنده محتوای ساخت‌وساز دارد نه خرید/فروش/اجاره', bldAbout.props.text.includes('ساخت') && !bldAbout.props.text.includes('اجاره ملک') && bldHero.props.eyebrow === 'ساخت و ساز')
+  const bldAuto297 = buildAutoSitePayload({ phone: '09120000298', name: 'جواهری', roleType: 'builder', specialties: [], about: '', logo: '', contactPhone: '', address: '' })
+  ok('سایتِ خودکارِ سازنده: نشانِ هیرو «سازنده» و خدمات/دربارهٔ ساخت‌وساز', bldAuto297.pages[0].blocks[0].props.eyebrow === 'سازنده' && bldAuto297.pages.flatMap(p => p.blocks).some(b => b.type === 'services' && b.props.items.some(i => String(i.title).includes('مشارکت'))))
 }
 
 // ── فاز ۲۹۶ج — اسلاگِ فارسیِ سایت از پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود ──
