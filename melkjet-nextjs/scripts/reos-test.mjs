@@ -3351,6 +3351,11 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('صفحهٔ «پروژه‌ها» با فهرستِ پروژه‌های واقعی زنده است', bldSite297.pages.some(p => p.slug === 'projects' && p.blocks.some(b => b.type === 'services' && b.props.heading === 'پروژه‌های ما')))
   ok('گالریِ سازنده از عکسِ واقعیِ پروژه‌ها پر می‌شود', bldSite297.pages.flatMap(p => p.blocks).some(b => b.type === 'gallery' && b.props.images[0] === 'https://x/p1.jpg'))
   ok('سازندهٔ بدونِ دادهٔ پروژه، کارت/آمارِ جعلی نمی‌گیرد', !bldAuto297.pages.flatMap(p => p.blocks).some(b => b.type === 'stats' || (b.type === 'services' && b.props.heading === 'پروژه‌های ما')))
+
+  // ── فاز ۲۹۷ح — منو در فوتر: لینکِ واقعیِ صفحه‌های همین سایت، نه انکرِ مردهٔ قالب ──
+  const ft297 = pay296.pages[0].blocks.find(b => b.type === 'footer')
+  ok('فوتر منوی واقعیِ سایت را دارد (خانه + صفحه‌ها با اسلاگِ خودِ سایت)', ft297.props.links[0].href === `/${encodeURIComponent(pay296.slug)}` && ft297.props.links.some(l => l.href === `/${encodeURIComponent(pay296.slug)}/listings`) && !ft297.props.links.some(l => String(l.href).startsWith('#')))
+  ok('فوترِ همهٔ صفحه‌ها همین منو را دارد', pay296.pages.every(p => p.blocks.filter(b => b.type === 'footer').every(b => b.props.links.length >= 4)))
 }
 
 // ── فاز ۲۹۶ج — اسلاگِ فارسیِ سایت از پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود ──

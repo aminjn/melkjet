@@ -65,7 +65,7 @@ export interface AutoSiteSeed {
 }
 
 // نسخهٔ سازنده — بالارفتنش یعنی سایت‌های خودکارِ «دست‌نخورده» در جاروِ بعدی بازسازی می‌شوند.
-export const AUTO_SITE_V = 6
+export const AUTO_SITE_V = 7
 
 // نگاشتِ نوعِ دایرکتوری → پروفایلِ قالب‌های سایت‌ساز (همان گروه‌هایی که ابزار دارد).
 const TYPE_TO_PROFILE: Record<string, string> = {
@@ -167,11 +167,18 @@ export function buildAutoSitePayload(s: AutoSiteSeed) {
   const chrome = new Set(['hero', 'cta', 'footer'])
   const finalPages = pages.filter((pg, i) => i === 0 || pg.blocks.some(b => !chrome.has(b.type)))
 
+  // فاز ۲۹۷ح — منو در فوتر («باید منو تو فوتر داشته باشه»): ستونِ «دسترسی سریع»ِ فوتر
+  // لینکِ واقعیِ صفحه‌های همین سایت می‌شود، نه انکرهای مردهٔ قالب (#listings…).
+  const slug = sanitizeSlug(s.name)
+  const base = `/${encodeURIComponent(slug)}`
+  const menuLinks = [{ label: 'خانه', href: base }, ...finalPages.slice(1).filter(pg => pg.inMenu !== false).map(pg => ({ label: pg.menuLabel || pg.title, href: `${base}/${pg.slug}` }))]
+  for (const pg of finalPages) for (const b of pg.blocks) if (b.type === 'footer') b.props = { ...b.props, links: menuLinks }
+
   // سئو از واقعیت‌های ساخت‌یافته — عنوانی که با «نامِ شخص» شروع می‌شود (هدف: جست‌وجوی نام).
   const seoTitle = `${s.name} | ${roleLabel}${inCity}`.slice(0, 70)
   const seoDesc = `${s.name}، ${roleLabel}${inCity}${s.specialties.length ? `؛ تخصص: ${s.specialties.slice(0, 3).join('، ')}` : ''}. آگهی‌ها، خدمات و اطلاعاتِ تماس در سایتِ اختصاصیِ ${s.name} در ملک‌جت.`.slice(0, 160)
   return {
-    slug: sanitizeSlug(s.name),
+    slug,
     title: s.name,
     owner: s.phone,
     ownerName: s.name,
@@ -280,7 +287,10 @@ async function seedOf(acc: Account): Promise<AutoSiteSeed | null> {
 }
 
 /** جاروِ کرون: هر تیک چند سایتِ جدید + چند پیامکِ معوق. خروجی برای لاگِ عملیاتی. */
-export async function sweepAutoSites(maxCreate = 8, maxSms = 4): Promise<{ created: number; sms: number; pending: number }> {
+// فاز ۲۹۷ح — سقفِ ارتقا جدا و بالاتر از ساخت: بازسازیِ ~۱۲۰۰ سایت با ۸تا/تیک ~۲ ساعت طول
+// می‌کشید («اولا که نیومد پروژه‌ها») — با ۲۴تا/تیک کلِ ناوگان ~۴۰ دقیقه. ارتقا سبک است
+// (چند kv-خواندن/نوشتن)، برخلافِ ساخت که پیامک/slug دارد.
+export async function sweepAutoSites(maxCreate = 8, maxSms = 4, maxUpgrade = 24): Promise<{ created: number; sms: number; pending: number }> {
   const cfg = await getAutoSiteCfg()
   if (!cfg.enabled) return { created: 0, sms: 0, pending: 0 }
   const meta = await loadMeta()
@@ -312,7 +322,7 @@ export async function sweepAutoSites(maxCreate = 8, maxSms = 4): Promise<{ creat
   // چیدمانِ کامل بازسازی می‌شوند. سایتی که صاحبش ویرایش کرده هرگز دست نمی‌خورد.
   let upgraded = 0
   for (const [phone, rec] of Object.entries(meta.done)) {
-    if (upgraded >= maxCreate || created >= maxCreate * 2) break
+    if (upgraded >= maxUpgrade) break
     if (rec.manual || (rec.v || 1) >= AUTO_SITE_V) continue
     const st = byOwner.get(phone)
     if (!st) { rec.v = AUTO_SITE_V; dirty = true; continue }           // سایت حذف شده — کاری نیست
