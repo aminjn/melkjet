@@ -288,9 +288,9 @@ async function seedOf(acc: Account): Promise<AutoSiteSeed | null> {
 
 /** جاروِ کرون: هر تیک چند سایتِ جدید + چند پیامکِ معوق. خروجی برای لاگِ عملیاتی. */
 // فاز ۲۹۷ح — سقفِ ارتقا جدا و بالاتر از ساخت: بازسازیِ ~۱۲۰۰ سایت با ۸تا/تیک ~۲ ساعت طول
-// می‌کشید («اولا که نیومد پروژه‌ها») — با ۲۴تا/تیک کلِ ناوگان ~۴۰ دقیقه. ارتقا سبک است
+// می‌کشید («اولا که نیومد پروژه‌ها») — و ناوگان به ~۳٬۹۰۰ سایت رسیده: با ۴۸تا/تیک ~۴۵ دقیقه. ارتقا سبک است
 // (چند kv-خواندن/نوشتن)، برخلافِ ساخت که پیامک/slug دارد.
-export async function sweepAutoSites(maxCreate = 8, maxSms = 4, maxUpgrade = 24): Promise<{ created: number; sms: number; pending: number }> {
+export async function sweepAutoSites(maxCreate = 8, maxSms = 4, maxUpgrade = 48): Promise<{ created: number; sms: number; pending: number }> {
   const cfg = await getAutoSiteCfg()
   if (!cfg.enabled) return { created: 0, sms: 0, pending: 0 }
   const meta = await loadMeta()

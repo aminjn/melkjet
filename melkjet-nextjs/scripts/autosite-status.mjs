@@ -26,10 +26,10 @@ let manual = 0
 for (const r of recs) { if (r.manual) { manual++; continue } const v = r.v || 1; byV[v] = (byV[v] || 0) + 1 }
 console.log(`\nکلِ رکوردها: ${fa(recs.length)} (دست‌ساز: ${fa(manual)})`)
 for (const v of Object.keys(byV).sort((a, b) => a - b)) {
-  console.log(`  v${v}: ${fa(byV[v])} سایت${Number(v) < AUTO_SITE_V ? '  ← در صفِ بازسازی (۲۴تا در هر ۴۵ ثانیه)' : '  ✓ به‌روز'}`)
+  console.log(`  v${v}: ${fa(byV[v])} سایت${Number(v) < AUTO_SITE_V ? '  ← در صفِ بازسازی (۴۸تا در هر ۴۵ ثانیه)' : '  ✓ به‌روز'}`)
 }
 const behind = recs.filter(r => !r.manual && (r.v || 1) < AUTO_SITE_V).length
-if (behind) console.log(`⏳ ${fa(behind)} سایت هنوز قدیمی‌اند — حدودِ ${fa(Math.ceil(behind / 24 * 45 / 60))} دقیقه تا پایانِ بازسازی.`)
+if (behind) console.log(`⏳ ${fa(behind)} سایت هنوز قدیمی‌اند — حدودِ ${fa(Math.ceil(behind / 48 * 45 / 60))} دقیقه تا پایانِ بازسازی.`)
 else console.log('✅ همهٔ سایت‌های خودکار به‌روزند.')
 
 const slugArg = process.argv[2]
