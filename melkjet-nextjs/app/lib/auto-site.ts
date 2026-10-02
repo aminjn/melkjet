@@ -1,7 +1,8 @@
 import { kvGet, kvSet, pgEnabled } from './db'
 import { listAccounts, type Account } from './account-store'
 import { getProfile, type BusinessProfile } from './profile-store'
-import { listSiteHeads, saveSite, sanitizeSlug, type SiteBlock } from './sites-store'
+import { listSiteHeads, saveSite, sanitizeSlug } from './sites-store'
+import { buildProfileSite, STARTER_TEMPLATES, type TplBlock } from './site-templates'
 import { urlTypeForRole, typeLabel } from './provider-public'
 
 // ─── فاز ۲۹۶ — سایت‌سازِ خودکار برای همهٔ اهالیِ دایرکتوری ────────────────────────
@@ -58,24 +59,33 @@ export interface AutoSiteSeed {
 }
 
 // نسخهٔ سازنده — بالارفتنش یعنی سایت‌های خودکارِ «دست‌نخورده» در جاروِ بعدی بازسازی می‌شوند.
-export const AUTO_SITE_V = 3
+export const AUTO_SITE_V = 4
 
-/** بدنهٔ سایتِ خودکار از دادهٔ واقعی — خالص و تست‌پذیر. فاز ۲۹۶هـ: چیدمانِ کامل
- *  («سایتِ خالی جذابیت ندارد»): جستجو/فیلترِ کاملِ آگهی‌ها، نظراتِ واقعی، CTA، و برای
- *  معماران کلِ دادهٔ طرح‌۲طرح (نمونه‌کارها/آمار/تحصیلات/مهارت‌ها/دفتر).
- *  فاز ۲۹۷ج: چندصفحه‌ای («کلی صفحه داریم تو سایت‌ساز چرا ندارند») — خانه + صفحه‌های
- *  جداگانهٔ آگهی‌ها/نمونه‌کارها/درباره/نظرات/تماس در منوی سایت. */
+// نگاشتِ نوعِ دایرکتوری → پروفایلِ قالب‌های سایت‌ساز (همان گروه‌هایی که ابزار دارد).
+const TYPE_TO_PROFILE: Record<string, string> = {
+  pros: 'مشاور', agency: 'آژانس', builder: 'سازنده', architect: 'معمار', contractor: 'پیمانکار',
+  materials: 'فروشگاه', legal: 'حقوقی', lawfirm: 'دفتر حقوقی', finance: 'بانک و بیمه',
+  appraiser: 'کارشناس', notary: 'دفترخانه',
+}
+
+/** بدنهٔ سایتِ خودکار — فاز ۲۹۷هـ («باید با حرفه‌ای‌ترین گرافیکِ خودِ سایت‌ساز و همهٔ
+ *  صفحات ساخته بشه»): دیگر چیدمانِ دستی نیست؛ «خودِ» موتورِ قالبِ سایت‌ساز
+ *  (buildProfileSite: قالبِ صنفی + پالتِ تم + صفحاتِ کاملِ هر پنل: درباره/فایل‌ها یا
+ *  نمونه‌کارها یا محصولات/خدمات/تیم/وبلاگ/تماس) سایت را می‌سازد و بعد با دادهٔ «واقعیِ»
+ *  خودِ شخص شخصی‌سازی می‌شود. قانونِ آهنین پابرجاست: روی سایتِ یک شخصِ واقعی هیچ عددِ
+ *  ساختگی و هیچ عکس/نظرِ جعلی نمی‌نشیند — آمارِ بی‌سند حذف می‌شود، نه جعل.
+ *  قالبِ هر شخص از بینِ ۱۰ قالبِ صنفش «قطعی از روی شماره‌اش» انتخاب می‌شود تا سایت‌ها
+ *  متنوع ولی در بازسازی‌ها پایدار باشند. خالص و تست‌پذیر. */
 export function buildAutoSitePayload(s: AutoSiteSeed) {
   const roleLabel = typeLabel(s.roleType)
   const inCity = s.city ? ` در ${s.city}` : ''
-  let id = 1
   const a = s.arch
-  const footer = (): SiteBlock => ({ id: id++, type: 'footer', props: {} })
-  const contactBlock = (): SiteBlock => ({ id: id++, type: 'contact', props: { heading: 'تماس با ما', phone: s.contactPhone || s.phone, ...(s.address || s.city || a?.officeName ? { address: [a?.officeName, s.address || s.city].filter(Boolean).join(' — ') } : {}) } })
-  const ctaBlock = (): SiteBlock => ({ id: id++, type: 'cta', props: { heading: s.roleType === 'architect' ? 'پروژه‌ای در ذهن دارید؟' : 'به دنبال خرید، فروش یا اجاره هستید؟', subheading: `همین حالا با ${s.name} در ارتباط باشید`, buttonText: s.providerUrl ? 'مشاهدهٔ پروفایل و درخواست مشاوره' : 'تماس با ما', buttonLink: s.providerUrl || '#contact' } })
-  const aboutBlock = (): SiteBlock => ({ id: id++, type: 'about', props: { heading: `دربارهٔ ${s.name}`, text: s.about!.trim().slice(0, 1500), ...(s.logo ? { image: s.logo } : {}) } })
+  const profile = TYPE_TO_PROFILE[s.roleType] || 'عمومی'
+  let h = 0; for (const ch of s.phone) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  const tpls = STARTER_TEMPLATES.filter(t => t.profile === profile)
+  const built = buildProfileSite(profile, tpls.length ? tpls[h % tpls.length] : undefined)
 
-  // آمارِ واقعی (فقط عددهای ناصفر — هیچ عددِ ساختگی)
+  // دادهٔ واقعیِ شخص — تنها چیزی که حق دارد جای محتوای نمونهٔ قالب بنشیند.
   const statItems: { label: string; value: string }[] = []
   if (a) {
     if (a.projDone) statItems.push({ label: 'پروژهٔ اجراشده', value: a.projDone.toLocaleString('fa-IR') })
@@ -83,70 +93,57 @@ export function buildAutoSitePayload(s: AutoSiteSeed) {
     if (a.honors) statItems.push({ label: 'جایزه و مقام', value: a.honors.toLocaleString('fa-IR') })
     if (a.rating) statItems.push({ label: 'امتیاز بازخوردها', value: `${a.rating.toLocaleString('fa-IR')} از ۵` })
   }
-  const statsBlock = (): SiteBlock => ({ id: id++, type: 'stats', props: { items: statItems } })
+  const realServices = [...s.specialties, ...(a ? [...a.skills, ...a.engagements] : [])].filter(Boolean).slice(0, 9)
+  const realEdus = (a?.edus || []).filter(Boolean).slice(0, 6)
+  const galleryImages = (a?.images || []).filter(Boolean)
+  const realAbout = s.about && s.about.trim().length >= 20 ? s.about.trim().slice(0, 1500) : ''
+  const contactPhone = s.contactPhone || s.phone
+  const address = [a?.officeName, s.address || s.city].filter(Boolean).join(' — ')
 
-  const hasAbout = !!(s.about && s.about.trim().length >= 20)
-
-  // ── صفحهٔ خانه ──
-  const blocks: SiteBlock[] = []
-  blocks.push({ id: id++, type: 'hero', props: { heading: s.name, subheading: `${roleLabel}${inCity}${s.tagline ? ' — ' + s.tagline : ''}`, align: 'center', badge: roleLabel, ...(a?.cover ? { image: a.cover } : {}) } })
-  if (hasAbout) blocks.push(aboutBlock())
-  if (statItems.length >= 2) blocks.push(statsBlock())
-  if (s.specialties.length) blocks.push({ id: id++, type: 'services', props: { heading: 'خدمات و تخصص‌ها', items: s.specialties.slice(0, 9).map(t => ({ title: t })), perSlide: 3 } })
-
-  if (LISTING_TYPES.has(s.roleType)) {
-    // خانه: اسلایدرِ آخرین آگهی‌ها؛ جستجو/فیلترِ کامل در صفحهٔ اختصاصیِ «آگهی‌ها».
-    blocks.push({ id: id++, type: 'listings', props: { heading: `آخرین آگهی‌های ${s.name}`, total: 9, perSlide: 3 } })
-    if (s.roleType === 'agency') blocks.push({ id: id++, type: 'team', props: { heading: 'مشاوران ما' } })
-  }
-  if (CATALOG_TYPES.has(s.roleType)) blocks.push({ id: id++, type: 'catalog', props: { heading: `محصولات ${s.name}` } })
-
-  if (a) {
-    if (a.images.length) blocks.push({ id: id++, type: 'gallery', props: { heading: 'نمونه‌کارها و پروژه‌ها', images: a.images.slice(0, 6), perSlide: 3 } })
-    if (a.skills.length || a.engagements.length) blocks.push({ id: id++, type: 'services', props: { heading: 'مهارت‌ها و حوزه‌های همکاری', items: [...a.skills, ...a.engagements].slice(0, 9).map(t => ({ title: t })), perSlide: 3 } })
-    if (a.edus.length) blocks.push({ id: id++, type: 'services', props: { heading: 'تحصیلات و سوابق', items: a.edus.slice(0, 6).map(t => ({ title: t })), perSlide: 3 } })
-  }
-
-  // نظراتِ واقعیِ تاییدشده (بلوک خودش از store می‌خواند — همیشه تازه) + فرمِ ثبت
-  blocks.push({ id: id++, type: 'testimonials', props: { heading: 'نظرات مشتریان' } })
-  blocks.push(ctaBlock())
-  blocks.push(contactBlock())
-  blocks.push(footer())
-
-  // ── صفحه‌های منو — سایتِ واقعی چندصفحه است، نه یک اسکرولِ بلند ──
-  const pages: { slug: string; title: string; menuLabel?: string; blocks: SiteBlock[] }[] = [{ slug: 'home', title: 'خانه', blocks }]
-  if (LISTING_TYPES.has(s.roleType)) {
-    pages.push({ slug: 'listings', title: `آگهی‌های ${s.name}`, menuLabel: 'آگهی‌ها', blocks: [
-      { id: id++, type: 'searchlist', props: { heading: `جستجو در آگهی‌های ${s.name}`, total: 150 } },
-      footer(),
-    ] })
-  }
-  if (CATALOG_TYPES.has(s.roleType)) {
-    pages.push({ slug: 'products', title: `محصولات ${s.name}`, menuLabel: 'محصولات', blocks: [
-      { id: id++, type: 'catalog', props: { heading: `محصولات ${s.name}` } },
-      footer(),
-    ] })
-  }
-  if (a && a.images.length) {
-    pages.push({ slug: 'portfolio', title: 'نمونه‌کارها و پروژه‌ها', menuLabel: 'نمونه‌کارها', blocks: [
-      { id: id++, type: 'gallery', props: { heading: 'نمونه‌کارها و پروژه‌ها', images: a.images.slice(0, 24), perSlide: 3 } },
-      ...(a.skills.length || a.engagements.length ? [{ id: id++, type: 'services', props: { heading: 'مهارت‌ها و حوزه‌های همکاری', items: [...a.skills, ...a.engagements].slice(0, 9).map(t => ({ title: t })), perSlide: 3 } } as SiteBlock] : []),
-      footer(),
-    ] })
-  }
-  if (hasAbout || a?.edus.length || statItems.length >= 2) {
-    pages.push({ slug: 'about', title: `دربارهٔ ${s.name}`, menuLabel: 'درباره', blocks: [
-      ...(hasAbout ? [aboutBlock()] : []),
-      ...(statItems.length >= 2 ? [statsBlock()] : []),
-      ...(a?.edus.length ? [{ id: id++, type: 'services', props: { heading: 'تحصیلات و سوابق', items: a.edus.slice(0, 6).map(t => ({ title: t })), perSlide: 3 } } as SiteBlock] : []),
-      footer(),
-    ] })
-  }
-  pages.push({ slug: 'reviews', title: 'نظرات مشتریان', menuLabel: 'نظرات', blocks: [
-    { id: id++, type: 'testimonials', props: { heading: 'نظرات مشتریان' } },
-    footer(),
-  ] })
-  pages.push({ slug: 'contact', title: 'تماس با ما', menuLabel: 'تماس', blocks: [contactBlock(), ctaBlock(), footer()] })
+  const pages = built.pages.map((pg, pi) => {
+    const blocks = pg.blocks.map(b => {
+      const p = { ...b.props }
+      switch (b.type) {
+        case 'hero':
+          // فقط هیروی صفحهٔ اصلی شخصی می‌شود؛ هیروی صفحه‌های داخلی («درباره ما»…) عمومی و درست است.
+          if (pi === 0) { p.heading = s.name; p.subheading = `${roleLabel}${inCity}${s.tagline ? ' — ' + s.tagline : ''}`; p.eyebrow = roleLabel; if (a?.cover) p.image = a.cover }
+          return { ...b, props: p }
+        case 'stats':
+          // قانونِ آهنین: آمارِ نمونهٔ قالب («۵۰۰+ ملک فروخته») روی شخصِ واقعی جعل است — واقعی یا هیچ.
+          if (statItems.length >= 2) { p.items = statItems; return { ...b, props: p } }
+          return null
+        case 'services':
+          if (realServices.length) { p.heading = 'خدمات و تخصص‌ها'; p.items = realServices.map(t => ({ icon: '◈', title: t, desc: '' })) }
+          return { ...b, props: p }   // بدونِ دادهٔ واقعی: خدماتِ صنفیِ خودِ قالب (توصیفِ حرفه، نه ادعای عددی)
+        case 'gallery':
+          // گالری فقط با عکس‌های واقعیِ خودِ شخص؛ خالی/نمونه حذف می‌شود.
+          if (galleryImages.length) { p.images = galleryImages.slice(0, pi === 0 ? 9 : 24); return { ...b, props: p } }
+          return null
+        case 'about':
+          if (realAbout) { p.heading = `دربارهٔ ${s.name}`; p.text = realAbout }
+          if (s.logo) p.image = s.logo
+          return { ...b, props: p }
+        case 'listings': p.heading = `آخرین آگهی‌های ${s.name}`; return { ...b, props: p }
+        case 'searchlist': p.heading = `جستجو در آگهی‌های ${s.name}`; p.total = 120; return { ...b, props: p }
+        case 'catalog': p.heading = `محصولات ${s.name}`; return { ...b, props: p }
+        case 'cta':
+          if (s.providerUrl) { p.buttonLink = s.providerUrl; p.buttonText = 'مشاهدهٔ پروفایل و درخواست مشاوره' }
+          return { ...b, props: p }
+        case 'contact': p.phone = contactPhone; p.email = ''; if (address) p.address = address; else p.address = ''; return { ...b, props: p }
+        case 'footer': p.brand = s.name; p.phone = contactPhone; p.email = ''; p.address = address; return { ...b, props: p }
+        default: return { ...b, props: p }
+      }
+    }).filter((b): b is TplBlock => !!b)
+    // تحصیلات و سوابقِ واقعیِ معمار — روی صفحهٔ «درباره» (قبل از فوتر).
+    if (pg.slug === 'about' && realEdus.length) {
+      blocks.splice(Math.max(blocks.length - 1, 0), 0, { id: 9000 + pi, type: 'services', props: { heading: 'تحصیلات و سوابق', items: realEdus.map(t => ({ icon: '◈', title: t, desc: '' })), perSlide: 3 } })
+    }
+    return { ...pg, blocks }
+  })
+  // صفحه‌ای که بعد از حذفِ محتوای بی‌سند فقط هیرو/اقدام/فوتر برایش مانده، حذف می‌شود —
+  // صفحهٔ خالی در منو ضدِ «حسِ سایت» است. صفحهٔ خانه همیشه می‌ماند.
+  const chrome = new Set(['hero', 'cta', 'footer'])
+  const finalPages = pages.filter((pg, i) => i === 0 || pg.blocks.some(b => !chrome.has(b.type)))
 
   // سئو از واقعیت‌های ساخت‌یافته — عنوانی که با «نامِ شخص» شروع می‌شود (هدف: جست‌وجوی نام).
   const seoTitle = `${s.name} | ${roleLabel}${inCity}`.slice(0, 70)
@@ -156,7 +153,8 @@ export function buildAutoSitePayload(s: AutoSiteSeed) {
     title: s.name,
     owner: s.phone,
     ownerName: s.name,
-    pages,
+    theme: built.theme,
+    pages: finalPages,
     seo: { title: seoTitle, description: seoDesc },
   }
 }

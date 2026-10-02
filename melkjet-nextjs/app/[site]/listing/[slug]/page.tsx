@@ -40,18 +40,25 @@ export async function generateMetadata({ params }: { params: Promise<{ site: str
   }
 }
 
-// پالتِ سایتِ اصلی (تمِ روشن) با طلاییِ برندِ همان سایت — تا اجزای مشترکِ صفحهٔ آگهی
-// داخلِ سایتِ شخصی درست رنگ بگیرند. پینِ inline اینجا «عمدی» است (استثنای قاعدهٔ فاز ۲۹۴،
-// مثلِ empRoot): سایتِ منتشرشده تمِ ثابتِ خودش را دارد و سوییچِ دارک/لایتِ ملک‌جت رویش معنا ندارد.
+// پالتِ سایتِ اصلی با رنگِ برندِ همان سایت — تا اجزای مشترکِ صفحهٔ آگهی داخلِ سایتِ
+// شخصی درست رنگ بگیرند. پینِ inline اینجا «عمدی» است (استثنای قاعدهٔ فاز ۲۹۴، مثلِ empRoot):
+// سایتِ منتشرشده تمِ ثابتِ خودش را دارد و سوییچِ دارک/لایتِ ملک‌جت رویش معنا ندارد.
+// فاز ۲۹۷هـ: قالب‌های سایت‌ساز تمِ تیره هم دارند (مشکی لوکس/سرمه‌ای شب/…) — متن/خط/سطح
+// بر اساسِ روشناییِ پس‌زمینهٔ خودِ سایت انتخاب می‌شود تا متنِ تیره روی زمینهٔ تیره نیفتد.
 function themeVars(site: Site): React.CSSProperties {
   const t = site.theme
   const primary = t?.primary || '#c9a84c'
+  const bg = t?.bg || '#faf8f3'
+  const m = /^#([0-9a-f]{6})$/i.exec(bg.trim())
+  const lum = m ? (parseInt(m[1].slice(0, 2), 16) * 0.3 + parseInt(m[1].slice(2, 4), 16) * 0.59 + parseInt(m[1].slice(4, 6), 16) * 0.11) : 255
+  const dark = lum < 128
   return {
-    '--bg': t?.bg || '#faf8f3', '--bg2': '#f5f2ea', '--surface': t?.surface || '#ffffff',
-    '--line': 'rgba(0,0,0,0.08)', '--line2': 'rgba(0,0,0,0.14)',
-    '--text': t?.heading || '#1a1712', '--muted': 'rgba(26,23,18,0.66)', '--faint': 'rgba(26,23,18,0.4)',
+    '--bg': bg, '--bg2': dark ? 'rgba(255,255,255,0.05)' : '#f5f2ea', '--surface': t?.surface || (dark ? '#17171c' : '#ffffff'),
+    '--line': dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)', '--line2': dark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.14)',
+    '--text': t?.heading || (dark ? '#f2efe9' : '#1a1712'),
+    '--muted': dark ? 'rgba(240,236,228,0.66)' : 'rgba(26,23,18,0.66)', '--faint': dark ? 'rgba(240,236,228,0.4)' : 'rgba(26,23,18,0.4)',
     '--gold': primary, '--gold2': primary, '--goldText': primary, '--goldDim': `${primary}1f`,
-    '--navbg': 'rgba(250,248,243,0.92)', '--shadow': '0 24px 60px -28px rgba(40,30,10,0.18)',
+    '--navbg': dark ? 'rgba(20,18,14,0.92)' : 'rgba(250,248,243,0.92)', '--shadow': '0 24px 60px -28px rgba(40,30,10,0.18)',
   } as React.CSSProperties
 }
 
