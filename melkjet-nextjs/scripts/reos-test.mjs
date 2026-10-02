@@ -3341,6 +3341,16 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('قالبِ سازنده محتوای ساخت‌وساز دارد نه خرید/فروش/اجاره', bldAbout.props.text.includes('ساخت') && !bldAbout.props.text.includes('اجاره ملک') && bldHero.props.eyebrow === 'ساخت و ساز')
   const bldAuto297 = buildAutoSitePayload({ phone: '09120000298', name: 'جواهری', roleType: 'builder', specialties: [], about: '', logo: '', contactPhone: '', address: '' })
   ok('سایتِ خودکارِ سازنده: نشانِ هیرو «سازنده» و خدمات/دربارهٔ ساخت‌وساز', bldAuto297.pages[0].blocks[0].props.eyebrow === 'سازنده' && bldAuto297.pages.flatMap(p => p.blocks).some(b => b.type === 'services' && b.props.items.some(i => String(i.title).includes('مشارکت'))))
+
+  // ── فاز ۲۹۷ز — پروژه‌های واقعیِ سازنده روی سایتش («پروژه‌ها رو نشون نمیده») ──
+  const bldSeed297 = { phone: '09120000299', name: 'پناهی آذر', roleType: 'builder', specialties: [], about: '', logo: '', contactPhone: '', address: '', bld: { count: 12, regionsCount: 3, unitsSum: 84, areaSum: 5200, photos: ['https://x/p1.jpg'], projects: [{ title: 'پروژهٔ سعادت‌آباد', desc: 'منطقه ۲ · ۵ طبقه · ۱۰ واحد', image: 'https://x/p1.jpg', href: '/projects/x' }] } }
+  const bldSite297 = buildAutoSitePayload(bldSeed297)
+  const bHome297 = bldSite297.pages[0].blocks
+  ok('خانهٔ سازنده کارتِ پروژه‌های واقعی دارد (عکس + لینک به صفحهٔ پروژه)', bHome297.some(b => b.type === 'services' && b.props.heading === 'پروژه‌های ما' && b.props.items[0].href === '/projects/x' && b.props.items[0].image))
+  ok('آمارِ سازنده واقعی است: پروژه/منطقه/واحد/متراژ', bHome297.some(b => b.type === 'stats' && b.props.items.length === 4 && b.props.items.some(i => i.label === 'پروژهٔ ثبت‌شده')))
+  ok('صفحهٔ «پروژه‌ها» با فهرستِ پروژه‌های واقعی زنده است', bldSite297.pages.some(p => p.slug === 'projects' && p.blocks.some(b => b.type === 'services' && b.props.heading === 'پروژه‌های ما')))
+  ok('گالریِ سازنده از عکسِ واقعیِ پروژه‌ها پر می‌شود', bldSite297.pages.flatMap(p => p.blocks).some(b => b.type === 'gallery' && b.props.images[0] === 'https://x/p1.jpg'))
+  ok('سازندهٔ بدونِ دادهٔ پروژه، کارت/آمارِ جعلی نمی‌گیرد', !bldAuto297.pages.flatMap(p => p.blocks).some(b => b.type === 'stats' || (b.type === 'services' && b.props.heading === 'پروژه‌های ما')))
 }
 
 // ── فاز ۲۹۶ج — اسلاگِ فارسیِ سایت از پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود ──

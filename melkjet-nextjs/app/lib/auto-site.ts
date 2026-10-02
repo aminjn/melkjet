@@ -56,10 +56,16 @@ export interface AutoSiteSeed {
     edus: string[]; skills: string[]; engagements: string[]
     officeName?: string
   }
+  // فاز ۲۹۷ز — دادهٔ غنیِ سازنده (پرشین‌سازه + پروژه‌های دستیِ پنل) — همه واقعی
+  bld?: {
+    count: number; regionsCount: number; unitsSum: number; areaSum: number
+    photos: string[]
+    projects: { title: string; desc: string; image?: string; href?: string }[]
+  }
 }
 
 // نسخهٔ سازنده — بالارفتنش یعنی سایت‌های خودکارِ «دست‌نخورده» در جاروِ بعدی بازسازی می‌شوند.
-export const AUTO_SITE_V = 5
+export const AUTO_SITE_V = 6
 
 // نگاشتِ نوعِ دایرکتوری → پروفایلِ قالب‌های سایت‌ساز (همان گروه‌هایی که ابزار دارد).
 const TYPE_TO_PROFILE: Record<string, string> = {
@@ -93,9 +99,16 @@ export function buildAutoSitePayload(s: AutoSiteSeed) {
     if (a.honors) statItems.push({ label: 'جایزه و مقام', value: a.honors.toLocaleString('fa-IR') })
     if (a.rating) statItems.push({ label: 'امتیاز بازخوردها', value: `${a.rating.toLocaleString('fa-IR')} از ۵` })
   }
+  const bl = s.bld
+  if (bl) {
+    if (bl.count) statItems.push({ label: 'پروژهٔ ثبت‌شده', value: bl.count.toLocaleString('fa-IR') })
+    if (bl.regionsCount) statItems.push({ label: 'منطقهٔ فعالیت', value: bl.regionsCount.toLocaleString('fa-IR') })
+    if (bl.unitsSum) statItems.push({ label: 'واحدِ مسکونی', value: bl.unitsSum.toLocaleString('fa-IR') })
+    if (bl.areaSum) statItems.push({ label: 'مترمربع زمینِ پروژه‌ها', value: bl.areaSum.toLocaleString('fa-IR') })
+  }
   const realServices = [...s.specialties, ...(a ? [...a.skills, ...a.engagements] : [])].filter(Boolean).slice(0, 9)
   const realEdus = (a?.edus || []).filter(Boolean).slice(0, 6)
-  const galleryImages = (a?.images || []).filter(Boolean)
+  const galleryImages = [...(a?.images || []), ...(bl?.photos || [])].filter(Boolean)
   const realAbout = s.about && s.about.trim().length >= 20 ? s.about.trim().slice(0, 1500) : ''
   const contactPhone = s.contactPhone || s.phone
   const address = [a?.officeName, s.address || s.city].filter(Boolean).join(' — ')
@@ -140,6 +153,15 @@ export function buildAutoSitePayload(s: AutoSiteSeed) {
     }
     return { ...pg, blocks }
   })
+  // فاز ۲۹۷ز — پروژه‌های واقعیِ سازنده («پروژه‌ها رو نشون نمیده تو سازنده‌ها»): کارتِ پروژه
+  // (عکس + منطقه/فاز/طبقات/واحد + لینک به صفحهٔ پروژه در ملک‌جت) بالای خانه و روی صفحهٔ «پروژه‌ها».
+  if (bl && bl.projects.length) {
+    const projBlock = (off: number): TplBlock => ({ id: 9100 + off, type: 'services', props: { heading: 'پروژه‌های ما', items: bl.projects.map(pr => ({ icon: '🏗', title: pr.title, desc: pr.desc, ...(pr.image ? { image: pr.image } : {}), ...(pr.href ? { href: pr.href } : {}) })), perSlide: 3 } })
+    const home = pages[0]
+    home.blocks.splice(Math.max(home.blocks.findIndex(b => b.type === 'hero'), 0) + 1, 0, projBlock(0))
+    const pp = pages.find(pg => pg.slug === 'projects')
+    if (pp) pp.blocks.splice(Math.max(pp.blocks.findIndex(b => b.type === 'hero'), 0) + 1, 0, projBlock(1))
+  }
   // صفحه‌ای که بعد از حذفِ محتوای بی‌سند فقط هیرو/اقدام/فوتر برایش مانده، حذف می‌شود —
   // صفحهٔ خالی در منو ضدِ «حسِ سایت» است. صفحهٔ خانه همیشه می‌ماند.
   const chrome = new Set(['hero', 'cta', 'footer'])
@@ -209,7 +231,52 @@ async function seedOf(acc: Account): Promise<AutoSiteSeed | null> {
     } catch { /* بدونِ دادهٔ طرح‌۲طرح — سایتِ پایه ساخته می‌شود */ }
   }
 
-  return { phone: acc.phone, name, roleType, city, tagline, about, logo, specialties, contactPhone: p.contactPhone || p.landline || '', address: p.address || '', providerUrl, arch }
+  // فاز ۲۹۷ز — دادهٔ کاملِ سازنده: پروژه‌های واقعیِ پرشین‌سازه (+ پروژه‌های دستی و متنِ
+  // «درباره»ی پنلِ عمومیِ سازنده). هر کارت به صفحهٔ پروژهٔ خودش در ملک‌جت لینک می‌شود.
+  let bld: AutoSiteSeed['bld']
+  if (roleType === 'builder') {
+    try {
+      const ps = await import('./persiansaze-store')
+      const { getPublic, STATUS_LABEL } = await import('./builder-public-store')
+      const { ensureProjectSlug } = await import('./project-slug-store')
+      const bid = ps.builderIdForPhone(acc.phone)
+      const prof = bid ? ps.getProfile(bid) : null
+      if (prof && (prof.projects || []).length) {
+        const pub = getPublic(String(bid))
+        const projMeta = pub.projMeta || {}
+        const top = [...prof.projects].sort((x, y) => (y.units || 0) - (x.units || 0)).slice(0, 24)
+        const projects: NonNullable<AutoSiteSeed['bld']>['projects'] = []
+        const photos: string[] = []
+        for (const pr of top) {
+          const title = (pr.address || '').trim() || `پروژهٔ ${pr.regionName || ps.regionLabel(pr)}`
+          const desc = [ps.regionLabel(pr), ps.phaseLabel(pr), pr.floors ? `${pr.floors.toLocaleString('fa-IR')} طبقه` : '', pr.units ? `${pr.units.toLocaleString('fa-IR')} واحد` : '', pr.groundArea ? `${pr.groundArea.toLocaleString('fa-IR')} متر زمین` : ''].filter(Boolean).join(' · ')
+          const img = pr.photo?.imageThumbnailUrl || pr.photo?.imageUrl || (pr.photos || [])[0] || (projMeta[pr.hashId]?.photos || [])[0] || ''
+          if (img) photos.push(img)
+          let href = ''
+          try { href = `/projects/${encodeURIComponent(await ensureProjectSlug(pr.hashId, title))}` } catch { /* بدونِ لینک هم کارت سالم است */ }
+          projects.push({ title, desc, ...(img ? { image: img } : {}), ...(href ? { href } : {}) })
+        }
+        // پروژه‌های دستیِ خودِ سازنده (پنل) — اولِ فهرست
+        for (const m of (pub.manual || []).slice(0, 6)) {
+          const img = (m.photos || [])[0] || ''
+          if (img) photos.push(img)
+          projects.unshift({ title: m.name, desc: [m.location, STATUS_LABEL[m.status], m.floors ? `${Number(m.floors).toLocaleString('fa-IR')} طبقه` : '', m.units ? `${Number(m.units).toLocaleString('fa-IR')} واحد` : ''].filter(Boolean).join(' · '), ...(img ? { image: img } : {}) })
+        }
+        bld = {
+          count: prof.projectCount || prof.projects.length,
+          regionsCount: (prof.regions || []).length,
+          unitsSum: prof.projects.reduce((n, x) => n + (x.units || 0), 0),
+          areaSum: prof.projects.reduce((n, x) => n + (x.groundArea || 0), 0),
+          photos: photos.slice(0, 24),
+          projects: projects.slice(0, 24),
+        }
+        if (!about && pub.about) about = String(pub.about)
+        if (!tagline && pub.tagline) tagline = String(pub.tagline)
+      }
+    } catch { /* بدونِ دادهٔ پرشین‌سازه — سایتِ پایه ساخته می‌شود */ }
+  }
+
+  return { phone: acc.phone, name, roleType, city, tagline, about, logo, specialties, contactPhone: p.contactPhone || p.landline || '', address: p.address || '', providerUrl, arch, bld }
 }
 
 /** جاروِ کرون: هر تیک چند سایتِ جدید + چند پیامکِ معوق. خروجی برای لاگِ عملیاتی. */
