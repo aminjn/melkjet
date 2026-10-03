@@ -382,6 +382,45 @@ export async function resetFailedSms(): Promise<number> {
   return n
 }
 
+/** فاز ۲۹۷س — ارسالِ دستیِ پیامکِ سایت از پنل («بزنم رو یک کاربر یا ۱۰ تا و پیامک بره»):
+ *  برای شماره‌های انتخاب‌شده همین حالا می‌فرستد — بدونِ صف، بدونِ سقفِ ۳تلاش (ارادهٔ صریحِ
+ *  ادمین)، برای سایتِ دست‌ساز هم مجاز. نتیجهٔ تک‌تک برمی‌گردد و در رکوردِ هر نفر می‌نشیند. */
+export async function sendSmsManual(phones: string[]): Promise<{ sent: number; failed: number; results: { phone: string; ok: boolean; error?: string }[] }> {
+  const meta = await loadMeta()
+  const heads = await listSiteHeads()
+  const bySiteOwner = new Map(heads.filter(h => h.owner).map(h => [String(h.owner), h.slug]))
+  const results: { phone: string; ok: boolean; error?: string }[] = []
+  let dirty = false
+  for (const raw of [...new Set(phones.map(p => String(p)))].slice(0, 100)) {
+    const phone = raw.trim()
+    const rec = meta.done[phone]
+    const slug = rec?.slug || bySiteOwner.get(phone) || ''
+    if (!slug) { results.push({ phone, ok: false, error: 'سایت هنوز ساخته نشده — در صفِ ساخت' }); continue }
+    if (!/^09\d{9}$/.test(phone)) { results.push({ phone, ok: false, error: 'شمارهٔ ثابت/غیرموبایل — پیامک ممکن نیست' }); continue }
+    const name = (getProfile(phone).businessName || getProfile(phone).displayName || listAccounts().find(a => a.phone === phone)?.name || '').trim() || 'همکار'
+    try {
+      const { sendAutoSiteSms } = await import('./sms')
+      const r = await sendAutoSiteSms(phone, name, `https://melkjet.com/${encodeURIComponent(slug)}`)
+      if (rec) {
+        if (r.ok) { rec.smsAt = Date.now(); rec.lastErr = '' }
+        else { rec.smsTries = (rec.smsTries || 0) + 1; rec.lastErr = String(r.error || 'خطا').slice(0, 220) }
+        dirty = true
+      } else if (r.ok) {
+        // سایتِ دست‌سازِ بدونِ رکورد: نتیجه ثبت می‌شود تا پنل «رفته» را نشان دهد.
+        meta.done[phone] = { at: Date.now(), slug, manual: true, smsAt: Date.now(), v: AUTO_SITE_V }
+        dirty = true
+      }
+      results.push({ phone, ok: r.ok, ...(r.ok ? {} : { error: String(r.error || 'خطا').slice(0, 220) }) })
+    } catch (e) {
+      const msg = String((e as Error)?.message || e).slice(0, 220)
+      if (rec) { rec.smsTries = (rec.smsTries || 0) + 1; rec.lastErr = msg; dirty = true }
+      results.push({ phone, ok: false, error: msg })
+    }
+  }
+  if (dirty) await saveMeta(meta)
+  return { sent: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length, results }
+}
+
 /** وضعیتِ پیامک‌ها برای پنل: ناموفقِ قطعی (تفکیکِ شمارهٔ ثابت) و نمونهٔ آخرین خطا. */
 export async function smsStatus(): Promise<{ failed: number; invalid: number; waiting: number; sampleErr: string }> {
   const meta = await loadMeta()

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { resetFailedSms, smsStatus } from '@/app/lib/auto-site'
+import { resetFailedSms, sendSmsManual, smsStatus } from '@/app/lib/auto-site'
 import { getSession } from '@/app/lib/session'
 import { listSiteHeads } from '@/app/lib/sites-store'
 import { allSiteStats, summarize } from '@/app/lib/site-stats-store'
@@ -107,6 +107,13 @@ export async function POST(req: NextRequest) {
   if (b.action === 'resetSms') {
     const n = await resetFailedSms()
     return NextResponse.json({ ok: true, reset: n })
+  }
+  // فاز ۲۹۷س — ارسالِ دستیِ پیامک به کاربر(های) انتخاب‌شده از پنل.
+  if (b.action === 'sendSms') {
+    const phones = Array.isArray(b.phones) ? b.phones.map(String) : []
+    if (!phones.length) return NextResponse.json({ error: 'هیچ کاربری انتخاب نشده' }, { status: 400 })
+    const r = await sendSmsManual(phones)
+    return NextResponse.json({ ok: true, ...r })
   }
   return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
 }

@@ -1934,6 +1934,10 @@ function UserSitesView() {
   const [fVisit, setFVisit] = useState<'all' | 'has' | 'zero'>('all')
   const [fRole, setFRole] = useState('')
   const [open, setOpen] = useState('')
+  // فاز ۲۹۷س — انتخابِ دستیِ کاربرها برای ارسالِ پیامکِ سایت (یکی یا دسته‌ای)
+  const [sel, setSel] = useState<string[]>([])
+  const [sending, setSending] = useState(false)
+  const [sendMsg, setSendMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const load = async () => {
     setLoading(true)
@@ -2008,6 +2012,22 @@ function UserSitesView() {
           <input style={{ ...inp, flex: '1 1 220px' }} placeholder="جستجو: نام، شماره، اسلاگ…" value={q} onChange={e => setQ(e.target.value)} />
           <button onClick={load} style={{ padding: '9px 18px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>↻ تازه‌سازی</button>
           <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(filtered.length)} ردیف</span>
+          {sel.length > 0 && (
+            <>
+              <button disabled={sending} onClick={async () => {
+                setSending(true); setSendMsg('در حال ارسال…')
+                try {
+                  const r = await fetch('/api/admin/sites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sendSms', phones: sel }) })
+                  const j = await r.json()
+                  if (j.ok) { setSendMsg(`✓ ${fa(j.sent)} پیامک رفت${j.failed ? ` · ✗ ${fa(j.failed)} خطا (علت روی ردیفِ هر کاربر)` : ''}`); setSel([]) }
+                  else setSendMsg(`✗ ${j.error || 'خطا'}`)
+                } catch { setSendMsg('✗ خطای شبکه') }
+                setSending(false); await load()
+              }} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: 'var(--gold)', color: '#241d00', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', opacity: sending ? .6 : 1 }}>📩 ارسالِ پیامک به {fa(sel.length)} کاربر</button>
+              <button onClick={() => setSel([])} style={{ padding: '9px 12px', borderRadius: 10, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--faint)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+            </>
+          )}
+          {sendMsg && <span style={{ fontSize: 12.5, color: sendMsg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{sendMsg}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 12, padding: '10px 12px', background: 'var(--bg2)', borderRadius: 12 }}>
           {chips('نوع', fType, setFType, [['all', 'همه'], ['auto', 'خودکار'], ['manual', 'دست‌ساز']])}
@@ -2030,6 +2050,7 @@ function UserSitesView() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead><tr style={{ color: 'var(--muted)', fontSize: 11.5, textAlign: 'right' }}>
+                <th style={{ padding: '8px 6px' }}><input type="checkbox" checked={filtered.slice(0, 300).length > 0 && filtered.slice(0, 300).every(r => sel.includes(r.owner))} onChange={e => setSel(e.target.checked ? [...new Set([...sel, ...filtered.slice(0, 300).map(r => r.owner)])] : sel.filter(p => !filtered.slice(0, 300).some(r => r.owner === p)))} style={{ cursor: 'pointer' }} /></th>
                 <th style={{ padding: '8px 6px' }}>کاربر</th><th style={{ padding: '8px 6px' }}>نقش</th><th style={{ padding: '8px 6px' }}>سایت</th><th style={{ padding: '8px 6px' }}>نوع</th><th style={{ padding: '8px 6px' }}>پیامک</th><th style={{ padding: '8px 6px' }}>امروز</th><th style={{ padding: '8px 6px' }}>۷ روز</th><th style={{ padding: '8px 6px' }}>جستجو ۷ر</th><th style={{ padding: '8px 6px' }}>کل</th><th style={{ padding: '8px 6px' }}>آخرین بازدید</th><th style={{ padding: '8px 6px' }}>آخرین ورودِ کاربر</th>
               </tr></thead>
               <tbody>
@@ -2039,6 +2060,7 @@ function UserSitesView() {
                   return (
                   <Fragment key={rk}>
                     <tr onClick={() => setOpen(open === rk ? '' : rk)} style={{ borderTop: '1px solid var(--line)', cursor: 'pointer' }}>
+                      <td style={{ padding: '9px 6px' }} onClick={e => e.stopPropagation()}><input type="checkbox" checked={sel.includes(r.owner)} onChange={e => setSel(e.target.checked ? [...sel, r.owner] : sel.filter(p => p !== r.owner))} style={{ cursor: 'pointer' }} /></td>
                       <td style={{ padding: '9px 6px' }}><b>{r.ownerName}</b><div style={{ fontSize: 10.5, color: 'var(--faint)', direction: 'ltr', textAlign: 'right' }}>{r.owner}</div></td>
                       <td style={{ padding: '9px 6px', color: 'var(--muted)' }}>{r.role || '—'}</td>
                       <td style={{ padding: '9px 6px' }}>{r.pending ? <span style={{ fontSize: 10.5, color: '#e7a14a', background: 'rgba(231,161,74,.12)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>⏳ در صفِ ساخت</span> : <a href={`/${encodeURIComponent(r.slug)}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--gold)', textDecoration: 'none' }}>{r.slug} ↗</a>}</td>
@@ -2052,7 +2074,7 @@ function UserSitesView() {
                       <td style={{ padding: '9px 6px', fontSize: 11.5, color: r.lastLogin ? 'var(--muted)' : '#e7a14a' }}>{r.lastLogin ? ago(r.lastLogin) : 'هرگز وارد نشده'}</td>
                     </tr>
                     {open === rk && (
-                      <tr style={{ background: 'var(--bg2)' }}><td colSpan={11} style={{ padding: '10px 14px', fontSize: 12 }}>
+                      <tr style={{ background: 'var(--bg2)' }}><td colSpan={12} style={{ padding: '10px 14px', fontSize: 12 }}>
                         <b style={{ color: 'var(--muted)' }}>جستجوهای اخیرِ بازدیدکننده‌ها:</b>{' '}
                         {r.topQueries.length ? r.topQueries.map((x, i) => <span key={i} style={{ display: 'inline-block', margin: '2px 4px', padding: '3px 10px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999 }}>{x}</span>) : <span style={{ color: 'var(--faint)' }}>هنوز جستجویی ثبت نشده</span>}
                         <span style={{ marginInlineStart: 14, color: 'var(--faint)' }}>{r.pending ? `حساب ساخته‌شده: ${new Date(r.createdAt).toLocaleString('fa-IR')} — سایت در صفِ جاروِ خودکار (هر ۴۵ ثانیه چندتا ساخته می‌شود)` : `ساختِ سایت: ${new Date(r.createdAt).toLocaleDateString('fa-IR')} · کل جستجو: ${fa(r.totalS)}`}</span>
