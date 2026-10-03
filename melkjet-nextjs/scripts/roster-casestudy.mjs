@@ -18,6 +18,14 @@ const { extractSignature, validName, addressTokens, aiCanonical, lexiconMatch } 
 const { knownNames } = await import('../app/lib/agency-roster-ml.ts')
 const { fetchDivarPost } = await import('../app/lib/divar-post.ts')
 
+// «عینِ» تولید: سینکِ واقعی قبل از شروع مدل‌ها را prime می‌کند (agency-roster-store) —
+// بدونِ این، nameProbSync=null و مدلِ خلوت غایب است و نتیجه با تولید فرق می‌کند (دورِ ۳ کیس‌استادی).
+const { primeNameModel } = await import('../app/lib/roster-name-model.ts')
+const { loadNer } = await import('../app/lib/roster-ner.ts')
+const primed = await primeNameModel().catch(() => false)
+const nerLoaded = !!(await loadNer().catch(() => null))
+console.log(`مدل‌ها: nameProb=${primed ? '✓' : '✗ (آموزش‌ندیده)'} · NER=${nerLoaded ? '✓' : '✗'}`)
+
 const scrapes = await listScrapes()
 const s = scrapes.find(x => `${x.slug} ${x.agencyName || ''}`.includes(q))
 if (!s) { console.log(`✗ اسکرپی با «${q}» پیدا نشد. موجودها: ${scrapes.map(x => x.slug).join(', ')}`); process.exit(1) }
