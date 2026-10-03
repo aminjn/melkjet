@@ -75,8 +75,22 @@ if [ "$FREE_KB" -lt $((NEED_KB + 500000)) ]; then
   exit 1
 fi
 
+# ── فاز ۲۹۷ر — همان حصارهای auto-deploy: رمِ ماشین برای build جا ندارد (اینستنس‌ها + پستگرس
+# ≈ کلِ رم)، پس ۳۰۰۳ در پنجرهٔ بیلد خاموش می‌شود (برگشتِ تضمینی با trap) و build داخلِ cgroup
+# با سقفِ CPU/RAM اجرا می‌شود تا در بدترین حالت فقط «بیلد» بمیرد، نه سرور/SSH.
+avail_mb=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
+[ "${avail_mb:-0}" -lt 1100 ] && echo "⚠ رمِ آزاد فقط ${avail_mb}MB است — بیلد کند و سنگین خواهد بود."
+pm2 stop melkjet-3003 >/dev/null 2>&1 || true
+trap 'pm2 start melkjet-3003 >/dev/null 2>&1 || true' EXIT
+fence() {
+  if systemd-run --scope --quiet -p CPUQuota=70% /bin/true 2>/dev/null; then
+    systemd-run --scope --quiet -p CPUQuota=70% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20 -p Nice=19 -- "$@"
+  else
+    nice -n 19 ionice -c3 "$@"
+  fi
+}
 rm -rf "$NEW"
-NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build
+fence env NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
 # A half-written slot must never go live.
 if [ ! -f "$NEW/BUILD_ID" ]; then

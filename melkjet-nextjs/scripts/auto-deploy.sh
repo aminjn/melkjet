@@ -38,6 +38,18 @@ else
 fi
 echo "$REMOTE" > "$FAILED_MARK"   # تا وقتی build+reload موفق نشده، «ناتمام» حساب می‌شود
 
+# ── فاز ۲۹۷ر — سه حصار که «مرگِ سرور با هر دیپلوی» را می‌بندند ──────────────────
+# ریشه (free/load شبِ ۳ اکتبر): بودجهٔ رمِ اینستنس‌ها (۲۶۰۰M + ۳×۱۳۰۰M) + پستگرس ≈ کلِ
+# ۷.۸GB را می‌گیرد؛ build (~۲GB) هیچ جایی نداشت → سواپ‌ترش → لود ۱۵+ → حتی SSH می‌مُرد.
+# nice فقط اولویتِ CPU است و جلوی «فشارِ رم» را نمی‌گیرد — این سه حصار می‌گیرند:
+# (۱) گاردِ پیش‌پرواز: رم/لودِ تنگ یعنی «الان نه» — مارکر مانده و دورِ بعدِ کرون ادامه می‌دهد.
+avail_mb=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
+load1=$(awk '{print int($1)}' /proc/loadavg)
+if [ "${avail_mb:-0}" -lt 1100 ] || [ "${load1:-99}" -gt 6 ]; then
+  echo "$(date) ⏸ سرور تنگ است (رمِ آزاد ${avail_mb}MB، لود ${load1}) — بیلد به دورِ بعدِ کرون موکول شد"
+  exit 0
+fi
+
 # ⚠️ بیلد باید در «اسلاتِ خاموش» انجام شود، دقیقاً مثلِ deploy.sh.
 # ecosystem.config.js پوشهٔ سِرو را از `.next-current` می‌خواند (.next-a/.next-b).
 # نسخهٔ قبلیِ این اسکریپت در `.next` بیلد می‌کرد و به اشاره‌گر دست نمی‌زد؛ نتیجه
@@ -50,9 +62,22 @@ if [ -f "$APP_DIR/.next-current" ]; then CUR="$(cat "$APP_DIR/.next-current")"; 
 case "$CUR" in .next-a) NEW=".next-b" ;; *) NEW=".next-a" ;; esac
 echo "$(date) → بیلد در اسلاتِ خاموش: $NEW   (زنده: $CUR)"
 
-# nice/ionice مثلِ deploy.sh: build تمامِ ۴ هسته را نمی‌بلعد و سایت وسطِ دیپلویِ خودکار ۵۰۴ نمی‌دهد.
+# (۲) آزادسازیِ رم در پنجرهٔ بیلد: ۳۰۰۳ موقتاً خاموش می‌شود (۱.۳GB آزاد؛ nginx با ۳۰۰۱/۳۰۰۲
+# سرویس می‌دهد) و با trap «در هر خروجی» برمی‌گردد — حتی اگر build وسطِ راه بمیرد.
+pm2 stop melkjet-3003 >/dev/null 2>&1 || true
+trap 'pm2 start melkjet-3003 >/dev/null 2>&1 || true' EXIT
+
+# (۳) حصارِ cgroup روی خودِ build: سقفِ CPU/RAM/سواپ — در بدترین حالت «بیلد» کشته می‌شود
+# (و مارکرِ ناتمام دورِ بعد دوباره تلاش می‌کند)، نه کلِ سرور. بدونِ systemd-run → nice/ionice.
+fence() {
+  if systemd-run --scope --quiet -p CPUQuota=70% /bin/true 2>/dev/null; then
+    systemd-run --scope --quiet -p CPUQuota=70% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20 -p Nice=19 -- "$@"
+  else
+    nice -n 19 ionice -c3 "$@"
+  fi
+}
 # اسلاتِ خاموش هر بار از صفر ساخته می‌شود، پس ENOTEMPTY/ISRِ کهنه اصلاً پیش نمی‌آید.
-build() { rm -rf "$APP_DIR/$NEW"; NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build; }
+build() { rm -rf "$APP_DIR/$NEW"; fence env NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" npm run build; }
 if ! build; then
   echo "$(date) ✗ build شکست خورد — یک‌بارِ دیگر تلاش می‌کنم"
   if ! build; then
