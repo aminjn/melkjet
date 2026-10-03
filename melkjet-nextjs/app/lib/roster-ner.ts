@@ -134,13 +134,19 @@ export const NER_THRESHOLD = 0.55
 // «کارشناسِ فروش» سالم می‌مانَد) تا «کارشناسی شده - تک برگ» نامِ جعلیِ p=0.98 نسازد؛
 // جمع‌ها (مشاورین/مشاوران/کارشناسان) صریح در الگو هستند.
 const PBASE = '\\u0621-\\u064A\\u0671-\\u06D5'
-const LABELED_SEP = '[:：~ـ\\-–—|]'
+// جداکننده: فقط «:» و «-» بعد از deEmoji زنده می‌مانند (بقیه به فاصله می‌شوند). پس ~ – — |
+// و تطویل را «پیش از» deEmoji به «:» نرمال می‌کنیم تا به‌عنوان جداکنندهٔ شناخته‌شده بمانند.
+const LABELED_SEP = '[:：\\-]'
 const LABELED_RE = new RegExp(
-  `(?<![${PBASE}])(?:مشاور(?:ین|ان)?|کارشناس(?:ان)?)(?![${PBASE}])[^:：~ـ\\-–—|\\n]{0,25}${LABELED_SEP}[ \\t]*([ء-ی]{2,}(?:[ ‌][ء-ی]{2,})?)`,
+  `(?<![${PBASE}])(?:مشاور(?:ین|ان)?|کارشناس(?:ان)?)(?![${PBASE}])[^:：\\-\\n]{0,25}${LABELED_SEP}[ \\t]*([ء-ی]{2,}(?:[ ‌][ء-ی]{2,})?)`,
 )
 const LABELED_REJECT = /^(?:ملک|املاک|مسکن|خرید|فروش|رهن|اجاره|قیمت|بازدید|پاسخگویی|شماره|منطقه|محدوده|تخصصی|رسمی|ارشد|فایل|شما)$/
+// نام‌های ناحیه/محلهٔ تهران که ممکن است بعد از جداکنندهٔ ضعیف بیایند (نه اسمِ آدم).
+const PLACE_WORDS = new Set(['غرب', 'شرق', 'شمال', 'جنوب', 'مرکز', 'ونک', 'نیاوران', 'فرمانیه', 'جردن', 'الهیه', 'سعادت', 'پاسداران', 'ولنجک', 'زعفرانیه', 'اختیاریه', 'قیطریه', 'دروس', 'تجریش', 'شهرک', 'گیشا', 'صادقیه', 'پونک', 'ستارخان', 'یوسف‌آباد', 'نیلوفر'])
 export function labeledName(desc: string): string | null {
-  const lines = deEmoji(String(desc || '')).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
+  // فاز ۲۹۷ث۲ — جداکننده‌های ~ – — | ـ را پیش از deEmoji (که آن‌ها را به فاصله می‌کُشد) به «:» نرمال کن.
+  const normalized = String(desc || '').replace(/[~ـ–—|]/g, ':')
+  const lines = deEmoji(normalized).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
   for (const line of lines.slice(-6)) {
     const m = line.match(LABELED_RE)
     if (!m) continue
@@ -148,6 +154,10 @@ export function labeledName(desc: string): string | null {
     const toks = name.split(/\s+/)
     if (!toks.length) continue
     if (toks.some(w => KEYW.test(w) || VERBISH.test(w) || LABELED_REJECT.test(w) || isNoiseWord(w))) continue
+    // فاز ۲۹۷ث۲ — جداکنندهٔ ضعیف (~ – — |) پیش از نامِ مکان هم می‌آید: «منطقه ~ سعادت‌آباد».
+    // چون برچسب‌دار p=0.98 می‌گیرد و از دروازهٔ nameProb رد نمی‌شود، نامِ مکان (پسوندِ آباد/
+    // شهر/ده یا واژهٔ ناحیه) اینجا رد می‌شود تا مشاورِ جعلیِ «سعادت آباد» ساخته نشود.
+    if (toks.some(w => /(?:آباد|اباد|شهر|پارک)$/.test(w) || PLACE_WORDS.has(w))) continue
     return name
   }
   return null
