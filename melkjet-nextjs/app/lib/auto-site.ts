@@ -65,7 +65,7 @@ export interface AutoSiteSeed {
 }
 
 // نسخهٔ سازنده — بالارفتنش یعنی سایت‌های خودکارِ «دست‌نخورده» در جاروِ بعدی بازسازی می‌شوند.
-export const AUTO_SITE_V = 7
+export const AUTO_SITE_V = 8
 
 // نگاشتِ نوعِ دایرکتوری → پروفایلِ قالب‌های سایت‌ساز (همان گروه‌هایی که ابزار دارد).
 const TYPE_TO_PROFILE: Record<string, string> = {
@@ -130,7 +130,12 @@ export function buildAutoSitePayload(s: AutoSiteSeed) {
           return { ...b, props: p }   // بدونِ دادهٔ واقعی: خدماتِ صنفیِ خودِ قالب (توصیفِ حرفه، نه ادعای عددی)
         case 'gallery':
           // گالری فقط با عکس‌های واقعیِ خودِ شخص؛ خالی/نمونه حذف می‌شود.
-          if (galleryImages.length) { p.images = galleryImages.slice(0, pi === 0 ? 9 : 24); return { ...b, props: p } }
+          if (galleryImages.length) {
+            p.images = galleryImages.slice(0, pi === 0 ? 9 : 24)
+            // سازنده: کارت‌های «پروژه‌های ما» جدا می‌آیند — تیترِ گالری تکراری نشود.
+            if (bl?.projects.length) p.heading = 'گالریِ پروژه‌ها'
+            return { ...b, props: p }
+          }
           return null
         case 'about':
           if (realAbout) { p.heading = `دربارهٔ ${s.name}`; p.text = realAbout }

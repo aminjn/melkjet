@@ -862,7 +862,41 @@ function SiteNav({ site, primary, currentSlug }: { site: Site; primary: string; 
 // route and the [page] sub-route so there's a single source of truth.
 // پوستهٔ سایت‌ساز (تم + ناوبری + فوتر) که «هر محتوایی» را داخلِ خودش می‌گیرد.
 // صفحه‌های جزئیاتِ آگهی/محصول/مقاله از همین استفاده می‌کنند تا داخلِ همان سایت + قالب بمانند.
-export function SiteChrome({ site, currentSlug, children, appendFooter }: { site: Site; currentSlug?: string; children: React.ReactNode; appendFooter?: boolean }) {
+// فاز ۲۹۷ط — منوی ثابتِ پایینِ موبایل («باید منو زیر داشته باشه، منو موبایلی»): مثلِ اپ،
+// خانه + ۴ صفحهٔ اولِ منو همیشه دمِ دستِ انگشت. چون در «پوسته» است، روی همهٔ سایت‌ها
+// (خودکار و دست‌ساز) بدونِ بازسازی زنده می‌شود. آیکنِ هر صفحه از اسلاگش.
+const BOTTOM_ICONS: Record<string, string> = {
+  home: '⌂', listings: '⌕', opportunities: '⌕', projects: '▦', portfolio: '▦', products: '▤',
+  prices: '▤', services: '◈', about: '¶', blog: '✎', contact: '✉', team: '☺', reviews: '❝',
+}
+function BottomNav({ site, currentSlug, primary }: { site: Site; currentSlug: string; primary: string }) {
+  const items = menuPages(site).slice(0, 5)
+  if (items.length < 2) return null
+  return (
+    <nav className="mjs-bottom-bar" style={{
+      position: 'fixed', bottom: 0, insetInlineStart: 0, insetInlineEnd: 0, zIndex: 60, direction: 'rtl',
+      display: 'none', background: 'color-mix(in srgb, var(--mjs-bg) 94%, transparent)', backdropFilter: 'blur(12px)',
+      borderTop: '1px solid color-mix(in srgb, var(--mjs-text) 14%, transparent)',
+      paddingBottom: 'env(safe-area-inset-bottom)', boxShadow: '0 -6px 24px -18px rgba(20,16,10,.8)',
+    }}>
+      {items.map(it => {
+        const active = it.home ? !currentSlug || currentSlug === 'home' : it.slug === currentSlug
+        return (
+          <a key={it.slug} href={it.home ? `/${encodeURIComponent(site.slug)}` : `/${encodeURIComponent(site.slug)}/${it.slug}`} style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+            padding: '8px 2px 7px', textDecoration: 'none', minWidth: 0,
+            color: active ? primary : 'var(--mjs-text)', fontWeight: active ? 800 : 600,
+          }}>
+            <span aria-hidden style={{ fontSize: 19, lineHeight: 1, opacity: active ? 1 : .75 }}>{BOTTOM_ICONS[it.slug] || '•'}</span>
+            <span style={{ fontSize: 10.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{it.label}</span>
+          </a>
+        )
+      })}
+    </nav>
+  )
+}
+
+export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNav = true }: { site: Site; currentSlug?: string; children: React.ReactNode; appendFooter?: boolean; bottomNav?: boolean }) {
   const t = site.theme
   const primary = t?.primary || '#c9a84c'
   const secondary = t?.secondary || '#1a1510'
@@ -879,7 +913,7 @@ export function SiteChrome({ site, currentSlug, children, appendFooter }: { site
   const home = site.pages.find(p => p.slug === 'home') || site.pages[0]
   const footerBlocks = appendFooter ? (home?.blocks || []).filter(b => b.type === 'footer') : []
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--mjs-bg)', color: 'var(--mjs-text)', fontFamily, ...cssVars }}>
+    <main className="mjs-site-main" style={{ minHeight: '100vh', background: 'var(--mjs-bg)', color: 'var(--mjs-text)', fontFamily, ...cssVars }}>
       <style>{`
         /* ناوبریِ موبایلِ ملک‌جت روی سایتِ منتشرشده دیده نشود — هر سایت منوی خودش را دارد. */
         .mj-bottom-nav{display:none !important}
@@ -897,6 +931,11 @@ export function SiteChrome({ site, currentSlug, children, appendFooter }: { site
         .mjs-gallery-img:hover{transform:scale(1.03)}
         .mjs-nav-items{scrollbar-width:none}
         .mjs-nav-items::-webkit-scrollbar{display:none}
+        /* فاز ۲۹۷ط — منوی پایینِ موبایل فقط زیرِ ۷۲۰px دیده می‌شود؛ جا برای آن ته صفحه باز می‌شود */
+        @media(max-width:719px){
+          .mjs-bottom-bar{display:flex !important}
+          main.mjs-site-main{padding-bottom:62px}
+        }
         @media(max-width:680px){
           .mjs-grid-3,.mjs-grid-4{grid-template-columns:1fr !important}
           .mjs-search-row{flex-direction:column !important}
@@ -908,6 +947,7 @@ export function SiteChrome({ site, currentSlug, children, appendFooter }: { site
       <NavBar brand={site.title} items={menuPages(site)} currentSlug={currentSlug || ''} siteSlug={site.slug} primary={primary} />
       {children}
       {footerBlocks.map(block => renderBlock(block, primary, site.ownerName, site.owner, site.slug))}
+      {bottomNav ? <BottomNav site={site} currentSlug={currentSlug || ''} primary={primary} /> : null}
     </main>
   )
 }

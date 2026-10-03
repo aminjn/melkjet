@@ -68,7 +68,8 @@ export default async function InSiteListing({ params }: { params: Promise<{ site
   if (!r) notFound()
   const d = await buildListingDetailData(r.it)
   return (
-    <SiteChrome site={r.site} appendFooter>
+    // نوارِ اکشنِ خودِ صفحهٔ آگهی (چت/تماس) پایین است — منوی پایینِ سایت اینجا خاموش تا روی هم نیفتند
+    <SiteChrome site={r.site} appendFooter bottomNav={false}>
       <Beacon slug={r.site.slug} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(d.ld) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(d.breadcrumbLd) }} />
