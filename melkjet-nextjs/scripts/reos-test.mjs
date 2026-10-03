@@ -2747,7 +2747,8 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('پاسِ قطع‌شده: درخواست زنده می‌ماند و خودکار دوباره صف می‌شود', p1.ok === false && s1.runRequested === true && (await listDueRosters(Date.now())).some(x => x.id === id196))
       ok('پیشرفتِ واقعی (رسیدن به ایمپورت) شمارندهٔ تلاش را می‌بخشد — کیلِ دیپلوی به give-up نمی‌رسد', (s1.runAttempts || 0) === 0)
       const rowsAfterP1 = rowFetches, aiAfterP1 = aiCalls
-      ok('پاسِ ۱ همهٔ ردیف‌ها را خواند و AI را پرسید (کش ساخته شد)', rowsAfterP1 === N && aiAfterP1 >= 1)
+      // فاز ۲۹۷خ — شناساییِ نام ML-only شد: AI دیگر «اصلاً» پرسیده نمی‌شود (گپ غیرفعال).
+      ok('پاسِ ۱ همهٔ ردیف‌ها را خواند و AI هرگز پرسیده نشد (ML-only — فاز ۲۹۷خ)', rowsAfterP1 === N && aiAfterP1 === 0)
       // پاسِ ۲: بودجهٔ کافی → باید کامل شود، بدونِ «هیچ» خواندنِ دوباره از دیوار و بدونِ AI تکراری
       const p2 = await syncRoster(id196, undefined, { budgetMs: 600_000, f, fetchPost })
       const s2 = await getScrape(id196)

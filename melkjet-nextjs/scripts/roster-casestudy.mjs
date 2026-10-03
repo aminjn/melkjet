@@ -93,9 +93,9 @@ for (const [k, b] of [...buckets.entries()].sort((a, b2) => b2[1].n - a[1].n).sl
   for (const l of b.sample.lines) console.log(`   │ ${l.slice(0, 90)}`)
 }
 
-// کاوشِ AI: در تولید اولویتِ اول AI است — اگر AI از کار افتاده باشد (اعتبار/خطا)، علتِ اصلیِ
-// حجمِ بی‌نام‌ها همین است. روی ۶ نمونهٔ اول آزمایش می‌کنیم.
-console.log(`\n─── کاوشِ مسیرِ AI (اولویتِ اولِ تولید) ───`)
+// کاوشِ AI: از فاز ۲۹۷خ شناساییِ نام «کاملاً ML-only» است و AI در تولید دخالت ندارد.
+// این بخش فقط «اطلاعاتی» است: اگر گپ شارژ شود، AI چه نام‌هایی اضافه می‌کرد.
+console.log(`\n─── کاوشِ مسیرِ AI (اطلاعاتی — در تولید غیرفعال است؛ ML-only) ───`)
 try {
   const probe = still.filter(r => r.desc).slice(0, 6).map((r, i) => ({ i, title: r.title, desc: r.desc }))
   if (probe.length) {
