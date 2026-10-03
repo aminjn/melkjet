@@ -144,12 +144,37 @@ export function labeledName(desc: string): string | null {
   return null
 }
 
+// فاز ۲۹۷م — معرفیِ صریحِ خود در پایانِ آگهی: «خوشبین هستم در خدمت شما عزیزان».
+// «خوشبین» برای مدل صفت است و سکوت می‌کرد → آگهیِ امضادار به آژانس می‌رفت. خطِ امضایی
+// که «با یک نام شروع می‌شود و به هستم/هستیم می‌رسد» معرفیِ قطعیِ خود است (قرینهٔ فاز ۲۹۵)؛
+// صفت‌های حسی/آمادگی («مفتخر/خوشحال/آماده هستم…») جداگانه رد می‌شوند.
+// ⚠️ \b با حروفِ فارسی کار نمی‌کند (مرزِ کلمهٔ JS فقط ASCII است) — lookahead به‌جایش.
+const SELF_INTRO_RE = /^(?:بنده\s+|اینجانب\s+|من\s+)?([ء-ی]{2,}(?:[ ‌][ء-ی]{2,})?)\s+(?:هستم|هستیم)(?![ء-ی])/
+const SELF_REJECT = /^(?:مفتخر|خوشحال|خرسند|آماده|مشتاق|منتظر|امیدوار|خوشنود|سپاسگزار|ممنون|متشکر|موظف|متعهد|مصمم|افتخار|خدمت|خدمتگزار|همراه|مطمئن|معتقد)$/
+export function selfIntroName(desc: string): string | null {
+  const lines = deEmoji(String(desc || '')).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
+  for (const line of lines.slice(-4)) {
+    if (!/هست(?:م|یم)/.test(line)) continue
+    const m = line.match(SELF_INTRO_RE)
+    if (!m) continue
+    const name = m[1].replace(/‌/g, ' ').trim()
+    const toks = name.split(/\s+/)
+    if (!toks.length) continue
+    if (toks.some(w => KEYW.test(w) || VERBISH.test(w) || LABELED_REJECT.test(w) || SELF_REJECT.test(w) || isNoiseWord(w))) continue
+    return name
+  }
+  return null
+}
+
 /** نامِ مشاورِ این آگهی، یا خالی. نامِ دوبخشی وقتی ساخته می‌شود که توکنِ همسایه هم
  *  نمرهٔ بالایی داشته باشد — نه با قاعده، بلکه با همان نمرهٔ مدل. */
 export function bestName(title: string, desc: string): { name: string; p: number } | null {
   // فاز ۲۹۵ — امضای برچسب‌دارِ صریح بر مدل مقدم است (دقتِ بالا، بدونِ حدس).
   const ln = labeledName(desc)
   if (ln) return { name: ln, p: 0.98 }
+  // فاز ۲۹۷م — معرفیِ صریحِ خود («X هستم در خدمت شما») هم بر مدل مقدم است.
+  const sn = selfIntroName(desc)
+  if (sn) return { name: sn, p: 0.97 }
   // مدلِ خلوت (۹۵.۲٪) اگر بارگذاری شده باشد، مرجع است؛ چگال (۹۰.۴٪) تورِ ایمنی.
   if (hasSparse()) return bestNameSparse(title, desc)
   const m = NER
