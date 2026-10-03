@@ -3436,5 +3436,16 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('آژانسِ بدونِ رابطهٔ رسمی، تیمش از رُستر می‌آید (فقط حساب‌دارها)', team297.length === 1 && team297[0].phone === '09127772971' && team297[0].name === 'رضا تیمی')
 }
 
+// ── فاز ۲۹۷ص — پیامکِ سایت‌ساز بدونِ لینکِ کوتاه «نمی‌رود» (شکستِ بی‌صدا ممنوع) ──
+{
+  const { shortenUrlDetailed, mustShortenUrl, firstUrl } = await import('../app/lib/shortener.ts')
+  const longU = `https://melkjet.com/${encodeURIComponent('زهرا-شهابی')}`
+  ok('URLِ درصد-encodedِ فارسی توسطِ regexِ لینک کامل دیده می‌شود', firstUrl(`سلام ${longU} ملک‌جت`) === longU)
+  const d297s = await shortenUrlDetailed(longU)
+  ok('کوتاه‌کنندهٔ پیکربندی‌نشده «علت» برمی‌گرداند، نه nullِ بی‌صدا', d297s.ok === false && d297s.error.includes('پیکربندی نشده'))
+  const m297s = await mustShortenUrl(longU, { channel: 'autosite' })
+  ok('لینکِ کوتاهِ الزامی: شکست = خطای شفاف (نه لینکِ غول‌پیکر در پیامک)', m297s.ok === false && m297s.error.includes('پیکربندی نشده'))
+}
+
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
 process.exit(fail === 0 ? 0 : 1)

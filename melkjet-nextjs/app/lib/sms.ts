@@ -1,6 +1,6 @@
 import { getAdminData } from './admin-store'
 import { shecanRequest } from './shecan-https'
-import { shortenLinksInText, linkVarName, firstUrl, siteBase } from './shortener'
+import { shortenLinksInText, linkVarName, firstUrl, siteBase, mustShortenUrl } from './shortener'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ارسالِ پیامکِ متنِ آزاد با IPPanel — برای اتوماسیون/پیام‌های دلخواه.
@@ -55,13 +55,16 @@ export async function sendAutoSiteSms(phone: string, name: string, url: string):
   const nameVar = (a.ippanel?.autositeVar || 'name').trim() || 'name'
   try {
     if (patternCode) {
-      // لینک کوتاه/ردگیری می‌شود و در متغیرِ لینکِ پترن می‌نشیند (همان سازوکارِ بقیهٔ پترن‌ها).
-      const short = await shortenLinksInText(url, { channel: 'autosite', phone: recipient })
+      // فاز ۲۹۷ص — لینکِ پیامکِ سایت‌ساز «باید» کوتاه باشد؛ لینکِ بلندِ درصد-encoded
+      // (melkjet.com/%D8%B2…) یعنی چند صفحه پیامک و پیامی زشت. قبلاً شکستِ کوتاه‌کننده
+      // بی‌صدا بلعیده می‌شد و لینکِ غول‌پیکر می‌رفت — حالا شکست = ارسال متوقف + علت در پنل.
+      const sh = await mustShortenUrl(url, { channel: 'autosite', phone: recipient, title: name })
+      if (!sh.ok) return { ok: false, error: `کوتاه‌کننده: ${sh.error}` }
       const variable: Record<string, string> = { [nameVar]: String(name || 'همکار').slice(0, 60) }
       // فاز ۲۹۷ع — پترنِ سایت‌ساز همیشه لینک دارد؛ فیلدِ خالیِ «متغیرِ لینک» نباید ارسال را
       // بشکند («تکمیل گزینه params.link الزامی») — پیش‌فرضِ قراردادیِ IPPanel: link.
       const lv = linkVarName() || 'link'
-      variable[lv] = firstUrl(short) || short || siteBase()
+      variable[lv] = sh.shortUrl
       const body = { code: patternCode, sender, recipient, variable }
       const res = await shecanRequest('https://api2.ippanel.com/api/v1/sms/pattern/normal/send', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
       const ok = res.status >= 200 && res.status < 300
