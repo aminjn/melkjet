@@ -107,15 +107,29 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: Br
   let any200 = false
   let reason: string | undefined
 
+  // فاز ۲۹۷ش — کیس‌استادیِ شاهان: ۱۱۴۲ آگهیِ فعال، ولی اسکن در ۲۶۱ می‌ایستاد. ریشه:
+  // هر صفحه «یک» پروکسیِ تصادفی می‌گرفت و اولین صفحهٔ غیر۲۰۰/خطا کلِ خزش را «بی‌صدا»
+  // قطع می‌کرد — ۸۸۰ آگهی دیده نمی‌شد و فایل‌هایشان برای همیشه روی حسابِ آژانس می‌ماند.
+  // حالا: هر صفحه تا ۳ تلاش با پروکسیِ تازه، و قطعِ ناقص با صدای بلند لاگ می‌شود.
+  let noNewStreak = 0
   for (let page = 0; page < 120; page++) {   // تا ~۳۰۰۰ آگهی (هر صفحه ~۲۴)؛ حلقه با نبودِ آگهیِ جدید/کرسر خودش می‌ایستد
     const body = JSON.stringify({ request_data: { brand_token: slug, tracker_session_id: '' }, specification: { last_item_identifier: cursor } })
-    const proxyUrl = pickDivarProxy()   // هر صفحه یک IP از استخر → پخشِ بار
-    let res
-    try {
-      res = await proxiedRequest(ENDPOINT, { method: 'POST', headers, body, proxyUrl, timeout: 20000 })
-      reportDivarProxy(proxyUrl, res.status === 200)
-    } catch { reportDivarProxy(proxyUrl, false); reason = reason || 'unreachable'; break }
-    if (res.status !== 200) { if (page === 0) reason = `http_${res.status}`; break }
+    let res: { status: number; body: string } | null = null
+    let lastErr = ''
+    for (let attempt = 0; attempt < 3 && !res; attempt++) {
+      const proxyUrl = pickDivarProxy()   // هر تلاش یک IP از استخر → پخشِ بار + دورزدنِ IPِ خراب
+      try {
+        const r = await proxiedRequest(ENDPOINT, { method: 'POST', headers, body, proxyUrl, timeout: 20000 })
+        reportDivarProxy(proxyUrl, r.status === 200)
+        if (r.status === 200) res = r
+        else { lastErr = `http_${r.status}`; await new Promise(rr => setTimeout(rr, 500)) }
+      } catch { reportDivarProxy(proxyUrl, false); lastErr = 'unreachable'; await new Promise(rr => setTimeout(rr, 500)) }
+    }
+    if (!res) {
+      if (page === 0) reason = lastErr || 'unreachable'
+      else console.error(`[divar] ⚠ اسکنِ پروفایلِ ${slug} در صفحهٔ ${page} قطع شد (${lastErr}) — ${posts.size} آگهی دیده شد؛ بقیه این دور جا ماندند`)
+      break
+    }
     any200 = true
 
     const raw = res.body || ''
@@ -149,7 +163,9 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: Br
     // cursorِ صفحهٔ بعد: infinite_scroll_response.last_item_identifier
     const next = (j?.infinite_scroll_response?.last_item_identifier ?? deepFindKey(j, 'last_item_identifier'))
 
-    if (posts.size === before) break                       // آگهیِ جدیدی نیامد → تمام
+    // فاز ۲۹۷ش — دیوار گاهی یک صفحهٔ «تماماً تکراری» وسطِ صفحه‌بندی می‌دهد؛ قطعِ فوری
+    // بقیهٔ آگهی‌ها را جا می‌گذاشت. تا وقتی کرسر جلو می‌رود، یک صفحهٔ بی‌پیشرفت تحمل می‌شود.
+    if (posts.size === before) { noNewStreak++; if (noNewStreak >= 2) break } else noNewStreak = 0
     if (next === undefined || next === null || next === '' || String(next) === cursor) break  // صفحهٔ بعدی نیست
     cursor = String(next)
   }

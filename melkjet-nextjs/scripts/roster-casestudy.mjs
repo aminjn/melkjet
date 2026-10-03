@@ -14,9 +14,8 @@ if (!q) { console.log('استفاده: roster-casestudy.mjs <بخشی از slug 
 const N = Math.max(5, Math.min(100, parseInt(process.argv[3] || '60', 10) || 60))
 
 const { listScrapes } = await import('../app/lib/agency-roster-store.ts')
-const { extractSignature, validName, addressTokens, aiCanonical } = await import('../app/lib/agency-roster.ts')
+const { extractSignature, validName, addressTokens, aiCanonical, lexiconMatch } = await import('../app/lib/agency-roster.ts')
 const { knownNames } = await import('../app/lib/agency-roster-ml.ts')
-const { keyOf } = await import('../app/lib/agency-name-lexicon.ts')
 const { fetchDivarPost } = await import('../app/lib/divar-post.ts')
 
 const scrapes = await listScrapes()
@@ -42,7 +41,7 @@ for (let i = 0; i < tokens.length; i++) {
 }
 console.log('')
 
-// همان دروازه‌های تولید: heuristic (extractSignature) + lexicon (تطبیقِ آموخته‌ها در ناحیهٔ امضا).
+// «عینِ» دروازه‌های تولید: lexiconMatch واقعی + validName + heuristic (extractSignature).
 const lastLines = (desc) => desc.split('\n').map(x => x.trim()).filter(Boolean).slice(-4)
 let fetchErr = 0, emptyDesc = 0, nowNamed = [], still = []
 for (const r of rows) {
@@ -50,10 +49,7 @@ for (const r of rows) {
   if (!r.desc) { emptyDesc++; still.push({ ...r, why: 'متنِ خالی' }); continue }
   const addr = addressTokens(`${r.title}\n${r.desc}`)
   const heur = extractSignature(r.title, r.desc, s.agencyName || '')[0] || ''
-  const zone = lastLines(r.desc).join('\n')
-  const zoneKey = keyOf(zone)
-  let lex = ''
-  for (const l of learned) { const k = keyOf(l.name); if (k && zoneKey.includes(k)) { lex = validName(l.name, s.agencyName || '', addr); if (lex) break } }
+  const lex = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), s.agencyName || '', addr)
   const chosen = lex || heur
   if (chosen) nowNamed.push({ t: r.t, name: chosen, via: lex ? 'lexicon' : 'heuristic' })
   else still.push(r)
@@ -99,8 +95,8 @@ try {
   console.log('  ⚠ اگر این خطا اعتبار/سهمیه است، علتِ اصلیِ حجمِ بی‌نام‌ها همین است — AI اولویتِ اولِ خوشه‌بندی است.')
 }
 
-// گزارشِ کاملِ خام برای تحلیلِ عمیق‌تر.
-const out = `.roster-casestudy-${s.slug}.json`
+// گزارشِ کاملِ خام برای تحلیلِ عمیق‌تر — در /tmp تا با مالکِ rootِ پوشهٔ اپ EACCES نخورد.
+const out = `/tmp/roster-casestudy-${s.slug}.json`
 writeFileSync(out, JSON.stringify({ slug: s.slug, agencyName: s.agencyName, nowNamed, still: still.map(r => ({ t: r.t, title: r.title, desc: r.desc })) }, null, 1))
 console.log(`\nگزارشِ کامل: ${out}`)
 process.exit(0)

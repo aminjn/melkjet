@@ -33,7 +33,8 @@ export { validName, addressTokens } from './agency-name-lexicon'
 // همان را برمی‌گرداند — قطعی، رایگان، بدونِ AI. هستهٔ «یادگیریِ تدریجیِ ماشین».
 // deEmoji (اموجی/نماد → فاصله؛ کلیدِ رفعِ «♀️محمدی») از واژه‌نامهٔ مشترک می‌آید.
 const normTxt = (s: string) => (' ' + deEmoji(s).replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک') + ' ')
-function lexiconMatch(text: string, learned: { name: string }[]): string {
+// (exported برای scripts/roster-casestudy.mjs — کیس‌استادی باید «عینِ» منطقِ تولید را بسنجد)
+export function lexiconMatch(text: string, learned: { name: string }[]): string {
   if (!learned.length) return ''
   const t = normTxt(text)
   let best = ''
