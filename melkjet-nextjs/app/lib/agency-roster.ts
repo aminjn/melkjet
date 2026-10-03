@@ -79,7 +79,16 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   const ner = bestName(title, desc)
   if (hasSparseModel() || ner) {
     const v = ner ? validName(ner.name, agencyName) : ''
-    return v ? [v] : []
+    if (!v) return []
+    // فاز ۲۹۷ت — کیس‌استادیِ شاهان: حدسِ مدل («تمیز»، «سخت»، «همراهتان») بدونِ هیچ
+    // دروازهٔ دومی پذیرفته می‌شد و با ۲ فایل مشاورِ جعلی می‌ساخت، درحالی‌که مسیرِ regex
+    // همهٔ کاندیداها را از nameProbSync می‌گذرانْد. حالا حدسِ «خالصِ» مدل هم از همان
+    // دروازه می‌گذرد؛ امضای برچسب‌دار/معرفیِ خود (p≥۰.۹۷ — شواهدِ قطعیِ متنی) مستثناست.
+    if (ner!.p < 0.97) {
+      const bp = nameProbSync(v)
+      if (bp !== null && bp < NAME_THRESHOLD) return []
+    }
+    return [v]
   }
 
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)

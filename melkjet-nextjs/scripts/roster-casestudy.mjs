@@ -41,25 +41,31 @@ for (let i = 0; i < tokens.length; i++) {
 }
 console.log('')
 
-// «عینِ» دروازه‌های تولید: lexiconMatch واقعی + validName + heuristic (extractSignature).
+// «عینِ» تصمیمِ تولید برای هر آگهی: chosen = AI || cand[0] (extractSignature = مدل+دروازه‌ها).
+// واژه‌نامه در تولید «به‌تنهایی» آگهی تصاحب نمی‌کند (قانونِ موضع، فاز ۲۸۰) — فقط اطلاع.
 const lastLines = (desc) => desc.split('\n').map(x => x.trim()).filter(Boolean).slice(-4)
-let fetchErr = 0, emptyDesc = 0, nowNamed = [], still = []
+let fetchErr = 0, emptyDesc = 0, nowNamed = [], still = [], lexInfo = []
 for (const r of rows) {
   if (r.err) { fetchErr++; continue }
   if (!r.desc) { emptyDesc++; still.push({ ...r, why: 'متنِ خالی' }); continue }
   const addr = addressTokens(`${r.title}\n${r.desc}`)
   const heur = extractSignature(r.title, r.desc, s.agencyName || '')[0] || ''
   const lex = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), s.agencyName || '', addr)
-  const chosen = lex || heur
-  if (chosen) nowNamed.push({ t: r.t, name: chosen, via: lex ? 'lexicon' : 'heuristic' })
-  else still.push(r)
+  if (heur) nowNamed.push({ t: r.t, name: heur })
+  else { still.push(r); if (lex) lexInfo.push({ t: r.t, lex }) }
 }
 
-console.log(`─── نتیجه با کدِ فعلی (بدونِ AI) ───`)
-console.log(`✅ حالا اسم می‌گیرند (سینکِ بعدی خودکار درست می‌شوند): ${fa(nowNamed.length)}`)
-for (const x of nowNamed.slice(0, 15)) console.log(`   ${x.t}  →  ${x.name}  (${x.via})`)
-if (nowNamed.length > 15) console.log(`   … و ${fa(nowNamed.length - 15)} تای دیگر`)
-console.log(`✗ هنوز بی‌نام: ${fa(still.length)}   (متنِ خالی: ${fa(emptyDesc)} · خطای واکشی: ${fa(fetchErr)})\n`)
+console.log(`─── نتیجه با «تصمیمِ واقعیِ تولید» (مدل/heuristic، بدونِ AI) ───`)
+console.log(`✅ اسم می‌گیرند: ${fa(nowNamed.length)}`)
+const byName = new Map()
+for (const x of nowNamed) byName.set(x.name, (byName.get(x.name) || 0) + 1)
+for (const [n, c] of [...byName.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20)) console.log(`   ×${fa(c)}  ${n}`)
+console.log(`✗ بی‌نام می‌مانند: ${fa(still.length)}   (متنِ خالی: ${fa(emptyDesc)} · خطای واکشی: ${fa(fetchErr)})`)
+if (lexInfo.length) {
+  console.log(`\nℹ واژه‌نامه برای ${fa(lexInfo.length)} تای بی‌نام «پیشنهاد» دارد (در تولید فقط برای مشاورِ تثبیت‌شدهٔ همین آژانس اعمال می‌شود):`)
+  for (const x of lexInfo.slice(0, 10)) console.log(`   ${x.t}  ~  ${x.lex}`)
+}
+console.log('')
 
 // دسته‌بندیِ الگوی «خطِ آخر» بی‌نام‌های واقعی + نمونهٔ کامل برای هر الگو.
 const norm = (l) => l.replace(/[0-9۰-۹]/g, '#').replace(/\s+/g, ' ').trim().slice(0, 60)
