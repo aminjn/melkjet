@@ -191,7 +191,8 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
 
 // (اختیاری) پالایشِ AI: نامِ کانونیِ مشاورِ هر آگهی را برمی‌گرداند (فارسی؛ خالی اگر امضا نبود).
 // دسته‌ای صدا زده می‌شود تا هزینهٔ AI کم بماند. اگر مدل نبود/خطا داد → [] (تکیه بر heuristic).
-async function aiCanonical(items: { i: number; title: string; desc: string }[]): Promise<{ map: Record<number, string>; raw: string }> {
+// (exported برای اسکریپتِ کیس‌استادی scripts/roster-casestudy.mjs — فاز ۲۹۷ش)
+export async function aiCanonical(items: { i: number; title: string; desc: string }[]): Promise<{ map: Record<number, string>; raw: string }> {
   const { model, provider } = resolveAgent([['content', 'text'], ['chat', 'text']])
   if (!model) return { map: {}, raw: '(هیچ مدلی تنظیم نشده)' }
   // اموجی/نماد را به فاصله تبدیل می‌کنیم تا اسمِ چسبیده به اموجی («♀️محمدی») برای AI هم خوانا شود.
