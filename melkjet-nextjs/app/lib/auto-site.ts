@@ -356,11 +356,11 @@ export async function sweepAutoSites(maxCreate = 8, maxSms = 4, maxUpgrade = 48)
         const r = await sendAutoSiteSms(phone, name, `https://melkjet.com/${encodeURIComponent(rec.slug)}`)
         if (r.ok) { rec.smsAt = Date.now(); rec.lastErr = ''; sms++ }
         else {
-          rec.smsTries = (rec.smsTries || 0) + 1; rec.lastErr = String(r.error || 'خطا').slice(0, 120)
+          rec.smsTries = (rec.smsTries || 0) + 1; rec.lastErr = String(r.error || 'خطا').slice(0, 220)
           // قانونِ شمارهٔ یک: پیامکِ نرفته باید فریاد بزند، نه اینکه ۳ تلاش بی‌صدا بسوزد.
           console.error(`[autosite] sms failed phone=${phone} try=${rec.smsTries}: ${rec.lastErr}`)
         }
-      } catch (e) { rec.smsTries = (rec.smsTries || 0) + 1; rec.lastErr = String((e as Error)?.message || e).slice(0, 120); console.error(`[autosite] sms threw phone=${phone}: ${rec.lastErr}`) }
+      } catch (e) { rec.smsTries = (rec.smsTries || 0) + 1; rec.lastErr = String((e as Error)?.message || e).slice(0, 220); console.error(`[autosite] sms threw phone=${phone}: ${rec.lastErr}`) }
       dirty = true
     }
   }

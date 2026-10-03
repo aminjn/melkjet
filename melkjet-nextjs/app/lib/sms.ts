@@ -63,7 +63,8 @@ export async function sendAutoSiteSms(phone: string, name: string, url: string):
       const body = { code: patternCode, sender, recipient, variable }
       const res = await shecanRequest('https://api2.ippanel.com/api/v1/sms/pattern/normal/send', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
       const ok = res.status >= 200 && res.status < 300
-      return ok ? { ok: true } : { ok: false, error: `HTTP ${res.status} (پترن سایت‌ساز)` }
+      // فاز ۲۹۷ن — پاسخِ IPPanel علتِ دقیق را می‌گوید (پترن تایید نشده/متغیر غلط/…) — دور نریز.
+      return ok ? { ok: true } : { ok: false, error: `HTTP ${res.status} (پترن سایت‌ساز): ${String(res.body || '').slice(0, 160)}` }
     }
     // بدونِ پترنِ اختصاصی → متنِ آزاد (خطِ تبلیغاتی لازم دارد؛ خطِ خدماتی رد می‌کند)
     return sendServiceSms(recipient, `سلام ${name} عزیز؛ سایت اختصاصی شما در ملک‌جت آماده شد:\n${url}\nملک‌جت`, 'سایت‌ساز ملک‌جت', name)

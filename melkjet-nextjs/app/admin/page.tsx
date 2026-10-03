@@ -1917,17 +1917,19 @@ interface PSState {
 }
 
 // ─── سایت‌سازها — فاز ۲۹۶ب: سایت‌های اختصاصیِ کاربران + آمارِ بازدید/جستجو ────────
-interface UserSiteRow { slug: string; title: string; owner: string; ownerName: string; role: string; auto: boolean; smsAt: number; lastLogin: number; createdAt: number; updatedAt: number; today: number; d7v: number; d7s: number; totalV: number; totalS: number; lastAt: number; topQueries: string[] }
+interface UserSiteRow { slug: string; title: string; owner: string; ownerName: string; role: string; auto: boolean; pending: boolean; smsState: string; smsAt: number; smsTries: number; smsErr: string; siteAt: number; lastLogin: number; createdAt: number; updatedAt: number; today: number; d7v: number; d7s: number; totalV: number; totalS: number; lastAt: number; topQueries: string[] }
 function UserSitesView() {
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   const [rows, setRows] = useState<UserSiteRow[]>([])
-  const [totals, setTotals] = useState<{ sites: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number; loggedInEver: number; loggedIn7d: number; smsFailed: number; smsInvalid: number; smsWaiting: number; smsSampleErr: string } | null>(null)
+  const [totals, setTotals] = useState<{ sites: number; pending: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number; loggedInEver: number; loggedIn7d: number; smsFailed: number; smsInvalid: number; smsWaiting: number; smsSampleErr: string } | null>(null)
   const [smsMsg, setSmsMsg] = useState('')
   const [q, setQ] = useState('')
   // فاز ۲۹۷ج — فیلترهای پنل (خواستهٔ صریح: «تو سوپرادمین فیلتر بزار»)
   const [fType, setFType] = useState<'all' | 'auto' | 'manual'>('all')
-  const [fSms, setFSms] = useState<'all' | 'sent' | 'not'>('all')
+  // فاز ۲۹۷ن — وضعیتِ سایت (ساخته/در صفِ ساخت) و وضعیتِ دقیقِ پیامک، ردیف‌به‌ردیف
+  const [fSite, setFSite] = useState<'all' | 'built' | 'queued'>('all')
+  const [fSms, setFSms] = useState<'all' | 'sent' | 'waiting' | 'failed' | 'invalid'>('all')
   const [fLogin, setFLogin] = useState<'all' | 'yes' | 'never'>('all')
   const [fVisit, setFVisit] = useState<'all' | 'has' | 'zero'>('all')
   const [fRole, setFRole] = useState('')
@@ -1943,7 +1945,8 @@ function UserSitesView() {
   const filtered = rows.filter(r =>
     (!q || r.ownerName.includes(q) || r.title.includes(q) || r.slug.includes(q) || r.owner.includes(q)) &&
     (fType === 'all' || (fType === 'auto' ? r.auto : !r.auto)) &&
-    (fSms === 'all' || (fSms === 'sent' ? !!r.smsAt : !r.smsAt)) &&
+    (fSite === 'all' || (fSite === 'queued' ? r.pending : !r.pending)) &&
+    (fSms === 'all' || (fSms === 'waiting' ? (r.smsState === 'waiting' || r.smsState === 'queued') : r.smsState === fSms)) &&
     (fLogin === 'all' || (fLogin === 'yes' ? !!r.lastLogin : !r.lastLogin)) &&
     (fVisit === 'all' || (fVisit === 'has' ? r.totalV > 0 : r.totalV === 0)) &&
     (!fRole || r.role === fRole)
@@ -1972,6 +1975,7 @@ function UserSitesView() {
       {totals && (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
           {tile('کل سایت‌ها', fa(totals.sites))}
+          {tile('در صفِ ساخت', fa(totals.pending), totals.pending ? '#e7a14a' : undefined)}
           {tile('خودکار', fa(totals.auto), '#5fd98a')}
           {tile('دست‌ساز', fa(totals.manual))}
           {tile('پیامک رفته', fa(totals.smsSent), 'var(--gold)')}
@@ -2003,11 +2007,12 @@ function UserSitesView() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
           <input style={{ ...inp, flex: '1 1 220px' }} placeholder="جستجو: نام، شماره، اسلاگ…" value={q} onChange={e => setQ(e.target.value)} />
           <button onClick={load} style={{ padding: '9px 18px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>↻ تازه‌سازی</button>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(filtered.length)} سایت</span>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(filtered.length)} ردیف</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 12, padding: '10px 12px', background: 'var(--bg2)', borderRadius: 12 }}>
           {chips('نوع', fType, setFType, [['all', 'همه'], ['auto', 'خودکار'], ['manual', 'دست‌ساز']])}
-          {chips('پیامک', fSms, setFSms, [['all', 'همه'], ['sent', 'رفته 📩'], ['not', 'نرفته']])}
+          {chips('سایت', fSite, setFSite, [['all', 'همه'], ['built', 'ساخته‌شده'], ['queued', 'در صفِ ساخت']])}
+          {chips('پیامک', fSms, setFSms, [['all', 'همه'], ['sent', 'رفته 📩'], ['waiting', 'در صف'], ['failed', 'ناموفق'], ['invalid', 'پیامک‌ناپذیر']])}
           {chips('ورودِ کاربر', fLogin, setFLogin, [['all', 'همه'], ['yes', 'وارد شده'], ['never', 'هرگز']])}
           {chips('بازدید', fVisit, setFVisit, [['all', 'همه'], ['has', 'بازدیددار'], ['zero', 'صفر']])}
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -2017,24 +2022,28 @@ function UserSitesView() {
               {roles297.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </span>
-          {(fType !== 'all' || fSms !== 'all' || fLogin !== 'all' || fVisit !== 'all' || fRole) && (
-            <button onClick={() => { setFType('all'); setFSms('all'); setFLogin('all'); setFVisit('all'); setFRole('') }} style={{ padding: '4px 11px', borderRadius: 999, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--faint)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✕ پاک‌کردن فیلترها</button>
+          {(fType !== 'all' || fSite !== 'all' || fSms !== 'all' || fLogin !== 'all' || fVisit !== 'all' || fRole) && (
+            <button onClick={() => { setFType('all'); setFSite('all'); setFSms('all'); setFLogin('all'); setFVisit('all'); setFRole('') }} style={{ padding: '4px 11px', borderRadius: 999, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--faint)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✕ پاک‌کردن فیلترها</button>
           )}
         </div>
         {loading ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>در حال بارگذاری…</div> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead><tr style={{ color: 'var(--muted)', fontSize: 11.5, textAlign: 'right' }}>
-                <th style={{ padding: '8px 6px' }}>کاربر</th><th style={{ padding: '8px 6px' }}>نقش</th><th style={{ padding: '8px 6px' }}>سایت</th><th style={{ padding: '8px 6px' }}>نوع</th><th style={{ padding: '8px 6px' }}>امروز</th><th style={{ padding: '8px 6px' }}>۷ روز</th><th style={{ padding: '8px 6px' }}>جستجو ۷ر</th><th style={{ padding: '8px 6px' }}>کل</th><th style={{ padding: '8px 6px' }}>آخرین بازدید</th><th style={{ padding: '8px 6px' }}>آخرین ورودِ کاربر</th>
+                <th style={{ padding: '8px 6px' }}>کاربر</th><th style={{ padding: '8px 6px' }}>نقش</th><th style={{ padding: '8px 6px' }}>سایت</th><th style={{ padding: '8px 6px' }}>نوع</th><th style={{ padding: '8px 6px' }}>پیامک</th><th style={{ padding: '8px 6px' }}>امروز</th><th style={{ padding: '8px 6px' }}>۷ روز</th><th style={{ padding: '8px 6px' }}>جستجو ۷ر</th><th style={{ padding: '8px 6px' }}>کل</th><th style={{ padding: '8px 6px' }}>آخرین بازدید</th><th style={{ padding: '8px 6px' }}>آخرین ورودِ کاربر</th>
               </tr></thead>
               <tbody>
-                {filtered.slice(0, 300).map(r => (
-                  <Fragment key={r.slug}>
-                    <tr onClick={() => setOpen(open === r.slug ? '' : r.slug)} style={{ borderTop: '1px solid var(--line)', cursor: 'pointer' }}>
+                {filtered.slice(0, 300).map(r => {
+                  const rk = r.slug || r.owner
+                  const smsChip = r.smsState === 'sent' ? ['📩 رفته', '#5fd98a'] : r.smsState === 'failed' ? ['✗ ناموفق', '#e7674a'] : r.smsState === 'invalid' ? ['☎ پیامک‌ناپذیر', 'var(--faint)'] : r.smsState === 'manual' ? ['—', 'var(--faint)'] : [r.smsTries ? `⏳ در صف (${fa(r.smsTries)} تلاش)` : '⏳ در صف', '#e7a14a']
+                  return (
+                  <Fragment key={rk}>
+                    <tr onClick={() => setOpen(open === rk ? '' : rk)} style={{ borderTop: '1px solid var(--line)', cursor: 'pointer' }}>
                       <td style={{ padding: '9px 6px' }}><b>{r.ownerName}</b><div style={{ fontSize: 10.5, color: 'var(--faint)', direction: 'ltr', textAlign: 'right' }}>{r.owner}</div></td>
                       <td style={{ padding: '9px 6px', color: 'var(--muted)' }}>{r.role || '—'}</td>
-                      <td style={{ padding: '9px 6px' }}><a href={`/${encodeURIComponent(r.slug)}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--gold)', textDecoration: 'none' }}>{r.slug} ↗</a></td>
-                      <td style={{ padding: '9px 6px' }}>{r.auto ? <span style={{ fontSize: 10.5, color: '#5fd98a', background: 'rgba(95,217,138,.1)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>خودکار{r.smsAt ? ' · 📩' : ''}</span> : <span style={{ fontSize: 10.5, color: 'var(--muted)', background: 'var(--bg2)', borderRadius: 999, padding: '2px 9px' }}>دست‌ساز</span>}</td>
+                      <td style={{ padding: '9px 6px' }}>{r.pending ? <span style={{ fontSize: 10.5, color: '#e7a14a', background: 'rgba(231,161,74,.12)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>⏳ در صفِ ساخت</span> : <a href={`/${encodeURIComponent(r.slug)}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--gold)', textDecoration: 'none' }}>{r.slug} ↗</a>}</td>
+                      <td style={{ padding: '9px 6px' }}>{r.auto ? <span style={{ fontSize: 10.5, color: '#5fd98a', background: 'rgba(95,217,138,.1)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>خودکار</span> : <span style={{ fontSize: 10.5, color: 'var(--muted)', background: 'var(--bg2)', borderRadius: 999, padding: '2px 9px' }}>دست‌ساز</span>}</td>
+                      <td style={{ padding: '9px 6px' }}><span title={r.smsErr || ''} style={{ fontSize: 10.5, color: smsChip[1], fontWeight: 800, whiteSpace: 'nowrap' }}>{smsChip[0]}</span></td>
                       <td style={{ padding: '9px 6px', fontWeight: 800, color: r.today ? '#60a5fa' : 'var(--faint)' }}>{fa(r.today)}</td>
                       <td style={{ padding: '9px 6px', fontWeight: 800 }}>{fa(r.d7v)}</td>
                       <td style={{ padding: '9px 6px' }}>{fa(r.d7s)}</td>
@@ -2042,15 +2051,17 @@ function UserSitesView() {
                       <td style={{ padding: '9px 6px', color: 'var(--faint)', fontSize: 11.5 }}>{ago(r.lastAt)}</td>
                       <td style={{ padding: '9px 6px', fontSize: 11.5, color: r.lastLogin ? 'var(--muted)' : '#e7a14a' }}>{r.lastLogin ? ago(r.lastLogin) : 'هرگز وارد نشده'}</td>
                     </tr>
-                    {open === r.slug && (
-                      <tr style={{ background: 'var(--bg2)' }}><td colSpan={10} style={{ padding: '10px 14px', fontSize: 12 }}>
+                    {open === rk && (
+                      <tr style={{ background: 'var(--bg2)' }}><td colSpan={11} style={{ padding: '10px 14px', fontSize: 12 }}>
                         <b style={{ color: 'var(--muted)' }}>جستجوهای اخیرِ بازدیدکننده‌ها:</b>{' '}
                         {r.topQueries.length ? r.topQueries.map((x, i) => <span key={i} style={{ display: 'inline-block', margin: '2px 4px', padding: '3px 10px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999 }}>{x}</span>) : <span style={{ color: 'var(--faint)' }}>هنوز جستجویی ثبت نشده</span>}
-                        <span style={{ marginInlineStart: 14, color: 'var(--faint)' }}>ساخت: {new Date(r.createdAt).toLocaleDateString('fa-IR')} · کل جستجو: {fa(r.totalS)}</span>
+                        <span style={{ marginInlineStart: 14, color: 'var(--faint)' }}>{r.pending ? `حساب ساخته‌شده: ${new Date(r.createdAt).toLocaleString('fa-IR')} — سایت در صفِ جاروِ خودکار (هر ۴۵ ثانیه چندتا ساخته می‌شود)` : `ساختِ سایت: ${new Date(r.createdAt).toLocaleDateString('fa-IR')} · کل جستجو: ${fa(r.totalS)}`}</span>
+                        {r.smsAt ? <div style={{ marginTop: 6, color: '#5fd98a' }}>📩 پیامک رفته: {new Date(r.smsAt).toLocaleString('fa-IR')}</div> : null}
+                        {r.smsErr ? <div style={{ marginTop: 6, color: '#e7674a' }}>خطای آخرین پیامک ({fa(r.smsTries)} تلاش): <code style={{ direction: 'ltr', display: 'inline-block', background: 'var(--surface)', padding: '2px 8px', borderRadius: 8 }}>{r.smsErr}</code></div> : null}
                       </td></tr>
                     )}
                   </Fragment>
-                ))}
+                )})}
               </tbody>
             </table>
             {filtered.length > 300 && <div style={{ padding: 10, fontSize: 11.5, color: 'var(--faint)' }}>۳۰۰ ردیفِ اول نمایش داده شد — با جستجو محدود کن.</div>}
