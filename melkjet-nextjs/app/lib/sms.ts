@@ -58,8 +58,10 @@ export async function sendAutoSiteSms(phone: string, name: string, url: string):
       // لینک کوتاه/ردگیری می‌شود و در متغیرِ لینکِ پترن می‌نشیند (همان سازوکارِ بقیهٔ پترن‌ها).
       const short = await shortenLinksInText(url, { channel: 'autosite', phone: recipient })
       const variable: Record<string, string> = { [nameVar]: String(name || 'همکار').slice(0, 60) }
-      const lv = linkVarName()
-      if (lv) variable[lv] = firstUrl(short) || short || siteBase()
+      // فاز ۲۹۷ع — پترنِ سایت‌ساز همیشه لینک دارد؛ فیلدِ خالیِ «متغیرِ لینک» نباید ارسال را
+      // بشکند («تکمیل گزینه params.link الزامی») — پیش‌فرضِ قراردادیِ IPPanel: link.
+      const lv = linkVarName() || 'link'
+      variable[lv] = firstUrl(short) || short || siteBase()
       const body = { code: patternCode, sender, recipient, variable }
       const res = await shecanRequest('https://api2.ippanel.com/api/v1/sms/pattern/normal/send', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
       const ok = res.status >= 200 && res.status < 300
