@@ -71,7 +71,7 @@ export default function SiteListings({ items, primary, siteSlug = '' }: { items:
   const activeCount = [deal !== 'all', ptype !== 'all', city !== 'all', nb !== 'all', rooms !== 'all'].filter(Boolean).length
 
   const sel: React.CSSProperties = {
-    padding: '11px 13px', borderRadius: 12, background: 'var(--mjs-bg)', border: '1px solid #e6ddcd',
+    padding: '11px 13px', borderRadius: 12, background: 'var(--mjs-bg)', border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)',
     color: 'var(--mjs-heading)', fontSize: 14, outline: 'none', fontFamily: 'inherit', minHeight: 44, cursor: 'pointer',
   }
 
@@ -144,24 +144,26 @@ export default function SiteListings({ items, primary, siteSlug = '' }: { items:
 
       {/* گرید */}
       {shown.length === 0 ? (
-        <div style={{ background: 'var(--mjs-surface)', border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>
+        <div style={{ background: 'var(--mjs-surface)', border: '1px dashed color-mix(in srgb, var(--mjs-text) 24%, transparent)', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: 'var(--mjs-muted)', fontSize: 14.5 }}>
           آگهی‌ای با این فیلترها پیدا نشد.
         </div>
       ) : (
         <div className="mjsl-grid">
           {shown.map((it, i) => (
             <a key={it.id} href={siteSlug ? `/${siteSlug}${listingHref(it.id, it.title, it.location)}` : `/property/${it.id}`} className="mjsl-card" style={{
-              background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df',
+              background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden', border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)',
               textDecoration: 'none', display: 'block', boxShadow: CARD_SHADOW,
             }}>
-              <div style={{ position: 'relative' }}>
+              {/* فاز ۲۹۷ق۳ — کارتِ محصولی: زومِ هاور + گرادیانِ پایینِ عکس + چیپِ شیشه‌ای */}
+              <div style={{ position: 'relative', height: 200, overflow: 'hidden' }}>
                 {it.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={it.image} alt="" style={{ width: '100%', height: 200, objectFit: 'cover', display: 'block' }} />
+                  <img src={it.image} alt="" className="mjs-gallery-img" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                 ) : (
-                  <div style={{ height: 200, background: `linear-gradient(135deg,${GRADS[i % GRADS.length]})` }} />
+                  <div style={{ height: '100%', background: `linear-gradient(135deg,${GRADS[i % GRADS.length]})` }} />
                 )}
-                <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, fontSize: 11.5, fontWeight: 800, color: '#fff', background: it.deal === 'rent' ? '#2dd4bf' : primary, borderRadius: 999, padding: '4px 12px' }}>{it.deal === 'rent' ? 'اجاره' : 'فروش'}</span>
+                <div aria-hidden style={{ position: 'absolute', insetInline: 0, bottom: 0, height: 70, background: 'linear-gradient(180deg, transparent, rgba(10,8,5,.45))', pointerEvents: 'none' }} />
+                <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, fontSize: 11.5, fontWeight: 800, color: '#fff', background: it.deal === 'rent' ? 'rgba(13,148,136,.85)' : `color-mix(in srgb, ${primary} 85%, transparent)`, backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 999, padding: '5px 12px' }}>{it.deal === 'rent' ? 'اجاره' : 'فروش'}</span>
               </div>
               <div style={{ padding: 20 }}>
                 <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--mjs-heading)', marginBottom: 7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
@@ -173,7 +175,7 @@ export default function SiteListings({ items, primary, siteSlug = '' }: { items:
                   {it.rooms > 0 && <span>⌂ {it.rooms.toLocaleString('fa-IR')} خواب</span>}
                   {it.ptype && <span>● {it.ptype}</span>}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f2ede4', paddingTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid color-mix(in srgb, var(--mjs-text) 8%, transparent)', paddingTop: 12 }}>
                   <span style={{ fontSize: 17, fontWeight: 900, color: primary }}>{it.price || 'قیمت توافقی'}</span>
                   <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--mjs-text)' }}>مشاهده ←</span>
                 </div>

@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
-import { pgEnabled, kvMutate, kvGetPrefix } from './db'
+import { pgEnabled, kvGet, kvMutate, kvGetPrefix } from './db'
 
 // ─── فاز ۲۹۶ب — آمارِ سایت‌های اختصاصی (بازدید/جستجو) ───────────────────────────
 // هر سایت ردیفِ kv خودش را دارد (الگوی شاردِ فاز ۲۵۹/۲۹۱ — هیچ بلابِ مشترکی):
@@ -46,6 +46,13 @@ export async function recordSiteHit(slug: string, kind: 'view' | 'search', q?: s
   }
   if (!pgEnabled()) { const db = fileLoad(); const st = (db[slug] = db[slug] || JSON.parse(JSON.stringify(EMPTY))); apply(st); fileSave(db); return }
   await kvMutate<SiteStats, void>(KEY(slug), JSON.parse(JSON.stringify(EMPTY)), st => { st.days = st.days || {}; st.queries = st.queries || []; apply(st) })
+}
+
+/** فاز ۲۹۷ق — آمارِ «یک» سایت (نشانِ بازدید روی هیروی خودِ سایت): یک ردیفِ کوچک، نه کلِ ناوگان. */
+export async function getSiteStats(slug: string): Promise<SiteStats | null> {
+  if (!pgEnabled()) return fileLoad()[slug] || null
+  const row = await kvGet<SiteStats | null>(KEY(slug), null)
+  return row ? { ...EMPTY, ...row, days: row.days || {}, queries: row.queries || [] } : null
 }
 
 /** همهٔ آمارها یکجا (برای پنلِ ادمین) — کلید: slug. */

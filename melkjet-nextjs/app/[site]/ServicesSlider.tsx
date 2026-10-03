@@ -49,7 +49,7 @@ export default function ServicesSlider({
       <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 10 }}>
         <button aria-label="قبلی" className="mjs-srv-arrow" onClick={() => scrollByPage(-1)} style={{
           flex: '0 0 auto', alignSelf: 'center', width: 44, height: 44, borderRadius: '50%',
-          border: '1px solid #e6ddcd', background: 'var(--mjs-bg)', color: primary,
+          border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)', background: 'var(--mjs-bg)', color: primary,
           fontSize: 20, fontWeight: 900, cursor: 'pointer', boxShadow: CARD_SHADOW, lineHeight: 1,
         }}>‹</button>
 
@@ -62,7 +62,7 @@ export default function ServicesSlider({
             return (
             <Card key={i} {...(s.href ? { href: s.href } : {})} className="mjs-srv-card" style={{
               flex: `0 0 ${cardWidth}`, minWidth: 230, scrollSnapAlign: 'start',
-              background: 'var(--mjs-surface)', border: '1px solid #efe9df', borderRadius: 18,
+              background: 'var(--mjs-surface)', border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)', borderRadius: 18,
               padding: s.image ? '0 0 22px' : '34px 22px', textAlign: 'center', boxShadow: CARD_SHADOW,
               textDecoration: 'none', overflow: 'hidden', display: 'block',
             }}>
@@ -85,7 +85,7 @@ export default function ServicesSlider({
 
         <button aria-label="بعدی" className="mjs-srv-arrow" onClick={() => scrollByPage(1)} style={{
           flex: '0 0 auto', alignSelf: 'center', width: 44, height: 44, borderRadius: '50%',
-          border: '1px solid #e6ddcd', background: 'var(--mjs-bg)', color: primary,
+          border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)', background: 'var(--mjs-bg)', color: primary,
           fontSize: 20, fontWeight: 900, cursor: 'pointer', boxShadow: CARD_SHADOW, lineHeight: 1,
         }}>›</button>
       </div>
