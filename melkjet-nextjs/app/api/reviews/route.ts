@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
     try {
       const v = await moderateReview(r.review!.name, r.review!.text)
-      applyReviewModeration(r.review!.id, false, `پیشنهادِ AI: ${v.verdict === 'approve' ? 'تایید' : 'رد'} — ${v.reason}`)
+      // فاز ۲۹۷ی — verdictِ «review» یعنی AI نظری نداده (مثلاً اعتبار تمام شده) — برچسبِ «رد» نخورَد.
+      applyReviewModeration(r.review!.id, false, v.verdict === 'review' ? v.reason : `پیشنهادِ AI: ${v.verdict === 'approve' ? 'تایید' : 'رد'} — ${v.reason}`)
     } catch { /* بدونِ AI هم در صفِ ادمین می‌ماند */ }
     return NextResponse.json({ ok: true, published: false, message: 'نظرِ شما ثبت شد و پس از تاییدِ مدیر نمایش داده می‌شود. سپاسگزاریم!' })
   }
