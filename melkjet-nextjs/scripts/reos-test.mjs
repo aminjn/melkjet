@@ -3332,6 +3332,16 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('سایتِ آژانس بلوکِ تیم و صفحهٔ «تیمِ ما» دارد', agency297.pages.some(p => p.blocks.some(b => b.type === 'team')) && agency297.pages.some(p => p.slug === 'team'))
   ok('انتخابِ قالب قطعی است (بازسازی همان سایت را می‌دهد)', JSON.stringify(buildAutoSitePayload({ phone: '09120000296', name: 'علی رضایی', roleType: 'pros', city: 'تهران', tagline: '', about: 'بیش از ده سال تجربهٔ مشاورهٔ املاک در غرب تهران و همراهیِ صدها معامله.', logo: '', specialties: ['آپارتمان', 'ویلایی'], contactPhone: '', address: '' })) === JSON.stringify(pay296))
 
+  // ── فاز ۲۹۷ف — هیچ دکمه‌ای به انکرِ مرده نمی‌رود («سوتیِ تماس با ما») ──
+  const cBase297 = `/${encodeURIComponent(pay296.slug)}/contact`
+  const innerHeroes297 = pay296.pages.slice(1).filter(p => p.slug !== 'contact').flatMap(p => p.blocks.filter(b => b.type === 'hero'))
+  ok('دکمهٔ هیروی صفحه‌های داخلی به صفحهٔ واقعیِ «تماس» می‌رود', innerHeroes297.length > 0 && innerHeroes297.every(b => b.props.buttonLink === cBase297))
+  const aboutCta297 = pay296.pages.find(p => p.slug === 'about').blocks.find(b => b.type === 'cta')
+  ok('CTAی صفحهٔ بدونِ بلوکِ تماس هم به صفحهٔ تماس می‌رود', !aboutCta297 || aboutCta297.props.buttonLink === cBase297 || String(aboutCta297.props.buttonLink).startsWith('/pros/') || String(aboutCta297.props.buttonLink).startsWith('/'))
+  ok('دکمهٔ هیروی خانهٔ مشاور به سکشنِ آگهی‌ها می‌رود', pay296.pages[0].blocks[0].props.buttonLink === '#listings')
+  const archInner297 = pay296b.pages.slice(1).filter(p => p.slug !== 'contact').flatMap(p => p.blocks.filter(b => b.type === 'hero'))
+  ok('برچسبِ دکمهٔ صنفی: معمار «درخواستِ مشاورهٔ طراحی»', archInner297.every(b => b.props.buttonText === 'درخواستِ مشاورهٔ طراحی'))
+
   // ── فاز ۲۹۷و — محتوای هر صنف باید «مالِ همان صنف» باشد (سازنده متنِ خرید/فروش نگیرد) ──
   const { PROFILE_PRESETS, buildProfileSite } = await import('../app/lib/site-templates.ts')
   ok('هر ۱۲ صنف preset صنفی دارند (قبلاً ۶ تا به متنِ عمومیِ املاک می‌افتادند)', ['مشاور', 'آژانس', 'سازنده', 'فروشگاه', 'سرمایه‌گذار', 'حقوقی', 'معمار', 'پیمانکار', 'کارشناس', 'دفتر حقوقی', 'بانک و بیمه', 'دفترخانه'].every(k => PROFILE_PRESETS[k]?.services?.length >= 4 && PROFILE_PRESETS[k].about && PROFILE_PRESETS[k].eyebrow))
@@ -3350,6 +3360,7 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('آمارِ سازنده واقعی است: پروژه/منطقه/واحد/متراژ', bHome297.some(b => b.type === 'stats' && b.props.items.length === 4 && b.props.items.some(i => i.label === 'پروژهٔ ثبت‌شده')))
   ok('صفحهٔ «پروژه‌ها» با فهرستِ پروژه‌های واقعی زنده است', bldSite297.pages.some(p => p.slug === 'projects' && p.blocks.some(b => b.type === 'services' && b.props.heading === 'پروژه‌های ما')))
   ok('گالریِ سازنده از عکسِ واقعیِ پروژه‌ها پر می‌شود', bldSite297.pages.flatMap(p => p.blocks).some(b => b.type === 'gallery' && b.props.images[0] === 'https://x/p1.jpg'))
+  ok('دکمهٔ هیروی خانهٔ سازندهٔ عکس‌دار به گالریِ پروژه‌ها می‌رود', bldSite297.pages[0].blocks.find(b => b.type === 'hero').props.buttonLink === '#gallery')
   ok('سازندهٔ بدونِ دادهٔ پروژه، کارت/آمارِ جعلی نمی‌گیرد', !bldAuto297.pages.flatMap(p => p.blocks).some(b => b.type === 'stats' || (b.type === 'services' && b.props.heading === 'پروژه‌های ما')))
 
   // ── فاز ۲۹۷ح — منو در فوتر: لینکِ واقعیِ صفحه‌های همین سایت، نه انکرِ مردهٔ قالب ──

@@ -402,7 +402,7 @@ function ServicesBlock({ block, primary }: { block: SiteBlock; primary: string }
   const items: any[] = Array.isArray(props.items) ? props.items : []
   const perSlide = Math.max(1, Math.min(4, Number(props.perSlide) || 3))
   return (
-    <section style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
+    <section id="services" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary} center>{props.heading}</SectionHeading>
         {items.length > 0 && (
@@ -459,7 +459,7 @@ function GalleryBlock({ block, primary }: { block: SiteBlock; primary: string })
   const total = Math.max(1, Math.min(48, Number(props.total) || 9))
   const perSlide = Math.max(1, Math.min(6, Number(props.perSlide) || 3))
   return (
-    <section style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
+    <section id="gallery" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
         <GallerySlider images={imgs.slice(0, total)} perSlide={perSlide} primary={primary} placeholders={total} />

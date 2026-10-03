@@ -183,7 +183,7 @@ export const PROFILE_HERO_COPY: Record<string, { heading: string; subheading: st
 
 // محتوایِ اختصاصیِ هر صنف (خدمات/درباره/آمار/گالری) — تا سایتِ هر پنل «پُر و مرتبط» باشد،
 // نه با متنِ عمومیِ املاک. در loadTemplate روی بلوک‌های services/about/stats/gallery نشانده می‌شود.
-export interface ProfilePreset { servicesHeading?: string; services?: { icon: string; title: string; desc: string }[]; about?: string; aboutHeading?: string; stats?: { value: string; label: string }[]; galleryHeading?: string; footerAbout?: string; seoTitle?: string; seoDesc?: string; eyebrow?: string }
+export interface ProfilePreset { servicesHeading?: string; services?: { icon: string; title: string; desc: string }[]; about?: string; aboutHeading?: string; stats?: { value: string; label: string }[]; galleryHeading?: string; footerAbout?: string; seoTitle?: string; seoDesc?: string; eyebrow?: string; contactCta?: string }
 export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
   // فاز ۲۹۷و — شش صنفِ پایه (مشاور/آژانس/سازنده/فروشگاه/سرمایه‌گذار/حقوقی) preset نداشتند و
   // به پیش‌فرضِ عمومیِ «مشاور املاک» می‌افتادند — سایتِ «سازنده» متنِ خرید/فروش/اجاره می‌گرفت.
@@ -201,7 +201,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'به‌عنوانِ مشاورِ املاک، با شناختِ دقیقِ محله‌ها و قیمت‌های روز، کنارِ شما هستم تا معاملهٔ ملکی‌تان مطمئن، شفاف و به‌صرفه انجام شود. صداقت و پیگیری، اصلِ کارِ من است.',
     stats: [{ value: '۳۵۰+', label: 'معاملهٔ موفق' }, { value: '۱۰', label: 'سال تجربه' }, { value: '۹۶٪', label: 'رضایتِ مشتری' }, { value: '۲۴ ساعته', label: 'پاسخگویی' }],
     galleryHeading: 'گزیدهٔ فایل‌ها و بازدیدها',
-    footerAbout: 'مشاورِ املاک؛ خرید، فروش، رهن و اجاره با مشاورهٔ تخصصی و فایل‌های به‌روز.', seoTitle: 'مشاورِ املاک', eyebrow: 'مشاور املاک', seoDesc: 'خرید، فروش، رهن و اجارهٔ ملک با مشاورهٔ تخصصی، کارشناسیِ قیمت و همراهی تا پایِ سند.',
+    footerAbout: 'مشاورِ املاک؛ خرید، فروش، رهن و اجاره با مشاورهٔ تخصصی و فایل‌های به‌روز.', seoTitle: 'مشاورِ املاک', eyebrow: 'مشاور املاک', seoDesc: 'خرید، فروش، رهن و اجارهٔ ملک با مشاورهٔ تخصصی، کارشناسیِ قیمت و همراهی تا پایِ سند.', contactCta: 'درخواستِ مشاوره',
   },
   'آژانس': {
     servicesHeading: 'خدماتِ آژانس',
@@ -217,7 +217,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'آژانسِ ما با تیمی از مشاورانِ متخصصِ محله، بانکِ فایلِ به‌روز و فرایندِ شفافِ معامله، تجربه‌ای مطمئن از خرید، فروش و اجاره برای شما می‌سازد. اعتمادِ شما سرمایهٔ ماست.',
     stats: [{ value: '۲٬۰۰۰+', label: 'معاملهٔ انجام‌شده' }, { value: '۱۵', label: 'سال فعالیت' }, { value: '۲۰+', label: 'مشاورِ متخصص' }, { value: '۹۷٪', label: 'رضایتِ مشتری' }],
     galleryHeading: 'دفتر و تیمِ ما',
-    footerAbout: 'آژانسِ املاک؛ خرید، فروش، رهن و اجاره با تیمِ مشاورانِ متخصصِ محله.', seoTitle: 'آژانسِ املاک', eyebrow: 'آژانس املاک', seoDesc: 'خرید، فروش، رهن و اجارهٔ ملک با تیمِ مشاورانِ متخصص، بانکِ فایلِ به‌روز و قراردادِ مطمئن.',
+    footerAbout: 'آژانسِ املاک؛ خرید، فروش، رهن و اجاره با تیمِ مشاورانِ متخصصِ محله.', seoTitle: 'آژانسِ املاک', eyebrow: 'آژانس املاک', seoDesc: 'خرید، فروش، رهن و اجارهٔ ملک با تیمِ مشاورانِ متخصص، بانکِ فایلِ به‌روز و قراردادِ مطمئن.', contactCta: 'تماس با آژانس',
   },
   'سازنده': {
     servicesHeading: 'خدماتِ ساخت‌وساز',
@@ -233,7 +233,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'سازندهٔ پروژه‌های مسکونی و تجاری؛ با طراحیِ اصولی، متریالِ باکیفیت و اجرایِ مهندسی، ساختمان‌هایی می‌سازیم که سال‌ها ارزشِ خود را حفظ می‌کنند. مشارکت در ساخت و پیش‌فروش با شرایطِ شفاف.',
     stats: [{ value: '۴۰+', label: 'پروژهٔ تحویل‌شده' }, { value: '۱۲۰ هزار', label: 'مترمربع ساخت' }, { value: '۱۸', label: 'سال سابقه' }, { value: '۱۰۰٪', label: 'تحویلِ به‌موقع' }],
     galleryHeading: 'پروژه‌های ما',
-    footerAbout: 'سازندهٔ ساختمان؛ ساخت، پیش‌فروش و مشارکت در ساخت با کیفیتِ مهندسی.', seoTitle: 'سازندهٔ ساختمان', eyebrow: 'ساخت و ساز', seoDesc: 'ساختِ پروژه‌های مسکونی و تجاری، پیش‌فروشِ واحد و مشارکت در ساخت با تحویلِ به‌موقع.',
+    footerAbout: 'سازندهٔ ساختمان؛ ساخت، پیش‌فروش و مشارکت در ساخت با کیفیتِ مهندسی.', seoTitle: 'سازندهٔ ساختمان', eyebrow: 'ساخت و ساز', seoDesc: 'ساختِ پروژه‌های مسکونی و تجاری، پیش‌فروشِ واحد و مشارکت در ساخت با تحویلِ به‌موقع.', contactCta: 'درخواستِ همکاری و پیش‌فروش',
   },
   'فروشگاه': {
     servicesHeading: 'دسته‌های محصولات',
@@ -249,7 +249,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'فروشگاهِ مصالحِ ساختمانیِ ما با تأمینِ مستقیم از تولیدکننده، قیمتِ رقابتی و ارسالِ سریع به محلِ پروژه، همراهِ سازندگان و خانواده‌هاست. کیفیتِ کالا و تحویلِ به‌موقع، تعهدِ ماست.',
     stats: [{ value: '۵٬۰۰۰+', label: 'قلم کالا' }, { value: '۱۴', label: 'سال فعالیت' }, { value: '۲۴ ساعته', label: 'ارسالِ سریع' }, { value: '۹۵٪', label: 'رضایتِ خریداران' }],
     galleryHeading: 'نمونهٔ محصولات',
-    footerAbout: 'فروشگاهِ مصالحِ ساختمانی؛ تأمینِ مستقیم، قیمتِ رقابتی و ارسالِ سریع.', seoTitle: 'فروشگاهِ مصالحِ ساختمانی', eyebrow: 'مصالح ساختمانی', seoDesc: 'خریدِ مصالحِ ساختمانی با قیمتِ روز، تأمینِ مستقیم از تولیدکننده و ارسالِ سریع به پروژه.',
+    footerAbout: 'فروشگاهِ مصالحِ ساختمانی؛ تأمینِ مستقیم، قیمتِ رقابتی و ارسالِ سریع.', seoTitle: 'فروشگاهِ مصالحِ ساختمانی', eyebrow: 'مصالح ساختمانی', seoDesc: 'خریدِ مصالحِ ساختمانی با قیمتِ روز، تأمینِ مستقیم از تولیدکننده و ارسالِ سریع به پروژه.', contactCta: 'استعلامِ قیمت',
   },
   'سرمایه‌گذار': {
     servicesHeading: 'خدماتِ سرمایه‌گذاری',
@@ -265,7 +265,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'ما با تحلیلِ دادهٔ واقعیِ بازارِ ملک، فرصت‌های سرمایه‌گذاریِ کم‌ریسک و پُربازده را شناسایی می‌کنیم و از انتخاب تا خروج کنارِ سرمایه‌گذار می‌مانیم. تصمیمِ آگاهانه، سودِ پایدار می‌سازد.',
     stats: [{ value: '۱۲۰+', label: 'سرمایه‌گذاریِ موفق' }, { value: '۱۱', label: 'سال تجربه' }, { value: '۳۵٪', label: 'میانگینِ بازدهِ سالانه' }, { value: '۵۰+', label: 'سرمایه‌گذارِ همراه' }],
     galleryHeading: 'پروژه‌ها و فرصت‌ها',
-    footerAbout: 'سرمایه‌گذاریِ ملکی؛ شناساییِ فرصت‌های پُربازده با تحلیلِ دادهٔ واقعیِ بازار.', seoTitle: 'سرمایه‌گذاریِ ملکی', eyebrow: 'سرمایه‌گذاری ملکی', seoDesc: 'فرصت‌های سرمایه‌گذاریِ ملکیِ منتخب با تحلیلِ بازار، بررسیِ حقوقی و مدیریتِ پرتفوی.',
+    footerAbout: 'سرمایه‌گذاریِ ملکی؛ شناساییِ فرصت‌های پُربازده با تحلیلِ دادهٔ واقعیِ بازار.', seoTitle: 'سرمایه‌گذاریِ ملکی', eyebrow: 'سرمایه‌گذاری ملکی', seoDesc: 'فرصت‌های سرمایه‌گذاریِ ملکیِ منتخب با تحلیلِ بازار، بررسیِ حقوقی و مدیریتِ پرتفوی.', contactCta: 'درخواستِ مشاورهٔ سرمایه‌گذاری',
   },
   'حقوقی': {
     servicesHeading: 'خدماتِ حقوقیِ ملکی',
@@ -281,7 +281,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'مشاورِ حقوقیِ تخصصیِ املاک؛ از بررسیِ سند و تنظیمِ قرارداد تا وکالت در دعاویِ ملکی، کنارِ شما هستیم تا معامله‌تان از روزِ اول محکم و بی‌اختلاف باشد.',
     stats: [{ value: '۸۰۰+', label: 'پروندهٔ ملکی' }, { value: '۱۵', label: 'سال تجربه' }, { value: '۹۲٪', label: 'نرخِ موفقیت' }, { value: '۲۴ ساعته', label: 'پاسخِ مشاوره' }],
     galleryHeading: 'مدارک و افتخارات',
-    footerAbout: 'خدماتِ حقوقیِ املاک؛ قرارداد، دعاویِ ملکی و مشاورهٔ پیش از معامله.', seoTitle: 'مشاورهٔ حقوقیِ املاک', eyebrow: 'خدمات حقوقی', seoDesc: 'مشاورهٔ حقوقیِ ملکی، تنظیمِ قرارداد، بررسیِ سند و وکالت در دعاویِ ملکی.',
+    footerAbout: 'خدماتِ حقوقیِ املاک؛ قرارداد، دعاویِ ملکی و مشاورهٔ پیش از معامله.', seoTitle: 'مشاورهٔ حقوقیِ املاک', eyebrow: 'خدمات حقوقی', seoDesc: 'مشاورهٔ حقوقیِ ملکی، تنظیمِ قرارداد، بررسیِ سند و وکالت در دعاویِ ملکی.', contactCta: 'رزروِ مشاورهٔ حقوقی',
   },
   'معمار': {
     servicesHeading: 'خدماتِ طراحی و معماری',
@@ -297,7 +297,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'استودیوِ معماریِ ما با تلفیقِ زیبایی و کارایی، فضاهایی خلق می‌کند که هم چشم‌نواز و هم کاربردی‌اند. با تیمی از معماران و طراحانِ داخلیِ باتجربه، از ایده تا اجرا کنارِ شما هستیم.',
     stats: [{ value: '۲۵۰+', label: 'پروژهٔ طراحی' }, { value: '۱۴', label: 'سال تجربه' }, { value: '۹۸٪', label: 'رضایتِ کارفرما' }, { value: '۳', label: 'جایزهٔ طراحی' }],
     galleryHeading: 'نمونه‌کارها و پروژه‌ها',
-    footerAbout: 'استودیوِ معماری و طراحیِ داخلی؛ خلقِ فضاهایی زیبا و کاربردی از ایده تا اجرا.', seoTitle: 'استودیوِ معماری و طراحیِ داخلی', eyebrow: 'معماری و طراحی', seoDesc: 'طراحیِ داخلی، معماری و نظارت بر پروژه‌های مسکونی، اداری و تجاری با تیمی حرفه‌ای.',
+    footerAbout: 'استودیوِ معماری و طراحیِ داخلی؛ خلقِ فضاهایی زیبا و کاربردی از ایده تا اجرا.', seoTitle: 'استودیوِ معماری و طراحیِ داخلی', eyebrow: 'معماری و طراحی', seoDesc: 'طراحیِ داخلی، معماری و نظارت بر پروژه‌های مسکونی، اداری و تجاری با تیمی حرفه‌ای.', contactCta: 'درخواستِ مشاورهٔ طراحی',
   },
   'پیمانکار': {
     servicesHeading: 'خدماتِ اجرایی',
@@ -313,7 +313,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'شرکتِ پیمانکاریِ ما با اکیپِ مجرب، ماشین‌آلاتِ مدرن و مدیریتِ دقیقِ پروژه، ساختمان‌هایی باکیفیت و در زمان‌بندیِ مشخص تحویل می‌دهد. تعهد، کیفیت و شفافیتِ مالی، اصولِ کارِ ماست.',
     stats: [{ value: '۱۸۰+', label: 'پروژهٔ اجراشده' }, { value: '۲۲۰ هزار', label: 'مترمربع ساخت' }, { value: '۱۶', label: 'سال سابقه' }, { value: '۱۰۰٪', label: 'تحویلِ به‌موقع' }],
     galleryHeading: 'پروژه‌های اجراشده',
-    footerAbout: 'شرکتِ پیمانکاریِ ساختمان؛ اجرایِ حرفه‌ای از فونداسیون تا تحویلِ کلید.', seoTitle: 'شرکتِ پیمانکاریِ ساختمان', eyebrow: 'ساخت و ساز', seoDesc: 'اجرایِ حرفه‌ایِ پروژه‌های ساختمانی از فونداسیون تا تحویلِ کلید، با کیفیت و تعهد.',
+    footerAbout: 'شرکتِ پیمانکاریِ ساختمان؛ اجرایِ حرفه‌ای از فونداسیون تا تحویلِ کلید.', seoTitle: 'شرکتِ پیمانکاریِ ساختمان', eyebrow: 'ساخت و ساز', seoDesc: 'اجرایِ حرفه‌ایِ پروژه‌های ساختمانی از فونداسیون تا تحویلِ کلید، با کیفیت و تعهد.', contactCta: 'درخواستِ پیشنهادِ قیمت',
   },
   'کارشناس': {
     servicesHeading: 'خدماتِ کارشناسی',
@@ -329,7 +329,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'کارشناسِ رسمیِ دادگستری در رشتهٔ راه و ساختمان، با سال‌ها تجربه در ارزیابیِ دقیق و بی‌طرفانهٔ املاک. گزارش‌های ما موردِ استنادِ دادگاه‌ها، بانک‌ها و ادارات است.',
     stats: [{ value: '۹۰۰+', label: 'پروندهٔ کارشناسی' }, { value: '۲۰', label: 'سال سابقه' }, { value: '۹۹٪', label: 'دقتِ ارزیابی' }, { value: '۴۸ ساعت', label: 'زمانِ صدورِ گزارش' }],
     galleryHeading: 'نمونهٔ گزارش‌ها',
-    footerAbout: 'کارشناسِ رسمیِ دادگستری؛ ارزیابیِ دقیق و بی‌طرفانهٔ املاک با گزارشِ رسمی.', seoTitle: 'کارشناسِ رسمیِ دادگستری — املاک', eyebrow: 'کارشناسِ رسمی', seoDesc: 'ارزیابی، تفکیک و تعیینِ اجاره‌بهای املاک با گزارشِ رسمیِ موردِ قبولِ مراجع.',
+    footerAbout: 'کارشناسِ رسمیِ دادگستری؛ ارزیابیِ دقیق و بی‌طرفانهٔ املاک با گزارشِ رسمی.', seoTitle: 'کارشناسِ رسمیِ دادگستری — املاک', eyebrow: 'کارشناسِ رسمی', seoDesc: 'ارزیابی، تفکیک و تعیینِ اجاره‌بهای املاک با گزارشِ رسمیِ موردِ قبولِ مراجع.', contactCta: 'درخواستِ کارشناسی',
   },
   'دفتر حقوقی': {
     servicesHeading: 'خدماتِ حقوقی',
@@ -345,7 +345,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'دفترِ حقوقیِ ما با تیمی از وکلای پایه‌یکِ دادگستری، در تمامِ دعاوی و قراردادهای ملکی کنارِ شماست. هدفِ ما، احقاقِ حقِ موکل با کمترین زمان و هزینه است.',
     stats: [{ value: '۱٬۲۰۰+', label: 'پروندهٔ موفق' }, { value: '۱۸', label: 'سال تجربه' }, { value: '۹۴٪', label: 'نرخِ موفقیت' }, { value: '۵', label: 'وکیلِ پایه‌یک' }],
     galleryHeading: 'گواهی‌نامه‌ها و افتخارات',
-    footerAbout: 'دفترِ حقوقیِ تخصصیِ املاک؛ وکالت، مشاوره و تنظیمِ قرارداد با وکلای پایه‌یک.', seoTitle: 'دفترِ حقوقیِ تخصصیِ املاک', eyebrow: 'خدماتِ حقوقی', seoDesc: 'وکالت و مشاورهٔ دعاویِ ملکی: قرارداد، خلعِ ید و الزام به تنظیمِ سند با وکلای پایه‌یک.',
+    footerAbout: 'دفترِ حقوقیِ تخصصیِ املاک؛ وکالت، مشاوره و تنظیمِ قرارداد با وکلای پایه‌یک.', seoTitle: 'دفترِ حقوقیِ تخصصیِ املاک', eyebrow: 'خدماتِ حقوقی', seoDesc: 'وکالت و مشاورهٔ دعاویِ ملکی: قرارداد، خلعِ ید و الزام به تنظیمِ سند با وکلای پایه‌یک.', contactCta: 'رزروِ مشاوره',
   },
   'بانک و بیمه': {
     servicesHeading: 'خدماتِ مالی و بیمه‌ای',
@@ -361,7 +361,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'ما با ارائهٔ راهکارهای مالی و بیمه‌ایِ متنوع، خریدِ ملک و اجرای پروژه را برای شما آسان می‌کنیم. کارشناسانِ ما بهترین طرح را متناسب با شرایطِ شما پیشنهاد می‌دهند.',
     stats: [{ value: '۵ هزار میلیارد', label: 'تسهیلاتِ پرداختی' }, { value: '۳۰ هزار', label: 'مشتری' }, { value: '۲۵', label: 'سال فعالیت' }, { value: '۹۶٪', label: 'رضایتِ مشتری' }],
     galleryHeading: 'طرح‌ها و تفاهم‌نامه‌ها',
-    footerAbout: 'خدماتِ مالی و بیمه‌ایِ املاک؛ وامِ مسکن، وامِ ساخت و انواعِ بیمه‌نامه.', seoTitle: 'خدماتِ مالی و بیمهٔ املاک', eyebrow: 'مالی و بیمه', seoDesc: 'وامِ مسکن، وامِ ساخت و انواعِ بیمه‌نامه با بهترین شرایط و مشاورهٔ رایگان.',
+    footerAbout: 'خدماتِ مالی و بیمه‌ایِ املاک؛ وامِ مسکن، وامِ ساخت و انواعِ بیمه‌نامه.', seoTitle: 'خدماتِ مالی و بیمهٔ املاک', eyebrow: 'مالی و بیمه', seoDesc: 'وامِ مسکن، وامِ ساخت و انواعِ بیمه‌نامه با بهترین شرایط و مشاورهٔ رایگان.', contactCta: 'درخواستِ تسهیلات',
   },
   'دفترخانه': {
     servicesHeading: 'خدماتِ ثبتی',
@@ -377,7 +377,7 @@ export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
     about: 'دفترِ اسنادِ رسمیِ ما با کادری مجرب و سیستمِ نوبت‌دهیِ آنلاین، خدماتِ ثبتیِ شما را سریع، دقیق و مطمئن انجام می‌دهد. رضایتِ مراجعان، اولویتِ ماست.',
     stats: [{ value: '۴۰ هزار+', label: 'سندِ ثبت‌شده' }, { value: '۲۲', label: 'سال فعالیت' }, { value: '۱۵ دقیقه', label: 'میانگینِ انتظار' }, { value: '۹۷٪', label: 'رضایتِ مراجع' }],
     galleryHeading: 'دفتر و امکانات',
-    footerAbout: 'دفترِ اسنادِ رسمی؛ تنظیمِ سند، وکالت و استعلام با نوبت‌دهیِ آنلاین.', seoTitle: 'دفترِ اسنادِ رسمی', eyebrow: 'اسنادِ رسمی', seoDesc: 'تنظیمِ سند، وکالت‌نامه، تعهدنامه و استعلامِ ثبتی سریع و مطمئن با نوبت‌دهیِ آنلاین.',
+    footerAbout: 'دفترِ اسنادِ رسمی؛ تنظیمِ سند، وکالت و استعلام با نوبت‌دهیِ آنلاین.', seoTitle: 'دفترِ اسنادِ رسمی', eyebrow: 'اسنادِ رسمی', seoDesc: 'تنظیمِ سند، وکالت‌نامه، تعهدنامه و استعلامِ ثبتی سریع و مطمئن با نوبت‌دهیِ آنلاین.', contactCta: 'رزروِ نوبت',
   },
 }
 
@@ -599,7 +599,7 @@ export function buildProfileSite(profile: string, tplIn?: { id: string; name: st
   const build = (type: string, opts?: { heading?: string; sub?: string; btn?: string }): TplBlock => {
     let preset: Record<string, any> | undefined
     if (type === 'hero') preset = { heading: opts?.heading ?? copy.heading, subheading: opts?.sub ?? copy.subheading, buttonText: opts?.btn ?? copy.buttonText, bg: heroBg, ...(pp?.eyebrow ? { eyebrow: pp.eyebrow } : {}) }
-    else if (type === 'cta') preset = { bg: heroBg }
+    else if (type === 'cta') preset = { bg: heroBg, ...(pp?.contactCta ? { buttonText: pp.contactCta } : {}) }
     else if (type === 'footer') preset = { brand: tpl.name, ...(pp?.footerAbout ? { about: pp.footerAbout } : {}) }
     else if (type === 'blogfull') preset = { heading: opts?.heading ?? 'وبلاگ' }
     else if (type === 'blog') preset = { heading: opts?.heading ?? 'آخرین مقالات', count: 3 }
@@ -632,7 +632,7 @@ export function buildProfileSite(profile: string, tplIn?: { id: string; name: st
   const homeTypes = Array.from(new Set(homeOrder))
   const pages: TplPage[] = [{ slug: 'home', title: 'صفحه اصلی', blocks: homeTypes.map(type => build(type)) }]
   for (const spec of profilePageSpec(tpl.profile)) {
-    pages.push({ slug: spec.slug, title: spec.title, inMenu: true, menuLabel: spec.menuLabel, blocks: spec.blocks.map(type => build(type, { heading: spec.heroHeading, sub: spec.heroSub, btn: 'تماس با ما' })) })
+    pages.push({ slug: spec.slug, title: spec.title, inMenu: true, menuLabel: spec.menuLabel, blocks: spec.blocks.map(type => build(type, { heading: spec.heroHeading, sub: spec.heroSub, btn: pp?.contactCta || 'تماس با ما' })) })
   }
   return { theme: { ...pal }, seoTitle: pp?.seoTitle || '', seoDesc: pp?.seoDesc || '', tplName: tpl.name, pages }
 }

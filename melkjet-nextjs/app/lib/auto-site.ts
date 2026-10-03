@@ -65,7 +65,7 @@ export interface AutoSiteSeed {
 }
 
 // نسخهٔ سازنده — بالارفتنش یعنی سایت‌های خودکارِ «دست‌نخورده» در جاروِ بعدی بازسازی می‌شوند.
-export const AUTO_SITE_V = 8
+export const AUTO_SITE_V = 9
 
 // نگاشتِ نوعِ دایرکتوری → پروفایلِ قالب‌های سایت‌ساز (همان گروه‌هایی که ابزار دارد).
 const TYPE_TO_PROFILE: Record<string, string> = {
@@ -178,6 +178,26 @@ export function buildAutoSitePayload(s: AutoSiteSeed) {
   const base = `/${encodeURIComponent(slug)}`
   const menuLinks = [{ label: 'خانه', href: base }, ...finalPages.slice(1).filter(pg => pg.inMenu !== false).map(pg => ({ label: pg.menuLabel || pg.title, href: `${base}/${pg.slug}` }))]
   for (const pg of finalPages) for (const b of pg.blocks) if (b.type === 'footer') b.props = { ...b.props, links: menuLinks }
+
+  // فاز ۲۹۷ف — هیچ دکمه‌ای نباید به انکرِ مرده برود («سوتیِ تماس با ما»): دکمهٔ هیروی
+  // صفحه‌های داخلی → صفحهٔ واقعیِ «تماس»؛ دکمهٔ هیروی خانه → سکشنِ «آنچه ارائه می‌دهد»؛
+  // CTAی صفحه‌ای که بلوکِ تماس ندارد → صفحهٔ تماس (CTAی providerUrl دست نمی‌خورد).
+  const contactHref = finalPages.some(pg => pg.slug === 'contact') ? `${base}/contact` : '#contact'
+  finalPages.forEach((pg, i) => {
+    const has = (t: string) => pg.blocks.some(b => b.type === t)
+    const hasContact = has('contact')
+    for (const b of pg.blocks) {
+      if (b.type === 'hero') {
+        const link = i === 0
+          ? (has('listings') || has('searchlist') ? '#listings' : has('gallery') ? '#gallery' : has('catalog') ? '#catalog' : has('services') ? '#services' : contactHref)
+          : (hasContact ? '#contact' : contactHref)
+        b.props = { ...b.props, buttonLink: link }
+      }
+      if (b.type === 'cta' && String(b.props.buttonLink || '').startsWith('#contact') && !hasContact) {
+        b.props = { ...b.props, buttonLink: contactHref }
+      }
+    }
+  })
 
   // سئو از واقعیت‌های ساخت‌یافته — عنوانی که با «نامِ شخص» شروع می‌شود (هدف: جست‌وجوی نام).
   const seoTitle = `${s.name} | ${roleLabel}${inCity}`.slice(0, 70)
