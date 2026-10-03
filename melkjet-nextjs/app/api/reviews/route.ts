@@ -48,10 +48,10 @@ export async function POST(req: NextRequest) {
     const r = addReview(owner292, { name: b.name, text: b.text, rating: b.rating, byPhone: sess.phone })
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
     try {
+      // فاز ۲۹۷ک — پیشنهاد از ماشین‌لرنینگِ خودی (قواعد + یادگیری از داوری‌های قبلی)، نه AIِ پولی.
       const v = await moderateReview(r.review!.name, r.review!.text)
-      // فاز ۲۹۷ی — verdictِ «review» یعنی AI نظری نداده (مثلاً اعتبار تمام شده) — برچسبِ «رد» نخورَد.
-      applyReviewModeration(r.review!.id, false, v.verdict === 'review' ? v.reason : `پیشنهادِ AI: ${v.verdict === 'approve' ? 'تایید' : 'رد'} — ${v.reason}`)
-    } catch { /* بدونِ AI هم در صفِ ادمین می‌ماند */ }
+      applyReviewModeration(r.review!.id, false, v.verdict === 'review' ? v.reason : `پیشنهادِ خودکار: ${v.verdict === 'approve' ? 'تایید' : 'رد'} — ${v.reason}`)
+    } catch { /* بدونِ پیشنهاد هم در صفِ ادمین می‌ماند */ }
     return NextResponse.json({ ok: true, published: false, message: 'نظرِ شما ثبت شد و پس از تاییدِ مدیر نمایش داده می‌شود. سپاسگزاریم!' })
   }
   const owner = await ownerOfSlug(b.slug)
@@ -78,7 +78,11 @@ export async function PATCH(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'وارد شوید' }, { status: 401 })
   const b = await req.json().catch(() => ({} as any))
-  if (b.delete) { deleteReview(s.phone, String(b.id)); return NextResponse.json({ ok: true }) }
-  if (b.approved !== undefined) { setReviewApproved(s.phone, String(b.id), !!b.approved); return NextResponse.json({ ok: true }) }
+  // فاز ۲۹۷ک — داوریِ مالکِ سایت هم خوراکِ یادگیرندهٔ نظرات است.
+  const learn297 = async (id: string, approved: boolean) => {
+    try { const t = listReviews(s.phone, { all: true }).find(r => r.id === id)?.text; if (t) { const { learnReview } = await import('@/app/lib/review-ml'); await learnReview(t, approved) } } catch {}
+  }
+  if (b.delete) { await learn297(String(b.id), false); deleteReview(s.phone, String(b.id)); return NextResponse.json({ ok: true }) }
+  if (b.approved !== undefined) { if (b.approved) await learn297(String(b.id), true); setReviewApproved(s.phone, String(b.id), !!b.approved); return NextResponse.json({ ok: true }) }
   return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
 }

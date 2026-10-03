@@ -134,3 +134,6 @@ INSTALLATION_COMPLETE
 .dns-cache.json
 *.lock
 *.pre-b64
+
+# فاز ۲۹۷ک — مدلِ یادگیرندهٔ نظرات (حالتِ فایل/تست)
+.review-ml.json

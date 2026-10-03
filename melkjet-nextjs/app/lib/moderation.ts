@@ -268,28 +268,10 @@ reject = توهین/فحاشی، تبلیغ یا اسپم، شمارهٔ تما�
 همیشه reason را پر کن.`
 
 // نتیجهٔ ممیزیِ یک نظر. اگر مدلی تنظیم نشده باشد → 'review' (در انتظارِ تأییدِ دستی).
-// فاز ۲۹۷ی — خطای خامِ ارائه‌دهنده (HTTP 403 {"error":{…}}) در پنل گیج‌کننده بود («این چه اروریه؟»).
-// علتِ شناخته‌شده به زبانِ آدمیزاد + راهِ درمان؛ علتِ ناشناخته کوتاه‌شده ولی همچنان بلند (قانونِ شمارهٔ یک).
-function aiFailReason(e: unknown): string {
-  const m = String((e as Error)?.message || e || '')
-  if (/insufficient user quota|remaining quota|quota|credit|balance/i.test(m))
-    return '⚠ اعتبارِ حسابِ هوش مصنوعی (گپ) تمام شده — در پنلِ gapgpt.app شارژ کنید. تا آن موقع همهٔ کارهای AI (ممیزی/مقاله/پیشنهادِ نظر) در انتظارِ بررسیِ دستی می‌مانند'
-  return `هوش مصنوعی در دسترس نبود (${m.slice(0, 90)}) — در انتظارِ بررسیِ دستی`
-}
-
+// فاز ۲۹۷ک — ممیزیِ نظرات دیگر «هیچ» فراخوانِ AI ندارد («قرار بود همه رو ماشین‌لرنینگ انجام
+// بده»): قواعدِ قطعی (شماره/لینک/الفاظ) + یادگیرنده‌ای که از داوری‌های واقعیِ ادمین/مالک
+// می‌آموزد (review-ml.ts). رایگان، آنی، و مستقل از اعتبارِ گپ.
 export async function moderateReview(name: string, text: string): Promise<{ verdict: 'approve' | 'reject' | 'review'; reason: string }> {
-  const model = moderationModel()
-  if (!model) return { verdict: 'review', reason: 'هوش مصنوعی تنظیم نشده؛ در انتظارِ بررسی' }
-  try {
-    const out = await chatCompleteSafe(model, [
-      { role: 'system', content: REVIEW_SYS },
-      { role: 'user', content: `نام: ${String(name || '').slice(0, 60)}\nمتنِ نظر: ${String(text || '').slice(0, 600)}` },
-    ], { temperature: 0.1, max_tokens: 90 })
-    let t = out; const m = t.match(/\{[\s\S]*\}/); if (m) t = m[0]
-    const d = JSON.parse(t)
-    const v = d.verdict === 'approve' ? 'approve' : d.verdict === 'reject' ? 'reject' : 'review'
-    return { verdict: v, reason: String(d.reason || '').slice(0, 200) }
-  } catch (e: any) {
-    return { verdict: 'review', reason: aiFailReason(e) }
-  }
+  const { classifyReview } = await import('./review-ml')
+  return classifyReview(name, text)
 }

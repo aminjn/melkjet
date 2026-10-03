@@ -3368,6 +3368,29 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   ok('پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود (ریشهٔ ۴۰۴ همگانی)', !!encoded && encoded.slug === direct.slug)
 }
 
+// ── فاز ۲۹۷ک — ممیزیِ نظرات با ML خودی (بدونِ هیچ فراخوانِ AI) ──
+{
+  const { classifyReview, learnReview } = await import('../app/lib/review-ml.ts')
+  const v1 = await classifyReview('علی', 'برای خرید تماس بگیرید ۰۹۱۲۱۲۳۴۵۶۷')
+  ok('شمارهٔ تماس در متن → ردِ قطعی (قاعده، نه AI)', v1.verdict === 'reject')
+  const v2 = await classifyReview('x', 'بهترین مشاور! آیدی تلگرام @bestamlak')
+  ok('آیدی/لینکِ تبلیغاتی → ردِ قطعی', v2.verdict === 'reject')
+  const v3 = await classifyReview('رضا', 'بلبلطرزسبسییییسب')
+  ok('متنِ بی‌ساختار خودکار منتشر نمی‌شود → در انتظارِ بررسی', v3.verdict === 'review')
+  const v4 = await classifyReview('مینا', 'برخورد بسیار حرفه‌ای بود و در خریدِ آپارتمان صادقانه راهنمایی کردند')
+  ok('متنِ سالم → پیشنهادِ تایید', v4.verdict === 'approve')
+  const v5 = await classifyReview('ناشناس', 'این آقا کلاهبردار است و پولم را خورد')
+  ok('واژهٔ تند → داوریِ انسانی (شاید شکایتِ واقعی باشد)', v5.verdict === 'review')
+  // یادگیری: ۴۰ داوریِ واقعی روی یک الگویِ اسپمِ تکرارشونده → مدل خودش رد می‌کند
+  for (let i = 0; i < 25; i++) await learnReview('فروش ویژه کابینت ام دی اف با نصب رایگان تماس داخل پیج', false)
+  for (let i = 0; i < 25; i++) await learnReview('مشاورِ دقیق و پیگیری بودند و قرارداد خوب بست', true)
+  const v6 = await classifyReview('x', 'فروش ویژه کابینت ام دی اف نصب رایگان در پیج ما')
+  ok('یادگیرنده پس از ۵۰ داوری، اسپمِ مشابه را خودش رد می‌کند', v6.verdict === 'reject' && v6.reason.includes('ML'))
+  const { moderateReview } = await import('../app/lib/moderation.ts')
+  const v7 = await moderateReview('x', 'برخورد عالی و قیمت‌گذاریِ منصفانه‌ای داشتند ممنونم')
+  ok('مسیرِ ممیزیِ نظرات کلاً از ML می‌گذرد (بدونِ نیاز به AI/اعتبارِ گپ)', v7.verdict === 'approve')
+}
+
 // ── فاز ۲۹۷ج — تیمِ آژانسِ اسکرپی: fallback به مشاورانِ graduateشدهٔ رُستر ──
 {
   const { addScrape, patchScrape } = await import('../app/lib/agency-roster-store.ts')

@@ -44,18 +44,27 @@ export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({} as any))
   const action = String(b.action || '')
+  // فاز ۲۹۷ک — هر داوریِ ادمین خوراکِ یادگیرندهٔ نظرات است: متن پیش از اعمال برداشته می‌شود.
+  const textOf = (): string => {
+    if (b.source === 'builder') { const pr = pendingBuilderReviews().find(x => x.review.id === String(b.id)); return pr?.review.text || '' }
+    return pendingReviews().find(x => x.id === String(b.id))?.text || ''
+  }
   if (action === 'approve') {
+    const txt = textOf()
     const ok = b.source === 'builder'
       ? setBuilderReviewApproved(String(b.ownerPhone), String(b.id), true)
       : adminSetApproved(String(b.id), true)
     if (!ok) return NextResponse.json({ error: 'نظر یافت نشد' }, { status: 404 })
+    if (txt) { const { learnReview } = await import('@/app/lib/review-ml'); learnReview(txt, true).catch(() => {}) }
     return NextResponse.json({ ok: true })
   }
   if (action === 'reject') {
+    const txt = textOf()
     const ok = b.source === 'builder'
       ? deleteBuilderReview(String(b.ownerPhone), String(b.id))
       : adminDeleteReview(String(b.id))
     if (!ok) return NextResponse.json({ error: 'نظر یافت نشد' }, { status: 404 })
+    if (txt) { const { learnReview } = await import('@/app/lib/review-ml'); learnReview(txt, false).catch(() => {}) }
     return NextResponse.json({ ok: true })
   }
   if (action === 'verify') {
