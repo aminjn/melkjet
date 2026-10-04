@@ -14,7 +14,7 @@ import ProjectsMap from '@/app/components/ProjectsMap'
 import ArchProjects from '@/app/components/ArchProjects'
 import ProviderReviews from '@/app/components/ProviderReviews'
 import { listReviews } from '@/app/lib/reviews-store'
-import { architectScore, type ArchScore } from '@/app/lib/architect-score'
+import { providerScore, type ProviderScore } from '@/app/lib/provider-score'
 
 // Only these provider types have a ProDesk inbox that can receive an inquiry.
 const PRO_INQUIRY_TYPES = ['architect', 'contractor', 'appraiser', 'lawfirm', 'finance', 'notary', 'legal']
@@ -30,7 +30,7 @@ function SH({ children }: { children: ReactNode }) {
 }
 // فاز ۲۹۸ن — کارتِ «امتیازِ ملک‌جت»: سنجهٔ بومیِ شفاف از دادهٔ واقعی (جایگزینِ «اعتبار/رتبه»ی
 // بی‌معنایِ طرح‌۲طرح). حلقهٔ امتیاز + رتبهٔ کیفی + تفکیکِ پنج ستون (شفافیت، نه جعبهٔ سیاه).
-function ArchScoreCard({ s }: { s: ArchScore }) {
+function ProviderScoreCard({ s }: { s: ProviderScore }) {
   const faN = (n: number) => (n || 0).toLocaleString('fa-IR')
   const accent = s.tierKey === 'active' ? '#5fd98a' : s.tierKey === 'new' ? 'var(--muted)' : 'var(--gold)'
   return (
@@ -45,7 +45,7 @@ function ArchScoreCard({ s }: { s: ArchScore }) {
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>امتیازِ ملک‌جت</div>
           {s.tier && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, padding: '5px 13px', borderRadius: 999, background: `color-mix(in srgb, ${accent} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${accent} 42%, transparent)`, color: accent, fontSize: 13.5, fontWeight: 900 }}>★ {s.tier}</div>}
-          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 8 }}>ساخته‌شده از دادهٔ واقعیِ این معمار — بر پایهٔ {faN(s.dataPoints)} سنجه</div>
+          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 8 }}>ساخته‌شده از دادهٔ واقعیِ این متخصص — بر پایهٔ {faN(s.dataPoints)} سنجه</div>
         </div>
       </div>
       <div style={{ display: 'grid', gap: 9 }}>
@@ -113,18 +113,25 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
   const avg292 = rated292.length ? Math.round(rated292.reduce((s, r) => s + r.rating, 0) / rated292.length * 10) / 10 : 0
 
   // فاز ۲۵۴ (سئو L4): فیلدهای خالی از JSON-LD حذف می‌شوند (description=""" اسکیمای نامعتبر می‌ساخت).
-  // فاز ۲۹۸ن — امتیازِ بومیِ ملک‌جت برای معمار (از دادهٔ واقعی؛ جایگزینِ اعتبار/رتبهٔ طرح‌۲طرح).
-  const archScore = arch ? architectScore({
-    projDone: arch.projDone, projDoing: arch.projDoing, projPresented: arch.projPresented,
-    projectsCount: (arch.projects || []).length,
-    rating: arch.rating, ratingCount: arch.ratingCount, nps: arch.nps,
-    honor1: arch.honor1, honor2: arch.honor2, honor3: arch.honor3, honorFinal: arch.honorFinal,
-    honoursCount: (arch.honours || []).length,
-    skillsCount: (arch.skills || []).length, edusCount: (arch.edus || []).length,
-    hasAbout: !!(p.bio && p.bio.trim()), hasAvatar: !!p.photo, hasOffice: !!(arch.officeName || arch.managerName),
-    projectsWithImage: (arch.projects || []).filter(pr => pr.image).length, hasPhone: p.hasPhone,
-    mjReviews: rated292.length, mjAvg: avg292, verified: p.verified,
-  }) : null
+  // فاز ۲۹۸س — امتیازِ بومیِ ملک‌جت برای «همهٔ صنف‌ها» (نه فقط معمار): از دادهٔ واقعیِ عمومیِ p
+  // (فایل‌ها، نشان‌های اعتبار، کاملیِ پروفایل، تایید) + نظراتِ ملک‌جت، و اگر معمار بود دادهٔ غنیِ arch.
+  const pScore = providerScore({
+    // عمومیِ همهٔ صنف‌ها
+    listings: (p.listings || []).length,
+    badgesCount: (p.badges || []).filter(b => b.id !== 'verified').length,
+    specialtiesCount: (p.specialties || []).length,
+    hasAbout: !!(p.bio && p.bio.trim()), hasAvatar: !!p.photo, hasCity: !!p.city, hasPhone: p.hasPhone,
+    mjReviews: rated292.length, mjAvg: avg292, verified: p.verified, registered: true,
+    // غنیِ معمار (اگر بود)
+    projDone: arch?.projDone, projDoing: arch?.projDoing, projPresented: arch?.projPresented,
+    projects: arch ? (arch.projects || []).length : undefined,
+    projectsWithImage: arch ? (arch.projects || []).filter(pr => pr.image).length : undefined,
+    rating: arch?.rating, ratingCount: arch?.ratingCount, nps: arch?.nps,
+    honor1: arch?.honor1, honor2: arch?.honor2, honor3: arch?.honor3, honorFinal: arch?.honorFinal,
+    honoursCount: arch ? (arch.honours || []).length : undefined,
+    skillsCount: arch ? (arch.skills || []).length : undefined, edusCount: arch ? (arch.edus || []).length : undefined,
+    hasOffice: !!(arch?.officeName || arch?.managerName),
+  })
 
   const bio = (p.bio || '').replace(/<[^>]+>/g, '').trim().slice(0, 300)
   const ld: Record<string, unknown> = {
@@ -185,6 +192,9 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
 
         {PRO_INQUIRY_TYPES.includes(p.type) && <ProInquiryForm type={p.type} slug={p.slug} />}
 
+        {/* فاز ۲۹۸س — امتیازِ ملک‌جت برای همهٔ صنف‌ها (فقط وقتی دادهٔ کافی هست) */}
+        {pScore.score > 0 && <ProviderScoreCard s={pScore} />}
+
         {p.bio && <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20, marginBottom: 22, fontSize: 14.5, lineHeight: 2, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: /<\/?[a-z]/i.test(p.bio) ? p.bio : p.bio.replace(/\n/g, '<br/>') }} />}
 
         {p.specialties.length > 0 && (
@@ -196,9 +206,6 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
 
         {arch && (
           <>
-            {/* امتیازِ ملک‌جت (بومی، شفاف) — جایگزینِ «اعتبار/رتبه/امتیازِ رقابت»ی بی‌معنایِ مبدأ */}
-            {archScore && archScore.score > 0 && <ArchScoreCard s={archScore} />}
-
             {/* کاشی‌های آمارِ «واقعی و بامعنا» (نه معیارهای داخلیِ مبدأ) */}
             {(arch.rating != null || arch.ratingCount != null) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(148px,1fr))', gap: 14, marginBottom: 28 }}>

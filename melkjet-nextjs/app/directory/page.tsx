@@ -10,6 +10,7 @@ import PromoBadge from '@/app/components/PromoBadge'
 import RepBadges from '@/app/components/RepBadges'
 import { useState, useEffect, useMemo } from 'react'
 import { fetchContent, gradientFor, initialsFor, type ContentItem } from '@/app/lib/content-display'
+import { providerScore } from '@/app/lib/provider-score'
 
 // دسته‌های اصلی طبقِ طرح — id همان دستهٔ داخلیِ دایرکتوری است (ROLE_CAT / اسکرپ)
 const CATS: { id: string; label: string; icon: string }[] = [
@@ -310,6 +311,15 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
   const href = pro.url || `/profile/${pro.id}`
   const external = !!pro.url && !pro.url.startsWith('/')
   const s = pro.stats
+  // فاز ۲۹۸س — امتیازِ ملک‌جت (همان موتورِ پروفایل) از دادهٔ واقعیِ همین کارت.
+  const score = providerScore({
+    listings: s.listings, deals: s.deals, projects: s.projects,
+    mjReviews: s.reviews, mjAvg: pro.rating, ratingCount: s.reviews,
+    memberYears: s.memberYears, registered: pro.registered,
+    badgesCount: (pro.badges || []).filter(b => b.id !== 'verified').length,
+    specialtiesCount: pro.tags.length, hasAvatar: !!pro.image, hasCity: !!pro.area, hasPhone: pro.hasPhone, verified: pro.verified,
+  })
+  const scoreAccent = score.tierKey === 'active' ? '#5fd98a' : score.tierKey === 'new' ? 'var(--muted)' : 'var(--goldText)'
   // جعبه‌های آمار فقط وقتی دادهٔ واقعی هست — برای ثبت‌شده‌ها (نظر/عضویت/معامله) و سازنده‌ها (پروژه)
   const boxes: { value: string; label: string; color?: string }[] = []
   if (pro.registered && s.memberYears !== undefined) {
@@ -358,6 +368,16 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
           <span style={{ color: 'var(--goldText)', fontWeight: 700 }}>{pro.role}</span>
           {hasArea && <> · {pro.area}</>}
         </div>
+
+        {score.score > 0 && score.tier && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 9 }}>
+            <span title="امتیازِ ملک‌جت از دادهٔ واقعی" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 13%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 38%, transparent)`, fontSize: 11.5, fontWeight: 800, color: scoreAccent }}>
+              <span>★ {score.tier}</span>
+              <span style={{ opacity: .55 }}>|</span>
+              <span>{fa(score.score)}</span>
+            </span>
+          </div>
+        )}
 
         {boxes.length > 0 && (
           <div style={{ display: 'flex', gap: 8, margin: '13px 0 10px' }}>
