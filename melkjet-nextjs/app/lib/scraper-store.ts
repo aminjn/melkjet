@@ -140,6 +140,11 @@ function fileSave(db: DB) {
 // نوشتن (mutate) کش را باطل می‌کند تا همان اینستنس نوشتهٔ خودش را فوری ببیند. کهنگیِ
 // چند-ثانیه‌ایِ فیدِ آگهی بینِ اینستنس‌ها بی‌ضرر است (نوشتن‌ها اتمیک روی PG می‌مانند).
 let pgCache: { loadedAt: number; checkedAt: number; fullAt: number; data: DB; rev: number } | null = null
+// فاز ۲۹۸ — singleflight: وقتی کش سرد است (ری‌استارت/باطل‌شدن) چند درخواستِ همزمان روی
+// همین اینستنس هرکدام یک «SELECT data FROM listings» ۱۶۶مگی می‌زدند — رمهٔ کوئریِ ۱۰ثانیه‌ایِ
+// موازی که CPUِ پستگرس و استخرِ اتصال را می‌بلعید (ریشهٔ ۵۰۲/کندیِ هر ری‌استارت). حالا همهٔ
+// خواننده‌های همزمان یک بارگذاری را share می‌کنند.
+let fullLoadInflight: Promise<DB> | null = null
 
 // بازخوانیِ افزایشی (۲۰ سپتامبر).
 //
@@ -301,7 +306,14 @@ async function load(fresh = false): Promise<DB> {
       if (stepped) return stepped
     } catch { return pgCache.data }
   }
-  try {
+  // فاز ۲۹۸ — singleflight روی بارگذاریِ کامل: اگر همین الان یک بارگذاری در جریان است،
+  // همان را await کن به‌جای زدنِ یک SELECT 166مگی دوم. این مسیر هم سردِ اولیه و هم سقوطِ
+  // دلتا به بازخوانیِ کامل را پوشش می‌دهد (هر دو به اینجا می‌رسند).
+  if (fullLoadInflight) {
+    try { return await fullLoadInflight }
+    catch { if (pgCache) return pgCache.data; throw new Error('scraper full load failed') }
+  }
+  fullLoadInflight = (async (): Promise<DB> => {
     await ensureMigrated()
     // متادیتای زنده از KV_META؛ اگر هنوز نبود (لحظهٔ گذار)، از بلابِ قدیمی bootstrap کن.
     const [meta, items] = await Promise.all([kvGet<Partial<DB> & { __rev?: number }>(KV_META, {}), pgListingsAll() as Promise<Item[]>])
@@ -319,10 +331,15 @@ async function load(fresh = false): Promise<DB> {
     // فاز ۲۴۰ (خودترمیم): بعدِ هر بازخوانیِ کامل، revِ Redis با kv همگام می‌شود (اگر Redis تازه روشن/کهنه بود).
     try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled()) void rSetMax('scraper_rev', meta.__rev || 0) } catch {}
     return data
+  })()
+  try {
+    return await fullLoadInflight
   } catch (e) {
     // تاب‌آوری: اگر دیتابیس لحظه‌ای کند/اشباع بود، کشِ کهنه را سِرو کن (نه ۵۰۰/۵۰۴).
     if (pgCache) return pgCache.data
     throw e
+  } finally {
+    fullLoadInflight = null
   }
 }
 
@@ -331,6 +348,7 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   if (!pgEnabled()) { const d = fileLoad(); const r = fn(d); fileSave(d); return r }
   await ensureMigrated()
   let revOut = 0   // فاز ۲۴۰: revِ جدید برای انتشار در Redis (چکِ ارزانِ بین‌اینستنسی)
+  let dbOut: DB | null = null   // فاز ۲۹۸ — حالتِ پس‌از‌نوشتن برای گرم‌نگه‌داشتنِ کش (به‌جای null)
   const r = await pgTx(async (c) => {
     // مثلِ kvMutate (۲۸ سپتامبر): خواندنِ کاملِ جدول + انتظارِ صفِ قفل زیرِ بار از ۱۵ث رد
     // می‌شود و کشته‌شدنش یعنی تکرارِ کلِ کار (توفانِ retry). داخلِ همین تراکنش سقف ۴۵ث.
@@ -372,9 +390,17 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
       )
     }
     if (del.length) await c.query(`DELETE FROM listings WHERE id = ANY($1::text[])`, [del])
+    dbOut = db
     return result
   })
-  pgCache = null
+  // فاز ۲۹۸ — دیگر «هر نوشتن» کش را null نمی‌کند (که خواندنِ بعدی را به SELECT 166مگی مجبور
+  // می‌کرد — ریشهٔ طوفانِ بازخوانیِ کاملِ وسطِ سینکِ رُستر). db که همین الان با SELECT کامل
+  // خوانده و با fn به‌روز شد، «عینِ» حالتِ جدیدِ جدول است (مرجع، مستقل از کشِ قبلی)، پس کش را
+  // با همان گرم نگه می‌داریم — read-your-writes فوری + بدونِ بازخوانیِ کامل.
+  if (dbOut) {
+    const items = [...(dbOut as DB).items].sort((a, b) => (b.scrapedAt || 0) - (a.scrapedAt || 0))
+    pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), fullAt: Date.now(), data: { ...(dbOut as DB), items }, rev: revOut }
+  } else pgCache = null
   // فاز ۲۴۰: انتشارِ revِ جدید در Redis (best-effort) — چکِ اعتبارِ کشِ بقیهٔ اینستنس‌ها حافظه‌ای می‌شود.
   try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled() && revOut) void rSetMax('scraper_rev', revOut) } catch {}
   return r
@@ -403,6 +429,7 @@ async function mutateMeta<R>(fn: (meta: { sources: Source[]; categories?: string
   if (!pgEnabled()) { const d = fileLoad(); const r = fn({ sources: d.sources, categories: d.categories, owners: d.owners || [] }); fileSave(d); return r }
   await ensureMigrated()
   let revOut = 0
+  let boxOut: { sources: Source[]; categories?: string[]; owners: Owner[] } | null = null
   const r = await pgTx(async (c) => {
     await c.query(`SET LOCAL statement_timeout = '45s'`)   // انتظارِ صفِ قفل ≠ کوئریِ سرکش (۲۸ سپتامبر)
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
@@ -419,9 +446,16 @@ async function mutateMeta<R>(fn: (meta: { sources: Source[]; categories?: string
     // لاگِ خالی: rev بالا رفته ولی هیچ آگهی‌ای عوض نشده، پس خواننده هیچ ردیفی نمی‌خواند.
     const logMeta = withLog(meta as MetaDoc, rev, [], [])
     await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...box, __rev: rev, __log: logMeta })])
+    boxOut = box
     return result
   })
-  pgCache = null
+  // فاز ۲۹۸ — فقط متادیتا عوض شد (آگهی‌ها دست‌نخورده). اگر کشِ همین اینستنس دقیقاً روی
+  // revِ پیش از این نوشتن بود (یعنی هیچ نویسندهٔ دیگری میان‌کار commit نکرده)، به‌جای null
+  // کش را با متادیتای تازه و همان آگهی‌ها گرم نگه می‌داریم.
+  if (pgCache && boxOut && pgCache.rev === revOut - 1) {
+    const b = boxOut as { sources: Source[]; categories?: string[]; owners: Owner[] }
+    pgCache = { ...pgCache, loadedAt: Date.now(), checkedAt: Date.now(), rev: revOut, data: { ...pgCache.data, sources: b.sources, categories: b.categories, owners: b.owners } }
+  } else pgCache = null
   try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled() && revOut) void rSetMax('scraper_rev', revOut) } catch {}
   return r
 }
@@ -436,6 +470,7 @@ async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Par
   }
   await ensureMigrated()
   let revOut = 0
+  let changedOut: Item[] = []   // فاز ۲۹۸ — ردیف‌های تغییرکرده برای وصله به کشِ گرم
   const r = await pgTx(async (c) => {
     await c.query(`SET LOCAL statement_timeout = '45s'`)   // انتظارِ صفِ قفل ≠ کوئریِ سرکش (۲۸ سپتامبر)
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
@@ -457,9 +492,18 @@ async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Par
         [it.id, it.scrapedAt || 0, it.type, it.status, JSON.stringify(it)],
       )
     }
+    changedOut = changed
     return result
   })
-  pgCache = null
+  // فاز ۲۹۸ — نوشتنِ هدفمند هم کش را null نکند: اگر کشِ همین اینستنس دقیقاً روی revِ پیش از
+  // این نوشتن بود، ردیف‌های تغییرکرده را روی همان کش upsert می‌کنیم (مرجعِ تازه از SELECT،
+  // مستقل از کش). وگرنه نمی‌توانیم مطمئن بازسازی کنیم → null (مسیرِ خواندنِ کامل خودش را درست می‌کند).
+  if (pgCache && pgCache.rev === revOut - 1) {
+    const map = new Map(pgCache.data.items.map(i => [i.id, i]))
+    for (const it of changedOut) map.set(it.id, it)
+    const nextItems = [...map.values()].sort((a, b) => (b.scrapedAt || 0) - (a.scrapedAt || 0))
+    pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), fullAt: pgCache.fullAt, data: { ...pgCache.data, items: nextItems }, rev: revOut }
+  } else pgCache = null
   try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled() && revOut) void rSetMax('scraper_rev', revOut) } catch {}
   return r
 }
