@@ -47,7 +47,8 @@ export interface RosterScrape {
   startHour?: number
   endHour?: number
   createdAt: number
-  lastRun?: number
+  lastRun?: number        // آخرین «تلاش» (موفق یا ناموفق) — برای زمان‌بندی
+  lastOkAt?: number       // فاز ۲۹۷ض — آخرین سینکِ «موفقِ کامل» (گزارش این را نشان می‌دهد، نه تلاش)
   lastError?: string
   lastTotal?: number
   lastUnnamed?: number
@@ -485,7 +486,9 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
   console.log(`[roster] pass start id=${id} slug=${scrape.slug} attempt=${(scrape.runAttempts || 0) + 1}`)
   const attempts192 = (scrape.runAttempts || 0) + 1
   if (attempts192 > 8) {
-    await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastError: 'چند بار پشتِ‌سرِهم ناتمام ماند — لاگِ سرور را ببین و دوباره «همگام‌سازی الان» را بزن' })
+    // فاز ۲۹۷ض — علتِ آخرین شکست را نگه دار (lastError هنوز پاک نشده) تا در پنل معلوم باشد چرا.
+    const why = String(scrape.lastError || '').replace(/^خطای گذرا[^:]*:\s*/, '').slice(0, 120)
+    await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastError: `۸ بار پشتِ‌سرِهم ناتمام ماند${why ? ` — علت: ${why}` : ''} — «همگام‌سازی الان» را بزن` })
     return { ok: false, error: 'تلاش‌های ناتمامِ زیاد', advisors: 0, total: 0, unnamed: 0 }
   }
   await patchScrape(id, { running: true, runStartedAt: Date.now(), lastProgressAt: Date.now(), runAttempts: attempts192, phase: 'scrape', progress: { done: 0, total: 0 }, lastError: '' })
@@ -563,9 +566,12 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // فاز ۱۹۶ — flushِ نهاییِ کشِ ازسرگیری: ذخیرهٔ throttled (هر ۵ث) دُمِ کش (و نام‌های AI) را جا می‌گذاشت
     // → پاسِ بعد دوباره از دیوار می‌خواند و AI را دوباره می‌پرسید. (خودِ تستِ شبیه‌سازی این را گرفت.)
     await saveRowCache(id, rowCache).catch(() => {})
-    // فاز ۱۹۶ب — پیشرفتِ واقعی شمارندهٔ تلاش را می‌بخشد: رسیدن به این‌جا یعنی اسکرپ+AI کامل شد؛
-    // کیلِ دیپلوی وسطِ ایمپورت نباید به سمتِ «چند بار ناتمام ماند» بشمارد (فیدبک: give-up الکی).
-    if (roster.ok) await patchScrape(id, { runAttempts: 0 })
+    // فاز ۲۹۷ض — ریشهٔ «۱۴ ساعت در صف، هرگز کامل نمی‌شود» (۳۸ آژانس): اینجا runAttempts صفر
+    // می‌شد، «پیش از» فازِ ایمپورت. پس اگر ایمپورت هر بار خطای گذرا می‌داد، شمارنده هرگز بالا
+    // نمی‌رفت و سقفِ ۸ هرگز فعال نمی‌شد → حلقهٔ بی‌پایانِ خاموش (و lastRun هر بار تازه می‌شد، پس
+    // گزارش دروغ می‌گفت «۲ ساعت پیش سینک شد»). بخششِ واقعی به مسیرِ «بودجه تمام شد» منتقل شد
+    // (آن‌جا پیشرفتِ واقعی رخ داده)؛ خطای گذرای ایمپورت حالا می‌شمارد و بعد از ۸ بار «با علتِ
+    // واقعی» تسلیم می‌شود تا در پنل دیده شود، نه این‌که ابدی بچرخد.
     console.log(`[roster] scrape+AI done: rows=${roster.scanned} advisors=${roster.advisors.length} unnamed=${roster.unnamed.tokens.length}`)
     if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
@@ -622,8 +628,10 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       await mutateScrape(id, s2 => {
         if (!s2) return
         s2.advisors = recs; s2.running = false
+        // فاز ۲۹۷ض — «بودجه تمام شد» = پیشرفتِ واقعی (بخشی ایمپورت شد)؛ پس شمارندهٔ تلاش بخشیده
+        // می‌شود (این همان بخششی است که قبلاً اشتباهاً پیش از ایمپورت انجام می‌شد).
         if (wasStopped) { s2.runRequested = false; s2.stopRequested = false; s2.runAttempts = 0; s2.lastError = 'با دکمهٔ توقف متوقف شد' }
-        else s2.lastError = 'بودجهٔ زمانیِ این ران تمام شد — ادامه خودکار در چند لحظهٔ دیگر'
+        else { s2.runAttempts = 0; s2.lastError = 'بودجهٔ زمانیِ این ران تمام شد — ادامه خودکار در چند لحظهٔ دیگر' }
       })
       console.log(`[roster] pass end (${wasStopped ? 'stopped' : 'budget'}) imported=${done193}/${totalTokens193}`)
       return { ok: false, error: wasStopped ? 'متوقف شد' : 'بودجهٔ زمانی — ادامه خودکار', advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
@@ -632,7 +640,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     await mutateScrape(id, s => {
       if (!s) return
       s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
-      s.running = false; s.runRequested = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastError = ''
+      s.running = false; s.runRequested = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastOkAt = Date.now(); s.lastError = ''
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
     })
@@ -660,8 +668,10 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // حالا مسیرِ زمان‌بندی‌شده هم همان رفتارِ فاز ۱۹۲ را می‌گیرد: تیکِ بعدیِ کرون از همان‌جا
     // (RowCache) ادامه می‌دهد. سقفِ ۸ تلاشِ خط ۳۸۴ جلوی حلقهٔ بی‌پایان را می‌گیرد و بعد از آن
     // با پیامِ روشن تسلیم می‌شود، پس نه حلقهٔ بی‌صدا می‌ماند نه فشارِ بی‌پایان روی دیوار.
+    // فاز ۲۹۷ض — علتِ واقعی دیگر دور ریخته نمی‌شود (قانون شمارهٔ یک): بدونِ آن، «۳۸ آژانس خطای
+    // گذرا» بود ولی هیچ‌کس نمی‌دانست «چه چیزی» تایم‌اوت می‌خورد (PG؟ دیوار؟ سوکت؟).
     await patchScrape(id, transient
-      ? { running: false, runRequested: true, lastRun: Date.now(), lastError: 'خطای گذرای زیرساخت — ادامهٔ خودکار در چند لحظه' }
+      ? { running: false, runRequested: true, lastRun: Date.now(), lastError: `خطای گذرا (تلاشِ ${attempts192}/۸): ${msg.slice(0, 140)}` }
       : { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: msg })
     return { ok: false, error: msg, advisors: 0, total: 0, unnamed: 0 }
   } finally {

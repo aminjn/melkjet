@@ -54,10 +54,16 @@ const rows = scrapes.map(s => {
 console.log(`■ ${fa(scrapes.length)} آژانس  ·  ${fa(totAds)} آگهیِ اسکن‌شده  ·  ${fa(totAdv)} مشاورِ شناسایی‌شده (${fa(totNamedAdv)} حساب‌دار، ${fa(totGrad)} در صفِ ساخت)  ·  ${fa(totUnnamed)} آگهیِ بی‌نام`)
 console.log(`  هرگز سینک‌نشده: ${fa(neverSynced)}  ·  در حالِ اجرا الان: ${fa(running)}  ·  اتوسینک خاموش: ${fa(autoOff)}\n`)
 
-console.log('  آژانس'.padEnd(26) + 'اسلاگ'.padEnd(14) + 'آگهی'.padStart(7) + 'مشاور'.padStart(7) + 'حساب'.padStart(6) + 'بی‌نام'.padStart(7) + '  آخرین سینک'.padEnd(15) + ' اتو')
+let stuckN = 0
+console.log('  آژانس'.padEnd(26) + 'اسلاگ'.padEnd(14) + 'آگهی'.padStart(7) + 'مشاور'.padStart(7) + 'حساب'.padStart(6) + 'بی‌نام'.padStart(7) + '  سینکِ موفق'.padEnd(15) + ' اتو')
 console.log('  ' + '─'.repeat(92))
 for (const r of rows) {
   const name = (r.s.agencyName || r.s.slug || '—').slice(0, 24)
+  // فاز ۲۹۷ض — «سینکِ موفق» = lastOkAt (نه lastRun که آخرین تلاش است). گیرکرده = خطای گذرا
+  // دارد و بیش از ۳ ساعت موفق نشده.
+  const okAt = r.s.lastOkAt || (r.s.lastError ? 0 : r.s.lastRun)   // رکوردهای قدیمی قبل از lastOkAt
+  const stuck = /گذرا/.test(r.s.lastError || '') && (!okAt || now - okAt > 3 * 3600_000)
+  if (stuck) stuckN++
   const line =
     '  ' + name.padEnd(24) +
     String(r.s.slug || '—').slice(0, 12).padEnd(14) +
@@ -65,11 +71,12 @@ for (const r of rows) {
     fa(r.adv).padStart(7) +
     fa(r.named).padStart(6) +
     fa(r.s.lastUnnamed || 0).padStart(7) +
-    ('  ' + (r.s.running ? '⏳ اجرا' : ago(r.s.lastRun))).padEnd(16) +
+    ('  ' + (r.s.running ? '⏳ اجرا' : (stuck ? '⚠️ گیرکرده' : ago(okAt)))).padEnd(16) +
     (r.autoOn && r.s.schedule !== 'off' ? '✓' : '✗')
   console.log(line)
-  if (r.s.lastError) console.log('     ↳ خطا: ' + String(r.s.lastError).slice(0, 80))
+  if (r.s.lastError) console.log('     ↳ خطا: ' + String(r.s.lastError).slice(0, 90))
 }
+if (stuckN) console.log(`\n  ⚠️ ${fa(stuckN)} آژانس «گیرکرده»اند: خطای گذرا دارند و >۳ ساعت سینکِ موفق نداشته‌اند (ریشه در خطای بالا).`)
 
 // ── آژانس‌های با نامِ تکراری (احتمالِ اسکرپِ دوتایی) ──
 const byName = new Map()
