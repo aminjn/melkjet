@@ -733,7 +733,7 @@ function ContactBlock({ block, primary, slug }: { block: SiteBlock; primary: str
 type FooterLink = { label: string; href: string }
 type FooterColumn = { title: string; links: FooterLink[] }
 
-function FooterBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
+function FooterBlock({ block, primary, ownerName, slug }: { block: SiteBlock; primary: string; ownerName?: string; slug?: string }) {
   const props = p(block)
 
   const brand: string = String(props.brand || props.text || ownerName || 'ملک‌جت').trim() || 'ملک‌جت'
@@ -815,7 +815,14 @@ function FooterBlock({ block, primary, ownerName }: { block: SiteBlock; primary:
           {hasContact ? (
             <div>
               <div style={{ fontSize: 13.5, fontWeight: 800, color: '#c2b8a6', marginBottom: 16, letterSpacing: '.3px' }}>تماس</div>
-              {phone ? <ContactRow icon="☎" ltr>{phone}</ContactRow> : null}
+              {/* فاز ۲۹۸ب — شمارهٔ فوتر دیگر خام نیست: پشتِ «نمایشِ شماره» (مثلِ کارتِ تیم/تماس)
+                  تا هم در HTMLِ خام لو نرود و هم نمایشش در پنلِ سایت‌سازها گزارش شود. */}
+              {phone ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
+                  <span style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(255,255,255,.07)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>☎</span>
+                  <RevealPhone phone={phone} primary={primary} slug={slug} />
+                </div>
+              ) : null}
               {email ? <ContactRow icon="✉" ltr>{email}</ContactRow> : null}
               {address ? <ContactRow icon="📍">{address}</ContactRow> : null}
             </div>
@@ -1052,7 +1059,7 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
     case 'testimonials': return <TestimonialsBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} slug={slug} />
     case 'cta': return <CtaBlock key={block.id} block={block} primary={primary} />
     case 'contact': return <ContactBlock key={block.id} block={block} primary={primary} slug={slug} />
-    case 'footer': return <FooterBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
+    case 'footer': return <FooterBlock key={block.id} block={block} primary={primary} ownerName={ownerName} slug={slug} />
     default:
       return (
         <section key={block.id} style={{ background: 'var(--mjs-bg)', padding: '32px 24px', direction: 'rtl' }}>
