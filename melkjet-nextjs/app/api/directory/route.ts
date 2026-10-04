@@ -214,6 +214,16 @@ export async function GET(req: NextRequest) {
   } catch { /* پروموت در دسترس نبود */ }
   // ویژه‌ها اول، سپس تازه‌ترها / کامل‌ترها (عکس‌دار/تخصص‌دار).
   items.sort((x, y) => (Number(!!y.promoted) - Number(!!x.promoted)) || (Number(!!y.image) - Number(!!x.image)) || (y.scrapedAt - x.scrapedAt))
+  // فاز ۲۹۸ض — توزیعِ امتیازِ این دسته را کش کن تا صفحهٔ پروفایل بتواند «جزوِ N٪ برتر» را
+  // از جامعهٔ واقعیِ همان صنف نشان دهد. فقط دستهٔ مشخص و وقتی دادهٔ کافی هست.
+  if (category) {
+    try {
+      const { dirItemScore, computeDist } = await import('@/app/lib/provider-score')
+      const { kvSet, pgEnabled } = await import('@/app/lib/db')
+      const dist = computeDist(items.map(it => dirItemScore(it).score))
+      if (pgEnabled() && dist.count >= 8) await kvSet('scoredist:' + category, dist)
+    } catch { /* توزیع اختیاری است */ }
+  }
   return { items }
   })
   return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store, private' } })

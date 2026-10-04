@@ -14,7 +14,14 @@ import ProjectsMap from '@/app/components/ProjectsMap'
 import ArchProjects from '@/app/components/ArchProjects'
 import ProviderReviews from '@/app/components/ProviderReviews'
 import { listReviews } from '@/app/lib/reviews-store'
-import { providerScore, type ProviderScore } from '@/app/lib/provider-score'
+import { providerScore, topPercentLabel, type ProviderScore, type ScoreDist } from '@/app/lib/provider-score'
+import { kvGet, pgEnabled } from '@/app/lib/db'
+
+// فاز ۲۹۸ض — نگاشتِ نوعِ پروفایل → کلیدِ دستهٔ دایرکتوری (برای خواندنِ توزیعِ امتیاز و رتبهٔ درصدی).
+const TYPE_CAT: Record<string, string> = {
+  pros: 'مشاور', agency: 'آژانس', architect: 'معمار', contractor: 'پیمانکار', materials: 'مصالح',
+  lawfirm: 'حقوقی', legal: 'حقوقی', finance: 'بیمه', appraiser: 'کارشناس', notary: 'دفترخانه', builder: 'سازنده',
+}
 
 // Only these provider types have a ProDesk inbox that can receive an inquiry.
 const PRO_INQUIRY_TYPES = ['architect', 'contractor', 'appraiser', 'lawfirm', 'finance', 'notary', 'legal']
@@ -30,7 +37,7 @@ function SH({ children }: { children: ReactNode }) {
 }
 // فاز ۲۹۸ن — کارتِ «امتیازِ ملک‌جت»: سنجهٔ بومیِ شفاف از دادهٔ واقعی (جایگزینِ «اعتبار/رتبه»ی
 // بی‌معنایِ طرح‌۲طرح). حلقهٔ امتیاز + رتبهٔ کیفی + تفکیکِ پنج ستون (شفافیت، نه جعبهٔ سیاه).
-function ProviderScoreCard({ s }: { s: ProviderScore }) {
+function ProviderScoreCard({ s, topPct }: { s: ProviderScore; topPct?: string }) {
   const faN = (n: number) => (n || 0).toLocaleString('fa-IR')
   const accent = s.tierKey === 'active' ? '#5fd98a' : s.tierKey === 'new' ? 'var(--muted)' : 'var(--gold)'
   return (
@@ -44,7 +51,10 @@ function ProviderScoreCard({ s }: { s: ProviderScore }) {
         </div>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>امتیازِ ملک‌جت</div>
-          {s.tier && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, padding: '5px 13px', borderRadius: 999, background: `color-mix(in srgb, ${accent} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${accent} 42%, transparent)`, color: accent, fontSize: 13.5, fontWeight: 900 }}>★ {s.tier}</div>}
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 6 }}>
+            {s.tier && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 13px', borderRadius: 999, background: `color-mix(in srgb, ${accent} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${accent} 42%, transparent)`, color: accent, fontSize: 13.5, fontWeight: 900 }}>★ {s.tier}</span>}
+            {topPct && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 13px', borderRadius: 999, background: 'color-mix(in srgb, var(--gold) 14%, transparent)', border: '1px solid color-mix(in srgb, var(--gold) 40%, transparent)', color: 'var(--gold)', fontSize: 12.5, fontWeight: 800 }}>🏆 {topPct}</span>}
+          </div>
           <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 8 }}>ساخته‌شده از دادهٔ واقعیِ این متخصص — بر پایهٔ {faN(s.dataPoints)} سنجه</div>
         </div>
       </div>
@@ -132,6 +142,9 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
     skillsCount: arch ? (arch.skills || []).length : undefined, edusCount: arch ? (arch.edus || []).length : undefined,
     hasOffice: !!(arch?.officeName || arch?.managerName),
   })
+  // فاز ۲۹۸ض — رتبهٔ درصدیِ واقعی از توزیعِ امتیازِ همان صنف (که دایرکتوری کش کرده).
+  const scoreDist = (pScore.score > 0 && pgEnabled()) ? await kvGet<ScoreDist | null>('scoredist:' + (TYPE_CAT[p.type] || ''), null) : null
+  const topPct = topPercentLabel(pScore.score, scoreDist)
 
   const bio = (p.bio || '').replace(/<[^>]+>/g, '').trim().slice(0, 300)
   const ld: Record<string, unknown> = {
@@ -193,7 +206,7 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
         {PRO_INQUIRY_TYPES.includes(p.type) && <ProInquiryForm type={p.type} slug={p.slug} />}
 
         {/* فاز ۲۹۸س — امتیازِ ملک‌جت برای همهٔ صنف‌ها (فقط وقتی دادهٔ کافی هست) */}
-        {pScore.score > 0 && <ProviderScoreCard s={pScore} />}
+        {pScore.score > 0 && <ProviderScoreCard s={pScore} topPct={topPct} />}
 
         {p.bio && <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20, marginBottom: 22, fontSize: 14.5, lineHeight: 2, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: /<\/?[a-z]/i.test(p.bio) ? p.bio : p.bio.replace(/\n/g, '<br/>') }} />}
 
