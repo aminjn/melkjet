@@ -207,7 +207,7 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
             // eslint-disable-next-line @next/next/no-img-element
             <img src={extras.avatar} alt="" style={{
               width: 'clamp(92px,13vw,128px)', height: 'clamp(92px,13vw,128px)', borderRadius: 26,
-              objectFit: 'cover', flexShrink: 0,
+              objectFit: 'cover', objectPosition: 'top', flexShrink: 0,
               border: '3px solid rgba(255,255,255,.85)', boxShadow: '0 18px 44px -16px rgba(0,0,0,.55)',
             }} />
           ) : null}
@@ -861,7 +861,7 @@ export function TeamMemberCard({ m, primary, showSites, showPhone, slug }: { m: 
         <div style={{ position: 'relative' }}>
           {m.photo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={m.photo} alt={m.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', display: 'block', border: '4px solid var(--mjs-bg)', boxShadow: `0 0 0 3px ${primary}, 0 10px 24px -8px rgba(0,0,0,.45)` }} />
+            <img src={m.photo} alt={m.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', objectPosition: 'top', display: 'block', border: '4px solid var(--mjs-bg)', boxShadow: `0 0 0 3px ${primary}, 0 10px 24px -8px rgba(0,0,0,.45)` }} />
           ) : (
             <div style={{ width: 100, height: 100, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, ${primary}2e, ${primary}14)`, color: primary, fontSize: 40, fontWeight: 900, border: '4px solid var(--mjs-bg)', boxShadow: `0 0 0 3px ${primary}, 0 10px 24px -10px ${primary}` }}>{initial}</div>
           )}

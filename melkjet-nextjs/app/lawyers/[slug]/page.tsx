@@ -79,7 +79,7 @@ export default async function LawyerProfilePage({ params }: Props) {
         </div>
 
         <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center' }}>
-          <div style={{ width: 96, height: 96, borderRadius: 18, flexShrink: 0, border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 30, fontWeight: 800, overflow: 'hidden', background: p.avatar ? `center/cover no-repeat url(${p.avatar})` : 'linear-gradient(135deg, var(--gold), #b8860b)' }}>{!p.avatar && p.name.slice(0, 1)}</div>
+          <div style={{ width: 96, height: 96, borderRadius: 18, flexShrink: 0, border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 30, fontWeight: 800, overflow: 'hidden', background: p.avatar ? `top/cover no-repeat url(${p.avatar})` : 'linear-gradient(135deg, var(--gold), #b8860b)' }}>{!p.avatar && p.name.slice(0, 1)}</div>
 
           <div style={{ flex: '1 1 260px', minWidth: 0 }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text)', margin: '0 0 4px' }}>{p.name}</h1>

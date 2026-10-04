@@ -345,7 +345,7 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
         {/* آواتارِ حلقه‌نورانیِ سوار */}
         <div style={{
           width: 64, height: 64, borderRadius: '50%', margin: '0 auto 10px',
-          background: pro.image ? `center/cover no-repeat url(${pro.image})` : pro.avatarGradient,
+          background: pro.image ? `top/cover no-repeat url(${pro.image})` : pro.avatarGradient,
           display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 800, overflow: 'hidden',
           boxShadow: '0 0 0 3px var(--surface), 0 0 0 5px color-mix(in srgb, var(--gold) 42%, transparent), 0 8px 20px -6px rgba(0,0,0,.5)',
         }}>{!pro.image && pro.initials}</div>
