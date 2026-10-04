@@ -18,7 +18,10 @@ function getPool(): Pool {
     // «timeout exceeded when trying to connect» می‌مرد — اتصال‌ها پشتِ قفل‌ها پارک بودند.
     // ۳۰ برای اینستنسِ ۰ + ۱۲×۳ سرویس‌ده = ۶۶ < سقفِ ۱۰۰ پستگرس.
     const poolMax = process.env.NODE_APP_INSTANCE === '0' ? 30 : 12
-    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: poolMax, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 8_000, statement_timeout: 15_000 })
+    // فاز ۲۹۷ظ — سقفِ کوئری ۱۵s→۳۰s: روی سرورِ کم‌توان، خواندنِ یک بلابِ بزرگِ آژانس (۵۵ مشاور،
+    // چند مگابایت JSON) زیرِ بار بیش از ۱۵s می‌شد و «canceling statement due to statement timeout»
+    // کلِ سینک را می‌انداخت. ۳۰s فضا می‌دهد؛ kvMutate از قبل داخلِ تراکنش ۴۵s دارد.
+    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: poolMax, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 8_000, statement_timeout: 30_000 })
     pool.on('error', () => { /* خطای idle client، pool خودش بازیابی می‌کند */ })
   }
   return pool
