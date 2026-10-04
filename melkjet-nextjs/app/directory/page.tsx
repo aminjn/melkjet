@@ -10,7 +10,7 @@ import PromoBadge from '@/app/components/PromoBadge'
 import RepBadges from '@/app/components/RepBadges'
 import { useState, useEffect, useMemo } from 'react'
 import { fetchContent, gradientFor, initialsFor, type ContentItem } from '@/app/lib/content-display'
-import { providerScore } from '@/app/lib/provider-score'
+import { dirItemScore, computeDist, topPercentLabel, type ScoreDist } from '@/app/lib/provider-score'
 
 // دسته‌های اصلی طبقِ طرح — id همان دستهٔ داخلیِ دایرکتوری است (ROLE_CAT / اسکرپ)
 const CATS: { id: string; label: string; icon: string }[] = [
@@ -73,7 +73,7 @@ export default function DirectoryPage() {
     return () => clearTimeout(t)
   }, [searchQuery, activeCategory, serviceTag])
   const [promoted, setPromoted] = useState<ContentItem[]>([])
-  const [sortBy, setSortBy] = useState<'top' | 'reviews' | 'newest'>('top')   // فاز ۲۹۲
+  const [sortBy, setSortBy] = useState<'score' | 'top' | 'reviews' | 'newest'>('score')   // فاز ۲۹۲ / ۲۹۸ش (امتیاز پیش‌فرض)
   const [loading, setLoading] = useState(true)
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [extraCats, setExtraCats] = useState<string[]>([])
@@ -141,9 +141,14 @@ export default function DirectoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, promoted])
 
+  // فاز ۲۹۸ش — امتیازِ ملک‌جتِ هر متخصص (یک‌بار) برای مرتب‌سازی + توزیعِ رتبهٔ درصدیِ دسته.
+  const scoreById = useMemo(() => new Map(all.map(p => [p.id, dirItemScore(p).score])), [items, promoted])   // eslint-disable-line react-hooks/exhaustive-deps
+  const catDist = useMemo(() => computeDist([...scoreById.values()]), [scoreById])
+
   // فاز ۲۹۲ — مرتب‌سازیِ قابلِ انتخاب. پروموت‌شده‌ها همیشه اول (تعهدِ فروش)؛ بعد معیارِ کاربر:
-  // برترین‌ها = امتیازِ واقعی و بعد پرنظرترین‌ها؛ پرنظرترین‌ها = تعدادِ نظرِ تاییدشده؛ جدیدترین‌ها = تاریخِ عضویت.
+  // امتیاز = امتیازِ بومیِ ملک‌جت؛ برترین‌ها = امتیازِ بازخورد؛ پرنظرترین‌ها = تعدادِ نظر؛ جدیدترین‌ها = عضویت.
   const cmp: Record<string, (x: Professional, y: Professional) => number> = {
+    score: (x, y) => (scoreById.get(y.id) || 0) - (scoreById.get(x.id) || 0),
     top: (x, y) => ((y.rating || 0) - (x.rating || 0)) || ((y.stats.reviews || 0) - (x.stats.reviews || 0)),
     reviews: (x, y) => ((y.stats.reviews || 0) - (x.stats.reviews || 0)) || ((y.rating || 0) - (x.rating || 0)),
     newest: (x, y) => (y.memberSince || 0) - (x.memberSince || 0),
@@ -231,7 +236,7 @@ export default function DirectoryPage() {
               {loading ? 'در حال بارگذاری…' : <><span style={{ color: 'var(--goldText)' }}>{fa(filteredProfessionals.length)}</span> {catLabelOf(activeCategory)} فعال</>}
             </h2>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              {([['top', '⭐ برترین‌ها'], ['reviews', '💬 پرنظرترین‌ها'], ['newest', '🆕 جدیدترین‌ها']] as ['top' | 'reviews' | 'newest', string][]).map(([id, label]) => {
+              {([['score', '⬥ امتیازِ ملک‌جت'], ['top', '⭐ برترین‌ها'], ['reviews', '💬 پرنظرترین‌ها'], ['newest', '🆕 جدیدترین‌ها']] as ['score' | 'top' | 'reviews' | 'newest', string][]).map(([id, label]) => {
                 const active = sortBy === id
                 return (
                   <button key={id} onClick={() => setSortBy(id)}
@@ -278,7 +283,7 @@ export default function DirectoryPage() {
             <div style={{ textAlign: 'center', padding: '80px 24px', color: 'var(--muted)' }}>در حال بارگذاری…</div>
           ) : filteredProfessionals.length > 0 ? (
             <div className="mjdir-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 18 }}>
-              {filteredProfessionals.map((pro) => <ProfessionalCard key={pro.id} pro={pro} />)}
+              {filteredProfessionals.map((pro) => <ProfessionalCard key={pro.id} pro={pro} dist={catDist} />)}
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '80px 24px', color: 'var(--muted)' }}>
@@ -305,20 +310,15 @@ function StatBox({ value, label, color }: { value: string; label: string; color?
   )
 }
 
-function ProfessionalCard({ pro }: { pro: Professional }) {
+function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist | null }) {
   const [hovered, setHovered] = useState(false)
   const hasArea = !!(pro.area && pro.area.trim())
   const href = pro.url || `/profile/${pro.id}`
   const external = !!pro.url && !pro.url.startsWith('/')
   const s = pro.stats
-  // فاز ۲۹۸س — امتیازِ ملک‌جت (همان موتورِ پروفایل) از دادهٔ واقعیِ همین کارت.
-  const score = providerScore({
-    listings: s.listings, deals: s.deals, projects: s.projects,
-    mjReviews: s.reviews, mjAvg: pro.rating, ratingCount: s.reviews,
-    memberYears: s.memberYears, registered: pro.registered,
-    badgesCount: (pro.badges || []).filter(b => b.id !== 'verified').length,
-    specialtiesCount: pro.tags.length, hasAvatar: !!pro.image, hasCity: !!pro.area, hasPhone: pro.hasPhone, verified: pro.verified,
-  })
+  // فاز ۲۹۸س — امتیازِ ملک‌جت (همان موتورِ پروفایل) از دادهٔ واقعیِ همین کارت + رتبهٔ درصدیِ درونِ دسته.
+  const score = dirItemScore(pro)
+  const pct = topPercentLabel(score.score, dist)
   const scoreAccent = score.tierKey === 'active' ? '#5fd98a' : score.tierKey === 'new' ? 'var(--muted)' : 'var(--goldText)'
   // جعبه‌های آمار فقط وقتی دادهٔ واقعی هست — برای ثبت‌شده‌ها (نظر/عضویت/معامله) و سازنده‌ها (پروژه)
   const boxes: { value: string; label: string; color?: string }[] = []
@@ -372,7 +372,7 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
         {score.score > 0 && score.tier && (
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 9 }}>
             <span title="امتیازِ ملک‌جت از دادهٔ واقعی" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 13%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 38%, transparent)`, fontSize: 11.5, fontWeight: 800, color: scoreAccent }}>
-              <span>★ {score.tier}</span>
+              <span>★ {pct || score.tier}</span>
               <span style={{ opacity: .55 }}>|</span>
               <span>{fa(score.score)}</span>
             </span>

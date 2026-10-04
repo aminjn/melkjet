@@ -105,3 +105,33 @@ export function providerScore(i: ProviderScoreInput): ProviderScore {
   const dataPoints = parts.filter(p => p.score > 0).length
   return { score, tier, tierKey, parts, dataPoints }
 }
+
+// فاز ۲۹۸ش — نگاشتِ «آیتمِ دایرکتوری» (هم کارتِ toProfessional و هم آیتمِ خامِ API) → امتیاز.
+// یک منبعِ حقیقت تا کارت/مرتب‌سازی/توزیعِ رتبه همه یک عدد بدهند. شکل‌تحمل (area|location و…).
+export function dirItemScore(src: any): ProviderScore {
+  const s = (src && src.stats) || {}
+  return providerScore({
+    listings: s.listings, deals: s.deals, projects: s.projects,
+    mjReviews: s.reviews, mjAvg: (src && src.rating) != null ? src.rating : s.rating, ratingCount: s.reviews,
+    memberYears: s.memberYears, registered: !!(src && src.registered),
+    badgesCount: Array.isArray(src && src.badges) ? src.badges.filter((b: any) => b && b.id !== 'verified').length : 0,
+    specialtiesCount: Array.isArray(src && src.tags) ? src.tags.length : 0,
+    hasAvatar: !!(src && src.image), hasCity: !!(src && (src.area || src.location)), hasPhone: !!(src && src.hasPhone), verified: !!(src && src.verified),
+  })
+}
+
+// ── رتبهٔ درصدیِ واقعی (جزوِ N٪ برتر) ─────────────────────────────────────────
+export interface ScoreDist { count: number; p50: number; p75: number; p90: number; p95: number }
+export function computeDist(scores: number[]): ScoreDist {
+  const a = scores.filter(n => n > 0).sort((x, y) => x - y)
+  const pct = (p: number) => a.length ? a[Math.min(a.length - 1, Math.floor((p / 100) * a.length))] : 0
+  return { count: a.length, p50: pct(50), p75: pct(75), p90: pct(90), p95: pct(95) }
+}
+export function topPercentLabel(score: number, d: ScoreDist | null | undefined): string {
+  if (!d || d.count < 8 || score <= 0) return ''   // دادهٔ کم → رتبهٔ درصدی بی‌معنا (صادقانه)
+  if (score >= d.p95) return 'جزوِ ۵٪ برتر'
+  if (score >= d.p90) return 'جزوِ ۱۰٪ برتر'
+  if (score >= d.p75) return 'جزوِ ۲۵٪ برتر'
+  if (score >= d.p50) return 'جزوِ ۵۰٪ برتر'
+  return ''
+}
