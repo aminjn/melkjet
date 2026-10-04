@@ -92,7 +92,9 @@ fence() {
     nice -n 19 ionice -c3 "$@"
   fi
 }
-rm -rf "$NEW"
+rm -rf "$NEW"; mkdir -p "$NEW"
+# فاز ۲۹۷غ۲ — کشِ گرمِ بیلدِ قبلی را منتقل کن تا Next از صفر کامپایل نکند (رفعِ بیلدِ ۱۰دقیقه‌ای).
+cp -a "$CUR/cache" "$NEW/cache" 2>/dev/null || true
 fence env NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
 # A half-written slot must never go live.

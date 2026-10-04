@@ -82,7 +82,13 @@ fence() {
   fi
 }
 # اسلاتِ خاموش هر بار از صفر ساخته می‌شود، پس ENOTEMPTY/ISRِ کهنه اصلاً پیش نمی‌آید.
-build() { rm -rf "$APP_DIR/$NEW"; fence env NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" npm run build; }
+# فاز ۲۹۷غ۲ — سرعتِ بیلد: کشِ گرمِ بیلدِ قبلی (webpack/swc) به اسلاتِ جدید کپی می‌شود تا Next
+# از صفر کامپایل نکند. بزرگ‌ترین علتِ بیلدِ ۱۰دقیقه‌ای همین «کشِ سرد» بود (هر اسلات rm -rf می‌شد).
+build() {
+  rm -rf "$APP_DIR/$NEW"; mkdir -p "$APP_DIR/$NEW"
+  cp -a "$APP_DIR/$CUR/cache" "$APP_DIR/$NEW/cache" 2>/dev/null || true
+  fence env NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" npm run build
+}
 if ! build; then
   echo "$(date) ✗ build شکست خورد — یک‌بارِ دیگر تلاش می‌کنم"
   if ! build; then
