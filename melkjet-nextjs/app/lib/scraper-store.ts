@@ -1152,6 +1152,16 @@ export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): P
   return out
 }
 // فاز ۱۴۲ — در ادغامِ دو حساب، مالکیتِ آگهی‌های عمومی (نگاشتِ «آگهی‌های من») به شمارهٔ اصلی می‌رود.
+// فاز ۲۹۸ه — حذفِ همهٔ آگهی‌های عمومیِ متعلق به یک مالک (cascade حذفِ حساب) تا در سایت نماند.
+export async function deleteListingsByOwnerPhone(phone: string): Promise<number> {
+  const p = String(phone || '').trim(); if (!p) return 0
+  return mutate(db => {
+    const before = db.items.length
+    db.items = db.items.filter(it => it.meta?.['__ownerPhone'] !== p)
+    return before - db.items.length
+  })
+}
+
 export async function reassignListingOwnerPhone(from: string, to: string): Promise<number> {
   return mutate(db => {
     let n = 0

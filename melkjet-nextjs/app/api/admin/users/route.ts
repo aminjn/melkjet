@@ -185,13 +185,19 @@ export async function DELETE(req: NextRequest) {
     const prot = protectedTarget(s.role, [phone])
     if (prot) return PROTECTED_ERR(prot)
     deleteAccount(phone); logAudit(s.phone, 'حذفِ کاربر', phone)
-    return NextResponse.json({ ok: true })
+    // فاز ۲۹۸ه — حذفِ کامل: سایت/پروفایل/آگهی‌ها/داشبوردها/نظرها هم پاک شوند، نه فقط رکوردِ حساب.
+    const { purgeUserData } = await import('@/app/lib/account-purge')
+    const purge = await purgeUserData(phone)
+    return NextResponse.json({ ok: true, purge })
   }
   const b = await req.json().catch(() => ({}))
   if (Array.isArray(b.phones)) {
     const prot = protectedTarget(s.role, b.phones)
     if (prot) return PROTECTED_ERR(prot)
     bulkDelete(b.phones); logAudit(s.phone, 'حذفِ گروهیِ کاربران', `${b.phones.length} حساب`)
+    // فاز ۲۹۸ه — حذفِ کاملِ دادهٔ هر حساب (سریالی تا استخرِ PG اشباع نشود).
+    const { purgeUserData } = await import('@/app/lib/account-purge')
+    for (const ph of b.phones) { try { await purgeUserData(String(ph)) } catch { /* بعدی */ } }
     return NextResponse.json({ ok: true })
   }
   return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })

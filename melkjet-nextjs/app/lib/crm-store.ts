@@ -41,6 +41,12 @@ export async function listAllTasks(): Promise<Task[]> {
 }
 
 // فاز ۱۴۲ — انتقالِ مالکیتِ وظایف در ادغامِ دو حساب
+// فاز ۲۹۸ه — حذفِ همهٔ وظایفِ CRMِ یک مالک (cascade حذفِ حساب).
+export async function deleteTasksByOwner(owner: string): Promise<number> {
+  const o = String(owner || '').trim(); if (!o) return 0
+  return mutate(db => { const before = db.tasks.length; db.tasks = db.tasks.filter(t => t.owner !== o); return before - db.tasks.length })
+}
+
 export async function reassignTasksOwner(from: string, to: string): Promise<number> {
   return mutate(db => {
     let n = 0

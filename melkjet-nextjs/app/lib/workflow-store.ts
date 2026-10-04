@@ -55,6 +55,12 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
 
 // پنلِ ادمین قبلاً نسخهٔ تک‌کاربره را در حلقه صدا می‌زد = یک واکشیِ کاملِ سند به ازای هر کاربر.
 // این نسخه یک بار می‌خواند و همه را می‌شمارد.
+// فاز ۲۹۸ه — حذفِ همهٔ گردش‌کارهای یک مالک (cascade حذفِ حساب).
+export async function deleteWorkflowsByOwner(owner: string): Promise<number> {
+  const o = String(owner || '').trim(); if (!o) return 0
+  return mutate(db => { const before = db.workflows.length; db.workflows = db.workflows.filter(w => String(w.owner || '') !== o); return before - db.workflows.length })
+}
+
 export async function workflowCountsByOwner(): Promise<Record<string, number>> {
   const out: Record<string, number> = {}
   for (const w of (await load()).workflows) { const o = String(w.owner || ''); if (o) out[o] = (out[o] || 0) + 1 }

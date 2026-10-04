@@ -149,6 +149,15 @@ export function removeImport(o: string, token: string) {
   db.advisors[o] = cur; save(db)
 }
 
+// فاز ۲۹۸ه — حذفِ کاملِ تنظیمات و تاریخچهٔ سینکِ دیوارِ یک مالک (cascade حذفِ حساب).
+export function deleteAdvisorDivar(o: string): boolean {
+  const db = load()
+  if (!db.advisors[o]) return false
+  delete db.advisors[o]
+  save(db)
+  return true
+}
+
 export function clearImports(o: string) {
   const db = load()
   const cur = db.advisors[o]; if (!cur) return

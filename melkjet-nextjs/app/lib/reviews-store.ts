@@ -85,6 +85,21 @@ export function adminSetApproved(id: string, approved: boolean): boolean {
   const db = load(); const r = db.reviews.find(x => x.id === id); if (!r) return false
   r.approved = approved; r.moderated = true; save(db); return true
 }
+// فاز ۲۹۸ه — cascade حذفِ حساب: نظرهای «دربارهٔ» این کاربر (ownerPhone) و نظرهایی که «خودش
+// نوشته» (byPhone) هر دو پاک می‌شوند.
+export function deleteReviewsByOwner(ownerPhone: string): number {
+  const key = ownerKey(ownerPhone); if (!key) return 0
+  const db = load(); const before = db.reviews.length
+  db.reviews = db.reviews.filter(r => r.ownerPhone !== key)
+  const n = before - db.reviews.length; if (n) save(db); return n
+}
+export function deleteReviewsByAuthor(byPhone: string): number {
+  const p = String(byPhone || '').trim(); if (!p) return 0
+  const db = load(); const before = db.reviews.length
+  db.reviews = db.reviews.filter(r => r.byPhone !== p)
+  const n = before - db.reviews.length; if (n) save(db); return n
+}
+
 export function adminDeleteReview(id: string): boolean {
   const db = load(); const n = db.reviews.length
   db.reviews = db.reviews.filter(r => r.id !== id); save(db)

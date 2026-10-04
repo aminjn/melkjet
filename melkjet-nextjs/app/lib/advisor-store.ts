@@ -136,6 +136,22 @@ export async function mergeAdvisorData(from: string, to: string): Promise<{ list
   return counts
 }
 
+// فاز ۲۹۸ه — حذفِ کاملِ دادهٔ مشاورِ یک مالک (cascade حذفِ حساب): فایل‌ها/لیدها/قرارها و
+// آگهی‌های عمومیِ منتشرشده‌اش (publicId) پاک می‌شوند، سپس خودِ شاردِ advisor:{owner}.
+export async function deleteAdvisorData(owner: string): Promise<{ listings: number; publicDeleted: number }> {
+  const o = String(owner || '').trim()
+  if (!o) return { listings: 0, publicDeleted: 0 }
+  let src: AdvisorData | null
+  if (pgEnabled()) { await ensureMigratedPg(); src = await kvGet<AdvisorData | null>(ownerKey(o), null) }
+  else { src = fileLoad().advisors[o] || null }
+  if (!src) return { listings: 0, publicDeleted: 0 }
+  let publicDeleted = 0
+  for (const l of src.listings || []) { if (l.publicId) { try { await deleteItem(l.publicId); publicDeleted++ } catch { /* ردیفِ بعدی */ } } }
+  if (pgEnabled()) await kvDelete(ownerKey(o))
+  else { const db = fileLoad(); delete db.advisors[o]; fileSave(db) }
+  return { listings: (src.listings || []).length, publicDeleted }
+}
+
 export const STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'closed', 'lost']
 const LISTING_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
 const APPT_STATUSES: ApptStatus[] = ['scheduled', 'done', 'canceled']

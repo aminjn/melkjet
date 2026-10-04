@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { pgEnabled, kvGet, kvSet, kvMutate, kvGetPrefix } from './db'
+import { pgEnabled, kvGet, kvSet, kvMutate, kvGetPrefix, kvDelete } from './db'
 
 // Dependency-free JSON-file store for published builder sites.
 // Mirrors the persistence style of crm-store.ts.
@@ -148,6 +148,22 @@ export async function listSiteHeads(): Promise<SiteHead[]> {
   await ensureSitesSharded()
   const idx = await kvGet<IdxDoc>(IDX_KV, { m: {} })
   return Object.entries(idx.m || {}).map(([slug, e]) => ({ slug, owner: e.o || '', updatedAt: e.u || 0, title: e.t || '', createdAt: e.c || 0 }))
+}
+
+// فاز ۲۹۸ه — حذفِ همهٔ سایت‌های یک مالک (cascade حذفِ حساب). ریشهٔ باگِ «سایتِ سازنده بعد از
+// حذفِ حساب یتیم ماند»: deleteAccount هیچ cascadeای نداشت و merge هم sites-store را پوشش نمی‌داد.
+export async function deleteSitesByOwner(owner: string): Promise<number> {
+  const o = String(owner || '').trim()
+  if (!o) return 0
+  if (!pgEnabled()) {
+    return mutate(db => { const before = db.sites.length; db.sites = db.sites.filter(s => String(s.owner || '') !== o); return before - db.sites.length })
+  }
+  await ensureSitesSharded()
+  const idx = await kvGet<IdxDoc>(IDX_KV, { m: {} })
+  const slugs = Object.entries(idx.m || {}).filter(([, e]) => (e.o || '') === o).map(([slug]) => slug)
+  for (const slug of slugs) { try { await kvDelete(ROW(slug)) } catch { /* ردیفِ بعدی */ } }
+  if (slugs.length) await kvMutate<IdxDoc, void>(IDX_KV, { m: {} }, ix => { for (const slug of slugs) delete ix.m[slug] })
+  return slugs.length
 }
 
 // Make a url-safe slug: lowercase, keep a-z0-9, Persian letters and dash.

@@ -129,6 +129,15 @@ export function mergeProfiles(from: string, to: string): void {
   save(db)
 }
 
+// فاز ۲۹۸ه — حذفِ پروفایلِ عمومیِ یک کاربر (cascade حذفِ حساب) تا در دایرکتوری نماند.
+export function deleteProfile(phone: string): boolean {
+  const db = load()
+  if (!db[phone]) return false
+  delete db[phone]
+  save(db)
+  return true
+}
+
 export function completeness(p: BusinessProfile): number {
   const checks = [p.displayName || p.businessName, p.businessType, p.tagline, p.about, p.logo, p.contactPhone || p.landline, p.city, p.address, p.specialties.length > 0, p.workHours, p.social.instagram || p.social.telegram || p.social.whatsapp]
   const done = checks.filter(Boolean).length

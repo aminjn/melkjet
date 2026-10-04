@@ -26,6 +26,17 @@ interface Meta { done: Record<string, DoneRec> }
 let memMeta: Meta = { done: {} }
 async function loadMeta(): Promise<Meta> { return pgEnabled() ? await kvGet<Meta>(META_KV, { done: {} }) : memMeta }
 async function saveMeta(m: Meta): Promise<void> { if (pgEnabled()) await kvSet(META_KV, m); else memMeta = m }
+// فاز ۲۹۸ه — پاک‌کردنِ ردِ کاربر از متای سایت‌سازِ خودکار (cascade حذفِ حساب) تا دوباره
+// برایش سایت ساخته/پیامک نشود و در پنلِ سایت‌سازها نماند.
+export async function purgeAutoSiteMeta(phone: string): Promise<boolean> {
+  const p = String(phone || '').trim(); if (!p) return false
+  const m = await loadMeta()
+  if (!m.done || !m.done[p]) return false
+  delete m.done[p]
+  await saveMeta(m)
+  return true
+}
+
 export async function getAutoSiteCfg(): Promise<AutoSiteCfg> {
   const c = pgEnabled() ? await kvGet<Partial<AutoSiteCfg>>(CFG_KV, {}) : {}
   return { enabled: c.enabled !== false, sms: c.sms !== false }
