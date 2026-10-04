@@ -42,6 +42,14 @@ export function gradientFor(seed: string, kind: 'cover' | 'avatar' = 'cover'): s
     : `linear-gradient(135deg, ${a} 0%, ${b} 100%)`
 }
 
+// فاز ۲۹۸ط — جایگاهِ تصویرِ آواتار بر پایهٔ صنف: پرتره (شخص) بالا تا صورت کامل بماند،
+// کسب‌وکار (آژانس/مصالح/فروشگاه = لوگو/ویترین) وسط تا لوگو نصفه نشود. بدونِ این، یا صورت
+// بریده می‌شد یا لوگو — «عکسِ نصفه» در همهٔ انواعِ پروفایل.
+const PERSON_CATS = new Set(['مشاور', 'معمار', 'کارشناس', 'حقوقی', 'وکیل', 'پیمانکار', 'دفترخانه'])
+export function avatarPosFor(category?: string): 'top' | 'center' {
+  return category && PERSON_CATS.has(category.trim()) ? 'top' : 'center'
+}
+
 export function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '؟'

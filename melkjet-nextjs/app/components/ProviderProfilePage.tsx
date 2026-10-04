@@ -9,7 +9,7 @@ import { listingHref } from '@/app/lib/listing-url'
 import RepBadges from '@/app/components/RepBadges'
 import ProInquiryForm from '@/app/components/ProInquiryForm'
 import { resolveProvider, typeLabel } from '@/app/lib/provider-public'
-import { gradientFor, initialsFor } from '@/app/lib/content-display'
+import { gradientFor, initialsFor, avatarPosFor } from '@/app/lib/content-display'
 import ProjectsMap from '@/app/components/ProjectsMap'
 import ArchProjects from '@/app/components/ArchProjects'
 import ProviderReviews from '@/app/components/ProviderReviews'
@@ -185,7 +185,7 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
           )}
           <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', background: 'radial-gradient(440px 250px at 92% -25%, color-mix(in srgb, var(--gold) 22%, transparent), transparent 60%), radial-gradient(360px 260px at 2% 125%, color-mix(in srgb, var(--gold) 11%, transparent), transparent 60%), linear-gradient(135deg, color-mix(in srgb, var(--gold) 6%, var(--surface)), var(--surface))', border: '1px solid var(--line)', borderRadius: 22, padding: 'clamp(22px,3.5vw,30px)', boxShadow: '0 26px 64px -38px rgba(0,0,0,.5)' }}>
             {p.photo
-              ? <img src={p.photo} alt={p.name} style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', objectPosition: 'top', flexShrink: 0, boxShadow: '0 0 0 4px color-mix(in srgb, var(--gold) 35%, transparent), 0 10px 26px -8px rgba(0,0,0,.5)' }} />
+              ? <img src={p.photo} alt={p.name} style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', objectPosition: avatarPosFor(TYPE_CAT[p.type]), flexShrink: 0, boxShadow: '0 0 0 4px color-mix(in srgb, var(--gold) 35%, transparent), 0 10px 26px -8px rgba(0,0,0,.5)' }} />
               : <div style={{ width: 96, height: 96, borderRadius: '50%', background: gradientFor(p.name, 'avatar'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, fontWeight: 800, flexShrink: 0, boxShadow: '0 0 0 4px color-mix(in srgb, var(--gold) 35%, transparent), 0 10px 26px -8px rgba(0,0,0,.5)' }}>{initialsFor(p.name)}</div>}
             <div style={{ flex: 1, minWidth: 220 }}>
               <h1 style={{ fontSize: 'clamp(22px,3.2vw,30px)', fontWeight: 900, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

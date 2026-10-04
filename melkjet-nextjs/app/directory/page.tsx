@@ -9,7 +9,7 @@ import RevealContact from '@/app/components/RevealContact'
 import PromoBadge from '@/app/components/PromoBadge'
 import RepBadges from '@/app/components/RepBadges'
 import { useState, useEffect, useMemo } from 'react'
-import { fetchContent, gradientFor, initialsFor, type ContentItem } from '@/app/lib/content-display'
+import { fetchContent, gradientFor, initialsFor, avatarPosFor, type ContentItem } from '@/app/lib/content-display'
 import { dirItemScore, computeDist, topPercentLabel, type ScoreDist } from '@/app/lib/provider-score'
 
 // دسته‌های اصلی طبقِ طرح — id همان دستهٔ داخلیِ دایرکتوری است (ROLE_CAT / اسکرپ)
@@ -248,21 +248,27 @@ export default function DirectoryPage() {
             </span>
           </div>
 
-          {/* چیپ‌های نوعِ خدمات — از تگ‌های واقعیِ همین فهرست */}
-          {cities.length > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>شهر:</span>
-              {['', ...cities].map(c => {
-                const active = city === c
-                return (
-                  <button key={c || 'all'} onClick={() => setCity(c)}
-                    style={{ padding: '7px 16px', borderRadius: 999, fontSize: 12.5, fontWeight: active ? 800 : 500, cursor: 'pointer', fontFamily: 'inherit', border: active ? '1px solid var(--gold)' : '1px solid var(--line2)', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--goldText)' : 'var(--muted)', transition: 'all .15s' }}>
-                    {c || 'همه'}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          {/* فیلترِ منطقه — تک‌ردیفِ افقی (نه دیوارِ عمودی که مشاوران را دفن می‌کرد، فاز ۲۹۸ط).
+              پرتکرارها نمایش، بقیه از کادرِ جستجو. انتخابِ فعال همیشه در ردیف می‌ماند. */}
+          {cities.length > 1 && (() => {
+            const TOP = 24
+            const shown = city && !cities.slice(0, TOP).includes(city) ? [city, ...cities.slice(0, TOP)] : cities.slice(0, TOP)
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', marginBottom: 12, paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
+                <span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>منطقه:</span>
+                {['', ...shown].map(c => {
+                  const active = city === c
+                  return (
+                    <button key={c || 'all'} onClick={() => setCity(c)}
+                      style={{ flexShrink: 0, whiteSpace: 'nowrap', padding: '7px 16px', borderRadius: 999, fontSize: 12.5, fontWeight: active ? 800 : 500, cursor: 'pointer', fontFamily: 'inherit', border: active ? '1px solid var(--gold)' : '1px solid var(--line2)', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--goldText)' : 'var(--muted)', transition: 'all .15s' }}>
+                      {c || 'همه'}
+                    </button>
+                  )
+                })}
+                {cities.length > TOP && <span style={{ flexShrink: 0, fontSize: 11.5, color: 'var(--faint)', whiteSpace: 'nowrap', paddingInlineStart: 4 }}>+{fa(cities.length - TOP)} منطقهٔ دیگر — در کادرِ جستجو بنویس</span>}
+              </div>
+            )
+          })()}
 
           {serviceTags.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -351,11 +357,13 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
         {pro.rating > 0 && <span title={pro.registered ? `میانگینِ ${fa(s.reviews || 0)} نظرِ تأییدشده` : 'امتیاز از منبعِ آگهی'} style={{ position: 'absolute', top: 10, insetInlineEnd: 12, fontSize: 12.5, fontWeight: 800, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--bg) 55%, transparent)', backdropFilter: 'blur(6px)', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px' }}>{Number(pro.rating).toLocaleString('fa-IR')} <span style={{ color: 'var(--gold)' }}>★</span></span>}
       </div>
 
-      <div style={{ padding: '0 16px 16px', marginTop: -30 }}>
+      {/* position:relative ضروری است: کپِ بالا position:relative دارد و بدونِ این، آواتارِ
+          سوار (marginTop منفی) زیرِ کپ می‌رود و از بالا «نصفه» بریده می‌شود (فاز ۲۹۸ط). */}
+      <div style={{ padding: '0 16px 16px', marginTop: -30, position: 'relative' }}>
         {/* آواتارِ حلقه‌نورانیِ سوار */}
         <div style={{
           width: 64, height: 64, borderRadius: '50%', margin: '0 auto 10px',
-          background: pro.image ? `top/cover no-repeat url(${pro.image})` : pro.avatarGradient,
+          background: pro.image ? `${avatarPosFor(pro.category)}/cover no-repeat url(${pro.image})` : pro.avatarGradient,
           display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 800, overflow: 'hidden',
           boxShadow: '0 0 0 3px var(--surface), 0 0 0 5px color-mix(in srgb, var(--gold) 42%, transparent), 0 8px 20px -6px rgba(0,0,0,.5)',
         }}>{!pro.image && pro.initials}</div>
