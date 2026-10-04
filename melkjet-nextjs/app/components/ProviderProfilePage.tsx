@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import Nav from '@/app/components/Nav'
@@ -16,6 +17,26 @@ import { listReviews } from '@/app/lib/reviews-store'
 
 // Only these provider types have a ProDesk inbox that can receive an inquiry.
 const PRO_INQUIRY_TYPES = ['architect', 'contractor', 'appraiser', 'lawfirm', 'finance', 'notary', 'legal']
+
+// فاز ۲۹۸ی — زبانِ بصریِ «خفن» (هماهنگ با سایت‌سازها): سرتیترِ نوارِطلایی + کاشیِ آمارِ گرادیانی.
+function SH({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16 }}>
+      <span style={{ width: 4, height: 22, borderRadius: 2, background: 'linear-gradient(#f7de92, var(--gold))', flexShrink: 0 }} />
+      <h2 style={{ fontSize: 19, fontWeight: 900, margin: 0 }}>{children}</h2>
+    </div>
+  )
+}
+function StatTile({ ic, v, l }: { ic: string; v: string; l: string }) {
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 9%, var(--surface)), var(--surface))', border: '1px solid var(--line)', borderRadius: 18, padding: '18px 20px' }}>
+      <span aria-hidden style={{ position: 'absolute', insetInlineStart: 0, top: 0, bottom: 0, width: 3, background: 'linear-gradient(#f7de92, var(--gold))' }} />
+      <div style={{ fontSize: 20, marginBottom: 8, opacity: .9 }}>{ic}</div>
+      <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold)', lineHeight: 1.1 }}>{v}</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{l}</div>
+    </div>
+  )
+}
 
 // متایِ SSR برای صفحهٔ عمومیِ یک متخصص.
 export async function providerMetadata(type: string, slug: string): Promise<Metadata> {
@@ -93,7 +114,7 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
           {arch?.cover && (
             <div style={{ height: 190, borderRadius: 20, marginBottom: -54, background: `linear-gradient(rgba(10,10,14,.25), rgba(10,10,14,.6)), url(${arch.cover}) center/cover no-repeat`, border: '1px solid var(--line)' }} />
           )}
-          <div style={{ position: 'relative', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 7%, var(--surface)), var(--surface))', border: '1px solid var(--line)', borderRadius: 22, padding: 'clamp(20px,3.5vw,28px)', boxShadow: '0 24px 60px -36px rgba(0,0,0,.45)' }}>
+          <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', background: 'radial-gradient(440px 250px at 92% -25%, color-mix(in srgb, var(--gold) 22%, transparent), transparent 60%), radial-gradient(360px 260px at 2% 125%, color-mix(in srgb, var(--gold) 11%, transparent), transparent 60%), linear-gradient(135deg, color-mix(in srgb, var(--gold) 6%, var(--surface)), var(--surface))', border: '1px solid var(--line)', borderRadius: 22, padding: 'clamp(22px,3.5vw,30px)', boxShadow: '0 26px 64px -38px rgba(0,0,0,.5)' }}>
             {p.photo
               ? <img src={p.photo} alt={p.name} style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 0 4px color-mix(in srgb, var(--gold) 35%, transparent), 0 10px 26px -8px rgba(0,0,0,.5)' }} />
               : <div style={{ width: 96, height: 96, borderRadius: '50%', background: gradientFor(p.name, 'avatar'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, fontWeight: 800, flexShrink: 0, boxShadow: '0 0 0 4px color-mix(in srgb, var(--gold) 35%, transparent), 0 10px 26px -8px rgba(0,0,0,.5)' }}>{initialsFor(p.name)}</div>}
@@ -119,30 +140,22 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
 
         {p.specialties.length > 0 && (
           <div style={{ marginBottom: 22 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>تخصص‌ها</h2>
+            <SH>تخصص‌ها</SH>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{p.specialties.map((s, i) => <span key={i} style={{ fontSize: 12.5, padding: '5px 12px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)' }}>{s}</span>)}</div>
           </div>
         )}
 
         {arch && (
           <>
-            {/* آمارِ حرفه‌ای */}
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 22 }}>
+            {/* آمارِ حرفه‌ای — کاشی‌های گرادیانیِ آیکن‌دار */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(148px,1fr))', gap: 14, marginBottom: 28 }}>
               {[
-                arch.credit != null && { l: 'اعتبار تخصصی', v: faN(arch.credit) },
-                arch.score != null && { l: 'امتیاز رقابت', v: faN(arch.score) },
-                arch.rank != null && { l: 'رتبه در معماران', v: faN(arch.rank) },
-                arch.rating != null && { l: 'امتیاز بازخوردها', v: `${arch.rating.toLocaleString('fa-IR')} از ۵${arch.ratingCount ? ` (${faN(arch.ratingCount)} دیدگاه)` : ''}` },
-                arch.nps != null && { l: 'تمایلِ کارفرمایان (NPS)', v: `${arch.nps > 0 ? '+' : ''}${faN(arch.nps)}` },
-              ].filter(Boolean).map((t, i) => {
-                const tt = t as { l: string; v: string }
-                return (
-                  <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '12px 18px', minWidth: 130 }}>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{tt.l}</div>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', marginTop: 4 }}>{tt.v}</div>
-                  </div>
-                )
-              })}
+                arch.credit != null && { ic: '🏅', l: 'اعتبار تخصصی', v: faN(arch.credit) },
+                arch.score != null && { ic: '📊', l: 'امتیاز رقابت', v: faN(arch.score) },
+                arch.rank != null && { ic: '🏆', l: 'رتبه در معماران', v: faN(arch.rank) },
+                arch.rating != null && { ic: '⭐', l: 'امتیاز بازخوردها', v: `${arch.rating.toLocaleString('fa-IR')} از ۵${arch.ratingCount ? ` (${faN(arch.ratingCount)})` : ''}` },
+                arch.nps != null && { ic: '📈', l: 'تمایلِ کارفرمایان', v: `${arch.nps > 0 ? '+' : ''}${faN(arch.nps)}` },
+              ].filter(Boolean).map((t, i) => { const tt = t as { ic: string; l: string; v: string }; return <StatTile key={i} ic={tt.ic} v={tt.v} l={tt.l} /> })}
             </div>
 
             {/* وضعیتِ پروژه‌ها و افتخارات */}
@@ -162,7 +175,7 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
             {/* نقاطِ قوت از دیدِ کارفرمایان */}
             {(arch.strengths?.length || 0) > 0 && (
               <div style={{ marginBottom: 22 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>نقاطِ قوت از دیدِ کارفرمایان</h2>
+                <SH>نقاطِ قوت از دیدِ کارفرمایان</SH>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{arch.strengths!.map((s, i) => <span key={i} style={{ fontSize: 12.5, padding: '5px 12px', background: 'rgba(95,217,138,.1)', border: '1px solid rgba(95,217,138,.35)', borderRadius: 999 }}>✓ {s}</span>)}</div>
               </div>
             )}
@@ -170,7 +183,7 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
             {/* جوایز */}
             {(arch.honours?.length || 0) > 0 && (
               <div style={{ marginBottom: 22 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>جوایز و افتخارات</h2>
+                <SH>جوایز و افتخارات</SH>
                 <div style={{ display: 'grid', gap: 8 }}>
                   {arch.honours!.slice(0, 10).map((hn, i) => (
                     <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px', fontSize: 13 }}>
@@ -185,7 +198,7 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
             {([['تحصیلات و سوابق', arch.edus], ['مهارت‌ها و خدمات', arch.skills], ['تخصص‌ها و همکاری‌ها', arch.engagements]] as [string, string[] | undefined][])
               .filter(([, arr]) => (arr?.length || 0) > 0).map(([ttl, arr], k) => (
                 <div key={k} style={{ marginBottom: 22 }}>
-                  <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>{ttl}</h2>
+                  <SH>{ttl}</SH>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{arr!.slice(0, 20).map((s, i) => <span key={i} style={{ fontSize: 12.5, padding: '5px 12px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)' }}>{s}</span>)}</div>
                 </div>
               ))}
@@ -198,7 +211,7 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
             {/* نقشهٔ پروژه‌ها — روی نقشهٔ خودِ ملک‌جت */}
             {archPins.length > 0 && (
               <div style={{ marginBottom: 22 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>موقعیتِ پروژه‌ها روی نقشه</h2>
+                <SH>موقعیتِ پروژه‌ها روی نقشه</SH>
                 <ProjectsMap points={archPins} />
               </div>
             )}
@@ -206,7 +219,7 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
             {/* پروژه‌ها — کلیک = نمای بزرگ با همهٔ مشخصات و ورق‌زدن (مثلِ سایتِ مبدأ) */}
             {archProjects.length > 0 && (
               <div style={{ marginBottom: 22 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>نمونه‌کارها و پروژه‌ها</h2>
+                <SH>نمونه‌کارها و پروژه‌ها</SH>
                 <ArchProjects name={p.name} projects={archProjects.slice(0, 24).map(pr => ({ title: pr.title, image: pr.image, city: pr.city, year: pr.year, landArea: pr.landArea, builtArea: pr.builtArea, category: pr.category }))} />
               </div>
             )}
@@ -218,15 +231,17 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
 
         {p.listings.length > 0 && (
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>آگهی‌های {p.name}</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 14 }}>
+            <SH>آگهی‌های {p.name}</SH>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 16 }}>
               {p.listings.map(it => (
-                <Link key={it.id} href={listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 13, overflow: 'hidden' }}>
-                  <div style={{ height: 130, background: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.title) }} />
-                  <div style={{ padding: '11px 13px' }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{it.price || '—'}</div>
+                <Link key={it.id} href={listingHref(it.id, it.title, it.location)} className="mjpp-card" style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+                  <div style={{ height: 140, position: 'relative', background: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.title) }}>
+                    <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(transparent 55%, rgba(10,10,12,.7))' }} />
+                  </div>
+                  <div style={{ padding: '12px 14px' }}>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--gold)' }}>{it.price || '—'}</div>
                     <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
-                    {it.location && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{it.location}</div>}
+                    {it.location && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>📍 {it.location}</div>}
                   </div>
                 </Link>
               ))}
