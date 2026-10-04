@@ -120,6 +120,13 @@ export function dirItemScore(src: any): ProviderScore {
   })
 }
 
+// فاز ۲۹۸ظ — نمایشِ امتیاز به سبکِ IMDb: «X از ۱۰» (یک رقمِ اعشار، با ممیزِ فارسی). امتیازِ
+// درونی ۰..۱۰۰ است؛ برای کاربر به ۰..۱۰ تبدیل می‌شود (۴۷ → ۴٫۷، ۹۵ → ۹٫۵). عددِ خام دست‌نخورده.
+export function scoreOutOf10(score: number): string {
+  const v = Math.round((Math.max(0, Math.min(100, score)) / 10) * 10) / 10
+  return v.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+}
+
 // ── رتبهٔ درصدیِ واقعی (جزوِ N٪ برتر) ─────────────────────────────────────────
 export interface ScoreDist { count: number; p50: number; p75: number; p90: number; p95: number }
 export function computeDist(scores: number[]): ScoreDist {

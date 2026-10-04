@@ -10,7 +10,7 @@ import PromoBadge from '@/app/components/PromoBadge'
 import RepBadges from '@/app/components/RepBadges'
 import { useState, useEffect, useMemo } from 'react'
 import { fetchContent, gradientFor, initialsFor, avatarPosFor, type ContentItem } from '@/app/lib/content-display'
-import { dirItemScore, computeDist, topPercentLabel, type ScoreDist } from '@/app/lib/provider-score'
+import { dirItemScore, computeDist, topPercentLabel, scoreOutOf10, type ScoreDist } from '@/app/lib/provider-score'
 
 // دسته‌های اصلی طبقِ طرح — id همان دستهٔ داخلیِ دایرکتوری است (ROLE_CAT / اسکرپ)
 const CATS: { id: string; label: string; icon: string }[] = [
@@ -377,13 +377,15 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
           {hasArea && <> · {pro.area}</>}
         </div>
 
+        {/* فاز ۲۹۸ظ — امتیازِ ملک‌جت به سبکِ IMDb: نشانِ طلاییِ «★ X از ۱۰» + چیپِ رتبه/رده. */}
         {score.score > 0 && score.tier && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 9 }}>
-            <span title="امتیازِ ملک‌جت از دادهٔ واقعی" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 13%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 38%, transparent)`, fontSize: 11.5, fontWeight: 800, color: scoreAccent }}>
-              <span>★ {pct || score.tier}</span>
-              <span style={{ opacity: .55 }}>|</span>
-              <span>{fa(score.score)}</span>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
+            <span title="امتیازِ ملک‌جت از دادهٔ واقعی (معادلِ ۱۰)" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 11px', borderRadius: 999, background: 'linear-gradient(135deg, var(--gold2), var(--gold))', boxShadow: '0 2px 8px -3px rgba(201,168,76,.55)' }}>
+              <span style={{ color: '#3a2d07', fontSize: 12.5 }}>★</span>
+              <span style={{ fontSize: 13, fontWeight: 900, color: '#2a2105', lineHeight: 1 }}>{scoreOutOf10(score.score)}</span>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: '#5b4710', background: 'rgba(255,255,255,.45)', borderRadius: 999, padding: '2px 6px' }}>از ۱۰</span>
             </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 12px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 13%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 38%, transparent)`, fontSize: 11, fontWeight: 800, color: scoreAccent }}>{pct || score.tier}</span>
           </div>
         )}
 

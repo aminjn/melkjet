@@ -14,7 +14,7 @@ import ProjectsMap from '@/app/components/ProjectsMap'
 import ArchProjects from '@/app/components/ArchProjects'
 import ProviderReviews from '@/app/components/ProviderReviews'
 import { listReviews } from '@/app/lib/reviews-store'
-import { providerScore, topPercentLabel, type ProviderScore, type ScoreDist } from '@/app/lib/provider-score'
+import { providerScore, topPercentLabel, scoreOutOf10, type ProviderScore, type ScoreDist } from '@/app/lib/provider-score'
 import { kvGet, pgEnabled } from '@/app/lib/db'
 
 // فاز ۲۹۸ض — نگاشتِ نوعِ پروفایل → کلیدِ دستهٔ دایرکتوری (برای خواندنِ توزیعِ امتیاز و رتبهٔ درصدی).
@@ -44,9 +44,11 @@ function ProviderScoreCard({ s, topPct }: { s: ProviderScore; topPct?: string })
     <div style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 10%, var(--surface)), var(--surface))', border: '1px solid color-mix(in srgb, var(--gold) 28%, var(--line))', borderRadius: 20, padding: 'clamp(18px,3vw,24px)', marginBottom: 28 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginBottom: 18 }}>
         <div style={{ position: 'relative', width: 92, height: 92, borderRadius: '50%', flexShrink: 0, background: `conic-gradient(${accent} ${s.score * 3.6}deg, color-mix(in srgb, var(--text) 10%, transparent) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ width: 74, height: 74, borderRadius: '50%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 26, fontWeight: 900, color: accent, lineHeight: 1 }}>{faN(s.score)}</span>
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>از ۱۰۰</span>
+          {/* فاز ۲۹۸ظ — امتیاز به سبکِ IMDb: ستاره + «X از ۱۰» (به‌جای X از ۱۰۰). */}
+          <div style={{ width: 74, height: 74, borderRadius: '50%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+            <span style={{ fontSize: 12, color: accent, lineHeight: 1 }}>★</span>
+            <span style={{ fontSize: 27, fontWeight: 900, color: accent, lineHeight: 1, letterSpacing: '-1px' }}>{scoreOutOf10(s.score)}</span>
+            <span style={{ fontSize: 9.5, color: 'var(--muted)' }}>از ۱۰</span>
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 180 }}>
