@@ -159,6 +159,9 @@ export function ensureCronStarted() {
   g.started = true
   // قانونِ شمارهٔ یک: روشن‌شدنِ زمان‌بند باید در لاگ رد بگذارد — «کرونِ خاموش» ماه‌ها نامرئی بود.
   console.log(`[cron] scheduler armed (instance=${inst ?? 'dev'}, queueTick=${QUEUE_TICK_MS / 1000}s, tick=${TICK_MS / 60000}m)`)
+  // فاز ۲۹۸و — آزادسازیِ فوریِ سینک‌های «زامبی» که ری‌استارتِ همین بوت کشته (running=true مانده‌اند).
+  // بدونِ این، تا ۸ دقیقه اسلات‌ها قفل‌اند و «هیچ آژانسی سینک نمی‌شود» — بدترین وقتی که مدام دیپلوی می‌شود.
+  setTimeout(() => { import('./agency-roster-store').then(m => m.reconcileRunningOnBoot()).then(n => { if (n) console.log(`[cron] boot reconcile: freed ${n} zombie roster sync(s) — queue unblocked`) }).catch(() => {}) }, 3_000)
   setTimeout(() => { warmUp().catch(() => {}) }, 8_000)         // یک‌بار گرم‌کردنِ سبک پس از بوت
   setTimeout(() => { tick().catch(() => {}) }, 30_000)          // کمی بعد از بوت
   setInterval(() => { tick().catch(() => {}) }, TICK_MS)

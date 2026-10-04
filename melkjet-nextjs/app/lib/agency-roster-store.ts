@@ -231,6 +231,26 @@ export async function listScrapes(): Promise<RosterScrape[]> {
 }
 export async function getScrape(id: string): Promise<RosterScrape | null> { return getScrapeRow(id) }
 
+// فاز ۲۹۸و — آزادسازیِ «زامبی»ها موقعِ بوتِ اینستنسِ ۰ (ریشهٔ «رُستر هیچ‌وقت تمام نمی‌شود»):
+// هر ری‌استارت (= هر دیپلوی) سینک‌های در حالِ اجرا را می‌کُشت ولی ردیفشان running=true می‌ماند؛
+// listScrapes فقط در حافظه stale می‌کند (ذخیره نمی‌کند)، پس تا STALE_MS=۸دقیقه این ردیف‌ها
+// ۴ اسلات را قفل می‌کردند و «هیچ سینکِ تازه‌ای» شروع نمی‌شد — پنجرهٔ مردهٔ ۸دقیقه بعد از هر بوت.
+// چون پروسه تازه بالا آمده، هیچ سینکی واقعاً در حال اجرا نیست؛ پس همهٔ running=true زامبی‌اند و
+// فوری آزاد می‌شوند. RowCache حفظ می‌شود، پس سینکِ بعدی از همان‌جا (مثلِ ۶۰/۶۳۹) ادامه می‌دهد.
+export async function reconcileRunningOnBoot(): Promise<number> {
+  const db = await loadAll()
+  const running = Object.values(db.scrapes).filter(s => !!s.running)
+  let freed = 0
+  for (const s of running) {
+    await mutateScrape(s.id, x => {
+      if (!x || !x.running) return
+      x.running = false
+      x.lastError = x.lastError || 'همگام‌سازی با ری‌استارتِ سرور نیمه‌کاره ماند — خودکار از همان‌جا ادامه می‌یابد'
+    }).then(() => { freed++ }).catch(() => {})
+  }
+  return freed
+}
+
 // ساختِ یک اسکرپِ آژانس (فقط ثبت — سینکِ واقعی را کرون/دکمه می‌زند).
 export async function addScrape(input: { slug: string; agencyName?: string; useAI?: boolean; schedule?: RosterScrape['schedule'] }): Promise<{ ok: boolean; error?: string; scrape?: RosterScrape }> {
   const slug = cleanSlug(input.slug)
