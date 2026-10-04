@@ -769,13 +769,22 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   if (!accountExists(p)) {
     // فاز ۱۹۸ (فیدبک: «حساب ساخته شد ولی نقشِ مشاور املاک را نداد») — شناسهٔ نقش در role-store تصادفی است؛
     // رشتهٔ ثابتِ 'advisor' هیچ نقشی نبود. نقشِ واقعی با داشبورد پیدا می‌شود: مشاور=/pros، آژانس=/agency.
+    // فاز ۲۹۸ع — تخصیصِ نقش مقاوم شد: اگر جست‌وجو با داشبورد خالی بود، با «نامِ نقش» و سپس
+    // نسخهٔ غیرفعال هم امتحان می‌شود. حسابِ بی‌نقش در دایرکتوری «نامرئی» است (ROLE_CAT به آن
+    // نگاشت نمی‌کند) — پس آژانسِ graduateشده بی‌نقش یعنی «برایش حساب ساختیم ولی هیچ‌جا دیده نشد».
+    const wantAgency = isAgency || role === 'agency'
     let roleId = ''
     try {
       const { listRoles } = await import('./role-store')
-      const roles = listRoles()
-      const wantDash = isAgency || role === 'agency' ? '/agency' : '/pros'
-      roleId = roles.find(r => r.dashboard === wantDash && r.active)?.id || ''
+      const rs = listRoles()
+      const wantDash = wantAgency ? '/agency' : '/pros'
+      const wantName = wantAgency ? 'آژانس املاک' : 'مشاور املاک'
+      roleId = rs.find(r => r.dashboard === wantDash && r.active)?.id
+            || rs.find(r => r.name === wantName && r.active)?.id
+            || rs.find(r => r.dashboard === wantDash)?.id
+            || rs.find(r => r.name === wantName)?.id || ''
     } catch {}
+    if (!roleId) console.error(`[roster] ⚠️ نقشِ ${wantAgency ? 'آژانس املاک' : 'مشاور املاک'} پیدا نشد — حساب ${p} بی‌نقش ساخته می‌شود و در دایرکتوری دیده نمی‌شود (قانونِ شمارهٔ یک)`)
     const cr = createAccount(p, { name, role: roleId || undefined })
     if (!cr.ok) return { ok: false, error: cr.error }
     console.log(`[roster] graduate: account created phone=${p} name=${name} role=${roleId || '(نقش پیدا نشد!)'}`)
