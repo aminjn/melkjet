@@ -54,21 +54,45 @@ const rows = scrapes.map(s => {
 console.log(`■ ${fa(scrapes.length)} آژانس  ·  ${fa(totAds)} آگهیِ اسکن‌شده  ·  ${fa(totAdv)} مشاورِ شناسایی‌شده (${fa(totNamedAdv)} حساب‌دار، ${fa(totGrad)} در صفِ ساخت)  ·  ${fa(totUnnamed)} آگهیِ بی‌نام`)
 console.log(`  هرگز سینک‌نشده: ${fa(neverSynced)}  ·  در حالِ اجرا الان: ${fa(running)}  ·  اتوسینک خاموش: ${fa(autoOff)}\n`)
 
-console.log('  آژانس'.padEnd(26) + 'آگهی'.padStart(7) + 'مشاور'.padStart(8) + 'حساب‌دار'.padStart(9) + 'بی‌نام'.padStart(8) + '  آخرین سینک'.padEnd(16) + ' اتوسینک')
-console.log('  ' + '─'.repeat(82))
+console.log('  آژانس'.padEnd(26) + 'اسلاگ'.padEnd(14) + 'آگهی'.padStart(7) + 'مشاور'.padStart(7) + 'حساب'.padStart(6) + 'بی‌نام'.padStart(7) + '  آخرین سینک'.padEnd(15) + ' اتو')
+console.log('  ' + '─'.repeat(92))
 for (const r of rows) {
   const name = (r.s.agencyName || r.s.slug || '—').slice(0, 24)
   const line =
     '  ' + name.padEnd(24) +
+    String(r.s.slug || '—').slice(0, 12).padEnd(14) +
     fa(r.s.lastTotal || 0).padStart(7) +
-    fa(r.adv).padStart(8) +
-    fa(r.named).padStart(9) +
-    fa(r.s.lastUnnamed || 0).padStart(8) +
-    ('  ' + (r.s.running ? '⏳ در حالِ اجرا' : ago(r.s.lastRun))).padEnd(18) +
-    (r.autoOn && r.s.schedule !== 'off' ? '✓' : '✗ خاموش')
+    fa(r.adv).padStart(7) +
+    fa(r.named).padStart(6) +
+    fa(r.s.lastUnnamed || 0).padStart(7) +
+    ('  ' + (r.s.running ? '⏳ اجرا' : ago(r.s.lastRun))).padEnd(16) +
+    (r.autoOn && r.s.schedule !== 'off' ? '✓' : '✗')
   console.log(line)
-  if (r.s.lastError) console.log('     ↳ آخرین خطا: ' + String(r.s.lastError).slice(0, 90))
+  if (r.s.lastError) console.log('     ↳ خطا: ' + String(r.s.lastError).slice(0, 80))
 }
+
+// ── آژانس‌های با نامِ تکراری (احتمالِ اسکرپِ دوتایی) ──
+const byName = new Map()
+for (const s of scrapes) {
+  const k = (s.agencyName || '').replace(/\s+/g, ' ').trim()
+  if (!k) continue
+  ;(byName.get(k) || byName.set(k, []).get(k)).push(s)
+}
+const dups = [...byName.entries()].filter(([, v]) => v.length > 1)
+if (dups.length) {
+  console.log(`\n■ ⚠️ ${fa(dups.length)} نامِ آژانسِ تکراری (شاید اسکرپِ دوتایی — یا شعبه‌های واقعی):`)
+  for (const [name, list] of dups) {
+    console.log(`  «${name}»:`)
+    for (const s of list.sort((a, b) => (b.lastTotal || 0) - (a.lastTotal || 0)))
+      console.log(`     slug=${s.slug}  ·  ${fa(s.lastTotal || 0)} آگهی  ·  ${fa((s.advisors || []).length)} مشاور  ·  آخرین سینک ${ago(s.lastRun)}`)
+  }
+  console.log('  (اگر دو ردیف «یک divar profile» باشند، ردیفِ کوچک/قدیمی را در پنل حذف کن — فایل‌ها می‌مانند.)')
+}
+
+// ── سلامتِ خطا: چند آژانس در آخرین پاس خطای گذرا خوردند ──
+const transientN = scrapes.filter(s => /گذرا/.test(s.lastError || '')).length
+const fatalN = scrapes.filter(s => s.lastError && !/گذرا/.test(s.lastError)).length
+if (transientN || fatalN) console.log(`\n■ خطاها: ${fa(transientN)} آژانس خطای «گذرا» (خودکار دوباره تلاش می‌شود) · ${fa(fatalN)} خطای «قطعی» (نیاز به بررسی)`)
 
 // ── ۳) مشاورهای حساب‌دار (graduate شده) ──
 const graduated = []
