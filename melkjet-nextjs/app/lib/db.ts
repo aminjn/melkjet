@@ -18,32 +18,20 @@ function getPool(): Pool {
     // «timeout exceeded when trying to connect» می‌مرد — اتصال‌ها پشتِ قفل‌ها پارک بودند.
     // ۳۰ برای اینستنسِ ۰ + ۱۲×۳ سرویس‌ده = ۶۶ < سقفِ ۱۰۰ پستگرس.
     const poolMax = process.env.NODE_APP_INSTANCE === '0' ? 30 : 12
-    // فاز ۲۹۷ظ — سقفِ کوئری ۱۵s→۳۰s: روی سرورِ کم‌توان، خواندنِ یک بلابِ بزرگِ آژانس (۵۵ مشاور،
-    // چند مگابایت JSON) زیرِ بار بیش از ۱۵s می‌شد و «canceling statement due to statement timeout»
-    // کلِ سینک را می‌انداخت. ۳۰s فضا می‌دهد؛ kvMutate از قبل داخلِ تراکنش ۴۵s دارد.
-    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: poolMax, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 8_000, statement_timeout: 30_000 })
+    // فاز ۲۹۷ف۲ — سقفِ کوئری به ۱۵s برگشت و connect سریع (۴s) شکست می‌خورد: سقفِ ۳۰s + acquire-retryِ
+    // فاز ظ، «درخواستِ کاربر» را هم زیرِ فشار تا ~۲۷s معطل می‌کرد و nginx ۵۰۲ می‌داد (قطعیِ زنده).
+    // درخواستِ کاربر باید «سریع» شکست بخورد، نه معطل بماند؛ بارِ سینک با سریال‌بودن (conc=1) کم است.
+    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: poolMax, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 4_000, statement_timeout: 15_000 })
     pool.on('error', () => { /* خطای idle client، pool خودش بازیابی می‌کند */ })
   }
   return pool
 }
 
-// فاز ۲۹۷ط۲ — گرفتنِ اتصال «با تلاشِ دوباره». ریشهٔ «۱۴ ساعت در صف» (۳۸ آژانس): هنگامِ
-// فشارِ لحظه‌ای (۳ سینکِ هم‌زمان روی اینستنسِ ۰)، استخر لحظه‌ای پر می‌شد و connect با
-// «timeout exceeded when trying to connect» می‌مرد و «کلِ» سینک را می‌انداخت. حالا ۳ بار با
-// backoff تلاش می‌شود (بینِ تلاش‌ها اتصال‌های دیگر آزاد می‌شوند)، پس یک فشارِ گذرا دیگر
-// کلِ ایمپورت را نمی‌کُشد. فقط خطای «پرشدنِ استخر» retry می‌شود، نه خطای واقعیِ کوئری.
+// فاز ۲۹۷ف۲ — یک تلاشِ connect، سریع (۴s). acquire-retryِ سه‌باره‌ی فاز ظ درخواستِ کاربر را
+// زیرِ فشار تا ~۲۷s معطل می‌کرد (۵۰۲). حالا تک‌تلاش: شکستِ سریع برای کاربر؛ خودِ سینک در سطحِ
+// بالاتر (صف + سریال) مقاوم است و نیازی به retryِ سطحِ اتصال ندارد.
 async function acquire(): Promise<PoolClient> {
-  const p = getPool()
-  let lastErr: unknown
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try { return await p.connect() }
-    catch (e: any) {
-      lastErr = e
-      if (!/timeout exceeded when trying to connect|Connection terminated|too many clients/i.test(String(e?.message || e))) throw e
-      await new Promise(r => setTimeout(r, 600 * (attempt + 1)))   // ۶۰۰ms، ۱.۲s، ۱.۸s
-    }
-  }
-  throw lastErr
+  return getPool().connect()
 }
 
 // schemaOnce — پیش از این یک بولین بود که *در انتهای* تابع ست می‌شد. نتیجه: هنگام بالا
