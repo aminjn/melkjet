@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   const slug = String(b.slug || '').slice(0, 120)
-  const kind = b.kind === 'search' ? 'search' as const : 'view' as const
+  const kind = b.kind === 'search' ? 'search' as const : b.kind === 'phone' ? 'phone' as const : 'view' as const
   if (!slug) return NextResponse.json({ ok: false }, { status: 400 })
   const site = await getSite(slug)
   if (!site) return NextResponse.json({ ok: false }, { status: 404 })

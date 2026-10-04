@@ -56,7 +56,7 @@ export async function GET() {
       lastLogin: acc?.lastLogin || 0,   // فاز ۲۹۶ب — آخرین ورودِ صاحبِ سایت به پنلش
       createdAt: st.createdAt,
       updatedAt: st.updatedAt,
-      today: sm.today, d7v: sm.d7v, d7s: sm.d7s, totalV: sm.totalV, totalS: sm.totalS, lastAt: sm.lastAt,
+      today: sm.today, d7v: sm.d7v, d7s: sm.d7s, d7p: sm.d7p, totalV: sm.totalV, totalS: sm.totalS, totalP: sm.totalP, lastAt: sm.lastAt,
       topQueries: (stats.get(st.slug)?.queries || []).slice(0, 5).map(x => x.q),
     }
   }).sort((a, b) => (b.d7v - a.d7v) || (b.updatedAt - a.updatedAt))
@@ -79,7 +79,7 @@ export async function GET() {
         smsState: smsStateOf(a.phone, rec, false),
         smsAt: rec?.smsAt || 0, smsTries: rec?.smsTries || 0, smsErr: rec?.lastErr || '',
         siteAt: 0, lastLogin: a.lastLogin || 0, createdAt: a.createdAt || 0, updatedAt: 0,
-        today: 0, d7v: 0, d7s: 0, totalV: 0, totalS: 0, lastAt: 0, topQueries: [] as string[],
+        today: 0, d7v: 0, d7s: 0, d7p: 0, totalV: 0, totalS: 0, totalP: 0, lastAt: 0, topQueries: [] as string[],
       }
     })
 
@@ -92,6 +92,7 @@ export async function GET() {
     viewsToday: rows.reduce((s, r) => s + r.today, 0),
     views7d: rows.reduce((s, r) => s + r.d7v, 0),
     searches7d: rows.reduce((s, r) => s + r.d7s, 0),
+    phones7d: rows.reduce((s, r) => s + (r.d7p || 0), 0),   // فاز ۲۹۷ض۲ — «نمایشِ شماره»ی ۷روز
     // فاز ۲۹۶ب — فعالیتِ صاحبانِ سایت: چندتا اصلاً وارد شده‌اند و چندتا در ۷ روزِ اخیر
     loggedInEver: rows.filter(r => r.lastLogin).length,
     loggedIn7d: rows.filter(r => r.lastLogin && Date.now() - r.lastLogin < 7 * 864e5).length,

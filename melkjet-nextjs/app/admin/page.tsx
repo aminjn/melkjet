@@ -1917,12 +1917,12 @@ interface PSState {
 }
 
 // ─── سایت‌سازها — فاز ۲۹۶ب: سایت‌های اختصاصیِ کاربران + آمارِ بازدید/جستجو ────────
-interface UserSiteRow { slug: string; title: string; owner: string; ownerName: string; role: string; auto: boolean; pending: boolean; smsState: string; smsAt: number; smsTries: number; smsErr: string; siteAt: number; lastLogin: number; createdAt: number; updatedAt: number; today: number; d7v: number; d7s: number; totalV: number; totalS: number; lastAt: number; topQueries: string[] }
+interface UserSiteRow { slug: string; title: string; owner: string; ownerName: string; role: string; auto: boolean; pending: boolean; smsState: string; smsAt: number; smsTries: number; smsErr: string; siteAt: number; lastLogin: number; createdAt: number; updatedAt: number; today: number; d7v: number; d7s: number; d7p: number; totalV: number; totalS: number; totalP: number; lastAt: number; topQueries: string[] }
 function UserSitesView() {
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   const [rows, setRows] = useState<UserSiteRow[]>([])
-  const [totals, setTotals] = useState<{ sites: number; pending: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number; loggedInEver: number; loggedIn7d: number; smsFailed: number; smsInvalid: number; smsWaiting: number; smsSampleErr: string } | null>(null)
+  const [totals, setTotals] = useState<{ sites: number; pending: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number; phones7d: number; loggedInEver: number; loggedIn7d: number; smsFailed: number; smsInvalid: number; smsWaiting: number; smsSampleErr: string } | null>(null)
   const [smsMsg, setSmsMsg] = useState('')
   const [q, setQ] = useState('')
   // فاز ۲۹۷ج — فیلترهای پنل (خواستهٔ صریح: «تو سوپرادمین فیلتر بزار»)
@@ -1985,6 +1985,7 @@ function UserSitesView() {
           {tile('پیامک رفته', fa(totals.smsSent), 'var(--gold)')}
           {tile('بازدید امروز', fa(totals.viewsToday), '#60a5fa')}
           {tile('بازدید ۷ روز', fa(totals.views7d), '#60a5fa')}
+          {tile('نمایشِ شماره ۷ر', fa(totals.phones7d ?? 0), '#34d399')}
           {tile('جستجو ۷ روز', fa(totals.searches7d))}
           {tile('ورودِ کاربر (کل)', fa(totals.loggedInEver))}
           {tile('ورودِ ۷ روز', fa(totals.loggedIn7d), '#5fd98a')}
@@ -2051,7 +2052,7 @@ function UserSitesView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead><tr style={{ color: 'var(--muted)', fontSize: 11.5, textAlign: 'right' }}>
                 <th style={{ padding: '8px 6px' }}><input type="checkbox" checked={filtered.slice(0, 300).length > 0 && filtered.slice(0, 300).every(r => sel.includes(r.owner))} onChange={e => setSel(e.target.checked ? [...new Set([...sel, ...filtered.slice(0, 300).map(r => r.owner)])] : sel.filter(p => !filtered.slice(0, 300).some(r => r.owner === p)))} style={{ cursor: 'pointer' }} /></th>
-                <th style={{ padding: '8px 6px' }}>کاربر</th><th style={{ padding: '8px 6px' }}>نقش</th><th style={{ padding: '8px 6px' }}>سایت</th><th style={{ padding: '8px 6px' }}>نوع</th><th style={{ padding: '8px 6px' }}>پیامک</th><th style={{ padding: '8px 6px' }}>امروز</th><th style={{ padding: '8px 6px' }}>۷ روز</th><th style={{ padding: '8px 6px' }}>جستجو ۷ر</th><th style={{ padding: '8px 6px' }}>کل</th><th style={{ padding: '8px 6px' }}>آخرین بازدید</th><th style={{ padding: '8px 6px' }}>آخرین ورودِ کاربر</th>
+                <th style={{ padding: '8px 6px' }}>کاربر</th><th style={{ padding: '8px 6px' }}>نقش</th><th style={{ padding: '8px 6px' }}>سایت</th><th style={{ padding: '8px 6px' }}>نوع</th><th style={{ padding: '8px 6px' }}>پیامک</th><th style={{ padding: '8px 6px' }}>امروز</th><th style={{ padding: '8px 6px' }}>۷ روز</th><th style={{ padding: '8px 6px' }}>جستجو ۷ر</th><th style={{ padding: '8px 6px' }}>شماره ۷ر</th><th style={{ padding: '8px 6px' }}>کل</th><th style={{ padding: '8px 6px' }}>آخرین بازدید</th><th style={{ padding: '8px 6px' }}>آخرین ورودِ کاربر</th>
               </tr></thead>
               <tbody>
                 {filtered.slice(0, 300).map(r => {
@@ -2069,12 +2070,13 @@ function UserSitesView() {
                       <td style={{ padding: '9px 6px', fontWeight: 800, color: r.today ? '#60a5fa' : 'var(--faint)' }}>{fa(r.today)}</td>
                       <td style={{ padding: '9px 6px', fontWeight: 800 }}>{fa(r.d7v)}</td>
                       <td style={{ padding: '9px 6px' }}>{fa(r.d7s)}</td>
+                      <td style={{ padding: '9px 6px', fontWeight: 800, color: r.d7p ? '#34d399' : 'var(--faint)' }} title="نمایشِ شماره ۷ روز">{fa(r.d7p || 0)}</td>
                       <td style={{ padding: '9px 6px', color: 'var(--muted)' }}>{fa(r.totalV)}</td>
                       <td style={{ padding: '9px 6px', color: 'var(--faint)', fontSize: 11.5 }}>{ago(r.lastAt)}</td>
                       <td style={{ padding: '9px 6px', fontSize: 11.5, color: r.lastLogin ? 'var(--muted)' : '#e7a14a' }}>{r.lastLogin ? ago(r.lastLogin) : 'هرگز وارد نشده'}</td>
                     </tr>
                     {open === rk && (
-                      <tr style={{ background: 'var(--bg2)' }}><td colSpan={12} style={{ padding: '10px 14px', fontSize: 12 }}>
+                      <tr style={{ background: 'var(--bg2)' }}><td colSpan={13} style={{ padding: '10px 14px', fontSize: 12 }}>
                         <b style={{ color: 'var(--muted)' }}>جستجوهای اخیرِ بازدیدکننده‌ها:</b>{' '}
                         {r.topQueries.length ? r.topQueries.map((x, i) => <span key={i} style={{ display: 'inline-block', margin: '2px 4px', padding: '3px 10px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999 }}>{x}</span>) : <span style={{ color: 'var(--faint)' }}>هنوز جستجویی ثبت نشده</span>}
                         <span style={{ marginInlineStart: 14, color: 'var(--faint)' }}>{r.pending ? `حساب ساخته‌شده: ${new Date(r.createdAt).toLocaleString('fa-IR')} — سایت در صفِ جاروِ خودکار (هر ۴۵ ثانیه چندتا ساخته می‌شود)` : `ساختِ سایت: ${new Date(r.createdAt).toLocaleDateString('fa-IR')} · کل جستجو: ${fa(r.totalS)}`}</span>

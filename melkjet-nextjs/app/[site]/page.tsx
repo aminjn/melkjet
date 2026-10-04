@@ -676,7 +676,7 @@ function CtaBlock({ block, primary }: { block: SiteBlock; primary: string }) {
 
 // فاز ۲۹۷ق — تماس به‌شکلِ دوستونه (کارتِ «ارتباط با ما» + فرم) با دکمهٔ «نمایشِ شماره»
 // (الگوی پلتفرم‌های تخصصی) — شماره در HTML خام لو نمی‌رود و حسِ پلتفرمِ جدی می‌دهد.
-function ContactBlock({ block, primary }: { block: SiteBlock; primary: string }) {
+function ContactBlock({ block, primary, slug }: { block: SiteBlock; primary: string; slug?: string }) {
   const props = p(block)
   const phone = String(props.phone || '').trim()
   const email = String(props.email || '').trim()
@@ -699,7 +699,7 @@ function ContactBlock({ block, primary }: { block: SiteBlock; primary: string })
           <div className="mjs-card" style={{ background: SURFACE, border: BORDER, borderRadius: 22, padding: 'clamp(22px,3.5vw,30px)', boxShadow: CARD_SHADOW }}>
             <div style={{ fontSize: 16.5, fontWeight: 900, color: INK, marginBottom: 20 }}>ارتباط با ما</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {phone ? <Row icon="☎" label="شمارهٔ تماس"><RevealPhone phone={phone} primary={primary} /></Row> : null}
+              {phone ? <Row icon="☎" label="شمارهٔ تماس"><RevealPhone phone={phone} primary={primary} slug={slug} /></Row> : null}
               {email ? <Row icon="✉" label="ایمیل" ltr><a href={`mailto:${email}`} style={{ color: 'inherit', textDecoration: 'none' }}>{email}</a></Row> : null}
               {address ? <Row icon="📍" label="آدرس">{address}</Row> : null}
             </div>
@@ -833,24 +833,32 @@ function FooterBlock({ block, primary, ownerName }: { block: SiteBlock; primary:
 // ── Team / advisors block: کارتِ زیبای مشاورانِ عضوِ آژانس با تخصص و اطلاعاتِ مفید ──
 // اعضا از رابطهٔ واقعیِ «مشاور↔آژانس» خوانده و کامل می‌شوند (team-members). مشاوری که
 // در props.members انتخاب شده باشد نمایش داده می‌شود؛ اگر چیزی انتخاب نشده، همه.
-export function TeamMemberCard({ m, primary, showSites, showPhone }: { m: TeamMember; primary: string; showSites: boolean; showPhone: boolean }) {
+// فاز ۲۹۷ض۲ — کارتِ مدرن‌ترِ مشاور: دایره حفظ شد (حلقهٔ درخشان + بَجِ نقش روی آواتار)،
+// چیدمانِ تمیزتر، و «شماره» دیگر خام نیست — پشتِ «نمایشِ شماره» (RevealPhone) که هر نمایش
+// در پنلِ سایت‌سازها گزارش می‌شود. slug برای همان گزارش لازم است.
+export function TeamMemberCard({ m, primary, showSites, showPhone, slug }: { m: TeamMember; primary: string; showSites: boolean; showPhone: boolean; slug?: string }) {
   const info: { icon: string; label: string; value: string }[] = []
   if (m.areas) info.push({ icon: '📍', label: 'مناطقِ کاری', value: m.areas })
   if (m.experience) info.push({ icon: '⏳', label: 'سابقه', value: m.experience })
   if (m.activeListings > 0) info.push({ icon: '🏠', label: 'آگهیِ فعال', value: `${m.activeListings.toLocaleString('fa-IR')} مورد` })
-  if (showPhone && m.phone) info.push({ icon: '☎', label: 'تماس', value: m.phone })
+  const initial = (m.name || '?').trim().charAt(0) || '?'
   return (
-    <div className="mjs-card" style={{ background: 'var(--mjs-bg)', border: BORDER, borderRadius: 22, overflow: 'hidden', boxShadow: CARD_SHADOW, textAlign: 'center', display: 'flex', flexDirection: 'column' }}>
-      {/* نوارِ رنگیِ بالا */}
-      <div style={{ height: 76, background: 'linear-gradient(135deg, var(--mjs-primary), var(--mjs-secondary))' }} />
-      <div style={{ padding: '0 20px 22px', marginTop: -52, display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-        {m.photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={m.photo} alt={m.name} style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', display: 'block', border: '4px solid #fff', boxShadow: `0 0 0 2px ${primary}, 0 8px 20px -8px rgba(0,0,0,.4)` }} />
-        ) : (
-          <div style={{ width: 96, height: 96, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${primary}22`, color: primary, fontSize: 36, fontWeight: 900, border: '4px solid #fff', boxShadow: `0 0 0 2px ${primary}` }}>{(m.name || '?').trim().charAt(0)}</div>
-        )}
-        <div style={{ fontSize: 18, fontWeight: 900, color: INK, marginTop: 12 }}>{m.name}</div>
+    <div className="mjs-card" style={{ background: 'var(--mjs-bg)', border: BORDER, borderRadius: 24, overflow: 'hidden', boxShadow: CARD_SHADOW, textAlign: 'center', display: 'flex', flexDirection: 'column' }}>
+      {/* سرستونِ گرادیانیِ بلندتر + هالهٔ نرم */}
+      <div style={{ position: 'relative', height: 92, background: `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 60%, var(--mjs-secondary)))`, overflow: 'hidden' }}>
+        <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(260px 120px at 80% 0%, rgba(255,255,255,.22), transparent 70%)' }} />
+      </div>
+      <div style={{ padding: '0 20px 22px', marginTop: -56, display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+        {/* دایرهٔ آواتار با حلقهٔ درخشان (حفظ شد) */}
+        <div style={{ position: 'relative' }}>
+          {m.photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={m.photo} alt={m.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', display: 'block', border: '4px solid var(--mjs-bg)', boxShadow: `0 0 0 3px ${primary}, 0 10px 24px -8px rgba(0,0,0,.45)` }} />
+          ) : (
+            <div style={{ width: 100, height: 100, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, ${primary}2e, ${primary}14)`, color: primary, fontSize: 40, fontWeight: 900, border: '4px solid var(--mjs-bg)', boxShadow: `0 0 0 3px ${primary}, 0 10px 24px -10px ${primary}` }}>{initial}</div>
+          )}
+        </div>
+        <div style={{ fontSize: 18.5, fontWeight: 900, color: INK, marginTop: 13 }}>{m.name}</div>
         {m.title ? <div style={{ fontSize: 13, color: primary, fontWeight: 700, marginTop: 4 }}>{m.title}</div> : null}
         {/* چیپ‌های تخصص */}
         {m.specialties.length > 0 && (
@@ -860,29 +868,36 @@ export function TeamMemberCard({ m, primary, showSites, showPhone }: { m: TeamMe
             ))}
           </div>
         )}
-        {/* اطلاعاتِ مفید */}
+        {/* اطلاعاتِ مفید (بدونِ شماره — شماره پشتِ دکمه می‌رود) */}
         {info.length > 0 && (
           <div style={{ width: '100%', marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'right' }}>
             {info.map((r, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, background: SURFACE, border: BORDER_SOFT, borderRadius: 11, padding: '8px 11px' }}>
                 <span style={{ width: 26, height: 26, borderRadius: 8, background: `${primary}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>{r.icon}</span>
                 <span style={{ fontSize: 11.5, color: MUTED, flexShrink: 0 }}>{r.label}:</span>
-                <span style={{ fontSize: 12.5, color: INK, fontWeight: 700, marginInlineStart: 'auto', direction: r.icon === '☎' ? 'ltr' : 'rtl', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</span>
+                <span style={{ fontSize: 12.5, color: INK, fontWeight: 700, marginInlineStart: 'auto', direction: 'rtl', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</span>
               </div>
             ))}
           </div>
         )}
+        {/* شماره: پشتِ «نمایشِ شماره» (گزارش‌پذیر)، نه خام */}
+        {showPhone && m.phone ? (
+          <div style={{ width: '100%', marginTop: 14, display: 'flex', justifyContent: 'center' }}>
+            <RevealPhone phone={m.phone} primary={primary} slug={slug} />
+          </div>
+        ) : null}
         {/* دکمه‌ها */}
-        <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 18, width: '100%' }}>
-          {showSites && m.slug ? <a href={`/${m.slug}`} target="_blank" rel="noreferrer" className="mjs-btn" style={{ flex: 1, fontSize: 13, fontWeight: 800, color: '#fff', background: btnBg(primary), borderRadius: 999, padding: '10px 8px', textDecoration: 'none', boxShadow: `0 10px 22px -12px ${primary}` }}>وب‌سایتِ من ↗</a> : null}
-          {showPhone && m.phone ? <a href={`tel:${m.phone}`} style={{ flex: showSites && m.slug ? '0 0 auto' : 1, fontSize: 13, fontWeight: 800, color: primary, background: `${primary}12`, border: `1px solid ${primary}33`, borderRadius: 12, padding: '10px 16px', textDecoration: 'none' }}>☎ تماس</a> : null}
-        </div>
+        {showSites && m.slug ? (
+          <div style={{ marginTop: 'auto', paddingTop: 16, width: '100%' }}>
+            <a href={`/${m.slug}`} target="_blank" rel="noreferrer" className="mjs-btn" style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: '#fff', background: btnBg(primary), borderRadius: 999, padding: '11px 8px', textDecoration: 'none', boxShadow: `0 12px 26px -12px ${primary}` }}>وب‌سایتِ من ↗</a>
+          </div>
+        ) : null}
       </div>
     </div>
   )
 }
 
-async function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
+async function TeamBlock({ block, primary, ownerPhone, slug }: { block: SiteBlock; primary: string; ownerPhone?: string; slug?: string }) {
   const props = p(block)
   const showSites = props.showSites !== 'no'
   const showPhone = props.showPhone !== 'no'
@@ -897,7 +912,7 @@ async function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; pri
           <div style={{ background: SURFACE, border: BORDER_DASHED, borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: MUTED, fontSize: 14.5 }}>هنوز مشاوری به این آژانس متصل نشده است.</div>
         ) : (
           <div className="mjs-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 24 }}>
-            {people.map(m => <TeamMemberCard key={m.phone} m={m} primary={primary} showSites={showSites} showPhone={showPhone} />)}
+            {people.map(m => <TeamMemberCard key={m.phone} m={m} primary={primary} showSites={showSites} showPhone={showPhone} slug={slug} />)}
           </div>
         )}
       </div>
@@ -1031,12 +1046,12 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
     case 'blogfull': return <BlogFullBlock key={block.id} block={block} primary={primary} ownerName={ownerName} slug={slug} />
     case 'services': return <ServicesBlock key={block.id} block={block} primary={primary} />
     case 'about': return <AboutBlock key={block.id} block={block} primary={primary} />
-    case 'team': return <TeamBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />
+    case 'team': return <TeamBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} slug={slug} />
     case 'stats': return <StatsBlock key={block.id} block={block} primary={primary} />
     case 'gallery': return <GalleryBlock key={block.id} block={block} primary={primary} />
     case 'testimonials': return <TestimonialsBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} slug={slug} />
     case 'cta': return <CtaBlock key={block.id} block={block} primary={primary} />
-    case 'contact': return <ContactBlock key={block.id} block={block} primary={primary} />
+    case 'contact': return <ContactBlock key={block.id} block={block} primary={primary} slug={slug} />
     case 'footer': return <FooterBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     default:
       return (

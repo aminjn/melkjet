@@ -14,9 +14,10 @@ const DAYS_KEEP = 45
 const QUERIES_KEEP = 30
 
 export interface SiteStats {
-  days: Record<string, { v: number; s: number }>
+  days: Record<string, { v: number; s: number; p?: number }>   // p: فاز ۲۹۷ض۲ — «نمایشِ شماره»
   totalV: number
   totalS: number
+  totalP?: number          // کلِ دفعاتِ «نمایشِ شماره» (قابلِ گزارش در پنل)
   lastAt: number
   queries: { q: string; at: number }[]
 }
@@ -34,11 +35,13 @@ type FileDB = Record<string, SiteStats>
 function fileLoad(): FileDB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
 function fileSave(db: FileDB) { writeFileSync(FILE, JSON.stringify(db), 'utf-8') }
 
-/** ثبتِ یک رخداد (بازدید یا جستجو) برای یک سایت. */
-export async function recordSiteHit(slug: string, kind: 'view' | 'search', q?: string): Promise<void> {
+/** ثبتِ یک رخداد (بازدید / جستجو / نمایشِ شماره) برای یک سایت. */
+export async function recordSiteHit(slug: string, kind: 'view' | 'search' | 'phone', q?: string): Promise<void> {
   const apply = (st: SiteStats) => {
     const d = (st.days[dayKey()] = st.days[dayKey()] || { v: 0, s: 0 })
-    if (kind === 'view') { d.v++; st.totalV++ } else { d.s++; st.totalS++ }
+    if (kind === 'view') { d.v++; st.totalV++ }
+    else if (kind === 'phone') { d.p = (d.p || 0) + 1; st.totalP = (st.totalP || 0) + 1 }   // فاز ۲۹۷ض۲
+    else { d.s++; st.totalS++ }
     st.lastAt = Date.now()
     const qq = String(q || '').trim().slice(0, 60)
     if (kind === 'search' && qq.length >= 2) st.queries.unshift({ q: qq, at: Date.now() })
@@ -67,9 +70,9 @@ export async function allSiteStats(): Promise<Map<string, SiteStats>> {
 
 /** جمعِ بازه‌ای برای نمایش: امروز / ۷ روز / کل. */
 export function summarize(st: SiteStats | undefined, now = Date.now()) {
-  if (!st) return { today: 0, d7v: 0, d7s: 0, totalV: 0, totalS: 0, lastAt: 0 }
+  if (!st) return { today: 0, d7v: 0, d7s: 0, d7p: 0, totalV: 0, totalS: 0, totalP: 0, lastAt: 0 }
   const today = st.days[dayKey(now)]?.v || 0
-  let d7v = 0, d7s = 0
-  for (let i = 0; i < 7; i++) { const d = st.days[dayKey(now - i * 864e5)]; if (d) { d7v += d.v; d7s += d.s } }
-  return { today, d7v, d7s, totalV: st.totalV || 0, totalS: st.totalS || 0, lastAt: st.lastAt || 0 }
+  let d7v = 0, d7s = 0, d7p = 0
+  for (let i = 0; i < 7; i++) { const d = st.days[dayKey(now - i * 864e5)]; if (d) { d7v += d.v; d7s += d.s; d7p += d.p || 0 } }
+  return { today, d7v, d7s, d7p, totalV: st.totalV || 0, totalS: st.totalS || 0, totalP: st.totalP || 0, lastAt: st.lastAt || 0 }
 }
