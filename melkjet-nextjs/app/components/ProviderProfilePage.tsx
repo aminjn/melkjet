@@ -86,28 +86,31 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
           <span style={{ color: 'var(--gold)' }}>{p.typeLabel}</span>
         </nav>
 
-        {/* کاورِ پروفایل (معمارِ اسکرپ‌شده) */}
-        {arch?.cover && (
-          <div style={{ height: 180, borderRadius: 18, marginBottom: -46, background: `linear-gradient(rgba(10,10,14,.25), rgba(10,10,14,.55)), url(${arch.cover}) center/cover no-repeat`, border: '1px solid var(--line)' }} />
-        )}
-
-        {/* هدر */}
-        <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22, marginBottom: 22, position: 'relative' }}>
-          {p.photo
-            ? <img src={p.photo} alt={p.name} style={{ width: 88, height: 88, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--gold)', flexShrink: 0 }} />
-            : <div style={{ width: 88, height: 88, borderRadius: '50%', background: gradientFor(p.name, 'avatar'), border: '2px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 800, flexShrink: 0 }}>{initialsFor(p.name)}</div>}
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <h1 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 900, margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {p.name}
-              {p.verified && <span title="تاییدشدهٔ ملک‌جت" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#2f81f7', color: '#fff', fontSize: 12, fontWeight: 900, flexShrink: 0 }}>✓</span>}
-            </h1>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13, color: 'var(--muted)' }}>
-              <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{p.typeLabel}</span>
-              {p.city && <><span style={{ color: 'var(--faint)' }}>·</span><span>{p.city}</span></>}
+        {/* فاز ۲۹۸ح — هیروی حرفه‌ای (زبانِ بصریِ سایت‌سازها): هالهٔ گرادیانی، آواتارِ حلقه‌نورانی،
+            نشانِ «تاییدشده»، چیپِ امتیاز، و دکمهٔ تماسِ برجسته. داده/سئو/reveal بی‌تغییر. */}
+        <div style={{ position: 'relative', marginBottom: 24 }}>
+          <div aria-hidden style={{ position: 'absolute', insetInlineEnd: '-6%', top: '-34%', width: 340, height: 340, borderRadius: '50%', background: 'radial-gradient(circle, color-mix(in srgb, var(--gold) 20%, transparent), transparent 70%)', pointerEvents: 'none' }} />
+          {arch?.cover && (
+            <div style={{ height: 190, borderRadius: 20, marginBottom: -54, background: `linear-gradient(rgba(10,10,14,.25), rgba(10,10,14,.6)), url(${arch.cover}) center/cover no-repeat`, border: '1px solid var(--line)' }} />
+          )}
+          <div style={{ position: 'relative', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 7%, var(--surface)), var(--surface))', border: '1px solid var(--line)', borderRadius: 22, padding: 'clamp(20px,3.5vw,28px)', boxShadow: '0 24px 60px -36px rgba(0,0,0,.45)' }}>
+            {p.photo
+              ? <img src={p.photo} alt={p.name} style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 0 4px color-mix(in srgb, var(--gold) 35%, transparent), 0 10px 26px -8px rgba(0,0,0,.5)' }} />
+              : <div style={{ width: 96, height: 96, borderRadius: '50%', background: gradientFor(p.name, 'avatar'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, fontWeight: 800, flexShrink: 0, boxShadow: '0 0 0 4px color-mix(in srgb, var(--gold) 35%, transparent), 0 10px 26px -8px rgba(0,0,0,.5)' }}>{initialsFor(p.name)}</div>}
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <h1 style={{ fontSize: 'clamp(22px,3.2vw,30px)', fontWeight: 900, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {p.name}
+                {p.verified && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', borderRadius: 999, background: 'rgba(47,129,247,.13)', border: '1px solid rgba(47,129,247,.4)', color: '#2f81f7', fontSize: 11.5, fontWeight: 800 }}>✓ تاییدشده در ملک‌جت</span>}
+              </h1>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ padding: '5px 13px', borderRadius: 999, background: 'color-mix(in srgb, var(--gold) 14%, transparent)', border: '1px solid color-mix(in srgb, var(--gold) 40%, transparent)', color: 'var(--gold)', fontSize: 12.5, fontWeight: 800 }}>{p.typeLabel}</span>
+                {p.city && <span style={{ padding: '5px 13px', borderRadius: 999, background: 'var(--surface)', border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--muted)' }}>📍 {p.city}</span>}
+                {rated292.length > 0 && <span style={{ padding: '5px 13px', borderRadius: 999, background: 'var(--surface)', border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 800, color: 'var(--text)' }}>⭐ {avg292.toLocaleString('fa-IR')} <span style={{ color: 'var(--muted)', fontWeight: 600 }}>از ۵ · {rated292.length.toLocaleString('fa-IR')} نظر</span></span>}
+              </div>
+              {p.badges.length > 0 && <div style={{ marginTop: 12 }}><RepBadges badges={p.badges} /></div>}
             </div>
-            {p.badges.length > 0 && <div style={{ marginTop: 10 }}><RepBadges badges={p.badges} /></div>}
+            {p.hasPhone && <div style={{ flexShrink: 0 }}><RevealContact kind="advisor" id={p.phone} compact label="نمایشِ شماره" /></div>}
           </div>
-          {p.hasPhone && <div style={{ flexShrink: 0 }}><RevealContact kind="advisor" id={p.phone} compact label="نمایشِ شماره" /></div>}
         </div>
 
         {PRO_INQUIRY_TYPES.includes(p.type) && <ProInquiryForm type={p.type} slug={p.slug} />}

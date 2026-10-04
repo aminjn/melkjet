@@ -4,6 +4,14 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getToolLanding, TOOL_LANDINGS } from '@/app/lib/tool-landings'
 import { getSession } from '@/app/lib/session'
+import { profilePageSpec } from '@/app/lib/site-templates'
+
+// فاز ۲۹۸ط — «هر پروفایل بداند سایتش دقیقاً چه دارد» (خواستهٔ صریح): روی لندینگِ سایت‌ساز،
+// برای هر صنف فهرستِ واقعیِ صفحاتِ سایتِ خودکارش از profilePageSpec نشان داده می‌شود.
+const SITE_ROLES: { key: string; glyph: string }[] = [
+  { key: 'مشاور', glyph: '🏠' }, { key: 'آژانس', glyph: '🏛' }, { key: 'سازنده', glyph: '🏗' },
+  { key: 'معمار', glyph: '📐' }, { key: 'فروشگاه', glyph: '🧱' }, { key: 'سرمایه‌گذار', glyph: '📈' },
+]
 
 // فاز ۲۹۸د — صفحهٔ معرفیِ عمومیِ هر ابزارِ کسب‌وکار. لینک‌های فوتر به اینجا می‌رسند (نه مستقیم
 // به داشبوردِ گِیت‌شده)؛ دکمهٔ «شروع» بسته به ورود، به ابزار یا به /auth می‌برد.
@@ -75,6 +83,36 @@ export default async function ToolLandingPage({ params }: { params: Promise<{ to
           </div>
         </div>
       </section>
+
+      {/* فاز ۲۹۸ط — «سایتت چه صفحاتی خواهد داشت» (فقط برای سایت‌ساز) — دادهٔ واقعیِ هر صنف */}
+      {t.id === 'website-builder' && (
+        <section style={{ padding: '8px clamp(16px,5vw,24px) clamp(28px,4vw,48px)', direction: 'rtl' }}>
+          <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+            <h2 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 900, textAlign: 'center', margin: '0 0 6px', color: 'var(--text)' }}>سایتت دقیقاً چه صفحاتی خواهد داشت؟</h2>
+            <p style={{ fontSize: 14, color: 'var(--muted)', textAlign: 'center', margin: '0 auto 30px', maxWidth: 560 }}>بسته به صنفت، سایتِ خودکارت این صفحات را می‌گیرد — همه از دادهٔ واقعیِ خودت.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
+              {SITE_ROLES.map(r => {
+                const pages = ['صفحه اصلی', ...profilePageSpec(r.key).map(s => s.menuLabel || s.title)]
+                return (
+                  <div key={r.key} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: '22px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                      <span style={{ width: 42, height: 42, borderRadius: 12, background: `${a}1a`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 21 }}>{r.glyph}</span>
+                      <span style={{ fontSize: 17, fontWeight: 900, color: 'var(--text)' }}>{r.key}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                      {pages.map((pg, i) => (
+                        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 999, background: i === 0 ? `${a}14` : 'var(--bg)', border: `1px solid ${i === 0 ? `${a}44` : 'var(--line)'}`, fontSize: 12.5, fontWeight: 700, color: i === 0 ? a : 'var(--text)' }}>
+                          <span style={{ color: a }}>✓</span>{pg}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* WHAT YOU GET strip */}
       <section style={{ padding: '8px clamp(16px,5vw,24px) clamp(32px,5vw,56px)', direction: 'rtl' }}>

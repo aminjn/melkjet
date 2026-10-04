@@ -14,6 +14,7 @@ import BlogFull, { type BlogArticle } from './BlogFull'
 import NavBar from './NavBar'
 import ReviewForm from './ReviewForm'
 import RevealPhone from './RevealPhone'
+import { sealPhone, phoneMask } from '@/app/lib/phone-token'
 import Beacon from './Beacon'
 import { Fragment } from 'react'
 import { getSiteStats } from '@/app/lib/site-stats-store'
@@ -699,7 +700,7 @@ function ContactBlock({ block, primary, slug }: { block: SiteBlock; primary: str
           <div className="mjs-card" style={{ background: SURFACE, border: BORDER, borderRadius: 22, padding: 'clamp(22px,3.5vw,30px)', boxShadow: CARD_SHADOW }}>
             <div style={{ fontSize: 16.5, fontWeight: 900, color: INK, marginBottom: 20 }}>ارتباط با ما</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {phone ? <Row icon="☎" label="شمارهٔ تماس"><RevealPhone phone={phone} primary={primary} slug={slug} /></Row> : null}
+              {phone ? <Row icon="☎" label="شمارهٔ تماس"><RevealPhone token={sealPhone(phone)} mask={phoneMask(phone)} primary={primary} slug={slug} /></Row> : null}
               {email ? <Row icon="✉" label="ایمیل" ltr><a href={`mailto:${email}`} style={{ color: 'inherit', textDecoration: 'none' }}>{email}</a></Row> : null}
               {address ? <Row icon="📍" label="آدرس">{address}</Row> : null}
             </div>
@@ -820,7 +821,7 @@ function FooterBlock({ block, primary, ownerName, slug }: { block: SiteBlock; pr
               {phone ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
                   <span style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(255,255,255,.07)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>☎</span>
-                  <RevealPhone phone={phone} primary={primary} slug={slug} />
+                  <RevealPhone token={sealPhone(phone)} mask={phoneMask(phone)} primary={primary} slug={slug} />
                 </div>
               ) : null}
               {email ? <ContactRow icon="✉" ltr>{email}</ContactRow> : null}
@@ -890,7 +891,7 @@ export function TeamMemberCard({ m, primary, showSites, showPhone, slug }: { m: 
         {/* شماره: پشتِ «نمایشِ شماره» (گزارش‌پذیر)، نه خام */}
         {showPhone && m.phone ? (
           <div style={{ width: '100%', marginTop: 14, display: 'flex', justifyContent: 'center' }}>
-            <RevealPhone phone={m.phone} primary={primary} slug={slug} />
+            <RevealPhone token={sealPhone(m.phone)} mask={phoneMask(m.phone)} primary={primary} slug={slug} />
           </div>
         ) : null}
         {/* دکمه‌ها */}
