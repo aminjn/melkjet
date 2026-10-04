@@ -153,27 +153,47 @@ export default function DirectoryPage() {
     .filter((p) => !city || (p.area || '').split(/[،,]/)[0].trim() === city)
     .sort((x, y) => (Number(y.promoted) - Number(x.promoted)) || (cmp[sortBy] || cmp.top)(x, y))
 
+  // فاز ۲۹۸ک — آمارِ هیرو از دادهٔ «واقعی» (counts سراسری + شهرهای بارگذاری‌شده) — بدونِ عددِ ساختگی.
+  const totalPros = Object.values(counts).reduce((a, b) => a + (b || 0), 0)
+  const nCats = Object.values(counts).filter(n => (n || 0) > 0).length
+  const heroStats = [
+    totalPros > 0 && { v: fa(totalPros), l: 'متخصصِ فعال' },
+    nCats > 0 && { v: fa(nCats), l: 'دسته‌بندی' },
+    cities.length > 0 && { v: fa(cities.length), l: 'شهر' },
+  ].filter(Boolean) as { v: string; l: string }[]
+
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit' }}>
       <Nav />
 
-      {/* ── هیرو ── */}
-      <section style={{ background: 'linear-gradient(160deg, var(--bg2) 0%, var(--bg) 100%)', borderBottom: '1px solid var(--line)', padding: '56px 24px 44px', textAlign: 'center' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: 'var(--goldText)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '6px 16px', marginBottom: 18 }}>
+      {/* ── هیروی سینماییِ مش‌طلایی (فاز ۲۹۸ک) ── */}
+      <section style={{ position: 'relative', overflow: 'hidden', borderBottom: '1px solid var(--line)', padding: '60px 24px 40px', textAlign: 'center',
+        background: 'radial-gradient(620px 320px at 82% -20%, color-mix(in srgb, var(--gold) 18%, transparent), transparent 60%), radial-gradient(520px 340px at 8% 120%, color-mix(in srgb, var(--gold) 9%, transparent), transparent 60%), linear-gradient(160deg, var(--bg2), var(--bg) 72%)' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 800, color: 'var(--goldText)', background: 'var(--goldDim)', border: '1px solid color-mix(in srgb, var(--gold) 45%, transparent)', borderRadius: 999, padding: '6px 16px', marginBottom: 20 }}>
           <span style={{ fontSize: 8 }}>●</span> دایرکتوری متخصصان ملک‌جت
         </span>
-        <h1 style={{ fontSize: '2.1rem', fontWeight: 900, color: 'var(--text)', margin: '0 0 12px', lineHeight: 1.4 }}>متخصص و خدمات املاک پیدا کن</h1>
-        <p style={{ fontSize: '1rem', color: 'var(--muted)', maxWidth: 560, margin: '0 auto 30px', lineHeight: 1.8 }}>از مشاور و سازنده تا کارشناس، وکیل و پیمانکار — همه در یک‌جا.</p>
-        <div style={{ maxWidth: 520, margin: '0 auto', position: 'relative' }}>
+        <h1 style={{ fontSize: 'clamp(28px,4.6vw,44px)', fontWeight: 900, color: 'var(--text)', margin: '0 0 12px', lineHeight: 1.3 }}>متخصص و خدماتِ املاک پیدا کن</h1>
+        <p style={{ fontSize: '1rem', color: 'var(--muted)', maxWidth: 560, margin: '0 auto 28px', lineHeight: 1.8 }}>از مشاور و سازنده تا کارشناس، وکیل و پیمانکار — همه در یک‌جا، با امتیاز و نظرِ واقعی.</p>
+        <div style={{ maxWidth: 540, margin: '0 auto', position: 'relative' }}>
           <input
             type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="نام متخصص یا شهر…"
-            style={{ width: '100%', padding: '15px 20px 15px 50px', fontSize: '.95rem', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, color: 'var(--text)', outline: 'none', boxSizing: 'border-box', boxShadow: 'var(--shadow)', transition: 'border-color .2s' }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--gold)' }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--line)' }}
+            style={{ width: '100%', padding: '16px 22px 16px 52px', fontSize: '.98rem', background: 'color-mix(in srgb, var(--surface) 88%, transparent)', border: '1.5px solid var(--line2)', borderRadius: 14, color: 'var(--text)', outline: 'none', boxSizing: 'border-box', boxShadow: '0 16px 40px -24px rgba(0,0,0,.6)', transition: 'border-color .2s, box-shadow .2s' }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--gold) 18%, transparent)' }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--line2)'; e.currentTarget.style.boxShadow = '0 16px 40px -24px rgba(0,0,0,.6)' }}
           />
           <span style={{ position: 'absolute', left: 18, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
         </div>
+        {heroStats.length > 0 && (
+          <div style={{ display: 'flex', gap: 'clamp(22px,5vw,40px)', justifyContent: 'center', flexWrap: 'wrap', marginTop: 30 }}>
+            {heroStats.map(st => (
+              <div key={st.l} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--goldText)', lineHeight: 1.1 }}>{st.v}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{st.l}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── بدنه: سایدبارِ دسته‌ها (راست) + نتایج ── */}
@@ -275,10 +295,11 @@ export default function DirectoryPage() {
 }
 
 function StatBox({ value, label, color }: { value: string; label: string; color?: string }) {
+  // فاز ۲۹۸ک — کاشیِ آمارِ گرادیانی (هماهنگ با پروفایل/سایت‌سازها)
   return (
-    <div style={{ flex: 1, textAlign: 'center', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 11, padding: '10px 6px' }}>
-      <div style={{ fontSize: 15, fontWeight: 800, color: color || 'var(--text)', marginBottom: 2 }}>{value}</div>
-      <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{label}</div>
+    <div style={{ flex: 1, textAlign: 'center', background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 8%, var(--bg2)), var(--bg2))', border: '1px solid var(--line)', borderRadius: 12, padding: '9px 6px' }}>
+      <div style={{ fontSize: 15, fontWeight: 900, color: color || 'var(--text)', marginBottom: 2 }}>{value}</div>
+      <div style={{ fontSize: 10, color: 'var(--muted)' }}>{label}</div>
     </div>
   )
 }
@@ -299,64 +320,66 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
     boxes.push({ value: fa(s.projects), label: 'پروژهٔ ثبت‌شده', color: 'var(--goldText)' })
   }
 
+  // فاز ۲۹۸ک — کارتِ «خفن»: کپِ گرادیانی + آواتارِ حلقه‌نورانیِ سوار + نشانِ ویژه/امتیاز روی کپ.
   return (
     <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{
-        display: 'block', textDecoration: 'none', color: 'inherit',
+        display: 'block', textDecoration: 'none', color: 'inherit', position: 'relative', overflow: 'hidden',
         background: 'var(--surface)',
-        border: `1px solid ${pro.promoted || hovered ? 'var(--gold)' : 'var(--line)'}`,
-        borderRadius: 16, padding: 16,
-        transition: 'transform .18s, box-shadow .18s, border-color .18s',
-        transform: hovered ? 'translateY(-3px)' : 'none',
-        boxShadow: hovered ? '0 12px 34px -14px rgba(201,168,76,0.22)' : '0 2px 10px -6px rgba(0,0,0,0.25)',
+        border: `1px solid ${pro.promoted ? 'color-mix(in srgb, var(--gold) 55%, transparent)' : hovered ? 'var(--gold)' : 'var(--line)'}`,
+        borderRadius: 18,
+        transition: 'transform .2s, box-shadow .2s, border-color .2s',
+        transform: hovered ? 'translateY(-4px)' : 'none',
+        boxShadow: pro.promoted
+          ? '0 0 0 1px color-mix(in srgb, var(--gold) 22%, transparent), 0 18px 42px -24px rgba(201,168,76,.3)'
+          : hovered ? '0 20px 44px -22px rgba(201,168,76,0.25)' : '0 2px 10px -6px rgba(0,0,0,0.25)',
       }}>
-      {/* ردیفِ بالا: پروموت + امتیازِ واقعی */}
-      {(pro.promoted || pro.rating > 0) && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, minHeight: 22 }}>
-          <span>{pro.promoted && <PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" />}</span>
-          {pro.rating > 0 && <span title={pro.registered ? `میانگینِ ${fa(s.reviews || 0)} نظرِ تأییدشده` : 'امتیاز از منبعِ آگهی'} style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>{Number(pro.rating).toLocaleString('fa-IR')} <span style={{ color: 'var(--gold)' }}>★</span></span>}
-        </div>
-      )}
-      {/* آواتار + نام */}
-      <div style={{ textAlign: 'center', marginBottom: 12 }}>
+      {/* کپِ گرادیانی + نشانِ ویژه و امتیاز */}
+      <div style={{ height: 62, position: 'relative', background: 'radial-gradient(200px 80px at 80% 0, color-mix(in srgb, var(--gold) 26%, transparent), transparent 70%), linear-gradient(135deg, color-mix(in srgb, var(--gold) 16%, var(--surface)), var(--surface))' }}>
+        {pro.promoted && <span style={{ position: 'absolute', top: 10, insetInlineStart: 12 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
+        {pro.rating > 0 && <span title={pro.registered ? `میانگینِ ${fa(s.reviews || 0)} نظرِ تأییدشده` : 'امتیاز از منبعِ آگهی'} style={{ position: 'absolute', top: 10, insetInlineEnd: 12, fontSize: 12.5, fontWeight: 800, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--bg) 55%, transparent)', backdropFilter: 'blur(6px)', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px' }}>{Number(pro.rating).toLocaleString('fa-IR')} <span style={{ color: 'var(--gold)' }}>★</span></span>}
+      </div>
+
+      <div style={{ padding: '0 16px 16px', marginTop: -30 }}>
+        {/* آواتارِ حلقه‌نورانیِ سوار */}
         <div style={{
-          width: 62, height: 62, borderRadius: 16, margin: '0 auto 10px',
+          width: 64, height: 64, borderRadius: '50%', margin: '0 auto 10px',
           background: pro.image ? `center/cover no-repeat url(${pro.image})` : pro.avatarGradient,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 19, fontWeight: 800, overflow: 'hidden',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 800, overflow: 'hidden',
+          boxShadow: '0 0 0 3px var(--surface), 0 0 0 5px color-mix(in srgb, var(--gold) 42%, transparent), 0 8px 20px -6px rgba(0,0,0,.5)',
         }}>{!pro.image && pro.initials}</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <span style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</span>
           {pro.verified && <span title="تاییدشدهٔ ملک‌جت" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: '#2f81f7', color: '#fff', fontSize: 10.5, fontWeight: 900 }}>✓</span>}
           {!pro.verified && pro.badges?.some(b => b.id === 'verified') && <span title="پروفایلِ کامل و تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', fontSize: 10, fontWeight: 800 }}>✓</span>}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, textAlign: 'center' }}>
           <span style={{ color: 'var(--goldText)', fontWeight: 700 }}>{pro.role}</span>
           {hasArea && <> · {pro.area}</>}
         </div>
-      </div>
-      {/* آمارِ واقعی */}
-      {boxes.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          {boxes.map(b => <StatBox key={b.label} value={b.value} label={b.label} color={b.color} />)}
+
+        {boxes.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, margin: '13px 0 10px' }}>
+            {boxes.map(b => <StatBox key={b.label} value={b.value} label={b.label} color={b.color} />)}
+          </div>
+        )}
+        {(pro.badges?.filter(b => b.id !== 'verified').length ?? 0) > 0 && (
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}><RepBadges badges={pro.badges!.filter(b => b.id !== 'verified')} size="sm" /></div>
+        )}
+        {pro.tags.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 4, justifyContent: 'center' }}>
+            {pro.tags.slice(0, 3).map((tag) => (
+              <span key={tag} style={{ fontSize: 10.5, padding: '3px 10px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)', fontWeight: 600 }}>{tag}</span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+          {pro.hasPhone
+            ? <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><RevealContact kind={pro.revealKind || 'item'} id={pro.revealId || String(pro.id)} compact label="نمایشِ شماره" /></div>
+            : <span style={{ fontSize: 12, color: 'var(--faint)' }}>پروفایل عمومی</span>}
+          <span style={{ fontSize: 12.5, color: 'var(--goldText)', fontWeight: 800, whiteSpace: 'nowrap' }}>مشاهدهٔ خدمات ←</span>
         </div>
-      )}
-      {(pro.badges?.filter(b => b.id !== 'verified').length ?? 0) > 0 && (
-        <div style={{ marginBottom: 8 }}><RepBadges badges={pro.badges!.filter(b => b.id !== 'verified')} size="sm" /></div>
-      )}
-      {pro.tags.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 4, justifyContent: 'center' }}>
-          {pro.tags.slice(0, 3).map((tag) => (
-            <span key={tag} style={{ fontSize: 10.5, padding: '3px 10px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)', fontWeight: 600 }}>{tag}</span>
-          ))}
-        </div>
-      )}
-      {/* فوتر: نمایشِ شماره + مشاهدهٔ خدمات */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
-        {pro.hasPhone
-          ? <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><RevealContact kind={pro.revealKind || 'item'} id={pro.revealId || String(pro.id)} compact label="نمایشِ شماره" /></div>
-          : <span style={{ fontSize: 12, color: 'var(--faint)' }}>پروفایل عمومی</span>}
-        <span style={{ fontSize: 12.5, color: 'var(--goldText)', fontWeight: 800, whiteSpace: 'nowrap' }}>مشاهدهٔ خدمات ←</span>
       </div>
     </a>
   )
