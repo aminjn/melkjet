@@ -14,6 +14,7 @@ import ProjectsMap from '@/app/components/ProjectsMap'
 import ArchProjects from '@/app/components/ArchProjects'
 import ProviderReviews from '@/app/components/ProviderReviews'
 import { listReviews } from '@/app/lib/reviews-store'
+import { architectScore, type ArchScore } from '@/app/lib/architect-score'
 
 // Only these provider types have a ProDesk inbox that can receive an inquiry.
 const PRO_INQUIRY_TYPES = ['architect', 'contractor', 'appraiser', 'lawfirm', 'finance', 'notary', 'legal']
@@ -27,6 +28,41 @@ function SH({ children }: { children: ReactNode }) {
     </div>
   )
 }
+// فاز ۲۹۸ن — کارتِ «امتیازِ ملک‌جت»: سنجهٔ بومیِ شفاف از دادهٔ واقعی (جایگزینِ «اعتبار/رتبه»ی
+// بی‌معنایِ طرح‌۲طرح). حلقهٔ امتیاز + رتبهٔ کیفی + تفکیکِ پنج ستون (شفافیت، نه جعبهٔ سیاه).
+function ArchScoreCard({ s }: { s: ArchScore }) {
+  const faN = (n: number) => (n || 0).toLocaleString('fa-IR')
+  const accent = s.tierKey === 'active' ? '#5fd98a' : s.tierKey === 'new' ? 'var(--muted)' : 'var(--gold)'
+  return (
+    <div style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 10%, var(--surface)), var(--surface))', border: '1px solid color-mix(in srgb, var(--gold) 28%, var(--line))', borderRadius: 20, padding: 'clamp(18px,3vw,24px)', marginBottom: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginBottom: 18 }}>
+        <div style={{ position: 'relative', width: 92, height: 92, borderRadius: '50%', flexShrink: 0, background: `conic-gradient(${accent} ${s.score * 3.6}deg, color-mix(in srgb, var(--text) 10%, transparent) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 74, height: 74, borderRadius: '50%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 26, fontWeight: 900, color: accent, lineHeight: 1 }}>{faN(s.score)}</span>
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>از ۱۰۰</span>
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>امتیازِ ملک‌جت</div>
+          {s.tier && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, padding: '5px 13px', borderRadius: 999, background: `color-mix(in srgb, ${accent} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${accent} 42%, transparent)`, color: accent, fontSize: 13.5, fontWeight: 900 }}>★ {s.tier}</div>}
+          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 8 }}>ساخته‌شده از دادهٔ واقعیِ این معمار — بر پایهٔ {faN(s.dataPoints)} سنجه</div>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gap: 9 }}>
+        {s.parts.map(p => (
+          <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, color: 'var(--muted)', width: 112, flexShrink: 0 }}>{p.label}</span>
+            <span style={{ flex: 1, height: 7, borderRadius: 999, background: 'color-mix(in srgb, var(--text) 8%, transparent)', overflow: 'hidden' }}>
+              <span style={{ display: 'block', height: '100%', width: `${p.score}%`, borderRadius: 999, background: `linear-gradient(90deg, ${accent}, color-mix(in srgb, ${accent} 60%, transparent))` }} />
+            </span>
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--text)', width: 26, textAlign: 'left', flexShrink: 0 }}>{faN(p.score)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function StatTile({ ic, v, l }: { ic: string; v: string; l: string }) {
   return (
     <div style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 9%, var(--surface)), var(--surface))', border: '1px solid var(--line)', borderRadius: 18, padding: '18px 20px' }}>
@@ -77,6 +113,19 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
   const avg292 = rated292.length ? Math.round(rated292.reduce((s, r) => s + r.rating, 0) / rated292.length * 10) / 10 : 0
 
   // فاز ۲۵۴ (سئو L4): فیلدهای خالی از JSON-LD حذف می‌شوند (description=""" اسکیمای نامعتبر می‌ساخت).
+  // فاز ۲۹۸ن — امتیازِ بومیِ ملک‌جت برای معمار (از دادهٔ واقعی؛ جایگزینِ اعتبار/رتبهٔ طرح‌۲طرح).
+  const archScore = arch ? architectScore({
+    projDone: arch.projDone, projDoing: arch.projDoing, projPresented: arch.projPresented,
+    projectsCount: (arch.projects || []).length,
+    rating: arch.rating, ratingCount: arch.ratingCount, nps: arch.nps,
+    honor1: arch.honor1, honor2: arch.honor2, honor3: arch.honor3, honorFinal: arch.honorFinal,
+    honoursCount: (arch.honours || []).length,
+    skillsCount: (arch.skills || []).length, edusCount: (arch.edus || []).length,
+    hasAbout: !!(p.bio && p.bio.trim()), hasAvatar: !!p.photo, hasOffice: !!(arch.officeName || arch.managerName),
+    projectsWithImage: (arch.projects || []).filter(pr => pr.image).length, hasPhone: p.hasPhone,
+    mjReviews: rated292.length, mjAvg: avg292, verified: p.verified,
+  }) : null
+
   const bio = (p.bio || '').replace(/<[^>]+>/g, '').trim().slice(0, 300)
   const ld: Record<string, unknown> = {
     '@context': 'https://schema.org', '@type': type === 'agency' ? 'RealEstateAgent' : 'LocalBusiness',
@@ -147,16 +196,18 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
 
         {arch && (
           <>
-            {/* آمارِ حرفه‌ای — کاشی‌های گرادیانیِ آیکن‌دار */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(148px,1fr))', gap: 14, marginBottom: 28 }}>
-              {[
-                arch.credit != null && { ic: '🏅', l: 'اعتبار تخصصی', v: faN(arch.credit) },
-                arch.score != null && { ic: '📊', l: 'امتیاز رقابت', v: faN(arch.score) },
-                arch.rank != null && { ic: '🏆', l: 'رتبه در معماران', v: faN(arch.rank) },
-                arch.rating != null && { ic: '⭐', l: 'امتیاز بازخوردها', v: `${arch.rating.toLocaleString('fa-IR')} از ۵${arch.ratingCount ? ` (${faN(arch.ratingCount)})` : ''}` },
-                arch.nps != null && { ic: '📈', l: 'تمایلِ کارفرمایان', v: `${arch.nps > 0 ? '+' : ''}${faN(arch.nps)}` },
-              ].filter(Boolean).map((t, i) => { const tt = t as { ic: string; l: string; v: string }; return <StatTile key={i} ic={tt.ic} v={tt.v} l={tt.l} /> })}
-            </div>
+            {/* امتیازِ ملک‌جت (بومی، شفاف) — جایگزینِ «اعتبار/رتبه/امتیازِ رقابت»ی بی‌معنایِ مبدأ */}
+            {archScore && archScore.score > 0 && <ArchScoreCard s={archScore} />}
+
+            {/* کاشی‌های آمارِ «واقعی و بامعنا» (نه معیارهای داخلیِ مبدأ) */}
+            {(arch.rating != null || arch.ratingCount != null) && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(148px,1fr))', gap: 14, marginBottom: 28 }}>
+                {[
+                  arch.rating != null && { ic: '⭐', l: 'امتیازِ بازخوردها', v: `${arch.rating.toLocaleString('fa-IR')} از ۵${arch.ratingCount ? ` (${faN(arch.ratingCount)})` : ''}` },
+                  (arch.projDone != null && arch.projDone > 0) && { ic: '🏗', l: 'پروژهٔ اجراشده', v: faN(arch.projDone) },
+                ].filter(Boolean).map((t, i) => { const tt = t as { ic: string; l: string; v: string }; return <StatTile key={i} ic={tt.ic} v={tt.v} l={tt.l} /> })}
+              </div>
+            )}
 
             {/* وضعیتِ پروژه‌ها و افتخارات */}
             {((arch.projDone || 0) + (arch.projDoing || 0) + (arch.projPresented || 0) > 0 || (arch.honor1 || 0) + (arch.honor2 || 0) + (arch.honor3 || 0) + (arch.honorFinal || 0) > 0) && (
