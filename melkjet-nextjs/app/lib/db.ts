@@ -24,6 +24,25 @@ function getPool(): Pool {
   return pool
 }
 
+// فاز ۲۹۷ط۲ — گرفتنِ اتصال «با تلاشِ دوباره». ریشهٔ «۱۴ ساعت در صف» (۳۸ آژانس): هنگامِ
+// فشارِ لحظه‌ای (۳ سینکِ هم‌زمان روی اینستنسِ ۰)، استخر لحظه‌ای پر می‌شد و connect با
+// «timeout exceeded when trying to connect» می‌مرد و «کلِ» سینک را می‌انداخت. حالا ۳ بار با
+// backoff تلاش می‌شود (بینِ تلاش‌ها اتصال‌های دیگر آزاد می‌شوند)، پس یک فشارِ گذرا دیگر
+// کلِ ایمپورت را نمی‌کُشد. فقط خطای «پرشدنِ استخر» retry می‌شود، نه خطای واقعیِ کوئری.
+async function acquire(): Promise<PoolClient> {
+  const p = getPool()
+  let lastErr: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { return await p.connect() }
+    catch (e: any) {
+      lastErr = e
+      if (!/timeout exceeded when trying to connect|Connection terminated|too many clients/i.test(String(e?.message || e))) throw e
+      await new Promise(r => setTimeout(r, 600 * (attempt + 1)))   // ۶۰۰ms، ۱.۲s، ۱.۸s
+    }
+  }
+  throw lastErr
+}
+
 // schemaOnce — پیش از این یک بولین بود که *در انتهای* تابع ست می‌شد. نتیجه: هنگام بالا
 // آمدنِ هر پروسه، هر ۱۵ اتصالِ استخر هم‌زمان واردِ این تابع می‌شدند و ۱۵ بار CREATE TABLE و
 // CREATE INDEX می‌زدند؛ CREATE INDEX قفلِ سنگین می‌گیرد، پس همه پشتِ هم صف می‌بستند و
@@ -81,7 +100,7 @@ async function ensureSchemaOnce(client: PoolClient) {
 
 /** اجرای یک تابع داخلِ یک تراکنش (BEGIN/COMMIT با rollback خودکار). client خام برای کوئری‌های دلخواه. */
 export async function pgTx<R>(fn: (client: PoolClient) => Promise<R>): Promise<R> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     await client.query('BEGIN')
@@ -96,7 +115,7 @@ export async function pgTx<R>(fn: (client: PoolClient) => Promise<R>): Promise<R
 
 /** خواندنِ همهٔ ردیف‌های listings (فقط ستونِ data). خارج از تراکنش، سبک. */
 export async function pgListingsAll(): Promise<unknown[]> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     const r = await client.query('SELECT data FROM listings ORDER BY scraped_at DESC')
@@ -106,7 +125,7 @@ export async function pgListingsAll(): Promise<unknown[]> {
 
 /** خواندنِ سندِ یک استور. اگر نبود، fallback. */
 export async function kvGet<T>(key: string, fallback: T): Promise<T> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     const r = await client.query('SELECT data FROM kv WHERE key = $1', [key])
@@ -116,7 +135,7 @@ export async function kvGet<T>(key: string, fallback: T): Promise<T> {
 
 /** نوشتنِ سندِ کامل (upsert). */
 export async function kvSet(key: string, data: unknown): Promise<void> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     await client.query(
@@ -135,7 +154,7 @@ export async function pgStats(): Promise<
 > {
   if (!pgEnabled()) return { enabled: false }
   try {
-    const client = await getPool().connect()
+    const client = await acquire()
     try {
       await ensureSchema(client)
       const rows = await client.query('SELECT count(*)::int AS n FROM kv')
@@ -160,7 +179,7 @@ export async function pgStats(): Promise<
  * دو نوشتنِ همزمان روی همان کلید سریالایز می‌شوند → هیچ به‌روزرسانی‌ای گم نمی‌شود (برخلافِ فایل).
  */
 export async function kvMutate<T, R>(key: string, fallback: T, fn: (data: T) => R): Promise<R> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     await client.query('BEGIN')
@@ -188,7 +207,7 @@ export async function kvMutate<T, R>(key: string, fallback: T, fn: (data: T) => 
 /** خواندنِ همهٔ کلیدهایی که با prefix شروع می‌شوند (اسکنِ رِنجِ روی PKِ key — سبک).
  *  برای استورهای «شاردشده به ازای هر مالک» (مثلِ advisor:{owner}) تا list-all با یک کوئری بیاید. */
 export async function kvGetPrefix<T>(prefix: string): Promise<{ key: string; data: T }[]> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     const like = prefix.replace(/([%_\\])/g, '\\$1') + '%'
@@ -201,7 +220,7 @@ export async function kvGetPrefix<T>(prefix: string): Promise<{ key: string; dat
  *  فاز ۲۸۹: دایرکتوری برای غنی‌سازیِ مشاورها کلِ سندها (با آرایه‌های آگهیِ چندمگابایتی) را
  *  می‌کشید؛ با این، همان اطلاعات در چند کیلوبایت می‌آید. */
 export async function kvGetPrefixField<T>(prefix: string, field: string): Promise<{ key: string; data: T | null }[]> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     const like = prefix.replace(/([%_\\])/g, '\\$1') + '%'
@@ -212,7 +231,7 @@ export async function kvGetPrefixField<T>(prefix: string, field: string): Promis
 
 /** حذفِ یک کلید از kv. */
 export async function kvDelete(key: string): Promise<void> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     await client.query('DELETE FROM kv WHERE key = $1', [key])

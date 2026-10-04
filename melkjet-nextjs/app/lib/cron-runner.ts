@@ -177,7 +177,10 @@ const MAX_ACTIVE_SYNCS = 4          // حداکثر همگام‌سازیِ هم
 // قفلِ rosterRunning تا پایانِ همان یکی) — با هزاران آژانس ریاضی جواب نمی‌داد. حالا استخرِ N موازی:
 // هر تیک تا سقفِ همزمانی، آژانس‌های سررسیده fire-and-forget اجرا می‌شوند (هرکدام چک‌پوینت/بودجهٔ خودش).
 // مقدار از env قابلِ تنظیم (ROSTER_SYNCS) — اگر دیوار rate-limit کرد کمش کن.
-const MAX_ROSTER_SYNCS = Math.max(1, Math.min(8, Number(process.env.ROSTER_SYNCS) || 3))
+// فاز ۲۹۷ط۲ — پیش‌فرض ۳→۲: لاگ نشان داد ۳ سینکِ هم‌زمان استخرِ ۳۰تاییِ پستگرسِ اینستنسِ ۰ را
+// اشباع می‌کرد و «timeout exceeded when trying to connect» می‌داد (۳۸ آژانس هرگز کامل نمی‌شدند).
+// ۲ سینک + کارهای پس‌زمینه زیرِ سقفِ استخر می‌مانَد؛ throughput کمی کمتر ولی سینک‌ها «کامل» می‌شوند.
+const MAX_ROSTER_SYNCS = Math.max(1, Math.min(8, Number(process.env.ROSTER_SYNCS) || 2))
 const QUEUE_TICK_MS = 45 * 1000     // هر ۴۵ ثانیه صف را درین کن (پاسخ‌گوییِ خوب به کاربر)
 let queueRunning = false
 let queueRunningSince = 0
