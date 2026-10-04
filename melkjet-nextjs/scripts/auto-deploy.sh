@@ -45,7 +45,7 @@ echo "$REMOTE" > "$FAILED_MARK"   # تا وقتی build+reload موفق نشده
 # (۱) گاردِ پیش‌پرواز: رم/لودِ تنگ یعنی «الان نه» — مارکر مانده و دورِ بعدِ کرون ادامه می‌دهد.
 avail_mb=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
 load1=$(awk '{print int($1)}' /proc/loadavg)
-if [ "${avail_mb:-0}" -lt 1100 ] || [ "${load1:-99}" -gt 6 ]; then
+if [ "${avail_mb:-0}" -lt 1100 ] || [ "${load1:-99}" -gt 10 ]; then   # فاز ۲۹۷غ۳ — سقفِ لود ۶→۱۰ (سرور ۴ هسته است، نه ۱)
   echo "$(date) ⏸ سرور تنگ است (رمِ آزاد ${avail_mb}MB، لود ${load1}) — بیلد به دورِ بعدِ کرون موکول شد"
   exit 0
 fi
@@ -73,7 +73,7 @@ trap 'pm2 start melkjet-3003 >/dev/null 2>&1 || true' EXIT
 # assignment: Nice=19» خطا می‌داد؛ چون set -e داریم، کلِ دیپلوی همان‌جا می‌مرد و بیلد هرگز
 # اجرا نمی‌شد — یعنی از فاز ۲۹۷ر به بعد «هیچ» تغییری به سرور نرسید. nice به «دستور» منتقل شد،
 # و probe حالا «دقیقاً همان propertyها» را می‌سنجد تا اگر یکی هم پشتیبانی نشد، تمیز fallback شود.
-FENCE_PROPS="-p CPUQuota=70% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20"
+FENCE_PROPS="-p CPUQuota=300% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20"
 fence() {
   if systemd-run --scope --quiet $FENCE_PROPS /bin/true 2>/dev/null; then
     systemd-run --scope --quiet $FENCE_PROPS -- nice -n 19 ionice -c3 "$@"

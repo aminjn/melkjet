@@ -84,7 +84,7 @@ pm2 stop melkjet-3003 >/dev/null 2>&1 || true
 trap 'pm2 start melkjet-3003 >/dev/null 2>&1 || true' EXIT
 # فاز ۲۹۷غ — Nice=19 propertyِ نامعتبرِ systemd-run بود و با set -e کلِ دیپلوی را می‌کُشت
 # (بیلد هرگز اجرا نمی‌شد). nice به دستور منتقل شد؛ probe حالا دقیقاً همان propertyها را می‌سنجد.
-FENCE_PROPS="-p CPUQuota=70% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20"
+FENCE_PROPS="-p CPUQuota=300% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20"
 fence() {
   if systemd-run --scope --quiet $FENCE_PROPS /bin/true 2>/dev/null; then
     systemd-run --scope --quiet $FENCE_PROPS -- nice -n 19 ionice -c3 "$@"

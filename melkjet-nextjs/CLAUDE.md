@@ -2,6 +2,17 @@
 
 # MelkJet Project Notes
 
+## ⚠️ مشخصاتِ قطعیِ سرور (نامِ هاست گمراه‌کننده است!)
+**۴ vCPU · ۸ GB RAM · ۳۵ GB Disk.** نامِ هاستِ لینوکس `ubuntu---1-vcpu---2-gb-ram` است و
+**دروغ** می‌گوید — این عدد را هرگز مبنا نگیر. سرور ۴ هسته و ۸ گیگ است، نه ۱ هسته/۲ گیگ.
+نتیجه‌ها: (۱) بیلد باید از چند هسته استفاده کند (CPUQuota=۳۰۰٪، نه ۷۰٪ که ۰.۷ هسته است)؛
+(۲) «مرگِ سرور با دیپلوی» از رمِ ۸گیگ بود که بودجهٔ اینستنس‌ها (۲۶۰۰M+۳×۱۳۰۰M≈۶.۵G)+پستگرس
+آن را پر می‌کرد — نه ضعفِ CPU؛ (۳) اشباعِ استخرِ پستگرس (connect/statement timeout) دربارهٔ
+«تعدادِ اتصال و قفل» بود نه CPU، پس acquire-retry + statement۴۵s راه‌حلِ درست بود، ولی conc=1
+شاید لازم نباشد (با ۴ هسته می‌شود ROSTER_SYNCS=2 را دوباره امتحان کرد پس از پایدارشدن).
+
+# MelkJet Project Notes
+
 ## Deploy Command (ALWAYS use this exact path)
 ```bash
 cd /var/www/melkjet/melkjet-nextjs && git pull && npm run build && pm2 reload ecosystem.config.js
