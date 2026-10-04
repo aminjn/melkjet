@@ -82,9 +82,12 @@ avail_mb=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
 [ "${avail_mb:-0}" -lt 1100 ] && echo "⚠ رمِ آزاد فقط ${avail_mb}MB است — بیلد کند و سنگین خواهد بود."
 pm2 stop melkjet-3003 >/dev/null 2>&1 || true
 trap 'pm2 start melkjet-3003 >/dev/null 2>&1 || true' EXIT
+# فاز ۲۹۷غ — Nice=19 propertyِ نامعتبرِ systemd-run بود و با set -e کلِ دیپلوی را می‌کُشت
+# (بیلد هرگز اجرا نمی‌شد). nice به دستور منتقل شد؛ probe حالا دقیقاً همان propertyها را می‌سنجد.
+FENCE_PROPS="-p CPUQuota=70% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20"
 fence() {
-  if systemd-run --scope --quiet -p CPUQuota=70% /bin/true 2>/dev/null; then
-    systemd-run --scope --quiet -p CPUQuota=70% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20 -p Nice=19 -- "$@"
+  if systemd-run --scope --quiet $FENCE_PROPS /bin/true 2>/dev/null; then
+    systemd-run --scope --quiet $FENCE_PROPS -- nice -n 19 ionice -c3 "$@"
   else
     nice -n 19 ionice -c3 "$@"
   fi

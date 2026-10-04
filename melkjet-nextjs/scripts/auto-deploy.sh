@@ -69,9 +69,14 @@ trap 'pm2 start melkjet-3003 >/dev/null 2>&1 || true' EXIT
 
 # (۳) حصارِ cgroup روی خودِ build: سقفِ CPU/RAM/سواپ — در بدترین حالت «بیلد» کشته می‌شود
 # (و مارکرِ ناتمام دورِ بعد دوباره تلاش می‌کند)، نه کلِ سرور. بدونِ systemd-run → nice/ionice.
+# فاز ۲۹۷غ — «Nice=19» یک propertyِ نامعتبر برای systemd-run --scope بود و با «Unknown
+# assignment: Nice=19» خطا می‌داد؛ چون set -e داریم، کلِ دیپلوی همان‌جا می‌مرد و بیلد هرگز
+# اجرا نمی‌شد — یعنی از فاز ۲۹۷ر به بعد «هیچ» تغییری به سرور نرسید. nice به «دستور» منتقل شد،
+# و probe حالا «دقیقاً همان propertyها» را می‌سنجد تا اگر یکی هم پشتیبانی نشد، تمیز fallback شود.
+FENCE_PROPS="-p CPUQuota=70% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20"
 fence() {
-  if systemd-run --scope --quiet -p CPUQuota=70% /bin/true 2>/dev/null; then
-    systemd-run --scope --quiet -p CPUQuota=70% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20 -p Nice=19 -- "$@"
+  if systemd-run --scope --quiet $FENCE_PROPS /bin/true 2>/dev/null; then
+    systemd-run --scope --quiet $FENCE_PROPS -- nice -n 19 ionice -c3 "$@"
   else
     nice -n 19 ionice -c3 "$@"
   fi
