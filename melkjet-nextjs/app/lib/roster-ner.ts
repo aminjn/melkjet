@@ -188,10 +188,12 @@ function surnameOk(w: string): boolean {
 // نامِ لنگرخورده به «نامِ کوچکِ شناخته‌شده» یا «عنوان (آقای/خانم/…)» — فارغ از جداکننده.
 // فقط در بلوکِ امضا (۸ خطِ پایانی) تا متنِ آگهی نامِ جعلی نسازد.
 const ROLE_ANCHOR = new Set<string>(['کارشناس', 'کارشناسان', 'مشاور', 'مشاورین', 'مشاوران', 'نماینده'].map(keyOf))
+const toksOfLine = (line: string) => line.split(/[^ء-ی‌]+/).map(w => w.replace(/^‌|‌$/g, '')).filter(w => w.length >= 2)
 export function gazetteerName(desc: string): string | null {
-  const lines = deEmoji(String(desc || '')).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
-  for (const line of lines.slice(-8).reverse()) {   // از پایان به بالا (امضا معمولاً آخر است)
-    const toks = line.split(/[^ء-ی‌]+/).map(w => w.replace(/^‌|‌$/g, '')).filter(w => w.length >= 2)
+  const scan = deEmoji(String(desc || '')).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean).slice(-10)
+  for (let L = scan.length - 1; L >= 0; L--) {   // از پایان به بالا (امضا معمولاً آخر است)
+    const toks = toksOfLine(scan[L])
+    if (!toks.length) continue
     // نخستین «کلیدواژهٔ نقش» روی این خط — لنگرِ نامِ کوچک فقط «پس از» آن معتبر است (وگرنه
     // «خیابان محمد علی جناح» نامِ جعلی می‌سازد). عنوان (آقای/خانم) لنگرِ مستقلِ خودش است.
     let roleIdx = -1
@@ -211,6 +213,14 @@ export function gazetteerName(desc: string): string | null {
         const b = toks[i + 1]
         if (surnameOk(b) && !FIRST_NAMES.has(keyOf(b))) return `${toks[i]} ${b}`
       }
+    }
+    // (ج) فاز ۲۹۸م — برچسب روی یک خط، نام روی خطِ بعد: «کارشناس ملکی شما ؛ \n احمد باغبانی».
+    // بسیار رایج است و مدل آن را از دست می‌داد (و به‌جایش نامِ مکان از آدرس را می‌گرفت، مثلِ
+    // «رازقی» از «یاس رز رازقی»). فقط وقتی کلیدواژهٔ نقش نزدیکِ پایانِ خطِ برچسب است (برچسب،
+    // نه وسطِ جمله) و خطِ بعد «نامِ کوچکِ شناخته‌شده + خانوادگی» باشد.
+    if (roleIdx >= 0 && toks.length - roleIdx <= 4 && L + 1 < scan.length) {
+      const nt = toksOfLine(scan[L + 1])
+      if (nt.length >= 2 && FIRST_NAMES.has(keyOf(nt[0])) && surnameOk(nt[1]) && !FIRST_NAMES.has(keyOf(nt[1]))) return `${nt[0]} ${nt[1]}`
     }
   }
   return null
