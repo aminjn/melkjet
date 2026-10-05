@@ -188,6 +188,13 @@ function surnameOk(w: string): boolean {
 // نامِ لنگرخورده به «نامِ کوچکِ شناخته‌شده» یا «عنوان (آقای/خانم/…)» — فارغ از جداکننده.
 // فقط در بلوکِ امضا (۸ خطِ پایانی) تا متنِ آگهی نامِ جعلی نسازد.
 const ROLE_ANCHOR = new Set<string>(['کارشناس', 'کارشناسان', 'مشاور', 'مشاورین', 'مشاوران', 'نماینده'].map(keyOf))
+// فاز ۲۹۸ه — «نامِ خانوادگیِ تنها» پس از کلیدواژهٔ نقش یا دونقطه: «کارشناس منطقه باقریان»،
+// «مشاور شما پارسافر»، «در کنارتان هستیم: فریدمهر». چون نامِ کوچک ندارند، لنگرِ قبلی نمی‌گرفت.
+// پسوندِ قویِ نام‌خانوادگی (نه «ی»ِ تنها که «طلایی/آبی» را می‌گیرد) تا نامِ مکان/طلا جعل نشود.
+const STRONG_SURNAME = /(?:زاده|نژاد|پور|یان|فرد|منش|مهر|راد|نیا|مند|خواه|طلب|دوست|بخش|فر|لو)$/
+function surnameStrong(w: string): boolean {
+  return !!w && w.length >= 4 && STRONG_SURNAME.test(w) && surnameOk(w) && !FIRST_NAMES.has(keyOf(w))
+}
 const toksOfLine = (line: string) => line.split(/[^ء-ی‌]+/).map(w => w.replace(/^‌|‌$/g, '')).filter(w => w.length >= 2)
 export function gazetteerName(desc: string): string | null {
   const scan = deEmoji(String(desc || '')).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean).slice(-10)
@@ -214,6 +221,14 @@ export function gazetteerName(desc: string): string | null {
         if (surnameOk(b) && !FIRST_NAMES.has(keyOf(b))) return `${toks[i]} ${b}`
       }
     }
+    // (ب۲) نامِ خانوادگیِ تنها پس از کلیدواژهٔ نقش (تا ۳ واژه بعدتر): «کارشناس منطقه باقریان»،
+    // «مشاور شما پارسافر». پسوندِ قوی + ردِ مکان/طلا تا «غرب/طلایی» جعل نشود.
+    if (roleIdx >= 0) for (let i = roleIdx + 1; i < toks.length && i <= roleIdx + 3; i++) {
+      if (surnameStrong(toks[i])) return toks[i]
+    }
+    // (د) «… : فامیل» در انتهای خط (معرفیِ بی‌کلیدواژه): «در کنارتان هستیم: فریدمهر».
+    const mcol = scan[L].match(/[:：]\s*([ء-ی‌]{4,})\s*$/)
+    if (mcol) { const w = mcol[1].replace(/‌/g, '').trim(); if (surnameStrong(w)) return w }
     // (ج) فاز ۲۹۸م — برچسب روی یک خط، نام روی خطِ بعد: «کارشناس ملکی شما ؛ \n احمد باغبانی».
     // بسیار رایج است و مدل آن را از دست می‌داد (و به‌جایش نامِ مکان از آدرس را می‌گرفت، مثلِ
     // «رازقی» از «یاس رز رازقی»). فقط وقتی کلیدواژهٔ نقش نزدیکِ پایانِ خطِ برچسب است (برچسب،
