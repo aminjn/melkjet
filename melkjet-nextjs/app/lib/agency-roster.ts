@@ -78,7 +78,9 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   // همین یک بازگشت، همهٔ بهبودهای مدل را در آگهی‌های بی‌امضا خنثی می‌کرد.
   const ner = bestName(title, desc)
   if (hasSparseModel() || ner) {
-    const v = ner ? validName(ner.name, agencyName) : ''
+    // فاز ۲۹۸ی۳ — نامِ برآمده از سیگنالِ قطعیِ شخص (عنوان/برچسب/معرفیِ خود، ner.trust) از
+    // بانِ «شهرِ تک‌کلمه‌ای» عبور می‌کند: «خانم شهریار»/«شهریار هستم» واقعاً شخص‌اند.
+    const v = ner ? validName(ner.name, agencyName, undefined, { trustPerson: !!ner.trust }) : ''
     if (!v) return []
     // فاز ۲۹۷ت — کیس‌استادیِ شاهان: حدسِ مدل («تمیز»، «سخت»، «همراهتان») بدونِ هیچ
     // دروازهٔ دومی پذیرفته می‌شد و با ۲ فایل مشاورِ جعلی می‌ساخت، درحالی‌که مسیرِ regex

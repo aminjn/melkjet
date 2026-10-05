@@ -265,18 +265,22 @@ export function selfIntroName(desc: string): string | null {
 
 /** نامِ مشاورِ این آگهی، یا خالی. نامِ دوبخشی وقتی ساخته می‌شود که توکنِ همسایه هم
  *  نمرهٔ بالایی داشته باشد — نه با قاعده، بلکه با همان نمرهٔ مدل. */
-export function bestName(title: string, desc: string): { name: string; p: number } | null {
+export function bestName(title: string, desc: string): { name: string; p: number; trust?: boolean } | null {
   // فاز ۲۹۵ — امضای برچسب‌دارِ صریح بر مدل مقدم است (دقتِ بالا، بدونِ حدس).
+  // `trust` = این نام از یک «سیگنالِ قطعیِ شخص» آمده (برچسب «نقش: نام»، معرفیِ «نام هستم»،
+  // یا عنوانِ «خانم/آقای نام»)، نه حدسِ مدل. فاز ۲۹۸ی۳: فقط همین مسیرها اجازه دارند از
+  // بانِ «نامِ تک‌کلمه‌ایِ شهر» (SOLO_NEVER_NAME) عبور کنند — «خانم شهریار»/«شهریار هستم»
+  // واقعاً شخص‌اند، ولی «منطقه طلایی»/«کارشناس تهران» (حدسِ مدل) همچنان بی‌نام می‌مانند.
   const ln = labeledName(desc)
-  if (ln) return { name: ln, p: 0.98 }
+  if (ln) return { name: ln, p: 0.98, trust: true }
   // فاز ۲۹۷م — معرفیِ صریحِ خود («X هستم در خدمت شما») هم بر مدل مقدم است.
   const sn = selfIntroName(desc)
-  if (sn) return { name: sn, p: 0.97 }
+  if (sn) return { name: sn, p: 0.97, trust: true }
   // فاز ۲۹۸ل — لنگرِ «نامِ کوچکِ شناخته‌شده»: «کارشناس منطقه محمد طهرانی» (بدونِ جداکننده)
   // که مدل سکوت می‌کرد و labeledName (نیازمندِ «:») نمی‌گرفت. سیگنالِ مثبت و مطمئن، پس
   // بر مدل مقدم و p≥۰.۹۷ (از دروازهٔ nameProb عبور می‌کند — همان مدلی که اینجا کم آورده).
   const gz = gazetteerName(desc)
-  if (gz) return { name: gz, p: 0.97 }
+  if (gz) return { name: gz, p: 0.97, trust: true }
   // مدلِ خلوت (۹۵.۲٪) اگر بارگذاری شده باشد، مرجع است؛ چگال (۹۰.۴٪) تورِ ایمنی.
   if (hasSparse()) return bestNameSparse(title, desc)
   const m = NER

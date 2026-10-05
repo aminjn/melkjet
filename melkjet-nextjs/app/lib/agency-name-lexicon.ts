@@ -204,14 +204,17 @@ export function cleanName(s: string): string {
 }
 
 // آیا این کاندیدا نامِ واقعیِ شخص/برند است یا نوفه؟
-export function isBadName(v: string): boolean {
+// فاز ۲۹۸ی۳ — trustPerson: نام از «سیگنالِ قطعیِ شخص» آمده (عنوان/برچسب/معرفیِ خود)، پس
+// بانِ «نامِ تک‌کلمه‌ایِ شهر» اعمال نمی‌شود — «خانم شهریار» واقعاً شخص است. بقیهٔ دروازه‌ها
+// (نوفه/ملکی/آدرس/طول/شکلِ نام) سرِ جایشان می‌مانند.
+export function isBadName(v: string, trustPerson = false): boolean {
   const words = v.split(/\s+/).filter(Boolean)
   if (!words.length) return true
   if (words.some(w => w.length < 2)) return true                       // تکه‌های تک‌حرفی مثل «ی تایید»
   if (words.length >= 2 && words.every(w => w.length <= 2)) return true // تکه‌های کوتاهِ مثلِ «ان ما»
   if (words.length > 3) return true                                     // جملهٔ تبلیغاتی، نه اسم
   if (REALTY_TOKENS.has(keyOf(v))) return true                          // کلِ نام یک واژهٔ ملکی است
-  if (words.length === 1 && SOLO_NEVER_NAME.has(keyOf(v))) return true  // فاز ۲۹۷ش — «طلایی/تهران» تنها
+  if (!trustPerson && words.length === 1 && SOLO_NEVER_NAME.has(keyOf(v))) return true  // فاز ۲۹۷ش — «طلایی/تهران» تنها (مگر سیگنالِ قطعیِ شخص)
   if (words.some(w => isNoiseWord(w))) return true                      // حتی یک کلمهٔ نوفه = اسم نیست
   if (/^\d+$/.test(keyOf(v))) return true
   // دروازهٔ مثبت — آخرین و قاطع‌ترین شرط: باید شکلِ نام داشته باشد.
@@ -221,9 +224,9 @@ export function isBadName(v: string): boolean {
 
 // نامِ نهاییِ معتبر یا خالی: پاک‌سازیِ القاب/نوفه + ردِ نامِ خراب + ردِ نامِ خودِ آژانس
 // + (فاز ۲۷۵) ردِ هر کاندیدایی که توکنِ آدرسِ همان آگهی باشد.
-export function validName(s: string, agencyName = '', banned?: Set<string>): string {
+export function validName(s: string, agencyName = '', banned?: Set<string>, opts?: { trustPerson?: boolean }): string {
   const v = cleanName((s || '').trim())
-  if (!v || v.length < 2 || v.length > 24 || isBadName(v)) return ''
+  if (!v || v.length < 2 || v.length > 24 || isBadName(v, !!opts?.trustPerson)) return ''
   const k = keyOf(v), a = keyOf(agencyName)
   if (a && k.length >= 2 && (k === a || a.includes(k) || k.includes(a))) return ''   // خودِ آژانس امضا نیست
   if (banned?.size && v.split(/\s+/).some(w => banned.has(keyOf(w)))) return ''      // «فلاحی» از «بین فلاحی ۴۱»
