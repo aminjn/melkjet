@@ -112,7 +112,9 @@ export async function GET(req: NextRequest) {
     try {
       const { getProfiles, regionLabel } = await import('@/app/lib/persiansaze-store')
       const { allBuilderReviewStats } = await import('@/app/lib/builder-public-store')
+      const { allBuilderSlugsById } = await import('@/app/lib/builder-slug-store')   // فاز ۲۹۸ی۲ — لینکِ canonicalِ اسلاگی (نه idِ عددیِ ریدایرکتی)
       const bStats292 = allBuilderReviewStats()   // فاز ۲۹۲ — امتیازِ نظراتِ تاییدشدهٔ سازنده‌ها (یک خواندن)
+      const bSlugs = await allBuilderSlugsById().catch(() => ({} as Record<string, string>))
       const profs = getProfiles()
       for (const key in profs) {
         const b = profs[key]
@@ -127,7 +129,7 @@ export async function GET(req: NextRequest) {
           tags: pc ? [`${pc.toLocaleString('fa-IR')} پروژه`] : [],
           hasPhone: !!(b.phone || (b.phones && b.phones.length)),
           stats: { projects: pc, rating: brv?.avg || 0, reviews: brv?.count || 0 },   // فاز ۱۳۰/۲۹۲ — پروژه‌ها و امتیازِ واقعی
-          url: `/builders/${encodeURIComponent(b.id)}`,
+          url: `/builders/${encodeURIComponent(bSlugs[String(b.id)] || b.id)}`,   // اسلاگِ canonical؛ fallback به id
           revealKind: 'builder', revealId: String(b.id),   // شمارهٔ سازنده از /api/contact-reveal
           scrapedAt: 0, status: 'approved', registered: true,
         })

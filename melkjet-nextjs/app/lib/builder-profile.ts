@@ -5,7 +5,7 @@ import { FA_DIGITS, faDigit } from '../lib/digits'
 // ─── سرهم‌کردنِ پروفایلِ عمومیِ سازنده از دادهٔ واقعیِ پرشین سازه + ورودیِ خودِ سازنده ──
 
 export interface ProjectCard {
-  key: string; hashId?: string; manual: boolean
+  key: string; hashId?: string; slug?: string; manual: boolean
   name: string; location: string
   status: ProjStatus; statusLabel: string
   deliveryDate?: string; units?: number; areaRange?: string; priceText?: string

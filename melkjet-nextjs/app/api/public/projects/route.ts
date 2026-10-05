@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { publicQuery, publicFacets } from '@/app/lib/persiansaze-store'
+import { ensureManyProjectSlugs, allProjectSlugsByHash } from '@/app/lib/project-slug-store'   // فاز ۲۹۸ی۲ — لینکِ canonicalِ اسلاگی
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,16 @@ export async function GET(req: NextRequest) {
     page: num('page') || 1,
     pageSize: num('pageSize') || 24,
   })
+  // فاز ۲۹۸ی۲ — اسلاگِ canonical برای هر آیتم (لینکِ کارت → /projects/{slug} به‌جای /proje/{hashId}ِ ریدایرکتی)
+  try {
+    const its: any[] = res.items || []
+    const hashes = its.map(x => ({ hashId: String(x.hashId || ''), name: String(x.address || x.builderName || 'پروژه') })).filter(x => x.hashId)
+    if (hashes.length) {
+      await ensureManyProjectSlugs(hashes).catch(() => {})
+      const slugs = await allProjectSlugsByHash().catch(() => ({} as Record<string, string>))
+      for (const it of its) if (it.hashId && slugs[it.hashId]) it.slug = slugs[it.hashId]
+    }
+  } catch {}
   const body: any = { ok: true, ...res }
   if (u.get('facets') === '1') body.facets = publicFacets()
   return NextResponse.json(body)

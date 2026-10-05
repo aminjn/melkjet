@@ -6,6 +6,7 @@ import { assembleBuilderProfile } from '../../lib/builder-profile'
 import { isFollowing } from '../../lib/builder-public-store'
 import { getSession } from '../../lib/session'
 import { builderIdForSlug, ensureBuilderSlug, slugForBuilderId } from '../../lib/builder-slug-store'
+import { ensureManyProjectSlugs, allProjectSlugsByHash } from '../../lib/project-slug-store'   // فاز ۲۹۸ی۲ — لینکِ پروژه با اسلاگِ canonical
 import BuilderProfileView from './BuilderProfileView'
 
 export const dynamic = 'force-dynamic'
@@ -46,8 +47,13 @@ export default async function BuilderProfile({ params }: { params: Promise<{ slu
   if (canonSlug && slug !== canonSlug) redirect(`/builders/${canonSlug}`)
 
   const s = await getSession()
+  // فاز ۲۹۸ی۲ — اسلاگِ canonicalِ هر پروژهٔ پرشین‌سازه‌ایِ کارت‌ها (لینک دیگر /proje/{hashId}ِ ریدایرکتی نباشد)
+  const projHashes = [...profile.current, ...profile.past].map(c => ({ hashId: c.hashId || '', name: c.name || 'پروژه' })).filter(x => x.hashId)
+  if (projHashes.length) await ensureManyProjectSlugs(projHashes).catch(() => {})
+  const projSlugs = await allProjectSlugsByHash().catch(() => ({} as Record<string, string>))
+  const withSlugs = (arr: typeof profile.current) => arr.map(c => (c.hashId && projSlugs[c.hashId]) ? { ...c, slug: projSlugs[c.hashId] } : c)
   // شماره هرگز در payloadِ اولیه به مرورگر نمی‌رود؛ فقط با ورود از /api/contact-reveal می‌آید.
-  const safe = { ...profile, hasPhone: !!profile.phone, phone: '' }
+  const safe = { ...profile, current: withSlugs(profile.current), past: withSlugs(profile.past), hasPhone: !!profile.phone, phone: '' }
 
   // فاز ۲۵۴ (سئو): سازنده = GeneralContractor JSON-LD (محدودهٔ فعالیت/آدرس/امتیاز) + BreadcrumbList.
   const url = `https://melkjet.com/builders/${canonSlug}`

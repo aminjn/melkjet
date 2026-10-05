@@ -9,7 +9,7 @@ const fa = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶
 const faNum = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 
 interface ProjectCard {
-  key: string; hashId?: string; manual: boolean; name: string; location: string
+  key: string; hashId?: string; slug?: string; manual: boolean; name: string; location: string
   status: 'presale' | 'building' | 'delivered'; statusLabel: string
   deliveryDate?: string; units?: number; areaRange?: string; priceText?: string
   salesProgress?: number; description?: string; photo?: string
@@ -235,7 +235,7 @@ function CurrentCard({ p }: { p: ProjectCard }) {
       </div>
     </article>
   )
-  return p.hashId ? <Link href={`/proje/${p.hashId}`} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</Link> : inner
+  return p.hashId ? <Link href={p.slug ? `/projects/${p.slug}` : `/proje/${p.hashId}`} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</Link> : inner
 }
 
 function PastCard({ p }: { p: ProjectCard }) {
@@ -259,7 +259,7 @@ function PastCard({ p }: { p: ProjectCard }) {
       </div>
     </article>
   )
-  return p.hashId ? <Link href={`/proje/${p.hashId}`} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</Link> : inner
+  return p.hashId ? <Link href={p.slug ? `/projects/${p.slug}` : `/proje/${p.hashId}`} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</Link> : inner
 }
 
 function AboutTab({ profile }: { profile: Profile }) {
