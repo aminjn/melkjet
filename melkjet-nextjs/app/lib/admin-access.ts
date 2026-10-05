@@ -12,12 +12,15 @@ export const STAFF_GRANTABLE: Array<{ id: string; label: string }> = [
   { id: 'crm', label: '👁 نظارت بر CRM کاربران (همهٔ لیدهای سیستم)' },
   { id: 'users', label: '◍ کاربران' },
   { id: 'profiles', label: '👁 پروفایل‌ها' },
+  { id: 'dirReviews', label: '💬 نظرات و تیکِ آبی' },   // فاز ۲۹۸ف — جامانده بود
+  { id: 'userSites', label: '🌐 سایت‌سازها' },           // فاز ۲۹۸ف — جامانده بود (خواستهٔ کاربر)
   { id: 'agencyintel', label: '🏢 هوشِ آژانس' },
   { id: 'listings', label: '▤ آگهی‌ها' },
   { id: 'moderation', label: '✓ تأییدِ آگهی' },
   { id: 'products', label: '◰ محصولاتِ فروشگاه' },
   { id: 'catalog', label: '🧱 کاتالوگِ مصالح' },
   { id: 'articles', label: '✎ مقالات' },
+  { id: 'studio', label: '◳ استودیو پلان و ۳بعدی' },     // فاز ۲۹۸ف — جامانده بود
   { id: 'categories', label: '☰ دسته‌بندی‌ها' },
   { id: 'site', label: '🌐 تنظیماتِ سایت و صفحه‌ها' },
   { id: 'scraper', label: '⛏ موتورِ اسکرپی' },
@@ -26,6 +29,8 @@ export const STAFF_GRANTABLE: Array<{ id: string; label: string }> = [
   { id: 'promos', label: '★ پروموت و ویژه‌سازی' },
   { id: 'tracker', label: '🎯 ترکر و پیامکِ هدفمند' },
   { id: 'sms', label: '✉ پیامک و الگوها' },
+  { id: 'smscost', label: '📨 تعرفهٔ پیامک' },            // فاز ۲۹۸ف — جامانده بود (خواستهٔ کاربر)
+  { id: 'aicost', label: '🧮 هزینه و قیمتِ AI' },         // فاز ۲۹۸ف — جامانده بود
   { id: 'plans', label: '◔ پلن‌ها و اشتراک' },
   { id: 'geo', label: '🗺 مناطق و محله‌ها' },
   { id: 'sitemap', label: '🧭 سایت‌مپ و SEO' },
@@ -46,6 +51,8 @@ export const API_SECTIONS: Record<string, string[]> = {
   'shahkar-refetch': ['users'],
   profiles: ['profiles'],
   'profile-options': ['profiles'],
+  reviews: ['dirReviews'],              // فاز ۲۹۸ف — نظراتِ متخصصان و تیکِ آبی
+  sites: ['userSites'],                 // فاز ۲۹۸ف — پنلِ سایت‌سازها (فهرست + ارسالِ پیامک)
   'profile-gate-config': ['profiles', 'sms'],   // فاز ۱۲۵: کارتش داخلِ نمای پیامک هم هست
   'divar-pros': ['profiles', 'agencyintel'],
   'agency-intel': ['agencyintel'],
@@ -65,8 +72,8 @@ export const API_SECTIONS: Record<string, string[]> = {
   'alerts-config': ['sms'],
   'negotiation-config': ['sms'],
   outreach: ['tracker', 'sms'],
-  'sms-cost': ['sms'],
-  'ai-cost': ['reports'],
+  'sms-cost': ['sms', 'smscost'],       // فاز ۲۹۸ف — نمای «تعرفهٔ پیامک» هم جدا قابلِ‌اعطا شد
+  'ai-cost': ['reports', 'aicost'],     // فاز ۲۹۸ف — نمای «هزینه و قیمتِ AI» هم جدا قابلِ‌اعطا شد
   plans: ['plans'],
   geo: ['geo'],
   seo: ['sitemap'],
