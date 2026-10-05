@@ -9,7 +9,7 @@ import { getEnrichment, patchEnrichment } from './enrich-store'
 import { parseFaNum, rentPartsOf } from './reos/features'
 import { getDivar, recordImport, clearImports } from './advisor-divar-store'
 import { getAdvisor, addListing, publishListingsBatch, deleteListing, setListingStatus, updateAdvisorProfile, type Listing , updateListing} from './advisor-store'
-import { createAccount, accountExists } from './account-store'
+import { createAccount, accountExists, adminUpdate } from './account-store'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ── «هوش آژانس»: یک لینکِ آژانسِ دیوار → مشاورها + آژانس، هر کدام حسابِ جدا ──
@@ -1092,7 +1092,15 @@ export async function editAdvisor(id: string, key: string, patch: { name?: strin
     owner: newPhone ? newPhone : a.owner,
   })
   await patchScrape(id, { advisors } as any)
-  if (newPhone) {
+  // فاز ۲۹۸ن — تغییرِ نام را به پروفایل و حساب هم ببر (نه فقط وقتی شماره عوض می‌شود).
+  // قبلاً تغییرِ نامِ یک مشاورِ graduateشده فقط در ردیفِ رُستر می‌نشست و دایرکتوری/پروفایل
+  // همان نامِ قدیمی (مثلِ «شهریار هستم») را نشان می‌داد — چون نامِ دایرکتوری از حساب می‌آید.
+  const effPhone = newPhone || rec.phone || ''
+  const newName = patch.name != null && patch.name.trim() ? patch.name.trim() : ''
+  if (effPhone && newName && newName !== rec.name) {
+    try { await updateAdvisorProfile(effPhone, { name: newName, phone: effPhone, agency: scrape.agencyName }) } catch {}
+    try { adminUpdate(effPhone, { name: newName }) } catch {}   // نامِ حساب (منبعِ نامِ دایرکتوری)
+  } else if (newPhone) {
     try { await updateAdvisorProfile(newPhone, { name: patch.name || rec.name, phone: newPhone, agency: scrape.agencyName }) } catch {}
   }
   return { ok: true, moved }
