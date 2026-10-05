@@ -56,7 +56,7 @@ export default async function ToolLandingPage({ params }: { params: Promise<{ to
             <Link href={ctaHref} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 30px', borderRadius: 14, background: `linear-gradient(135deg, ${a}, ${a}cc)`, color: '#fff', fontWeight: 900, fontSize: 16, textDecoration: 'none', boxShadow: `0 10px 30px -8px ${a}88` }}>
               {session ? t.cta : 'شروعِ رایگان'} <span style={{ fontSize: 18 }}>←</span>
             </Link>
-            <Link href="/pricing" style={{ display: 'inline-flex', alignItems: 'center', padding: '14px 26px', borderRadius: 14, background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--text)', fontWeight: 800, fontSize: 15, textDecoration: 'none' }}>دیدنِ پلن‌ها</Link>
+            <Link href={`/pricing?for=${t.id}`} style={{ display: 'inline-flex', alignItems: 'center', padding: '14px 26px', borderRadius: 14, background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--text)', fontWeight: 800, fontSize: 15, textDecoration: 'none' }}>دیدنِ پلن‌ها</Link>
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12.5, color: 'var(--muted)', alignSelf: 'center' }}>برای:</span>
