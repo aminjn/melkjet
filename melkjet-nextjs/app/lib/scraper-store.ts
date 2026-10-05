@@ -8,6 +8,7 @@ import { FA_DIGITS, faDigit } from '../lib/digits'
 import { resolveScrapedLocation } from './geo-store'
 import { hasTimePrefix } from './location-match'
 import { deriveListing, seoListingTitle } from './listing-search'
+import { slugText } from './listing-url'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 const KV_KEY = 'scraper'          // بلابِ قدیمی — بعد از migration دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند
@@ -79,6 +80,9 @@ export interface Item {
   /** اولین باری که این فایل دیده شد. برخلافِ scrapedAt در هر به‌روزرسانی ریست نمی‌شود،
    *  پس تنها مبنای درستِ «تازگی» و «رَوندِ قیمت» است. */
   firstSeenAt?: number
+  /** فاز ۲۹۸ی — اسلاگِ سئوِ «منجمد»: یک‌بار هنگامِ ساخت تعیین و در هر اسکرپِ بعدی حفظ می‌شود،
+   *  تا URLِ آگهی با تغییرِ عنوان/قیمت عوض نشود (ریشهٔ «Page with redirect»ِ انبوه در GSC). */
+  seoSlug?: string
   status: ItemStatus
   expiresAt?: number              // آگهی‌های کاربر ۳۰ روزه‌اند و منقضی می‌شوند
 }
@@ -926,6 +930,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
           if (r.url) twin.url = r.url
           if (r.phone && !twin.phone) twin.phone = r.phone
           twin.scrapedAt = Date.now()
+          if (!twin.seoSlug) twin.seoSlug = slugText(twin.title, twin.location)   // فاز ۲۹۸ی — انجمادِ تنبلِ آیتم‌های قدیمی
           // بازنشر = ملک هنوز فعال است → مهرِ فروخته/اجاره‌رفتهٔ قبلی برداشته می‌شود
           if (twin.meta?.['__dealStatus']) { delete twin.meta['__dealStatus']; delete twin.meta['__soldAt'] }
           // فاز ۱۵۶ (A2): ردیفِ قبلاً-تکراری با اسکرپِ تازه بازپس گرفته می‌شود → صفِ ممیزی
@@ -965,6 +970,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
         id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
         category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
         ...r, title, location: loc, ownerId, firstSeenAt: Date.now(),
+        seoSlug: slugText(title, loc),   // فاز ۲۹۸ی — اسلاگِ منجمد (دیگر با اسکرپِ بعدی عوض نمی‌شود)
       }
       db.items.unshift(item)
       existingByKey.set(key, item)
@@ -1034,6 +1040,7 @@ function addUserListingCore(db: DB, raw: UserListingRaw, twinIdx: TwinIndex<Item
     // firstSeenAt فقط وقتی «حالا» است که فایل واقعاً تازه باشد. مسیرِ انتشار تاریخِ
     // ثبتِ اصلی را پاس می‌دهد. (تبدیلِ نوعِ محلی چون UserListingRaw این فیلد را اعلام نکرده.)
     scrapedAt: Date.now(), firstSeenAt: (raw as { firstSeenAt?: number }).firstSeenAt || Date.now(),
+    seoSlug: (raw as { seoSlug?: string }).seoSlug || slugText(raw.title, raw.location),   // فاز ۲۹۸ی — منجمد (انتشار اگر از قبل داشت حفظ می‌کند)
     status: twin ? 'duplicate' : 'pending',
     aiReason: twin ? `تکراری در لحظهٔ ثبت — هم‌ملکِ «${twin.title.slice(0, 60)}»` : undefined,
     expiresAt: Date.now() + LISTING_TTL,
@@ -1319,6 +1326,7 @@ export async function addItemManual(raw: {
       image: raw.image, url: raw.url, excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner,
       meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
       scrapedAt: Date.now(), firstSeenAt: Date.now(), status: 'approved', edited: true,
+      seoSlug: raw.type === 'listing' ? slugText(raw.title, raw.location) : undefined,   // فاز ۲۹۸ی
     }
     db.items.unshift(item)
     return item

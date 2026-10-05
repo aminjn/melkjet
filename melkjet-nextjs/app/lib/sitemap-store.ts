@@ -94,7 +94,7 @@ export async function buildShards(force = false): Promise<Shard[]> {
       const key = `${cityOf(it)}-${dealOf(it)}`
       // فاز ۲۵۴ (M8 — image-sitemap): عکسِ اصلیِ آگهی برای Google Images؛ فقط URLِ مطلق (نسبی → BASE).
       const img = it.image ? (/^https?:\/\//.test(it.image) ? it.image : `${BASE}${it.image}`) : undefined
-      const e: UrlEntry = { url: `${BASE}${listingHref(it.id, it.title, it.location)}`, priority: 0.6, lastModified: iso(it.scrapedAt), changeFrequency: 'daily', image: img }
+      const e: UrlEntry = { url: `${BASE}${listingHref(it.id, it.title, it.location, (it as { seoSlug?: string }).seoSlug)}`, priority: 0.6, lastModified: iso(it.scrapedAt), changeFrequency: 'daily', image: img }
       ;(groups.get(key) || groups.set(key, []).get(key)!).push(e)
     }
     for (const [key, entries] of [...groups.entries()].sort()) {

@@ -51,7 +51,7 @@ export async function buildListingDetailData(it: Item): Promise<ListingDetailDat
   const area = num(it.meta?.['متراژ'])
   const rooms = num(it.meta?.['اتاق خواب'])
   const city = (it.meta?.['شهر'] || '').trim()
-  const canonical = `https://melkjet.com${listingHref(it.id, it.title, it.location)}`
+  const canonical = `https://melkjet.com${listingHref(it.id, it.title, it.location, (it as { seoSlug?: string }).seoSlug)}`
   // فاز ۲۳۰: مرجعِ واحدِ dealOf (اجارهٔ روزانه دیگر «فروشی» حساب نمی‌شود — نه در بردکرامب نه در قیمتِ اسکیما)
   const { dealOf } = await import('./listing-filter')
   const deal = dealOf(it)

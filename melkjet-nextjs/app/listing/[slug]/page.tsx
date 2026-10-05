@@ -38,7 +38,9 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   if (!it) notFound()
   // فاز ۲۱۸: هر slugِ غیرِ حقیقی (عنوانِ عوض‌شده/لینکِ قدیمی/دست‌ساز) با ۳۰۸ به URLِ یکتا می‌رود —
   // گوگل هرگز دو نسخه از یک آگهی نمی‌بیند.
-  const canonicalPath = listingHref(it.id, it.title, it.location)
+  // فاز ۲۹۸ی — URLِ «منجمد»: canonical از seoSlugِ ذخیره‌شده ساخته می‌شود، نه از عنوانِ متغیر،
+  // تا با هر اسکرپ عوض نشود (ریشهٔ انبوهِ «Page with redirect» در GSC).
+  const canonicalPath = listingHref(it.id, it.title, it.location, (it as { seoSlug?: string }).seoSlug)
   if (`/listing/${decodeURIComponent(slug)}` !== canonicalPath) permanentRedirect(canonicalPath)
   const id = idFromListingSlug(slug)
 
