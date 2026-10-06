@@ -166,8 +166,8 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
             <p style={{ margin: '20px 0 0', maxWidth: 560, fontSize: 'clamp(15px,2vw,18.5px)', lineHeight: 1.85, color: 'rgba(244,238,225,.78)' }}>
               به زبان خودت بگو چه می‌خواهی. ملک‌جت بازار را تحلیل می‌کند، دلیل هر پیشنهاد را توضیح می‌دهد و کنارت می‌ماند تا بهترین تصمیم را بگیری.
             </p>
-            {/* دسترسیِ سریع به همهٔ اکوسیستم‌ها — قرص‌های شیشه‌ای */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 26 }}>
+            {/* دسترسیِ سریع به همهٔ اکوسیستم‌ها — قرص‌های شیشه‌ای (موبایل: اسکرولِ افقی) */}
+            <div className="mjhero-quicklinks" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 26 }}>
               {[
                 { l: 'خرید و اجارهٔ ملک', h: '/search', ic: '🏠' },
                 { l: 'بازارِ مصالح', h: '/materials-market', ic: '🧱' },

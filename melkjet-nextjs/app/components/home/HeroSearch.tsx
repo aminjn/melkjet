@@ -57,33 +57,35 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
   return (
     <div style={{ width: '100%', textAlign: 'right' }}>
       <div style={{ position: 'relative', background: 'linear-gradient(158deg, rgba(76,95,114,.34), rgba(8,10,12,.5) 60%)', border: '1px solid rgba(244,244,244,.3)', borderRadius: 30, padding: 'clamp(16px,2.2vw,22px)', boxShadow: '0 40px 90px -34px rgba(0,0,0,.78), inset 0 1px 0 rgba(255,255,255,.1)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}>
-        {/* ردیفِ بالا: فیلترها (راست) + جعبهٔ زبانِ طبیعی (چپ). Flexbox تا هیچ‌وقت روی هم نیفتند؛ در تنگی wrap می‌شود. */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'stretch' }}>
-          {/* ستونِ فیلترها */}
+        {/* ردیفِ بالا: فیلترها (راست) + جعبهٔ زبانِ طبیعی (چپ). دسکتاپ کنارِ هم؛ موبایل روی هم. */}
+        <div className="mjhp-top" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'stretch' }}>
+          {/* ستونِ فیلترها — دسکتاپ عمودی؛ موبایل اسکرولِ افقی (جمع‌وجور) */}
           <div style={{ flex: '1 1 208px', minWidth: 196, display: 'grid', gap: 10, alignContent: 'start' }}>
-            <label style={pill}>
-              <span style={pillLabel}>نوع ملک:</span>
-              <select value={kind} onChange={e => setKind(e.target.value)} style={selStyle}>
-                {KINDS.map(k => <option key={k} value={k} style={{ color: '#111' }}>{k}</option>)}
-              </select>
-            </label>
-            <label style={pill}>
-              <span style={pillLabel}>موقعیت:</span>
-              <input value={loc} onChange={e => setLoc(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') runSearch() }} placeholder="تهران" style={{ ...selStyle, cursor: 'text', minWidth: 0 }} />
-            </label>
-            <label style={pill}>
-              <span style={pillLabel}>نوع:</span>
-              <select value={deal} onChange={e => setDeal(e.target.value)} style={selStyle}>
-                {DEALS.map(d => <option key={d.l} value={d.v} style={{ color: '#111' }}>{d.l}</option>)}
-              </select>
-            </label>
+            <div className="mjhp-pills" style={{ display: 'grid', gap: 10 }}>
+              <label style={pill}>
+                <span style={pillLabel}>نوع ملک:</span>
+                <select value={kind} onChange={e => setKind(e.target.value)} style={selStyle}>
+                  {KINDS.map(k => <option key={k} value={k} style={{ color: '#111' }}>{k}</option>)}
+                </select>
+              </label>
+              <label style={pill}>
+                <span style={pillLabel}>موقعیت:</span>
+                <input value={loc} onChange={e => setLoc(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') runSearch() }} placeholder="تهران" style={{ ...selStyle, cursor: 'text', minWidth: 0 }} />
+              </label>
+              <label style={pill}>
+                <span style={pillLabel}>نوع:</span>
+                <select value={deal} onChange={e => setDeal(e.target.value)} style={selStyle}>
+                  {DEALS.map(d => <option key={d.l} value={d.v} style={{ color: '#111' }}>{d.l}</option>)}
+                </select>
+              </label>
+            </div>
             <button onClick={runSearch} style={{ height: 48, border: 'none', borderRadius: 14, background: 'linear-gradient(140deg,#F5D982,#E6C766 55%,#C9A227)', color: '#16140f', fontFamily: 'inherit', fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 12px 28px -10px rgba(217,173,62,.7)' }}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16140f" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
               جستجو
             </button>
           </div>
           {/* جعبهٔ زبانِ طبیعی */}
-          <textarea value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSearch() } }} placeholder="به زبان خودت بگو چه می‌خواهی… مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو" style={{ flex: '2 1 240px', minWidth: 0, minHeight: 176, resize: 'none', borderRadius: 16, border: '1px solid rgba(221,194,122,.35)', outline: 'none', background: 'rgba(221,194,122,.08)', color: '#f6f1e6', fontFamily: 'inherit', fontSize: 15.5, lineHeight: 1.85, padding: '14px 16px' }} />
+          <textarea className="mjhp-textarea" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSearch() } }} placeholder="به زبان خودت بگو چه می‌خواهی… مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو" style={{ flex: '2 1 240px', minWidth: 0, minHeight: 176, resize: 'none', borderRadius: 16, border: '1px solid rgba(221,194,122,.35)', outline: 'none', background: 'rgba(221,194,122,.08)', color: '#f6f1e6', fontFamily: 'inherit', fontSize: 15.5, lineHeight: 1.85, padding: '14px 16px' }} />
         </div>
 
         {/* نوارِ دستیارِ هوشمند با دکمهٔ گردِ ارسال */}
