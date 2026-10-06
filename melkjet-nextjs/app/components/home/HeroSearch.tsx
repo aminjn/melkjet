@@ -49,14 +49,14 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
   }
 
   // ── حالتِ glass — پنلِ هیروی سینمایی (مطابقِ موکاپ) ──
-  const GOLD = '#F7DE92'
-  const pill: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 48, padding: '0 16px', borderRadius: 14, border: '1px solid rgba(247,222,146,.3)', background: 'rgba(247,222,146,.07)', color: '#f3ede0', overflow: 'hidden', boxSizing: 'border-box' }
+  const GOLD = '#F5D982'
+  const pill: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 48, padding: '0 16px', borderRadius: 14, border: '1px solid rgba(221,194,122,.4)', background: 'rgba(221,194,122,.08)', color: '#f3ede0', overflow: 'hidden', boxSizing: 'border-box' }
   const pillLabel: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: GOLD, whiteSpace: 'nowrap', flexShrink: 0 }
   const selStyle: React.CSSProperties = { flex: 1, width: 0, minWidth: 0, appearance: 'none', WebkitAppearance: 'none', border: 'none', outline: 'none', background: 'transparent', color: '#f3ede0', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'right', direction: 'rtl', textOverflow: 'ellipsis' }
 
   return (
     <div style={{ width: '100%', textAlign: 'right' }}>
-      <div style={{ position: 'relative', background: 'rgba(18,20,28,.5)', border: '1px solid rgba(247,222,146,.26)', borderRadius: 26, padding: 'clamp(16px,2.2vw,22px)', boxShadow: '0 40px 90px -34px rgba(0,0,0,.75), inset 0 1px 0 rgba(255,255,255,.06)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}>
+      <div style={{ position: 'relative', background: 'linear-gradient(158deg, rgba(76,95,114,.34), rgba(8,10,12,.5) 60%)', border: '1px solid rgba(244,244,244,.3)', borderRadius: 30, padding: 'clamp(16px,2.2vw,22px)', boxShadow: '0 40px 90px -34px rgba(0,0,0,.78), inset 0 1px 0 rgba(255,255,255,.1)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}>
         {/* ردیفِ بالا: فیلترها (راست) + جعبهٔ زبانِ طبیعی (چپ). Flexbox تا هیچ‌وقت روی هم نیفتند؛ در تنگی wrap می‌شود. */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'stretch' }}>
           {/* ستونِ فیلترها */}
@@ -77,19 +77,19 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
                 {DEALS.map(d => <option key={d.l} value={d.v} style={{ color: '#111' }}>{d.l}</option>)}
               </select>
             </label>
-            <button onClick={runSearch} style={{ height: 48, border: 'none', borderRadius: 14, background: 'linear-gradient(140deg,#F7DE92,#D9AD3E 60%,#A9761D)', color: '#16140f', fontFamily: 'inherit', fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 12px 28px -10px rgba(217,173,62,.7)' }}>
+            <button onClick={runSearch} style={{ height: 48, border: 'none', borderRadius: 14, background: 'linear-gradient(140deg,#F5D982,#E6C766 55%,#C9A227)', color: '#16140f', fontFamily: 'inherit', fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 12px 28px -10px rgba(217,173,62,.7)' }}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16140f" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
               جستجو
             </button>
           </div>
           {/* جعبهٔ زبانِ طبیعی */}
-          <textarea value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSearch() } }} placeholder="به زبان خودت بگو چه می‌خواهی… مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو" style={{ flex: '2 1 240px', minWidth: 0, minHeight: 176, resize: 'none', borderRadius: 16, border: '1px solid rgba(247,222,146,.3)', outline: 'none', background: 'rgba(247,222,146,.08)', color: '#f6f1e6', fontFamily: 'inherit', fontSize: 15.5, lineHeight: 1.85, padding: '14px 16px' }} />
+          <textarea value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSearch() } }} placeholder="به زبان خودت بگو چه می‌خواهی… مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو" style={{ flex: '2 1 240px', minWidth: 0, minHeight: 176, resize: 'none', borderRadius: 16, border: '1px solid rgba(221,194,122,.35)', outline: 'none', background: 'rgba(221,194,122,.08)', color: '#f6f1e6', fontFamily: 'inherit', fontSize: 15.5, lineHeight: 1.85, padding: '14px 16px' }} />
         </div>
 
         {/* نوارِ دستیارِ هوشمند با دکمهٔ گردِ ارسال */}
-        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10, height: 56, padding: '0 8px 0 18px', borderRadius: 16, border: '1px solid rgba(247,222,146,.2)', background: 'rgba(255,255,255,.04)' }}>
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10, height: 56, padding: '0 8px 0 18px', borderRadius: 16, border: '1px solid rgba(221,194,122,.28)', background: 'rgba(255,255,255,.04)' }}>
           <input value={chat} onChange={e => setChat(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') runChat() }} placeholder="از دستیارِ هوشمندِ ملک‌جت بپرس…" style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', color: '#f3ede0', fontFamily: 'inherit', fontSize: 14.5 }} />
-          <button onClick={runChat} aria-label="ارسال به دستیار" style={{ flexShrink: 0, width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(247,222,146,.5)', background: 'linear-gradient(140deg,#F7DE92,#D9AD3E)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 20px -8px rgba(217,173,62,.8)' }}>
+          <button onClick={runChat} aria-label="ارسال به دستیار" style={{ flexShrink: 0, width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(221,194,122,.6)', background: 'linear-gradient(140deg,#F5D982,#E6C766)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 20px -8px rgba(217,173,62,.8)' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16140f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'scaleX(-1)' }}><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           </button>
         </div>

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
+import PageHeader from '@/app/components/PageHeader'
 import Footer from '@/app/components/Footer'
 
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -45,16 +46,10 @@ export default function MaterialPrices() {
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
       <Nav />
+      <PageHeader eyebrow="نرخِ روز" title="نرخِ روزِ مصالح" subtitle="نرخِ مرجعِ مصالح با روندِ تاریخیِ قیمت + قیمتِ واقعیِ فروشگاه‌های ملک‌جت. برای سازنده‌ها و پیمانکارها جهتِ برآوردِ هزینه.">
+        <Link href="/stores" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#f3ede0', textDecoration: 'none', border: '1px solid rgba(221,194,122,.4)', background: 'rgba(255,255,255,.05)', borderRadius: 999, padding: '9px 15px', whiteSpace: 'nowrap', fontWeight: 600 }}>🧱 فروشگاه‌های مصالح ↗</Link>
+      </PageHeader>
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '28px 20px 60px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
-          <div>
-            <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>📊 نرخِ روزِ مصالح</h1>
-            <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 8, maxWidth: 640, lineHeight: 1.9 }}>
-              نرخِ مرجعِ مصالح با روندِ تاریخیِ قیمت + قیمتِ واقعیِ فروشگاه‌های ملک‌جت. برای سازنده‌ها و پیمانکارها جهتِ برآوردِ هزینه.
-            </p>
-          </div>
-          <Link href="/stores" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', border: '1px solid var(--gold)', borderRadius: 9, padding: '8px 16px', whiteSpace: 'nowrap' }}>🧱 فروشگاه‌های مصالح ↗</Link>
-        </div>
         {/* فاز ۱۰۰ (جلد ۴۳): شاخصِ مصالحِ ملک‌جت — پایه ۱۰۰ از اولین روزِ با پوششِ کافی؛ همه از قیمت‌های واقعیِ فروشندگان */}
         {idx?.ok && (
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 16px', marginBottom: 16, fontSize: 13 }}>

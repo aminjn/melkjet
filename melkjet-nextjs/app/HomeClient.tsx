@@ -61,7 +61,7 @@ function bedsFromItem(it: ContentItem): string {
   return m ? m[1] : '—'
 }
 
-export default function HomeClient({ initial }: { initial: HomeData }) {
+export default function HomeClient({ initial, heroImage = '' }: { initial: HomeData; heroImage?: string }) {
   // دادهٔ اولیه از سرور می‌آید (SSR با محتوا).
   const { listings, advisorItems, promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight, sysStats } = initial
 
@@ -139,12 +139,18 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
       <Nav />
 
       <main>
-      {/* HERO — ری‌برندِ سینماییِ ۲۹۸ی۶ (عکسِ واقعیِ ویلای غروبِ کاربر، مطابقِ موکاپ) */}
+      {/* HERO — ری‌برندِ سینمایی (فاز ۲۹۸ی۸: عکس از پنلِ ادمین؛ خالی = گرادیانِ غروب) */}
       <section style={{ position: 'relative', overflow: 'hidden', background: '#080b14', color: '#f3ede0', padding: 'clamp(56px,7vw,112px) 24px clamp(56px,7vw,96px)' }}>
-        {/* عکسِ ویلای غروب (full-bleed) */}
-        <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'url(/hero-villa.webp)', backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
-        {/* روکشِ خوانایی: تیره‌تر سمتِ چپ (پشتِ پنل) + وینیِتِ بالا و پایین تا متن و پنل خوانا بمانند */}
-        <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(to left, rgba(6,8,16,.18) 0%, rgba(6,8,16,.5) 50%, rgba(6,8,16,.8) 100%), linear-gradient(180deg, rgba(6,8,16,.55) 0%, transparent 26%, rgba(4,6,11,.62) 100%)' }}></div>
+        {heroImage ? (<>
+          {/* عکسِ هیرو (full-bleed) + روکشِ خوانایی */}
+          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: `url(${heroImage})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
+          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(to left, rgba(6,8,16,.18) 0%, rgba(6,8,16,.5) 50%, rgba(6,8,16,.8) 100%), linear-gradient(180deg, rgba(6,8,16,.55) 0%, transparent 26%, rgba(4,6,11,.62) 100%)' }}></div>
+        </>) : (<>
+          {/* بدونِ عکس → گرادیانِ سینماییِ غروب */}
+          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(1200px 560px at 70% 48%, rgba(236,151,56,.40), rgba(188,108,38,.14) 42%, transparent 70%), radial-gradient(880px 440px at 85% -12%, rgba(247,222,146,.20), transparent 62%), linear-gradient(180deg,#060810 0%,#0a0e1a 36%,#171209 100%)' }}></div>
+          <div className="mjh-orb" style={{ position: 'absolute', top: '-10%', insetInlineEnd: '-6%', width: 'clamp(300px,38vw,560px)', height: 'clamp(300px,38vw,560px)', borderRadius: '50%', background: 'radial-gradient(circle, rgba(236,170,70,.30), transparent 68%)', filter: 'blur(26px)', pointerEvents: 'none', animation: 'mjfloat 9s ease-in-out infinite' }}></div>
+          <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', pointerEvents: 'none', background: 'linear-gradient(180deg,transparent,rgba(4,6,11,.82))' }}></div>
+        </>)}
 
         <div className="mjhero-grid" style={{ position: 'relative', maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr', gap: 'clamp(30px,4vw,52px)', alignItems: 'center' }}>
           {/* ستونِ متن (سمتِ راست/آغاز در RTL) */}

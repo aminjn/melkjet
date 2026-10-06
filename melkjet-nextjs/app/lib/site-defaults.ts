@@ -34,6 +34,7 @@ export interface SiteBrand {
   logoDark?: string    // لوگو برای تمِ تاریک
   favicon?: string
   accent?: string      // رنگِ برند (hex)
+  heroImage?: string   // عکسِ پس‌زمینهٔ هیروی صفحهٔ اصلی — خالی = گرادیانِ سینمایی (فاز ۲۹۸ی۸)
 }
 export interface SiteConfig {
   brand: SiteBrand
@@ -45,7 +46,7 @@ export interface SiteConfig {
 }
 
 export const DEFAULT_SITE: SiteConfig = {
-  brand: { name: 'ملک‌جت', accent: '#c9a84c' },
+  brand: { name: 'ملک‌جت', accent: '#c9a84c', heroImage: '/hero-villa.webp' },
   blog: { tldr: true, market: true },
   footer: {
     blurb: 'بزرگ‌ترین اکوسیستم هوشمند صنعت املاک و ساختمان ایران. تصمیم بهتر، با داده‌ی بهتر.',
