@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Nav from '../components/Nav'
 import Footer from '../components/Footer'
+import PageHeader from '../components/PageHeader'
 import StaticMap from '../components/StaticMap'
 import NeshanMap from '../components/NeshanMap'
 import { readCity } from '../components/CitySelector'
@@ -165,14 +166,12 @@ export default function Sazandeha() {
   return (
     <>
       <Nav />
+      {/* هدرِ سینمایی (ری‌برندِ ۲۹۸ی۷) */}
+      <PageHeader eyebrow="دایرکتوری پروژه‌ها" title="پروژه‌های ساختمانی و سازنده‌ها" subtitle="پیش‌فروش تا آمادهٔ تحویل — از سازنده‌های واقعی، با آدرس، مرحلهٔ ساخت و اطلاعاتِ تماس." />
       <main style={{ maxWidth: 1240, margin: '0 auto', padding: '22px 16px 60px' }}>
-        {/* سرتیتر */}
-        <div style={{ marginBottom: 16 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>پروژه‌های ساختمانی و سازنده‌ها</h1>
-          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
-            {facets ? `${fa(facets.total)} پروژه از سازنده‌های واقعی` : 'در حال بارگذاری…'}
-            {activeCount > 0 && ` · ${fa(total)} نتیجه با فیلترِ فعلی`}
-          </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', margin: '2px 0 16px' }}>
+          {facets ? `${fa(facets.total)} پروژه از سازنده‌های واقعی` : 'در حال بارگذاری…'}
+          {activeCount > 0 && ` · ${fa(total)} نتیجه با فیلترِ فعلی`}
         </div>
 
         {/* نوار جستجو + ابزار */}

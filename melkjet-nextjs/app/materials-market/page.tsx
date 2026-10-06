@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
+import PageHeader from '@/app/components/PageHeader'
 import Footer from '@/app/components/Footer'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
@@ -125,17 +126,13 @@ export default function BazarMasaleh() {
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
       <Nav />
-      <div style={{ maxWidth: 1240, margin: '0 auto', padding: '24px 20px 60px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-          <div>
-            <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>🧱 بازارِ مصالح ساختمانی</h1>
-            <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 6 }}>{facets ? `${fa(facets.total)} کالا` : 'همهٔ محصولات'} — با قیمتِ مرجع، مقایسهٔ فروشندگان و نرخِ روز.</p>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Link href="/stores" style={topLink}>🏪 فروشگاه‌ها ↗</Link>
-            <Link href="/materials-prices" style={topLink}>📊 نرخِ روز ↗</Link>
-          </div>
+      <PageHeader eyebrow="بازارِ مصالح" title="بازارِ مصالح ساختمانی" subtitle={`${facets ? `${fa(facets.total)} کالا` : 'همهٔ محصولات'} — با قیمتِ مرجع، مقایسهٔ فروشندگان و نرخِ روز.`}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link href="/stores" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 999, border: '1px solid rgba(247,222,146,.3)', background: 'rgba(255,255,255,.05)', color: '#f3ede0', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>🏪 فروشگاه‌ها ↗</Link>
+          <Link href="/materials-prices" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 999, border: '1px solid rgba(247,222,146,.3)', background: 'rgba(255,255,255,.05)', color: '#f3ede0', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>📊 نرخِ روز ↗</Link>
         </div>
+      </PageHeader>
+      <div style={{ maxWidth: 1240, margin: '0 auto', padding: '24px 20px 60px' }}>
 
         {/* AI search */}
         <div style={{ background: 'linear-gradient(120deg,var(--goldDim),transparent)', border: '1px solid var(--gold)', borderRadius: 14, padding: 12, marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>

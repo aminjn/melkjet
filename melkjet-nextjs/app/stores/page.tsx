@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
+import PageHeader from '@/app/components/PageHeader'
 import Footer from '@/app/components/Footer'
 
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -40,14 +41,10 @@ export default function MaterialsDirectory() {
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
       <Nav />
+      <PageHeader eyebrow="فروشگاه‌های مصالح" title="بازار مصالح ساختمانی" subtitle={`فروشگاه‌های مصالح ساختمانی${facets ? ` — ${fa(facets.shopCount)} فروشگاه` : ''}. نرخِ روز، مقایسه و استعلامِ مستقیم از فروشنده.`}>
+        <Link href="/materials-prices" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#f3ede0', textDecoration: 'none', border: '1px solid rgba(247,222,146,.3)', background: 'rgba(255,255,255,.05)', borderRadius: 999, padding: '9px 15px', fontWeight: 600 }}>📊 نرخِ روزِ مصالح ↗</Link>
+      </PageHeader>
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 20px 60px' }}>
-        <div style={{ marginBottom: 22 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>🧱 بازار مصالح ساختمانی</h1>
-          <p style={{ fontSize: 14, color: 'var(--muted)', marginTop: 8 }}>
-            فروشگاه‌های مصالح ساختمانی{facets ? ` — ${fa(facets.shopCount)} فروشگاه` : ''}. نرخِ روز، مقایسه و استعلامِ مستقیم از فروشنده.
-          </p>
-          <Link href="/materials-prices" style={{ display: 'inline-block', marginTop: 10, fontSize: 13, color: 'var(--gold)', textDecoration: 'none', border: '1px solid var(--gold)', borderRadius: 9, padding: '8px 16px' }}>📊 نرخِ روزِ مصالح ↗</Link>
-        </div>
 
         {/* filters */}
         <div className="mjd-tools" style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>

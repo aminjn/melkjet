@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/app/components/Nav'
+import PageHeader from '@/app/components/PageHeader'
 import Footer from '@/app/components/Footer'
 
 // Shape returned by GET /api/plans (active plans, sorted by order).
@@ -432,29 +433,17 @@ export default function PricingPage() {
         </div>
       )}
 
-      {/* Hero */}
-      <section style={{ textAlign: 'center', padding: '80px 24px 60px', position: 'relative', overflow: 'hidden' }}>
+      {/* هدرِ سینمایی (ری‌برندِ ۲۹۸ی۷) */}
+      <PageHeader eyebrow="شفاف، منعطف، بدون هزینه پنهان" title="پلن‌ها و اشتراک" subtitle="از جستجوی رایگان تا راه‌حل سازمانی — هر پلن برای یک نیاز واقعی طراحی شده است. بدون قرارداد بلندمدت اجباری، هر زمان که خواستید تغییر دهید." />
+
+      {/* Hero (فقط تاگلِ صورتحساب) */}
+      <section style={{ textAlign: 'center', padding: '36px 24px 44px', position: 'relative', overflow: 'hidden' }}>
         <div style={{
           position: 'absolute', inset: 0, zIndex: 0,
           background: 'radial-gradient(ellipse 70% 50% at 50% 0%, var(--goldDim), transparent)',
           pointerEvents: 'none',
         }} />
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <span style={{
-            display: 'inline-block', marginBottom: 18,
-            background: 'var(--goldDim)', border: '1px solid var(--gold)',
-            borderRadius: 999, padding: '5px 18px',
-            fontSize: 13, color: 'var(--gold)', fontWeight: 600,
-          }}>
-            شفاف، منعطف، بدون هزینه پنهان
-          </span>
-          <h1 style={{ fontSize: 'clamp(32px,5vw,54px)', fontWeight: 900, lineHeight: 1.2, marginBottom: 18 }}>
-            پلن‌ها و اشتراک
-          </h1>
-          <p style={{ fontSize: 18, color: 'var(--muted)', maxWidth: 560, margin: '0 auto 40px', lineHeight: 1.8 }}>
-            از جستجوی رایگان تا راه‌حل سازمانی — هر پلن برای یک نیاز واقعی طراحی شده است.
-            بدون قرارداد بلندمدت اجباری، هر زمان که خواستید تغییر دهید.
-          </p>
 
           {/* Billing toggle */}
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '6px 6px 6px 18px' }}>

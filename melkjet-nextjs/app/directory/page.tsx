@@ -5,6 +5,7 @@
 // معامله از آگهی‌های فروخته/اجاره‌رفتهٔ خودِ متخصص، عضویت از تاریخِ واقعیِ ثبت‌نام، پروژه از پرشین‌سازه.
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import PageHeader from '@/app/components/PageHeader'
 import RevealContact from '@/app/components/RevealContact'
 import PromoBadge from '@/app/components/PromoBadge'
 import RepBadges from '@/app/components/RepBadges'
@@ -172,35 +173,31 @@ export default function DirectoryPage() {
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit' }}>
       <Nav />
 
-      {/* ── هیروی سینماییِ مش‌طلایی (فاز ۲۹۸ک) ── */}
-      <section style={{ position: 'relative', overflow: 'hidden', borderBottom: '1px solid var(--line)', padding: '60px 24px 40px', textAlign: 'center',
-        background: 'radial-gradient(620px 320px at 82% -20%, color-mix(in srgb, var(--gold) 18%, transparent), transparent 60%), radial-gradient(520px 340px at 8% 120%, color-mix(in srgb, var(--gold) 9%, transparent), transparent 60%), linear-gradient(160deg, var(--bg2), var(--bg) 72%)' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 800, color: 'var(--goldText)', background: 'var(--goldDim)', border: '1px solid color-mix(in srgb, var(--gold) 45%, transparent)', borderRadius: 999, padding: '6px 16px', marginBottom: 20 }}>
-          <span style={{ fontSize: 8 }}>●</span> دایرکتوری متخصصان ملک‌جت
-        </span>
-        <h1 style={{ fontSize: 'clamp(28px,4.6vw,44px)', fontWeight: 900, color: 'var(--text)', margin: '0 0 12px', lineHeight: 1.3 }}>متخصص و خدماتِ املاک پیدا کن</h1>
-        <p style={{ fontSize: '1rem', color: 'var(--muted)', maxWidth: 560, margin: '0 auto 28px', lineHeight: 1.8 }}>از مشاور و سازنده تا کارشناس، وکیل و پیمانکار — همه در یک‌جا، با امتیاز و نظرِ واقعی.</p>
-        <div style={{ maxWidth: 540, margin: '0 auto', position: 'relative' }}>
-          <input
-            type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="نام متخصص یا شهر…"
-            style={{ width: '100%', padding: '16px 22px 16px 52px', fontSize: '.98rem', background: 'color-mix(in srgb, var(--surface) 88%, transparent)', border: '1.5px solid var(--line2)', borderRadius: 14, color: 'var(--text)', outline: 'none', boxSizing: 'border-box', boxShadow: '0 16px 40px -24px rgba(0,0,0,.6)', transition: 'border-color .2s, box-shadow .2s' }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--gold) 18%, transparent)' }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--line2)'; e.currentTarget.style.boxShadow = '0 16px 40px -24px rgba(0,0,0,.6)' }}
-          />
-          <span style={{ position: 'absolute', left: 18, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
-        </div>
-        {heroStats.length > 0 && (
-          <div style={{ display: 'flex', gap: 'clamp(22px,5vw,40px)', justifyContent: 'center', flexWrap: 'wrap', marginTop: 30 }}>
-            {heroStats.map(st => (
-              <div key={st.l} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--goldText)', lineHeight: 1.1 }}>{st.v}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{st.l}</div>
-              </div>
-            ))}
+      {/* ── هدرِ سینمایی (ری‌برندِ ۲۹۸ی۷) ── */}
+      <PageHeader eyebrow="دایرکتوری متخصصان ملک‌جت" title="متخصص و خدماتِ املاک پیدا کن" subtitle="از مشاور و سازنده تا کارشناس، وکیل و پیمانکار — همه در یک‌جا، با امتیاز و نظرِ واقعی.">
+        <div style={{ display: 'grid', gap: 16, justifyItems: 'stretch', width: 'min(86vw,360px)' }}>
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="نام متخصص یا شهر…"
+              style={{ width: '100%', padding: '14px 18px 14px 48px', fontSize: '.95rem', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(247,222,146,.3)', borderRadius: 13, color: '#f3ede0', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#F7DE92' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(247,222,146,.3)' }}
+            />
+            <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'rgba(244,238,225,.6)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
           </div>
-        )}
-      </section>
+          {heroStats.length > 0 && (
+            <div style={{ display: 'flex', gap: 'clamp(18px,4vw,34px)', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              {heroStats.map(st => (
+                <div key={st.l} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 23, fontWeight: 900, color: '#F7DE92', lineHeight: 1.1 }}>{st.v}</div>
+                  <div style={{ fontSize: 11.5, color: 'rgba(244,238,225,.65)', marginTop: 2 }}>{st.l}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </PageHeader>
 
       {/* ── بدنه: سایدبارِ دسته‌ها (راست) + نتایج ── */}
       <main className="mjdir-body" style={{ maxWidth: 1180, margin: '0 auto', padding: '32px 24px 64px', display: 'grid', gridTemplateColumns: '270px 1fr', gap: 24, alignItems: 'start' }}>
