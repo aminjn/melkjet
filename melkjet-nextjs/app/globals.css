@@ -309,12 +309,15 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 @media(min-width:880px){.mjhero-grid{grid-template-columns:.88fr 1.12fr!important}}
 /* موبایل (۲۹۸ی۹): هیروی جمع‌وجور — فیلترها و چیپ‌ها اسکرولِ افقی، جعبهٔ متن کوتاه‌تر */
 @media(max-width:620px){
-  .mjhp-top{flex-direction:column!important}
-  .mjhp-pills{display:flex!important;flex-direction:row!important;overflow-x:auto;gap:8px;padding-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  /* min-width:0 در کلِ زنجیره تا ردیف‌های اسکرولی پنل را پهن‌تر از ستون نکنند (رفعِ «کج»/بیرون‌زدن) */
+  .mjhero-grid > div{min-width:0!important}
+  .mjhp-top{flex-direction:column!important;min-width:0}
+  .mjhp-top > div{min-width:0!important}
+  .mjhp-pills{display:flex!important;flex-direction:row!important;overflow-x:auto;gap:8px;padding-bottom:4px;min-width:0;max-width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .mjhp-pills::-webkit-scrollbar{display:none}
-  .mjhp-pills > label{width:auto!important;min-width:148px;flex:0 0 auto}
+  .mjhp-pills > label{width:auto!important;min-width:150px;flex:0 0 auto}
   .mjhp-textarea{min-height:92px!important}
-  .mjhero-quicklinks{flex-wrap:nowrap!important;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+  .mjhero-quicklinks{flex-wrap:nowrap!important;overflow-x:auto;padding-bottom:6px;min-width:0;max-width:100%;scrollbar-width:none}
   .mjhero-quicklinks::-webkit-scrollbar{display:none}
   .mjhero-quicklinks > a{flex:0 0 auto}
 }
