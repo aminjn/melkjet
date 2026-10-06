@@ -167,18 +167,21 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
             <p style={{ margin: '20px 0 0', maxWidth: 560, fontSize: 'clamp(15px,2vw,18.5px)', lineHeight: 1.85, color: 'rgba(244,238,225,.78)' }}>
               به زبان خودت بگو چه می‌خواهی. ملک‌جت بازار را تحلیل می‌کند، دلیل هر پیشنهاد را توضیح می‌دهد و کنارت می‌ماند تا بهترین تصمیم را بگیری.
             </p>
-            {/* دسترسیِ سریع به همهٔ اکوسیستم‌ها — قرص‌های شیشه‌ای (موبایل: اسکرولِ افقی) */}
+            {/* دسترسیِ سریع — ایکون‌های حرفه‌ایِ SVG در قابِ شیشه‌ای (فاز ۲۹۸ی۱۲) */}
             <div className="mjhero-quicklinks" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 26 }}>
               {[
-                { l: 'خرید و اجارهٔ ملک', h: '/search', ic: '🏠' },
-                { l: 'بازارِ مصالح', h: '/materials-market', ic: '🧱' },
-                { l: 'نرخِ روزِ مصالح', h: '/materials-prices', ic: '📊' },
-                { l: 'متخصصان', h: '/directory', ic: '👷' },
-                { l: 'سازندگان', h: '/builders', ic: '🏗️' },
-                { l: 'دستیارِ AI', h: '/plan-ai', ic: '🤖' },
+                { l: 'خرید و اجارهٔ ملک', h: '/search', svg: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /><path d="M10 20v-5h4v5" /></> },
+                { l: 'بازارِ مصالح', h: '/materials-market', svg: <><rect x="3" y="4.5" width="18" height="4.5" rx="1" /><rect x="3" y="9.5" width="7" height="4.5" rx="1" /><rect x="11" y="9.5" width="10" height="4.5" rx="1" /><rect x="3" y="14.5" width="11" height="4.5" rx="1" /><rect x="15" y="14.5" width="6" height="4.5" rx="1" /></> },
+                { l: 'نرخِ روزِ مصالح', h: '/materials-prices', svg: <><path d="M4 20V13" /><path d="M9.3 20V8.5" /><path d="M14.6 20v-5.5" /><path d="M20 20V5" /></> },
+                { l: 'متخصصان', h: '/directory', svg: <><circle cx="9" cy="7.5" r="3" /><path d="M3.5 20c0-3 2.5-5.3 5.5-5.3S14.5 17 14.5 20" /><path d="M16 4.7a2.8 2.8 0 0 1 0 5.6" /><path d="M17.2 14.9c2 .4 3.3 2.1 3.3 4.6" /></> },
+                { l: 'سازندگان', h: '/builders', svg: <><path d="M4 21V6l9-2.6V21" /><path d="M13 9.5l7 2V21" /><path d="M3 21h18" /><path d="M7 9h2.5M7 13h2.5M7 17h2.5M16 13.5h1.6M16 17h1.6" /></> },
+                { l: 'دستیارِ AI', h: '/plan-ai', svg: <><path d="M12 3.2l1.9 4.5 4.6 1.9-4.6 1.9L12 16l-1.9-4.5L5.5 9.6l4.6-1.9z" /><path d="M18.5 14.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" /></> },
               ].map(p => (
-                <Link key={p.l} href={p.h} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 999, border: '1px solid rgba(247,222,146,.22)', background: 'rgba(255,255,255,.05)', color: 'rgba(244,238,225,.9)', textDecoration: 'none', fontSize: 13, fontWeight: 600, backdropFilter: 'blur(6px)' }}>
-                  <span>{p.ic}</span>{p.l}
+                <Link key={p.l} href={p.h} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 16px 7px 7px', borderRadius: 999, border: '1px solid rgba(247,222,146,.22)', background: 'rgba(255,255,255,.05)', color: 'rgba(244,238,225,.92)', textDecoration: 'none', fontSize: 13, fontWeight: 600, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                  <span style={{ width: 30, height: 30, flexShrink: 0, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(247,222,146,.4)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.12)' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5D982" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{p.svg}</svg>
+                  </span>
+                  {p.l}
                 </Link>
               ))}
             </div>
