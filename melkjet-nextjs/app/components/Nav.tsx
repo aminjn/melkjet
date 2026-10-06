@@ -61,7 +61,6 @@ export default function Nav() {
   const [open, setOpen] = useState<string | null>(null)        // منوی دسکتاپِ بازشده
   const [mobOpen, setMobOpen] = useState<string | null>(null)  // بخشِ بازشدهٔ موبایل
   const [me, setMe] = useState<{ dash: string } | null | undefined>(undefined)
-  const [brand, setBrand] = useState<{ name?: string; logoLight?: string; logoDark?: string } | null>(null)   // فاز ۲۷۰
   // «قصدِ هاور»: بستنِ منو با کمی تأخیر تا رد شدن از فاصلهٔ بینِ دکمه و منو، آن را نبندد (پرش/فلیکر).
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const openMenu = (label: string) => { if (closeTimer.current) clearTimeout(closeTimer.current); setOpen(label) }
@@ -71,7 +70,6 @@ export default function Nav() {
     let cancelled = false
     const loadMe = () => fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => { if (!cancelled) setMe(d && d.phone ? { dash: d.dash || '/buyer' } : null) }).catch(() => { if (!cancelled) setMe(null) })
     loadMe()
-    fetch('/api/site').then(r => r.ok ? r.json() : null).then(d => { if (!cancelled && d?.brand) setBrand(d.brand) }).catch(() => {})   // فاز ۲۷۰ — برند
     window.addEventListener('mj-auth-success', loadMe)
     return () => { cancelled = true; window.removeEventListener('mj-auth-success', loadMe) }
   }, [])
@@ -87,18 +85,9 @@ export default function Nav() {
     <header style={{ position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(18px)', background: 'var(--navbg)', borderBottom: '1px solid var(--line)' }}>
       <nav style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', height: 64, display: 'flex', alignItems: 'center', gap: 18 }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'var(--text)', flexShrink: 0 }}>
-          {brand?.logoLight && brand?.logoDark ? (<>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={brand.logoLight} alt={brand.name || 'ملک‌جت'} className="mj-logo-light" style={{ height: 34, maxWidth: 170, objectFit: 'contain' }} />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={brand.logoDark} alt={brand.name || 'ملک‌جت'} className="mj-logo-dark" style={{ height: 34, maxWidth: 170, objectFit: 'contain' }} />
-          </>) : (brand?.logoLight || brand?.logoDark) ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={(brand.logoLight || brand.logoDark) as string} alt={brand.name || 'ملک‌جت'} style={{ height: 34, maxWidth: 170, objectFit: 'contain' }} />
-          ) : (
-            // ری‌برندِ ۲۹۸ی۴ — لوگومارکِ «M» طلایی + نام‌وارهٔ ملک‌جت (وکتور، تیز در هر اندازه)
-            <Logo height={32} word />
-          )}
+          {/* ری‌برندِ ۲۹۸ی۵ — لوگومارکِ «M» طلایی همیشه نمایش داده می‌شود (برندِ ذخیره‌شدهٔ قدیمیِ
+              پنلِ ادمین دیگر override نمی‌کند؛ لوگوی واحدِ وکتور، تیز در هر اندازه). */}
+          <Logo height={32} word />
         </Link>
 
         <CitySelector />

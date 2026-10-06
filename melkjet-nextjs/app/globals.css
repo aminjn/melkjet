@@ -305,8 +305,8 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 @media(max-width:560px){.mjh-serv{grid-template-columns:1fr 1fr!important}}
 @keyframes mjfloat{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-14px,18px) scale(1.06)}}
 @media(prefers-reduced-motion:reduce){.mjh-orb{animation:none!important}}
-/* هیروی ری‌برند (۲۹۸ی۴): دسکتاپ دوستونه — متن سمتِ راست، پنلِ شیشه‌ای سمتِ چپ */
-@media(min-width:880px){.mjhero-grid{grid-template-columns:1.05fr .95fr!important}}
+/* هیروی ری‌برند (۲۹۸ی۴): دسکتاپ دوستونه — متن سمتِ راست، پنلِ شیشه‌ای (پهن‌تر) سمتِ چپ */
+@media(min-width:880px){.mjhero-grid{grid-template-columns:.88fr 1.12fr!important}}
 
 /* فاز ۱۰۹ (Visual Pass 2): شهرِ زندهٔ خطِ آسمان — خودرو/باران/برف/ابر/رعد؛ با احترامِ کامل به reduced-motion */
 @keyframes empDrive{from{left:-7%}to{left:104%}}
