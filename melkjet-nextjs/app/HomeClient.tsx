@@ -135,12 +135,13 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
     : []   // بدونِ متخصصِ واقعی، «مشاوران برتر»ِ فیک نشان نده
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
-      <Nav />
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', position: 'relative' }}>
+      {/* فاز ۲۹۸ی۱۱ — ناوِ شفافِ شناور روی هیرو (مطابقِ موکاپ) */}
+      <Nav overlay />
 
       <main>
-      {/* HERO — ری‌برندِ سینمایی (فاز ۲۹۸ی۸: عکس از پنلِ ادمین؛ خالی = گرادیانِ غروب) */}
-      <section style={{ position: 'relative', overflow: 'hidden', background: '#080b14', color: '#f3ede0', padding: 'clamp(56px,7vw,112px) 24px clamp(56px,7vw,96px)' }}>
+      {/* HERO — تمام‌ارتفاع (مطابقِ موکاپ)؛ عکس از پنلِ ادمین، خالی = گرادیانِ غروب */}
+      <section style={{ position: 'relative', overflow: 'hidden', background: '#080b14', color: '#f3ede0', minHeight: '100vh', display: 'flex', alignItems: 'center', padding: 'clamp(92px,10vw,120px) 24px clamp(56px,6vw,80px)' }}>
         {heroImage ? (<>
           {/* عکسِ هیرو (full-bleed) + روکشِ خوانایی */}
           <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: `url(${heroImage})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
@@ -152,7 +153,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
           <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', pointerEvents: 'none', background: 'linear-gradient(180deg,transparent,rgba(4,6,11,.82))' }}></div>
         </>)}
 
-        <div className="mjhero-grid" style={{ position: 'relative', maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr', gap: 'clamp(30px,4vw,52px)', alignItems: 'center' }}>
+        <div className="mjhero-grid" style={{ position: 'relative', width: '100%', maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr', gap: 'clamp(30px,4vw,52px)', alignItems: 'center' }}>
           {/* ستونِ متن (سمتِ راست/آغاز در RTL) */}
           <div style={{ textAlign: 'right' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, border: '1px solid rgba(247,222,146,.4)', background: 'rgba(247,222,146,.09)', fontSize: 13, fontWeight: 700, color: '#F7DE92' }}>

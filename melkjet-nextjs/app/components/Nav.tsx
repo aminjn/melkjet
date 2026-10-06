@@ -56,7 +56,7 @@ const MENUS: Menu[] = [
   ] },
 ]
 
-export default function Nav() {
+export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [open, setOpen] = useState<string | null>(null)        // منوی دسکتاپِ بازشده
   const [mobOpen, setMobOpen] = useState<string | null>(null)  // بخشِ بازشدهٔ موبایل
@@ -82,7 +82,9 @@ export default function Nav() {
   const dashLabel = me ? (DASH_LABEL[me.dash] || 'پنل من') : ''
 
   return (
-    <header style={{ position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(18px)', background: 'var(--navbg)', borderBottom: '1px solid var(--line)' }}>
+    <header style={overlay
+      ? { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, background: 'transparent', color: '#f3ede0' }
+      : { position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(18px)', background: 'var(--navbg)', borderBottom: '1px solid var(--line)' }}>
       <nav style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', height: 64, display: 'flex', alignItems: 'center', gap: 18 }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'var(--text)', flexShrink: 0 }}>
           {/* ری‌برندِ ۲۹۸ی۵ — لوگومارکِ «M» طلایی همیشه نمایش داده می‌شود (برندِ ذخیره‌شدهٔ قدیمیِ
