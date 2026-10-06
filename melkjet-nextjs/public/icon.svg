@@ -1,6 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#0f0e0c"/>
-  <rect x="75" y="75" width="362" height="362" rx="80" fill="#c9a84c"/>
-  <polygon points="256,138 374,256 256,374 138,256" fill="#0f0e0c"/>
-  <polygon points="256,186 326,256 256,326 186,256" fill="#c9a84c"/>
+  <defs>
+    <linearGradient id="mjL" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#F7E39A"/><stop offset="0.45" stop-color="#E3BC52"/><stop offset="1" stop-color="#B07F26"/>
+    </linearGradient>
+    <linearGradient id="mjR" x1="0.2" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#C89A34"/><stop offset="0.5" stop-color="#8E691C"/><stop offset="1" stop-color="#573E0E"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="#0A0A0C"/>
+  <g transform="translate(106 125) scale(2.54)">
+    <path fill="url(#mjL)" d="M49 3 L56 3 L56 56 L54 66 L44 59 L39 57 L34 60 L34 96 L30 99 L0 82 L0 36 Z"/>
+    <path fill="url(#mjR)" d="M69 3 L62 3 L62 56 L64 66 L74 59 L79 57 L84 60 L84 96 L88 99 L118 82 L118 36 Z"/>
+  </g>
 </svg>

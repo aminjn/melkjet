@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { DEFAULT_SITE, type SiteFooter } from '@/app/lib/site-defaults'
+import Logo from './Logo'
 
 // فاز ۹۸: فوتر از تنظیماتِ سوپرادمین می‌خواند (admin → تنظیماتِ سایت و صفحه‌ها).
 // پیش‌فرض = همان محتوای همیشگی، پس تا وقتی ادمین چیزی عوض نکرده هیچ تغییری دیده
@@ -41,10 +42,8 @@ export default function Footer() {
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '56px 24px 28px', display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 32 }}>
         <div>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: 'var(--text)' }}>
-            <span style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ width: 13, height: 13, background: 'var(--bg2)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }}></span>
-            </span>
-            <span style={{ fontWeight: 800, fontSize: 20 }}>ملک‌جت</span>
+            {/* ری‌برندِ ۲۹۸ی۴ — لوگومارکِ «M» طلایی */}
+            <Logo height={34} word />
           </Link>
           <p style={{ marginTop: 16, fontSize: 13.5, lineHeight: 1.9, color: 'var(--muted)', maxWidth: 280 }}>{f.blurb}</p>
           {contactRows.length > 0 && (

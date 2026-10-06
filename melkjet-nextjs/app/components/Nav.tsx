@@ -4,6 +4,7 @@ import Link from 'next/link'
 import ThemeToggle from './ThemeToggle'
 import CitySelector from './CitySelector'
 import { openAuth } from './AuthModal'
+import Logo from './Logo'
 
 const DASH_LABEL: Record<string, string> = {
   '/admin': 'پنل مدیریت', '/builder': 'پنل سازنده', '/pros': 'پنل مشاور',
@@ -94,12 +95,10 @@ export default function Nav() {
           </>) : (brand?.logoLight || brand?.logoDark) ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={(brand.logoLight || brand.logoDark) as string} alt={brand.name || 'ملک‌جت'} style={{ height: 34, maxWidth: 170, objectFit: 'contain' }} />
-          ) : (<>
-            <span style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)' }}>
-              <span style={{ width: 13, height: 13, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }} />
-            </span>
-            <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-.5px' }}>{brand?.name || 'ملک‌جت'}</span>
-          </>)}
+          ) : (
+            // ری‌برندِ ۲۹۸ی۴ — لوگومارکِ «M» طلایی + نام‌وارهٔ ملک‌جت (وکتور، تیز در هر اندازه)
+            <Logo height={32} word />
+          )}
         </Link>
 
         <CitySelector />
