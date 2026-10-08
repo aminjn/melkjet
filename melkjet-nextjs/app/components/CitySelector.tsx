@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { IconSvg } from './GlassIcon'
 import { CITIES } from '@/app/lib/taxonomy'
 
 // انتخابگرِ شهر — در نوارِ بالای همهٔ صفحاتِ پابلیک. شهرِ انتخابی در کوکیِ mj_city می‌ماند.
@@ -124,7 +125,7 @@ export default function CitySelector() {
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
       <button onClick={() => setOpen(o => !o)} title="انتخاب شهر" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px', borderRadius: 11, border: `1px solid ${city ? 'var(--gold)' : 'var(--line2)'}`, background: city ? 'var(--goldDim)' : 'var(--surface)', color: city ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
-        <span style={{ fontSize: 14 }}>📍</span>
+        <IconSvg name="pin" size={14} color="var(--gold)" />
         <span>{city || 'انتخاب شهر'}</span>
         <span style={{ fontSize: 10, opacity: .7 }}>▾</span>
       </button>

@@ -3,6 +3,7 @@
 // اجرا می‌شوند → main-thread و JavaScriptِ کلاینت به‌شدت کمتر.
 import Link from 'next/link'
 import Nav from './components/Nav'
+import GlassIcon, { type IconName } from './components/GlassIcon'
 import Footer from './components/Footer'
 import PropertyCard from './components/PropertyCard'
 import PromoBadge from './components/PromoBadge'
@@ -170,17 +171,15 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
             {/* دسترسیِ سریع — ایکون‌های حرفه‌ایِ SVG در قابِ شیشه‌ای (فاز ۲۹۸ی۱۲) */}
             <div className="mjhero-quicklinks" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 26 }}>
               {[
-                { l: 'خرید و اجارهٔ ملک', h: '/search', svg: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /><path d="M10 20v-5h4v5" /></> },
-                { l: 'بازارِ مصالح', h: '/materials-market', svg: <><rect x="3" y="4.5" width="18" height="4.5" rx="1" /><rect x="3" y="9.5" width="7" height="4.5" rx="1" /><rect x="11" y="9.5" width="10" height="4.5" rx="1" /><rect x="3" y="14.5" width="11" height="4.5" rx="1" /><rect x="15" y="14.5" width="6" height="4.5" rx="1" /></> },
-                { l: 'نرخِ روزِ مصالح', h: '/materials-prices', svg: <><path d="M4 20V13" /><path d="M9.3 20V8.5" /><path d="M14.6 20v-5.5" /><path d="M20 20V5" /></> },
-                { l: 'متخصصان', h: '/directory', svg: <><circle cx="9" cy="7.5" r="3" /><path d="M3.5 20c0-3 2.5-5.3 5.5-5.3S14.5 17 14.5 20" /><path d="M16 4.7a2.8 2.8 0 0 1 0 5.6" /><path d="M17.2 14.9c2 .4 3.3 2.1 3.3 4.6" /></> },
-                { l: 'سازندگان', h: '/builders', svg: <><path d="M4 21V6l9-2.6V21" /><path d="M13 9.5l7 2V21" /><path d="M3 21h18" /><path d="M7 9h2.5M7 13h2.5M7 17h2.5M16 13.5h1.6M16 17h1.6" /></> },
-                { l: 'دستیارِ AI', h: '/plan-ai', svg: <><path d="M12 3.2l1.9 4.5 4.6 1.9-4.6 1.9L12 16l-1.9-4.5L5.5 9.6l4.6-1.9z" /><path d="M18.5 14.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" /></> },
+                                { l: 'خرید و اجارهٔ ملک', h: '/search', ic: 'home' as IconName },
+                { l: 'بازارِ مصالح', h: '/materials-market', ic: 'bricks' as IconName },
+                { l: 'نرخِ روزِ مصالح', h: '/materials-prices', ic: 'bars' as IconName },
+                { l: 'متخصصان', h: '/directory', ic: 'people' as IconName },
+                { l: 'سازندگان', h: '/builders', ic: 'crane' as IconName },
+                { l: 'دستیارِ AI', h: '/plan-ai', ic: 'spark' as IconName },
               ].map(p => (
                 <Link key={p.l} href={p.h} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 16px 7px 7px', borderRadius: 999, border: '1px solid rgba(247,222,146,.22)', background: 'rgba(255,255,255,.05)', color: 'rgba(244,238,225,.92)', textDecoration: 'none', fontSize: 13, fontWeight: 600, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
-                  <span style={{ width: 30, height: 30, flexShrink: 0, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(247,222,146,.4)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.12)' }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5D982" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{p.svg}</svg>
-                  </span>
+                  <GlassIcon name={p.ic} size={30} box={16} tone="hero" />
                   {p.l}
                 </Link>
               ))}
@@ -208,21 +207,21 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
         </div>
         <div className="mjh-serv" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 16 }}>
           {[
-            { ic: '🏠', t: 'خرید، فروش و اجارهٔ ملک', d: 'جستجوی هوشمند با هزاران فایلِ فعال، تحلیلِ قیمت و مقایسه.', href: '/search', c: '#7a8fae' },
-            { ic: '👷', t: 'متخصصان و مشاوران', d: 'دایرکتوریِ مشاور، آژانس، سازنده و مشاورِ حقوقیِ تأییدشده.', href: '/directory', c: '#caa86a' },
-            { ic: '🏗️', t: 'بانکِ سازندگان', d: 'دیتابیسِ سازندگان و پروژه‌ها با اطلاعاتِ تماسِ مستقیم.', href: '/builders', c: '#b07a8a' },
-            { ic: '🧱', t: 'بازارِ مصالح', d: 'کاتالوگِ کاملِ مصالح با قیمتِ مرجع، جستجو و مقایسهٔ فروشندگان.', href: '/materials-market', c: '#e7a14a' },
-            { ic: '🏪', t: 'فروشگاه‌های مصالح', d: 'دایرکتوریِ تأمین‌کنندگان با ویترینِ اختصاصی و استعلامِ مستقیم.', href: '/stores', c: '#5fd98a' },
-            { ic: '📊', t: 'نرخِ روزِ مصالح', d: 'قیمتِ روزِ آهن، سیمان و مصالح با نمودارِ روندِ تاریخی.', href: '/materials-prices', c: '#4ec4e8' },
-            { ic: '🤖', t: 'دستیارِ هوشِ مصنوعی', d: 'مشاورِ ۲۴ساعته برای خرید، قیمت‌گذاری، مذاکره و راهنماییِ حقوقی.', href: '/plan-ai', c: '#a77fd4' },
-            { ic: '📐', t: 'استودیو پلان و سه‌بعدی', d: 'طراحیِ نقشه و رندرِ سه‌بعدیِ واحد با کمکِ هوشِ مصنوعی.', href: '/plan-ai', c: '#7aa88f' },
-            { ic: '💼', t: 'ابزارِ کسب‌وکار', d: 'CRM، بازاریابی، اتوماسیون و سایت‌سازِ اختصاصی برای متخصصان.', href: '/pricing', c: '#c9a84c' },
-            { ic: '📰', t: 'بلاگ و راهنما', d: 'مقالاتِ تخصصیِ خرید، سرمایه‌گذاری و ساخت‌وساز.', href: '/blog', c: '#7a8fae' },
-            { ic: '📈', t: 'تحلیل و نقشهٔ بازار', d: 'ارزشِ واقعی، رشد و پیش‌بینیِ قیمتِ هر محله.', href: '/search', c: '#e7674a' },
-            { ic: '👑', t: 'پنل‌های تخصصی', d: 'داشبوردِ اختصاصیِ سازنده، مصالح‌فروش، مشاور، آژانس و مالک.', href: '/auth', c: '#caa86a' },
+            { ic: 'home', t: 'خرید، فروش و اجارهٔ ملک', d: 'جستجوی هوشمند با هزاران فایلِ فعال، تحلیلِ قیمت و مقایسه.', href: '/search', c: '#7a8fae' },
+            { ic: 'people', t: 'متخصصان و مشاوران', d: 'دایرکتوریِ مشاور، آژانس، سازنده و مشاورِ حقوقیِ تأییدشده.', href: '/directory', c: '#caa86a' },
+            { ic: 'crane', t: 'بانکِ سازندگان', d: 'دیتابیسِ سازندگان و پروژه‌ها با اطلاعاتِ تماسِ مستقیم.', href: '/builders', c: '#b07a8a' },
+            { ic: 'bricks', t: 'بازارِ مصالح', d: 'کاتالوگِ کاملِ مصالح با قیمتِ مرجع، جستجو و مقایسهٔ فروشندگان.', href: '/materials-market', c: '#e7a14a' },
+            { ic: 'store', t: 'فروشگاه‌های مصالح', d: 'دایرکتوریِ تأمین‌کنندگان با ویترینِ اختصاصی و استعلامِ مستقیم.', href: '/stores', c: '#5fd98a' },
+            { ic: 'bars', t: 'نرخِ روزِ مصالح', d: 'قیمتِ روزِ آهن، سیمان و مصالح با نمودارِ روندِ تاریخی.', href: '/materials-prices', c: '#4ec4e8' },
+            { ic: 'spark', t: 'دستیارِ هوشِ مصنوعی', d: 'مشاورِ ۲۴ساعته برای خرید، قیمت‌گذاری، مذاکره و راهنماییِ حقوقی.', href: '/plan-ai', c: '#a77fd4' },
+            { ic: 'ruler', t: 'استودیو پلان و سه‌بعدی', d: 'طراحیِ نقشه و رندرِ سه‌بعدیِ واحد با کمکِ هوشِ مصنوعی.', href: '/plan-ai', c: '#7aa88f' },
+            { ic: 'briefcase', t: 'ابزارِ کسب‌وکار', d: 'CRM، بازاریابی، اتوماسیون و سایت‌سازِ اختصاصی برای متخصصان.', href: '/pricing', c: '#c9a84c' },
+            { ic: 'article', t: 'بلاگ و راهنما', d: 'مقالاتِ تخصصیِ خرید، سرمایه‌گذاری و ساخت‌وساز.', href: '/blog', c: '#7a8fae' },
+            { ic: 'trend', t: 'تحلیل و نقشهٔ بازار', d: 'ارزشِ واقعی، رشد و پیش‌بینیِ قیمتِ هر محله.', href: '/search', c: '#e7674a' },
+            { ic: 'dashboard', t: 'پنل‌های تخصصی', d: 'داشبوردِ اختصاصیِ سازنده، مصالح‌فروش، مشاور، آژانس و مالک.', href: '/auth', c: '#caa86a' },
           ].map(s => (
             <Link key={s.t} href={s.href} className="mjh-card" style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: '20px 18px', textDecoration: 'none', color: 'inherit', transition: 'transform .16s, box-shadow .16s, border-color .16s' }}>
-              <div style={{ width: 46, height: 46, borderRadius: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, background: `${s.c}22`, border: `1px solid ${s.c}55` }}>{s.ic}</div>
+              <GlassIcon name={s.ic as IconName} size={46} tint={s.c} />
               <div style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)' }}>{s.t}</div>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.85, flex: 1 }}>{s.d}</div>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)' }}>ورود ↗</div>
@@ -406,13 +405,13 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       <section style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(40px,5vw,64px) 24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
           {[
-            { ic: '🧠', t: 'هوشِ مصنوعیِ همه‌جا', d: 'از جستجو و قیمت‌گذاری تا مذاکره، محتوا و تصویر — دستیارِ هوشمند کنارِ توست.' },
-            { ic: '🔗', t: 'زنجیرهٔ کامل', d: 'خریدار، مالک، مشاور، آژانس، سازنده و مصالح‌فروش، همه در یک اکوسیستمِ متصل.' },
-            { ic: '📉', t: 'دادهٔ واقعی', d: 'نرخِ روزِ مصالح، تحلیلِ قیمتِ ملک و دیتابیسِ سازندگان — بر پایهٔ دادهٔ واقعی.' },
-            { ic: '🛠️', t: 'ابزارِ حرفه‌ای', d: 'CRM، بازاریابی، اتوماسیون و سایت‌سازِ اختصاصی برای رشدِ کسب‌وکارت.' },
+            { ic: 'brain' as IconName, t: 'هوشِ مصنوعیِ همه‌جا', d: 'از جستجو و قیمت‌گذاری تا مذاکره، محتوا و تصویر — دستیارِ هوشمند کنارِ توست.' },
+            { ic: 'link' as IconName, t: 'زنجیرهٔ کامل', d: 'خریدار، مالک، مشاور، آژانس، سازنده و مصالح‌فروش، همه در یک اکوسیستمِ متصل.' },
+            { ic: 'chartDown' as IconName, t: 'دادهٔ واقعی', d: 'نرخِ روزِ مصالح، تحلیلِ قیمتِ ملک و دیتابیسِ سازندگان — بر پایهٔ دادهٔ واقعی.' },
+            { ic: 'tools' as IconName, t: 'ابزارِ حرفه‌ای', d: 'CRM، بازاریابی، اتوماسیون و سایت‌سازِ اختصاصی برای رشدِ کسب‌وکارت.' },
           ].map(x => (
             <div key={x.t} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 6px' }}>
-              <div style={{ fontSize: 30 }}>{x.ic}</div>
+              <GlassIcon name={x.ic} size={44} />
               <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>{x.t}</div>
               <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>{x.d}</div>
             </div>
