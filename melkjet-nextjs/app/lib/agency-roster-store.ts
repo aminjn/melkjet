@@ -51,6 +51,10 @@ export interface RosterScrape {
   lastRun?: number        // آخرین «تلاش» (موفق یا ناموفق) — برای زمان‌بندی
   lastOkAt?: number       // فاز ۲۹۷ض — آخرین سینکِ «موفقِ کامل» (گزارش این را نشان می‌دهد، نه تلاش)
   city?: string           // ۸ اکتبر — شهرِ آژانس از پرتکرارترین شهرِ فایل‌هایش (برای فیلترِ پنل)
+  // ۸ اکتبر — طولِ آخرین پاسِ موفق. بدونِ این، «چرا هر آژانس هر ۲-۳ روز یک‌بار سینک
+  // می‌شود» فقط قابلِ حدس بود: ظرفیتِ پنجرهٔ شبانه = طولِ پنجره ÷ طولِ هر پاس، و طولِ
+  // پاس هیچ‌جا ثبت نمی‌شد. حالا roster-health واقعاً حسابش می‌کند، نه تخمین.
+  lastOkMs?: number
   lastError?: string
   lastTotal?: number
   lastUnnamed?: number
@@ -667,6 +671,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
       if (cityNow) s.city = cityNow
       s.running = false; s.runRequested = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastOkAt = Date.now(); s.lastError = ''
+      if (s.runStartedAt) s.lastOkMs = Date.now() - s.runStartedAt
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
     })

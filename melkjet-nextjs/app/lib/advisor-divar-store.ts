@@ -184,6 +184,18 @@ export function tehranHourOf(now: number): number {
 // «روزانه» فقط در پنجرهٔ شبِ ۰۰ تا ۰۶ به وقتِ تهران due می‌شود — همهٔ روزانه‌ها سرِ ۱۲ شب
 // واردِ صفِ FIFO می‌شوند و در ساعاتِ خلوت درین می‌شوند؛ کلیکِ دستیِ «الان» همچنان فوری است.
 // گاردِ ۱۸ساعته نمی‌گذارد در همان پنجره دوباره اجرا شود.
+// ۸ اکتبر — همهٔ منبع‌ها، نه فقط سررسیده‌ها. برای تشخیص لازم بود: «چرا مشاورها
+// چند روز اسکرپ نشده‌اند» را نمی‌شد از listDueSources فهمید، چون آن فقط سررسیده‌ها را
+// می‌دهد و منبعِ خاموش/بی‌لینک/پنجره‌بسته را از دید پنهان می‌کند.
+export function allSources(): { phone: string; source: DivarSource }[] {
+  const db = load()
+  const out: { phone: string; source: DivarSource }[] = []
+  for (const phone of Object.keys(db.advisors)) {
+    const cur = migrate({ ...seed(), ...db.advisors[phone] })
+    for (const source of cur.sources) out.push({ phone, source })
+  }
+  return out
+}
 export function listDueSources(now: number): { phone: string; source: DivarSource }[] {
   const db = load()
   const out: { phone: string; source: DivarSource }[] = []

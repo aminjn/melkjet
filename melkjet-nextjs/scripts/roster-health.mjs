@@ -39,12 +39,13 @@ try { st = await getRosterSettings() } catch {}
 const g = { autoSync: st.autoSync !== false, startHour: st.startHour ?? 0, endHour: st.endHour ?? 6 }
 const hour = iranHour(now)
 const inWindow = inSyncWindow(hour, g.startHour, g.endHour)
-const cap = Math.max(1, Math.min(8, Number(process.env.ROSTER_SYNCS) || 3))
+const cap = Math.max(1, Math.min(8, Number(process.env.ROSTER_SYNCS) || 1))   // ۸ اکتبر: پیش‌فرضِ کد ۱ است (cron-runner)، نه ۳
 
 console.log('آژانس‌ها: ' + all.length)
 console.log('پنجرهٔ سینک: ' + g.startHour + ':۰۰ تا ' + g.endHour + ':۰۰ به وقتِ ایران   (الان ' + hour + ':۰۰ → ' +
   (inWindow ? 'داخلِ پنجره' : 'بیرونِ پنجره') + ')')
-console.log('سقفِ همزمانی: ' + cap + '   ⇒ ظرفیتِ هر شب ≈ ' + cap + ' × ' + ((g.endHour - g.startHour + 24) % 24 || 24) + ' ساعت')
+const winH = (g.endHour - g.startHour + 24) % 24 || 24
+console.log('سقفِ همزمانی: ' + cap + '   پنجره: ' + winH + ' ساعت')
 console.log('زمان‌بندیِ سراسری: ' + (g.autoSync ? 'روشن' : 'خاموش'))
 
 const off = all.filter(s => s.schedule === 'off' || (s.autoSync !== undefined ? !s.autoSync : !g.autoSync))
@@ -64,6 +65,51 @@ row('زمان‌بندی خاموش', off.length, 'عمدی — schedule=off ی�
 row('پارک‌شده (۳+ تلاشِ ناتمام)', parked.length, 'منتظرِ کلیکِ دستی')
 row('دارای خطای آخر', errored.length)
 
+
+// ── چرا هر آژانس هر چند روز یک‌بار؟ اندازه‌گیری، نه حدس ─────────────────────────
+// lastOkAt هر آژانس «آخرین سینکِ موفقش» است. اگر این‌ها را بر اساسِ شبی که در آن
+// افتاده‌اند بشماریم، توانِ واقعیِ هر شب درمی‌آید — و دورهٔ تکرار = کلِ آژانس‌ها ÷ همان.
+// این عدد را هیچ‌جا نگه نمی‌داشتیم، پس «۲-۳ روز» تا امروز فقط حس بود.
+console.log('')
+console.log('— توانِ واقعیِ هر شب (از lastOkAtِ خودِ آژانس‌ها) —')
+{
+  const nightOf = t => {                       // «شبِ» مالکِ یک زمان: روزی که پنجره‌اش در آن باز شد
+    const d = new Date(t + IR)
+    const h = d.getUTCHours()
+    const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+    if (h < g.startHour) day.setUTCDate(day.getUTCDate() - 1)
+    return day.toISOString().slice(0, 10)
+  }
+  const byNight = new Map()
+  let ok = 0
+  for (const s of all) { if (!s.lastOkAt) continue; ok++; const k = nightOf(s.lastOkAt); byNight.set(k, (byNight.get(k) || 0) + 1) }
+  if (!ok) console.log('  هیچ آژانسی سینکِ موفق ندارد — مشکل ظرفیت نیست، اجرا است.')
+  else {
+    const nights = [...byNight.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 7)
+    for (const [k, v] of nights) console.log('  ' + k + '   ' + String(v).padStart(4) + ' آژانس')
+    // «آخرین موفقیت» است، پس شب‌های قدیمی‌تر کم‌شمرده می‌شوند؛ تازه‌ترین شبِ کامل واقع‌بینانه‌ترین است.
+    const best = Math.max(...nights.map(x => x[1]))
+    console.log('  بهترین شب: ' + best + ' آژانس   ⇒ دورهٔ تکرار ≈ ' + (best ? (all.length / best).toFixed(1) : '∞') + ' شب')
+  }
+}
+
+// طولِ هر پاس — تازه ثبت شده (lastOkMs)؛ تا پرشدن، خطِ «نامعلوم» را می‌بینی.
+console.log('')
+console.log('— طولِ آخرین پاسِ موفق (ظرفیت = پنجره ÷ همین) —')
+{
+  const ms = all.map(s => s.lastOkMs).filter(x => Number(x) > 0).sort((a, b) => a - b)
+  if (!ms.length) console.log('  نامعلوم — lastOkMs از این دیپلوی به بعد نوشته می‌شود؛ فردا دوباره بزن.')
+  else {
+    const mins = x => (x / 60000).toFixed(1)
+    const med = ms[Math.floor(ms.length / 2)]
+    row('نمونه', ms.length)
+    row('میانه', mins(med) + ' دقیقه')
+    row('بیشترین', mins(ms[ms.length - 1]) + ' دقیقه')
+    const perNight = med > 0 ? Math.floor((winH * 3600_000) / med) * cap : 0
+    console.log('  ظرفیتِ نظریِ پنجره: ' + winH + ' ساعت ÷ ' + mins(med) + ' دقیقه × ' + cap + ' هم‌زمان = ' + perNight + ' آژانس در هر شب')
+    if (perNight && perNight < all.length) console.log('  ⇒ با ' + all.length + ' آژانس، هر کدام هر ' + (all.length / perNight).toFixed(1) + ' شب یک‌بار نوبتش می‌شود. همین است «۲-۳ روز».')
+  }
+}
 console.log('')
 // برچسبِ قبلیِ این بخش «سینکِ موفق» بود و غلط بود: lastRun در شکست هم ست می‌شود.
 console.log('— عمرِ آخرین تلاشِ سینک (موفق یا ناموفق) —')
@@ -75,6 +121,17 @@ for (const s of all) {
     else if (d < 7) buckets['۳ تا ۷ روز']++; else if (d < 30) buckets['۷ تا ۳۰ روز']++; else buckets['۳۰+ روز']++ }
 }
 for (const [k, v] of Object.entries(buckets)) row(k, v)
+
+console.log('')
+console.log('— عمرِ آخرین سینکِ «موفق» (همان چیزی که پنل نشان می‌دهد) —')
+const okB = { 'هیچ‌وقت': 0, '<۱ روز': 0, '۱ تا ۳ روز': 0, '۳ تا ۷ روز': 0, '۷ تا ۳۰ روز': 0, '۳۰+ روز': 0 }
+for (const s of all) {
+  if (!s.lastOkAt) okB['هیچ‌وقت']++
+  else { const d = (now - s.lastOkAt) / 86400_000
+    if (d < 1) okB['<۱ روز']++; else if (d < 3) okB['۱ تا ۳ روز']++
+    else if (d < 7) okB['۳ تا ۷ روز']++; else if (d < 30) okB['۷ تا ۳۰ روز']++; else okB['۳۰+ روز']++ }
+}
+for (const [k, v] of Object.entries(okB)) row(k, v)
 
 // «اجرا شد» با «چیزی آورد» یکی نیست. رانی که موفق تمام شود ولی صفر آگهی ببیند
 // (دیوار throttle کرده، پروفایل عوض شده، slug مرده) از بیرون دقیقاً مثلِ «آپدیت نمی‌شود» است.
