@@ -3,7 +3,9 @@
 import { useRef } from 'react'
 
 // آیتمِ خدمت/مزیت که از سرور پاس داده می‌شود.
-export interface ServiceItem { icon?: string; title?: string; desc?: string }
+// فاز ۲۹۷ز — image/href اختیاری: همین اسلایدر کارتِ «پروژه» هم می‌شود (عکسِ واقعی + لینک به
+// صفحهٔ پروژه در ملک‌جت). آیتمِ بدونِ این دو، همان کارتِ خدمتِ قبلی است — سایت‌های موجود دست نمی‌خورند.
+export interface ServiceItem { icon?: string; title?: string; desc?: string; image?: string; href?: string }
 
 const CARD_SHADOW = '0 10px 34px -22px rgba(20,16,10,.55), 0 2px 8px -4px rgba(20,16,10,.10)'
 
@@ -47,7 +49,7 @@ export default function ServicesSlider({
       <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 10 }}>
         <button aria-label="قبلی" className="mjs-srv-arrow" onClick={() => scrollByPage(-1)} style={{
           flex: '0 0 auto', alignSelf: 'center', width: 44, height: 44, borderRadius: '50%',
-          border: '1px solid #e6ddcd', background: 'var(--mjs-bg)', color: primary,
+          border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)', background: 'var(--mjs-bg)', color: primary,
           fontSize: 20, fontWeight: 900, cursor: 'pointer', boxShadow: CARD_SHADOW, lineHeight: 1,
         }}>‹</button>
 
@@ -55,26 +57,35 @@ export default function ServicesSlider({
           display: 'flex', gap: 24, overflowX: 'auto', scrollSnapType: 'x mandatory',
           paddingBottom: 6, flex: 1, scrollBehavior: 'smooth',
         }}>
-          {items.map((s, i) => (
-            <div key={i} className="mjs-srv-card" style={{
+          {items.map((s, i) => {
+            const Card: any = s.href ? 'a' : 'div'
+            return (
+            <Card key={i} {...(s.href ? { href: s.href } : {})} className="mjs-srv-card" style={{
               flex: `0 0 ${cardWidth}`, minWidth: 230, scrollSnapAlign: 'start',
-              background: 'var(--mjs-surface)', border: '1px solid #efe9df', borderRadius: 18,
-              padding: '34px 22px', textAlign: 'center', boxShadow: CARD_SHADOW,
+              background: 'var(--mjs-surface)', border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)', borderRadius: 18,
+              padding: s.image ? '0 0 22px' : '34px 22px', textAlign: 'center', boxShadow: CARD_SHADOW,
+              textDecoration: 'none', overflow: 'hidden', display: 'block',
             }}>
-              <div style={{
-                width: 72, height: 72, borderRadius: '50%', margin: '0 auto 18px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 32, color: primary, background: `${primary}1f`,
-              }}>{s.icon}</div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--mjs-heading)', marginBottom: 10 }}>{s.title}</div>
-              <div style={{ fontSize: 14, color: 'var(--mjs-text)', lineHeight: 1.9 }}>{s.desc}</div>
-            </div>
-          ))}
+              {s.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.image} alt={s.title || ''} loading="lazy" style={{ width: '100%', height: 170, objectFit: 'cover', display: 'block', marginBottom: 18 }} />
+              ) : (
+                <div style={{
+                  width: 72, height: 72, borderRadius: '50%', margin: '0 auto 18px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 32, color: primary, background: `${primary}1f`,
+                }}>{s.icon}</div>
+              )}
+              <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--mjs-heading)', marginBottom: 10, padding: s.image ? '0 18px' : 0 }}>{s.title}</div>
+              <div style={{ fontSize: 14, color: 'var(--mjs-text)', lineHeight: 1.9, padding: s.image ? '0 18px' : 0 }}>{s.desc}</div>
+              {s.href ? <div style={{ marginTop: 12, fontSize: 13, fontWeight: 800, color: primary }}>مشاهدهٔ پروژه ←</div> : null}
+            </Card>
+          )})}
         </div>
 
         <button aria-label="بعدی" className="mjs-srv-arrow" onClick={() => scrollByPage(1)} style={{
           flex: '0 0 auto', alignSelf: 'center', width: 44, height: 44, borderRadius: '50%',
-          border: '1px solid #e6ddcd', background: 'var(--mjs-bg)', color: primary,
+          border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)', background: 'var(--mjs-bg)', color: primary,
           fontSize: 20, fontWeight: 900, cursor: 'pointer', boxShadow: CARD_SHADOW, lineHeight: 1,
         }}>›</button>
       </div>

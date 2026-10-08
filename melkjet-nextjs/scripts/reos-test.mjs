@@ -2268,6 +2268,49 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('بلوکِ تزئینیِ برند امضا می‌شود', sig3.includes('SHAYGAN'))
       ok('عبارتِ تبلیغاتی امضا نمی‌شود', validName('فروش ویژه', '') === '' && validName('ی تایید', '') === '')
     }
+    // فاز ۲۹۸ل — واژه‌نامهٔ «نامِ کوچک» (کیس‌استادیِ شاهان، نمونهٔ واقعیِ کاربر): «کارشناس
+    // منطقه محمد طهرانی» بدونِ جداکننده را مدل سکوت می‌کرد و labeledName (نیازمندِ «:») نمی‌گرفت
+    // و آگهی بی‌نام می‌ماند. سیگنالِ مثبتِ «نامِ کوچکِ شناخته‌شده» این را ریشه‌ای حل می‌کند.
+    {
+      const { gazetteerName, bestName } = await import('../app/lib/roster-ner.ts')
+      const { extractSignature } = await import('../app/lib/agency-roster.ts')
+      const EX = 'امضا\nمالک فروشنده واقعی\nپارکینگ و انباری\nکارشناس منطقه محمد طهرانی'
+      ok('نمونهٔ واقعی: «کارشناس منطقه محمد طهرانی» → «محمد طهرانی»', gazetteerName(EX) === 'محمد طهرانی')
+      ok('extractSignature همان نمونه را نام‌دار می‌کند', extractSignature('آپارتمان', EX, 'آژانس شاهان').includes('محمد طهرانی'))
+      ok('bestName با p=۰.۹۷ (از دروازهٔ مدل عبور می‌کند)', (bestName('', EX) || {}).p === 0.97)
+      ok('«کارشناس فروش علی رضایی» → «علی رضایی»', gazetteerName('عالی\nکارشناس فروش علی رضایی') === 'علی رضایی')
+      ok('عنوان: «خانم شیدایی» → «شیدایی»', gazetteerName('با تشکر\nخانم شیدایی') === 'شیدایی')
+      ok('آدرس «خیابان محمد علی جناح» نامِ جعلی نمی‌سازد', gazetteerName('فروش\nخیابان محمد علی جناح پلاک ۵') === null)
+      ok('«کارشناس منطقه غرب» (مکان) نامِ جعلی نمی‌سازد', gazetteerName('ملک\nکارشناس منطقه غرب') === null)
+      ok('نامِ کوچک بدونِ کلیدواژهٔ نقش فعال نمی‌شود', gazetteerName('واحد تهران\nنزدیک محمد طهرانی') === null)
+      // فاز ۲۹۸م — برچسب روی یک خط، نام روی خطِ بعد (نمونهٔ واقعیِ کاربر: «کارشناس ملکی شما ؛ / احمد
+      // باغبانی») — مدل این را از دست می‌داد و به‌جایش «رازقی» را از آدرسِ «یاس رز رازقی» می‌گرفت.
+      const BAGH = 'فروشنده واقعی\n___________\nکارشناس ملکی شما ؛\nاحمد باغبانی\nشهرک راه آهن ، سروستان قائم بنفشه یاس رز رازقی\nآدرس دفتر ؛ بنفشه یکم'
+      ok('برچسب+خطِ بعد: «کارشناس ملکی شما ؛ / احمد باغبانی» → «احمد باغبانی»', gazetteerName(BAGH) === 'احمد باغبانی')
+      ok('آدرسِ «یاس رز رازقی» دیگر نامِ جعلیِ «رازقی» نمی‌سازد (gazetteer مقدم)', (bestName('', BAGH) || {}).name === 'احمد باغبانی')
+      ok('برچسب + آدرسِ خطِ بعد اسم نمی‌سازد', gazetteerName('کارشناس منطقه :\nشهرک راه آهن بنفشه') === null)
+      ok('«شهریار هستم …» → «شهریار» (هستم حذف می‌شود)', (bestName('', 'نوساز\nشهریار هستم در خدمت شما') || {}).name === 'شهریار')
+      // فاز ۲۹۸ه — نامِ خانوادگیِ تنها پس از کلیدواژهٔ نقش/دونقطه (دادهٔ واقعیِ PMKbXmwY):
+      // «کارشناس منطقه باقریان»، «مشاور شما پارسافر»، «در کنارتان هستیم: فریدمهر».
+      ok('«کارشناس منطقه باقریان» → «باقریان»', gazetteerName('نورگیر عالی\nکارشناس منطقه باقریان') === 'باقریان')
+      ok('«مشاور شما پارسافر» → «پارسافر»', gazetteerName('آماده تحویل\nمشاور شما پارسافر') === 'پارسافر')
+      ok('«در کنارتان هستیم: فریدمهر» → «فریدمهر»', gazetteerName('لوکیشن عالی\nدر کنارتان هستیم: فریدمهر') === 'فریدمهر')
+      ok('«کارشناس تخصصی منطقه طلایی» (مکان/طلا) اسم نمی‌سازد', gazetteerName('دیزاین\nکارشناس تخصصی منطقه طلایی') === null)
+      ok('«کارشناس منطقه نیلوفر» (محله) اسم نمی‌سازد', gazetteerName('عالی\nکارشناس منطقه نیلوفر') === null)
+      ok('«آدرس: سعادت‌آباد» اسم نمی‌سازد', gazetteerName('خوب\nآدرس: سعادت‌آباد') === null)
+      // فاز ۲۹۸ی۳ — نامِ تک‌کلمه‌ای که هم‌زمان نامِ شهر است («شهریار») با سیگنالِ قطعیِ شخص
+      // (عنوان/معرفیِ خود) باید نام بگیرد؛ بدونِ سیگنال (حدسِ مدل) همچنان بی‌نام بماند.
+      // دادهٔ واقعیِ PMKbXmwY: «خانم شهریار» در دو آگهی بی‌نام می‌ماند چون validName شهر را رد می‌کرد.
+      const { extractSignature: xs298 } = await import('../app/lib/agency-roster.ts')
+      const { validName: vn298 } = await import('../app/lib/agency-name-lexicon.ts')
+      ok('عنوان «خانم شهریار» → extractSignature نام می‌دهد (شهرِ هم‌نام با شخص)', xs298('آپارتمان', 'فول\n☎️فقط بازدید\nخانم شهریار\nفایلهای فروش منطقه ۲۲', 'آژانس شاهان')[0] === 'شهریار')
+      ok('«شهریار هستم …» → extractSignature نام می‌دهد', xs298('آپارتمان', 'نوساز\nشهریار هستم در خدمت شما', 'آژانس شاهان')[0] === 'شهریار')
+      // مکانیزمِ قطعی (مستقل از مدل): شهرِ تک‌کلمه‌ای بدونِ سیگنالِ شخص بَن است، با سیگنال آزاد.
+      ok('validName(«شهریار») بدونِ سیگنالِ شخص = بَن', vn298('شهریار') === '')
+      ok('validName(«شهریار», trustPerson) = آزاد', vn298('شهریار', '', undefined, { trustPerson: true }) === 'شهریار')
+      // «طلایی» هرگز از مسیرِ سیگنالِ قطعیِ شخص (gazetteer/labeled/selfIntro) عبور نمی‌کند، پس trust نمی‌گیرد.
+      ok('«کارشناس تخصصی منطقه طلایی» هیچ سیگنالِ شخص نمی‌دهد (gazetteer=null)', gazetteerName('دیزاین\nکارشناس تخصصی منطقه طلایی') === null)
+    }
     // فاز ۲۷۵ (فیدبک: «نامِ مشاورانِ رُستر آشغال درمی‌آید — لوکیشن، منطقه، دوخواب، قابل، عزیزان،
     // باهماهنگی، آزاد، ایرانی»): دو ریشه بسته شد — واژگانِ املاکی رد می‌شوند، و استخراج فقط از
     // «بلوکِ امضا» انجام می‌شود نه هرجای متن (نمونهٔ واقعی: «فلاحی» از آدرسِ «بین فلاحی ۴۱ و ۴۳»).
@@ -2747,7 +2790,8 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('پاسِ قطع‌شده: درخواست زنده می‌ماند و خودکار دوباره صف می‌شود', p1.ok === false && s1.runRequested === true && (await listDueRosters(Date.now())).some(x => x.id === id196))
       ok('پیشرفتِ واقعی (رسیدن به ایمپورت) شمارندهٔ تلاش را می‌بخشد — کیلِ دیپلوی به give-up نمی‌رسد', (s1.runAttempts || 0) === 0)
       const rowsAfterP1 = rowFetches, aiAfterP1 = aiCalls
-      ok('پاسِ ۱ همهٔ ردیف‌ها را خواند و AI را پرسید (کش ساخته شد)', rowsAfterP1 === N && aiAfterP1 >= 1)
+      // فاز ۲۹۷خ — شناساییِ نام ML-only شد: AI دیگر «اصلاً» پرسیده نمی‌شود (گپ غیرفعال).
+      ok('پاسِ ۱ همهٔ ردیف‌ها را خواند و AI هرگز پرسیده نشد (ML-only — فاز ۲۹۷خ)', rowsAfterP1 === N && aiAfterP1 === 0)
       // پاسِ ۲: بودجهٔ کافی → باید کامل شود، بدونِ «هیچ» خواندنِ دوباره از دیوار و بدونِ AI تکراری
       const p2 = await syncRoster(id196, undefined, { budgetMs: 600_000, f, fetchPost })
       const s2 = await getScrape(id196)
@@ -3242,10 +3286,15 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
     console.log = (...a) => { logs285.push(a.join(' ')) }   // لاگ‌های reassign جمع می‌شوند (خلوتیِ خروجیِ تست)
     gr285 = await ros285.graduateAdvisor(sid285, 'akbari', '09001285201')
   } finally { console.log = origLog285 }
+  // فاز ۲۸۷ — انتشار دیگر داخلِ انتقال نیست: reassign فقط کپی می‌کند و «جارویِ انتشار»
+  // (صفِ جداگانه، هر تیک چندتا) عمومی می‌کند. اینجا جارو تا خالی‌شدن اجرا می‌شود.
+  const preSweep285 = await adv285.getAdvisor('09001285201')
+  ok('فاز ۲۸۷: بلافاصله بعدِ انتقال هیچ فایلی هنوز عمومی نیست (انتشار با صفِ جداگانه)', preSweep285.listings.filter(l => l.status === 'active').every(l => !l.publicId))
+  for (let i = 0; i < 10; i++) { if (!(await ros285.repairOrphanPublishes(20))) break }
   const tgt285 = await adv285.getAdvisor('09001285201')
   const act285 = tgt285.listings.filter(l => l.status === 'active')
   ok('graduate: موفق و همهٔ ۱۸ فایل منتقل شد', gr285.ok === true && gr285.moved === 18 && tgt285.listings.length === 18)
-  ok('target: هر ۱۷ فایلِ فعال publicId دارد (انتشارِ دسته‌ای، با flushِ چانک+پایانی)', act285.length === 17 && act285.every(l => l.publicId && l.published))
+  ok('target: هر ۱۷ فایلِ فعال بعدِ جارویِ انتشار publicId دارد', act285.length === 17 && act285.every(l => l.publicId && l.published))
   const soldL285 = tgt285.listings.find(l => l.status === 'sold')
   ok('فایلِ فروخته منتشر نشد و وضعیتش ماند', !!soldL285 && !soldL285.publicId)
   ok('مبدأ (مالکِ موقت) کاملاً خالی شد', (await adv285.getAdvisor(tempO285)).listings.length === 0)
@@ -3269,11 +3318,210 @@ console.log('\n── انتشارِ دسته‌ای: هم‌ارزی با مس�
   try {
     console.log = () => {}
     gr2_285 = await ros285.graduateAdvisor(sid285, 'akbari', '09001285201')
+    for (let i = 0; i < 10; i++) { if (!(await ros285.repairOrphanPublishes(20))) break }   // فاز ۲۸۷: ترمیم هم کارِ جارویِ انتشار است
   } finally { console.log = origLog285 }
   const fixedL285 = (await adv285.getAdvisor('09001285201')).listings.find(l => l.title === crashTitle)
   ok('ترمیم: فایل دوباره publicId گرفت — با بازپس‌گیریِ همان آیتم، نه ردیفِ نو', gr2_285.ok === true && fixedL285.publicId === crashPub && fixedL285.published === true)
   const scrDb2_285 = JSON.parse(fs285.readFileSync('.scraper-data.json', 'utf-8'))
   ok('ترمیم: در اسکرپر فقط «یک» آیتمِ غیرduplicate از آن ملک هست', scrDb2_285.items.filter(i => i.title === crashTitle && i.status !== 'duplicate').length === 1)
+}
+
+// ── فاز ۲۹۵ — امضای برچسب‌دارِ «مشاور/کارشناس …: نام» (پیش‌تقدمِ قطعی بر مدلِ NER) ──
+{
+  const { labeledName, bestName } = await import('../app/lib/roster-ner.ts')
+  const ad295 = 'متراژ ۷۶ متر\n✨ ویژگی های ساختمان:\n✅ فول بازسازی\n🔴 تاپ لوکیشن منطقه\nرضایی مجد\n⚖️ مشاور و کارشناس منطقه:رها'
+  ok('امضای برچسب‌دار: «کارشناس منطقه:رها» (نامِ چسبیده به دونقطه) خوانده می‌شود', labeledName(ad295) === 'رها')
+  ok('bestName بدونِ مدل هم همان نامِ برچسب‌دار را با اطمینانِ بالا می‌دهد', (bestName('آپارتمان ۷۶ متری', ad295) || {}).name === 'رها')
+  ok('برچسبِ با فاصله و نامِ دوبخشی: «کارشناس فروش : احمدی راد»', labeledName('توضیح\nکارشناس فروش : احمدی راد\nتماس') === 'احمدی راد')
+  ok('واژهٔ نقشی بعد از دونقطه نام نیست: «مشاوره رایگان: تماس بگیرید»', labeledName('مشاوره رایگان: تماس بگیرید') === null)
+  ok('واژهٔ ملکی بعد از دونقطه نام نیست: «کارشناس خرید: ملک شما»', labeledName('خط۱\nکارشناس خرید: ملک شما') === null)
+  ok('برچسبِ خارج از ناحیهٔ امضا (۶ خطِ آخر) نادیده می‌ماند', labeledName('کارشناس: قاسمی\n۱\n۲\n۳\n۴\n۵\n۶\n۷') === null)
+}
+
+// ── فاز ۲۹۶ — سایت‌سازِ خودکار: اسلاگِ فارسی + بدنهٔ سایت از دادهٔ واقعی ──
+{
+  const { sanitizeSlug } = await import('../app/lib/sites-store.ts')
+  const { buildAutoSitePayload } = await import('../app/lib/auto-site.ts')
+  ok('اسلاگِ فارسی: «علی رضایی» → علی-رضایی', sanitizeSlug('علی رضایی') === 'علی-رضایی')
+  ok('اسلاگِ قدیمیِ لاتین مثلِ قبل کار می‌کند', sanitizeSlug('My Site! 22') === 'my-site-22')
+  const pay296 = buildAutoSitePayload({ phone: '09120000296', name: 'علی رضایی', roleType: 'pros', city: 'تهران', tagline: '', about: 'بیش از ده سال تجربهٔ مشاورهٔ املاک در غرب تهران و همراهیِ صدها معامله.', logo: '', specialties: ['آپارتمان', 'ویلایی'], contactPhone: '', address: '' })
+  const types296 = pay296.pages[0].blocks.map(b => b.type)
+  ok('خانهٔ سایتِ مشاور کامل است: hero/listings/services/testimonials/blog/cta/footer', ['hero', 'listings', 'services', 'testimonials', 'blog', 'cta', 'footer'].every(t => types296.includes(t)))
+  ok('هیروی خانه نام و نقشِ خودِ شخص را دارد (نه متنِ نمونهٔ قالب)', pay296.pages[0].blocks[0].type === 'hero' && pay296.pages[0].blocks[0].props.heading === 'علی رضایی' && pay296.pages[0].blocks[0].props.subheading.includes('تهران'))
+  ok('عنوانِ سئو با نامِ شخص شروع می‌شود و شهر دارد', pay296.seo.title.startsWith('علی رضایی') && pay296.seo.title.includes('تهران'))
+  ok('توضیحِ سئو از واقعیت‌ها ساخته شده (تخصص‌ها) و ≤۱۶۰', pay296.seo.description.includes('آپارتمان') && pay296.seo.description.length <= 160)
+  const pay296b = buildAutoSitePayload({ phone: '09120000297', name: 'استودیو معماری نو', roleType: 'architect', specialties: [], about: '', logo: '', contactPhone: '', address: '', arch: { cover: 'https://x/c.jpg', images: ['https://x/1.jpg', 'https://x/2.jpg'], projDone: 8, projDoing: 2, honors: 3, rating: 4.6, edus: ['لیسانس معماری'], skills: ['طراحی داخلی'], engagements: ['نظارت'], officeName: 'دفتر نو' } })
+  const types296b = pay296b.pages[0].blocks.map(b => b.type)
+  ok('معمار بلوکِ آگهی ندارد (دادهٔ ملکی ندارد)', !types296b.includes('listings') && !types296b.includes('searchlist') && !pay296b.pages.some(p => p.slug === 'listings'))
+  ok('سایتِ معمار دادهٔ کاملِ طرح‌۲طرح را دارد: stats/gallery/services', types296b.includes('stats') && types296b.includes('gallery') && types296b.includes('services'))
+  const st296 = pay296b.pages[0].blocks.find(b => b.type === 'stats')
+  ok('آمارِ معمار فقط عددهای واقعیِ ناصفر است', Array.isArray(st296.props.items) && st296.props.items.length === 4 && st296.props.items.every(i => i.value && i.label))
+
+  // ── فاز ۲۹۷هـ — سایتِ خودکار «خودِ» قالبِ کاملِ سایت‌ساز است (همهٔ صفحات + تم) ──
+  const slugs297 = pay296.pages.map(p => p.slug)
+  ok('سایتِ مشاور همهٔ صفحه‌های قالبِ صنفش را دارد: درباره/فایل‌ها/خدمات/وبلاگ/تماس', ['home', 'about', 'listings', 'services', 'blog', 'contact'].every(s => slugs297.includes(s)))
+  const lp297 = pay296.pages.find(p => p.slug === 'listings')
+  ok('صفحهٔ «فایل‌ها» جستجو/فیلترِ کامل با سقفِ ۱۲۰ دارد', lp297.blocks.some(b => b.type === 'searchlist' && b.props.total === 120))
+  ok('تمِ قالب (پالتِ حرفه‌ای) روی سایت می‌نشیند', !!pay296.theme && /^#[0-9a-f]{6}$/i.test(pay296.theme.primary))
+  ok('قانونِ آهنین: مشاورِ بدونِ آمارِ واقعی هیچ بلوکِ آماری ندارد (عددِ نمونهٔ قالب جعل است)', pay296.pages.every(p => p.blocks.every(b => b.type !== 'stats')))
+  ok('قانونِ آهنین: ایمیلِ نمونهٔ قالب (info@example.com) هیچ‌جا نمی‌ماند', pay296.pages.every(p => p.blocks.every(b => !String(b.props.email || '').includes('example.com'))))
+  ok('خدماتِ واقعی (تخصص‌ها) جای خدماتِ نمونهٔ قالب می‌نشیند', pay296.pages[0].blocks.find(b => b.type === 'services').props.items.some(i => i.title === 'آپارتمان'))
+  const slugs297b = pay296b.pages.map(p => p.slug)
+  ok('سایتِ معمار صفحهٔ «نمونه‌کارها» دارد و مشاور ندارد', slugs297b.includes('portfolio') && !slugs297.includes('portfolio'))
+  ok('صفحهٔ نمونه‌کارها گالریِ کاملِ عکس‌های واقعی دارد', pay296b.pages.find(p => p.slug === 'portfolio').blocks.some(b => b.type === 'gallery' && b.props.images.length === 2))
+  ok('تحصیلاتِ واقعیِ معمار روی صفحهٔ «درباره» است', pay296b.pages.find(p => p.slug === 'about').blocks.some(b => b.type === 'services' && b.props.heading === 'تحصیلات و سوابق'))
+  const allIds297 = pay296.pages.flatMap(p => p.blocks.map(b => b.id))
+  ok('شناسهٔ بلوک‌ها در کلِ سایت یکتاست', new Set(allIds297).size === allIds297.length)
+  const agency297 = buildAutoSitePayload({ phone: '02112345678', name: 'آژانس تست', roleType: 'agency', specialties: [], about: '', logo: '', contactPhone: '', address: '' })
+  ok('سایتِ آژانس بلوکِ تیم و صفحهٔ «تیمِ ما» دارد', agency297.pages.some(p => p.blocks.some(b => b.type === 'team')) && agency297.pages.some(p => p.slug === 'team'))
+  ok('انتخابِ قالب قطعی است (بازسازی همان سایت را می‌دهد)', JSON.stringify(buildAutoSitePayload({ phone: '09120000296', name: 'علی رضایی', roleType: 'pros', city: 'تهران', tagline: '', about: 'بیش از ده سال تجربهٔ مشاورهٔ املاک در غرب تهران و همراهیِ صدها معامله.', logo: '', specialties: ['آپارتمان', 'ویلایی'], contactPhone: '', address: '' })) === JSON.stringify(pay296))
+
+  // ── فاز ۲۹۷ف — هیچ دکمه‌ای به انکرِ مرده نمی‌رود («سوتیِ تماس با ما») ──
+  const cBase297 = `/${encodeURIComponent(pay296.slug)}/contact`
+  const innerHeroes297 = pay296.pages.slice(1).filter(p => p.slug !== 'contact').flatMap(p => p.blocks.filter(b => b.type === 'hero'))
+  ok('دکمهٔ هیروی صفحه‌های داخلی به صفحهٔ واقعیِ «تماس» می‌رود', innerHeroes297.length > 0 && innerHeroes297.every(b => b.props.buttonLink === cBase297))
+  const aboutCta297 = pay296.pages.find(p => p.slug === 'about').blocks.find(b => b.type === 'cta')
+  ok('CTAی صفحهٔ بدونِ بلوکِ تماس هم به صفحهٔ تماس می‌رود', !aboutCta297 || aboutCta297.props.buttonLink === cBase297 || String(aboutCta297.props.buttonLink).startsWith('/pros/') || String(aboutCta297.props.buttonLink).startsWith('/'))
+  ok('دکمهٔ هیروی خانهٔ مشاور به سکشنِ آگهی‌ها می‌رود', pay296.pages[0].blocks[0].props.buttonLink === '#listings')
+  const archInner297 = pay296b.pages.slice(1).filter(p => p.slug !== 'contact').flatMap(p => p.blocks.filter(b => b.type === 'hero'))
+  ok('برچسبِ دکمهٔ صنفی: معمار «درخواستِ مشاورهٔ طراحی»', archInner297.every(b => b.props.buttonText === 'درخواستِ مشاورهٔ طراحی'))
+
+  // ── فاز ۲۹۷و — محتوای هر صنف باید «مالِ همان صنف» باشد (سازنده متنِ خرید/فروش نگیرد) ──
+  const { PROFILE_PRESETS, buildProfileSite } = await import('../app/lib/site-templates.ts')
+  ok('هر ۱۲ صنف preset صنفی دارند (قبلاً ۶ تا به متنِ عمومیِ املاک می‌افتادند)', ['مشاور', 'آژانس', 'سازنده', 'فروشگاه', 'سرمایه‌گذار', 'حقوقی', 'معمار', 'پیمانکار', 'کارشناس', 'دفتر حقوقی', 'بانک و بیمه', 'دفترخانه'].every(k => PROFILE_PRESETS[k]?.services?.length >= 4 && PROFILE_PRESETS[k].about && PROFILE_PRESETS[k].eyebrow))
+  const bld297 = buildProfileSite('سازنده')
+  const bldAbout = bld297.pages.flatMap(p => p.blocks).find(b => b.type === 'about')
+  const bldHero = bld297.pages[0].blocks.find(b => b.type === 'hero')
+  ok('قالبِ سازنده محتوای ساخت‌وساز دارد نه خرید/فروش/اجاره', bldAbout.props.text.includes('ساخت') && !bldAbout.props.text.includes('اجاره ملک') && bldHero.props.eyebrow === 'ساخت و ساز')
+  const bldAuto297 = buildAutoSitePayload({ phone: '09120000298', name: 'جواهری', roleType: 'builder', specialties: [], about: '', logo: '', contactPhone: '', address: '' })
+  ok('سایتِ خودکارِ سازنده: نشانِ هیرو «سازنده» و خدمات/دربارهٔ ساخت‌وساز', bldAuto297.pages[0].blocks[0].props.eyebrow === 'سازنده' && bldAuto297.pages.flatMap(p => p.blocks).some(b => b.type === 'services' && b.props.items.some(i => String(i.title).includes('مشارکت'))))
+
+  // ── فاز ۲۹۷ز — پروژه‌های واقعیِ سازنده روی سایتش («پروژه‌ها رو نشون نمیده») ──
+  const bldSeed297 = { phone: '09120000299', name: 'پناهی آذر', roleType: 'builder', specialties: [], about: '', logo: '', contactPhone: '', address: '', bld: { count: 12, regionsCount: 3, unitsSum: 84, areaSum: 5200, photos: ['https://x/p1.jpg'], projects: [{ title: 'پروژهٔ سعادت‌آباد', desc: 'منطقه ۲ · ۵ طبقه · ۱۰ واحد', image: 'https://x/p1.jpg', href: '/projects/x' }] } }
+  const bldSite297 = buildAutoSitePayload(bldSeed297)
+  const bHome297 = bldSite297.pages[0].blocks
+  ok('خانهٔ سازنده کارتِ پروژه‌های واقعی دارد (عکس + لینک به صفحهٔ پروژه)', bHome297.some(b => b.type === 'services' && b.props.heading === 'پروژه‌های ما' && b.props.items[0].href === '/projects/x' && b.props.items[0].image))
+  ok('آمارِ سازنده واقعی است: پروژه/منطقه/واحد/متراژ', bHome297.some(b => b.type === 'stats' && b.props.items.length === 4 && b.props.items.some(i => i.label === 'پروژهٔ ثبت‌شده')))
+  ok('صفحهٔ «پروژه‌ها» با فهرستِ پروژه‌های واقعی زنده است', bldSite297.pages.some(p => p.slug === 'projects' && p.blocks.some(b => b.type === 'services' && b.props.heading === 'پروژه‌های ما')))
+  ok('گالریِ سازنده از عکسِ واقعیِ پروژه‌ها پر می‌شود', bldSite297.pages.flatMap(p => p.blocks).some(b => b.type === 'gallery' && b.props.images[0] === 'https://x/p1.jpg'))
+  ok('دکمهٔ هیروی خانهٔ سازندهٔ عکس‌دار به گالریِ پروژه‌ها می‌رود', bldSite297.pages[0].blocks.find(b => b.type === 'hero').props.buttonLink === '#gallery')
+  ok('سازندهٔ بدونِ دادهٔ پروژه، کارت/آمارِ جعلی نمی‌گیرد', !bldAuto297.pages.flatMap(p => p.blocks).some(b => b.type === 'stats' || (b.type === 'services' && b.props.heading === 'پروژه‌های ما')))
+
+  // ── فاز ۲۹۷ح — منو در فوتر: لینکِ واقعیِ صفحه‌های همین سایت، نه انکرِ مردهٔ قالب ──
+  const ft297 = pay296.pages[0].blocks.find(b => b.type === 'footer')
+  ok('فوتر منوی واقعیِ سایت را دارد (خانه + صفحه‌ها با اسلاگِ خودِ سایت)', ft297.props.links[0].href === `/${encodeURIComponent(pay296.slug)}` && ft297.props.links.some(l => l.href === `/${encodeURIComponent(pay296.slug)}/listings`) && !ft297.props.links.some(l => String(l.href).startsWith('#')))
+  ok('فوترِ همهٔ صفحه‌ها همین منو را دارد', pay296.pages.every(p => p.blocks.filter(b => b.type === 'footer').every(b => b.props.links.length >= 4)))
+}
+
+// ── فاز ۲۹۶ج — اسلاگِ فارسیِ سایت از پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود ──
+{
+  const { saveSite, getSite } = await import('../app/lib/sites-store.ts')
+  await saveSite({ slug: 'آژانس املاک تستی', title: 'آژانس املاک تستی', owner: '09000000296', ownerName: 'آژانس املاک تستی', pages: [{ slug: 'home', title: 'خانه', blocks: [] }] })
+  const direct = await getSite('آژانس-املاک-تستی')
+  const encoded = await getSite(encodeURIComponent('آژانس-املاک-تستی'))
+  ok('اسلاگِ فارسی مستقیم پیدا می‌شود', !!direct && direct.owner === '09000000296')
+  ok('پارامترِ درصد-کدشدهٔ Next هم پیدا می‌شود (ریشهٔ ۴۰۴ همگانی)', !!encoded && encoded.slug === direct.slug)
+}
+
+// ── فاز ۲۹۷ل — ضمیر هرگز اسمِ مشاور نیست («خودمان» با ۱۱ فایل، از متنِ کلیشه‌ایِ آژانس) ──
+{
+  const { extractSignature, validName } = await import('../app/lib/agency-roster.ts')
+  const d297 = 'فروش ۸۷متر بدون مشابه در منطقه\nجهت احترام به وقت شما و خودمان تمامی اطلاعات دقیق و\nدرست درج شده است\nسند تک برگ شخصی\nبدون هیچ ضعفی\nبازدید آزاد'
+  const s297 = extractSignature('فروش ۸۷ متر', d297, 'مشاورین املاک ژنرال')
+  ok('«خودمان» (ضمیر، از متنِ کلیشه‌ای) هرگز مشاور نمی‌شود', !s297.some(n => n.includes('خودمان')))
+  ok('کلِ خانوادهٔ ضمیرِ «خود» از دروازهٔ نام رد می‌شود', ['خودمان', 'خودمون', 'خودش', 'خودت', 'خودشان'].every(w => validName(w, '') === ''))
+
+  // ── فاز ۲۹۷م — معرفیِ صریحِ خود («خوشبین هستم در خدمت شما») قطعی و مقدم بر مدل است ──
+  const { bestName, selfIntroName } = await import('../app/lib/roster-ner.ts')
+  const dKh = 'واحد بازسازی شده با بهترین متریال\nمالک فروشنده\nقابلیت رهن تا مبلغ ۲۸۰۰ به عهده ماست\nخوشبین هستم در خدمت شما عزیزان'
+  const bn297 = bestName('فروش ۱۰۶متر', dKh)
+  ok('«خوشبین هستم در خدمت شما» → نامِ مشاور «خوشبین» (نه آژانس)', bn297?.name === 'خوشبین' && bn297.p >= 0.9)
+  ok('extractSignature همان یک نام را می‌دهد (نه قابلیت/مبلغ/ماست)', JSON.stringify(extractSignature('فروش ۱۰۶متر', dKh, 'مشاورین املاک ژنرال')) === '["خوشبین"]')
+  ok('صفتِ حسی با «هستم» نام نمی‌شود', selfIntroName('مفتخر هستم در خدمت شما') === null && selfIntroName('خوشحال هستیم در کنارِ شما') === null && selfIntroName('در خدمت شما هستم') === null)
+  ok('«محمد پرنده هستم مشاور و امین شما» هنوز درست درمی‌آید', selfIntroName('توضیحات ملک\nمحمد پرنده هستم مشاور و امین شما') === 'محمد پرنده')
+}
+
+// ── فاز ۲۹۷ک — ممیزیِ نظرات با ML خودی (بدونِ هیچ فراخوانِ AI) ──
+{
+  const { classifyReview, learnReview } = await import('../app/lib/review-ml.ts')
+  const v1 = await classifyReview('علی', 'برای خرید تماس بگیرید ۰۹۱۲۱۲۳۴۵۶۷')
+  ok('شمارهٔ تماس در متن → ردِ قطعی (قاعده، نه AI)', v1.verdict === 'reject')
+  const v2 = await classifyReview('x', 'بهترین مشاور! آیدی تلگرام @bestamlak')
+  ok('آیدی/لینکِ تبلیغاتی → ردِ قطعی', v2.verdict === 'reject')
+  const v3 = await classifyReview('رضا', 'بلبلطرزسبسییییسب')
+  ok('متنِ بی‌ساختار خودکار منتشر نمی‌شود → در انتظارِ بررسی', v3.verdict === 'review')
+  const v4 = await classifyReview('مینا', 'برخورد بسیار حرفه‌ای بود و در خریدِ آپارتمان صادقانه راهنمایی کردند')
+  ok('متنِ سالم → پیشنهادِ تایید', v4.verdict === 'approve')
+  const v5 = await classifyReview('ناشناس', 'این آقا کلاهبردار است و پولم را خورد')
+  ok('واژهٔ تند → داوریِ انسانی (شاید شکایتِ واقعی باشد)', v5.verdict === 'review')
+  // یادگیری: ۴۰ داوریِ واقعی روی یک الگویِ اسپمِ تکرارشونده → مدل خودش رد می‌کند
+  for (let i = 0; i < 25; i++) await learnReview('فروش ویژه کابینت ام دی اف با نصب رایگان تماس داخل پیج', false)
+  for (let i = 0; i < 25; i++) await learnReview('مشاورِ دقیق و پیگیری بودند و قرارداد خوب بست', true)
+  const v6 = await classifyReview('x', 'فروش ویژه کابینت ام دی اف نصب رایگان در پیج ما')
+  ok('یادگیرنده پس از ۵۰ داوری، اسپمِ مشابه را خودش رد می‌کند', v6.verdict === 'reject' && v6.reason.includes('ML'))
+  const { moderateReview } = await import('../app/lib/moderation.ts')
+  const v7 = await moderateReview('x', 'برخورد عالی و قیمت‌گذاریِ منصفانه‌ای داشتند ممنونم')
+  ok('مسیرِ ممیزیِ نظرات کلاً از ML می‌گذرد (بدونِ نیاز به AI/اعتبارِ گپ)', v7.verdict === 'approve')
+}
+
+// ── فاز ۲۹۷ج — تیمِ آژانسِ اسکرپی: fallback به مشاورانِ graduateشدهٔ رُستر ──
+{
+  const { addScrape, patchScrape } = await import('../app/lib/agency-roster-store.ts')
+  const { getTeamMembers } = await import('../app/lib/team-members.ts')
+  const r297 = await addScrape({ slug: 'team-fallback-297' })
+  await patchScrape(r297.scrape.id, {
+    agencyOwner: '09127772970',
+    advisors: [
+      { key: 'k1', name: 'رضا تیمی', owner: '09127772971', phone: '09127772971', listingCount: 3 },
+      { key: 'k2', name: 'بی‌حساب', owner: 'adv:x:k2', listingCount: 1 },   // graduate نشده — نباید بیاید
+    ],
+  })
+  const team297 = await getTeamMembers('09127772970')
+  ok('آژانسِ بدونِ رابطهٔ رسمی، تیمش از رُستر می‌آید (فقط حساب‌دارها)', team297.length === 1 && team297[0].phone === '09127772971' && team297[0].name === 'رضا تیمی')
+}
+
+// ── فاز ۲۹۷ش — کیس‌استادیِ شاهان: واژهٔ عمومی/شهر هرگز «نامِ تنها» نیست ──
+{
+  const { validName, strictName } = await import('../app/lib/agency-name-lexicon.ts')
+  ok('واژه‌های پایهٔ ملکی اسم نیستند (خانه/منزل/ساختمان/پروژه/فرصت)',
+    ['خانه', 'منزل', 'ساختمان', 'پروژه', 'فرصت'].every(w => validName(w, '') === ''))
+  ok('«طلایی» تنها اسم نیست (از «منطقه طلایی») ولی «رضا طلایی» نام‌خانوادگیِ سالم است',
+    validName('طلایی', '') === '' && validName('رضا طلایی', '') === 'رضا طلایی')
+  ok('نامِ شهرِ تنها اسم نیست ولی «تهرانی» (نام‌خانوادگی) سالم می‌ماند',
+    validName('تهران', '') === '' && validName('پردیس', '') === '' && validName('تهرانی', '') === 'تهرانی')
+  ok('«فرصت طلایی» (عبارتِ تبلیغاتی) اسم نمی‌شود', validName('فرصت طلایی', '') === '')
+  ok('واژه‌نامهٔ مسموم خود-هرس می‌شود: strictName(«خانه») خالی است → pruneLearned می‌اندازدش',
+    strictName('خانه') === '')
+
+  // ── فاز ۲۹۷ت — حدس‌های آشغالِ مدل و مسموم‌های زندهٔ تولید («همراهتان» با ۲ فایل مشاور شده بود) ──
+  ok('حدس‌های آشغالِ کیس‌استادی اسم نیستند (تمیز/سخت/غیر/انبار/همراهتان/یکپارچه/نگهبانی)',
+    ['تمیز', 'سخت', 'غیر', 'انبار', 'همراهتان', 'یکپارچه', 'نگهبانی', 'اطلاعات بیش'].every(w => validName(w, '') === ''))
+  ok('مدخلِ مسمومِ «باقی میماند» از دروازهٔ یادگیری/واژه‌نامه رد می‌شود (strictName) — «باقی» تنها نامِ سالم است',
+    strictName('باقی میماند') === '' && validName('باقی', '') === 'باقی')
+  ok('نام‌های واقعیِ هم‌خانواده سالم می‌مانند (باقی/همراهی‌فر مثالِ ترکیبِ سالم)',
+    validName('باقی', '') === 'باقی' && validName('رضا نگهدار', '') === 'رضا نگهدار')
+
+  // ── فاز ۲۹۷ث — امضای برچسب‌دار با جداکنندهٔ ~/تیره («مشاور تخصصی منطقه ~ علیرضا فلاحی» ×۲ بی‌نام بود) ──
+  const { labeledName } = await import('../app/lib/roster-ner.ts')
+  ok('«مشاور تخصصی منطقه ~ علیرضا فلاحی» با جداکنندهٔ ~ شناخته می‌شود',
+    labeledName('بدون مشابه در منطقه\nبازدید = قرارداد\n⚜️ مشاور تخصصی منطقه ~ علیرضا فلاحی') === 'علیرضا فلاحی')
+  ok('«کارشناس فروش - رضایی» با خطِ تیره هم شناخته می‌شود',
+    labeledName('توضیحات ملک\nکارشناس فروش - رضایی') === 'رضایی')
+  ok('مرزِ کلمه: «کارشناسی شده - تک برگ» و «مشاوره رایگان - تماس» نامِ جعلی نمی‌سازند',
+    labeledName('کارشناسی شده - تک برگ') === null && labeledName('مشاوره رایگان - تماس بگیرید') === null)
+  ok('سبکِ قدیمیِ دونقطه هنوز کار می‌کند («مشاور و کارشناس منطقه:رها»)',
+    labeledName('مشاور و کارشناس منطقه:رها') === 'رها')
+}
+
+// ── فاز ۲۹۷ص — پیامکِ سایت‌ساز بدونِ لینکِ کوتاه «نمی‌رود» (شکستِ بی‌صدا ممنوع) ──
+{
+  const { shortenUrlDetailed, mustShortenUrl, firstUrl } = await import('../app/lib/shortener.ts')
+  const longU = `https://melkjet.com/${encodeURIComponent('زهرا-شهابی')}`
+  ok('URLِ درصد-encodedِ فارسی توسطِ regexِ لینک کامل دیده می‌شود', firstUrl(`سلام ${longU} ملک‌جت`) === longU)
+  const d297s = await shortenUrlDetailed(longU)
+  ok('کوتاه‌کنندهٔ پیکربندی‌نشده «علت» برمی‌گرداند، نه nullِ بی‌صدا', d297s.ok === false && d297s.error.includes('پیکربندی نشده'))
+  const m297s = await mustShortenUrl(longU, { channel: 'autosite' })
+  ok('لینکِ کوتاهِ الزامی: شکست = خطای شفاف (نه لینکِ غول‌پیکر در پیامک)', m297s.ok === false && m297s.error.includes('پیکربندی نشده'))
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)

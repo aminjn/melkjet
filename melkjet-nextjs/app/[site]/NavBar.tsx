@@ -44,7 +44,17 @@ export default function NavBar({
       `}</style>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 18, minHeight: 64 }}>
-        <a href={`/${siteSlug}`} style={{ fontSize: 19, fontWeight: 900, color: 'var(--mjs-heading)', textDecoration: 'none', marginLeft: 'auto', letterSpacing: '-0.4px', flex: '0 0 auto' }}>{brand}</a>
+        {/* فاز ۲۹۷ق۲ — لوگومارک: مربعِ گرادیانی با حرفِ اولِ برند، به‌جای متنِ لخت */}
+        <a href={`/${siteSlug}`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginLeft: 'auto', flex: '0 0 auto', minWidth: 0 }}>
+          <span aria-hidden style={{
+            width: 38, height: 38, borderRadius: 12, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18, fontWeight: 900, color: '#fff',
+            background: `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 65%, var(--mjs-secondary)))`,
+            boxShadow: `0 8px 20px -8px ${primary}`,
+          }}>{(brand || 'م').trim().charAt(0)}</span>
+          <span style={{ fontSize: 18.5, fontWeight: 900, color: 'var(--mjs-heading)', letterSpacing: '-0.4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{brand}</span>
+        </a>
 
         {/* آیتم‌های افقیِ دسکتاپ */}
         <div className="mjs-nav-inline" style={{ alignItems: 'center', gap: 4, flex: '1 1 auto', justifyContent: 'flex-start' }}>

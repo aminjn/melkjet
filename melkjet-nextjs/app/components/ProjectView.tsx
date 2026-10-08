@@ -7,6 +7,7 @@ import StaticMap from './StaticMap'
 import NeshanMap from './NeshanMap'
 import RevealPhone from './RevealPhone'
 import CompareButton from './CompareButton'
+import BuilderReviews, { type BuilderReviewItem } from './BuilderReviews'
 
 const fa = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const faNum = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -21,7 +22,8 @@ interface ViewProject {
   lat: number | null; lng: number | null
   amenities: string[]; plans: { label: string; url: string }[]; usage?: string
   priceText?: string; salesProgress?: number
-  builder: { id: string; name: string; hasPhone: boolean; projectCount: number; regions: string[] }
+  builder: { id: string; slug?: string; name: string; hasPhone: boolean; projectCount: number; regions: string[] }
+  builderReviews?: BuilderReviewItem[]   // فاز ۲۹۲ — نظراتِ تاییدشدهٔ سازنده
   similar: { hashId: string; address: string; region: string; photo: string; builderName: string; slug?: string }[]
 }
 interface Intel {
@@ -90,11 +92,10 @@ export default function ProjectView({ p }: { p: ViewProject }) {
 
   return (
     <div dir="rtl" style={{
-      '--bg': '#0d0d0f', '--bg2': '#141417', '--surface': '#18181c', '--line': 'rgba(255,255,255,0.08)',
-      '--line2': 'rgba(255,255,255,0.14)', '--text': '#f2f1ee', '--muted': '#9a9a98', '--faint': '#6a6a68',
-      '--gold': '#c9a96a', '--gold2': '#e0c489', '--goldDim': 'rgba(201,169,106,0.12)',
+      // فاز ۲۹۴ — پالتِ تیرهٔ میخ‌شدهٔ inline حذف شد: متغیرها از تمِ سراسری (html.light) می‌آیند
+      // تا سوییچِ دارک/لایت روی این صفحه هم اثر کند («دارک و لایت می‌کنیم هیچی تغییر نمی‌کنه»).
       minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', system-ui, sans-serif",
-    } as React.CSSProperties}>
+    }}>
       <Nav />
 
       {/* Hero */}
@@ -285,7 +286,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
             <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ width: 56, height: 56, borderRadius: 18, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontSize: 22, fontWeight: 900 }}>{devLogo}</div>
               <div style={{ minWidth: 0 }}>
-                <Link href={`/builders/${encodeURIComponent(p.builder.id)}`} style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', textDecoration: 'none' }}>{p.builder.name}</Link>
+                <Link href={`/builders/${encodeURIComponent(p.builder.slug || p.builder.id)}`} style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', textDecoration: 'none' }}>{p.builder.name}</Link>
                 <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>{p.builder.regions.length ? `فعال در ${p.builder.regions.join('، ')}` : 'سازنده / انبوه‌ساز'}</div>
               </div>
               <div style={{ marginRight: 'auto', display: 'flex', gap: 20 }}>
@@ -295,6 +296,12 @@ export default function ProjectView({ p }: { p: ViewProject }) {
                 </div>
               </div>
             </div>
+          </section>
+
+          {/* فاز ۲۹۲ — نظراتِ کاربران دربارهٔ سازنده (انتشار با تاییدِ ادمین) */}
+          <section style={card}>
+            <div style={h}>نظراتِ کاربران</div>
+            <BuilderReviews builderId={p.builder.id} builderName={p.builder.name} projectName={p.title} reviews={p.builderReviews || []} />
           </section>
 
           {/* Similar */}

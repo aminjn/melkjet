@@ -45,6 +45,7 @@ export interface Listing {
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
   published?: boolean; publicId?: string
   unpublishedAt?: number   // فاز ۲۸۴ — unpublishِ عمدیِ مشاور؛ مسیرِ ترمیمِ graduate این را دوباره منتشر نمی‌کند
+  enrichFrom?: string      // فاز ۲۸۷ — publicIdِ قبلیِ همین ملک (انتقالِ رُستر): جارویِ انتشار غنی‌سازی را از آن کپی می‌کند تا دیوار دوباره خوانده نشود
   // اتصال فایل به لیدها: یک لیدِ فروشنده + چند لیدِ خریدار (برای CRM)
   sellerLeadId?: string; buyerLeadIds?: string[]
 }
@@ -135,6 +136,22 @@ export async function mergeAdvisorData(from: string, to: string): Promise<{ list
   return counts
 }
 
+// فاز ۲۹۸ه — حذفِ کاملِ دادهٔ مشاورِ یک مالک (cascade حذفِ حساب): فایل‌ها/لیدها/قرارها و
+// آگهی‌های عمومیِ منتشرشده‌اش (publicId) پاک می‌شوند، سپس خودِ شاردِ advisor:{owner}.
+export async function deleteAdvisorData(owner: string): Promise<{ listings: number; publicDeleted: number }> {
+  const o = String(owner || '').trim()
+  if (!o) return { listings: 0, publicDeleted: 0 }
+  let src: AdvisorData | null
+  if (pgEnabled()) { await ensureMigratedPg(); src = await kvGet<AdvisorData | null>(ownerKey(o), null) }
+  else { src = fileLoad().advisors[o] || null }
+  if (!src) return { listings: 0, publicDeleted: 0 }
+  let publicDeleted = 0
+  for (const l of src.listings || []) { if (l.publicId) { try { await deleteItem(l.publicId); publicDeleted++ } catch { /* ردیفِ بعدی */ } } }
+  if (pgEnabled()) await kvDelete(ownerKey(o))
+  else { const db = fileLoad(); delete db.advisors[o]; fileSave(db) }
+  return { listings: (src.listings || []).length, publicDeleted }
+}
+
 export const STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'closed', 'lost']
 const LISTING_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
 const APPT_STATUSES: ApptStatus[] = ['scheduled', 'done', 'canceled']
@@ -163,6 +180,24 @@ function applyAdvisor(db: DB, o: string): boolean {
 export async function allAdvisorProfiles(): Promise<Record<string, AdvisorData>> {
   if (pgEnabled()) return pgAllOwners()
   return fileLoad().advisors || {}
+}
+
+export type AdvisorProfileLean = AdvisorData['profile']
+// فاز ۲۸۹ (پرفِ دایرکتوری) — فقط فیلدِ profile از همهٔ شاردها. allAdvisorProfiles سندهای کامل
+// (با آرایه‌های آگهی، بعضی‌ها چند مگابایت) را می‌کشید و هر کلیکِ دستهٔ دایرکتوری ثانیه‌ها/دقیقه‌ها
+// «در حال بارگذاری» می‌ماند. اینجا برش سمتِ خودِ پستگرس است و کلِ انتقال چند کیلوبایت.
+export async function allAdvisorProfilesLean(): Promise<Record<string, AdvisorProfileLean>> {
+  if (!pgEnabled()) {
+    const out: Record<string, AdvisorProfileLean> = {}
+    for (const [k, v] of Object.entries(fileLoad().advisors || {})) out[k] = v.profile
+    return out
+  }
+  await ensureMigratedPg()
+  const { kvGetPrefixField } = await import('./db')
+  const rows = await kvGetPrefixField<AdvisorProfileLean>(OWNER_PREFIX, 'profile')
+  const out: Record<string, AdvisorProfileLean> = {}
+  for (const { key, data } of rows) if (data) out[key.slice(OWNER_PREFIX.length)] = data
+  return out
 }
 
 export async function getAdvisor(o: string): Promise<AdvisorData> {
@@ -323,6 +358,7 @@ export async function addListing(o: string, input: Partial<Listing>): Promise<Li
       phone: input.phone ? String(input.phone) : undefined,
       description: input.description ? String(input.description) : undefined,
       images: Array.isArray(input.images) ? input.images.slice(0, 12).map(String) : [],
+      enrichFrom: input.enrichFrom ? String(input.enrichFrom) : undefined,
     }
     a.listings.unshift(c)
   })

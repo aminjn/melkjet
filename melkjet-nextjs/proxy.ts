@@ -12,8 +12,21 @@ const secret = new TextEncoder().encode(
 //   سوپرادمین → همه‌چیز. پرسنل (claim `staff` داخلِ JWT — اعطا در کشوی کاربر) → صفحهٔ /admin آزاد
 //   (خودِ صفحه منو را به بخش‌های مجاز محدود می‌کند) و /api/admin/* فقط برای بخش‌های اعطاشده؛
 //   هر مسیرِ نگاشت‌نشده (impersonate، تغییرِ رمز، نقش‌ها، درگاه‌ها، کلیدها…) = فقط سوپرادمین.
+// فاز ۲۹۸ج — پنل‌های کسب‌وکار: کاربرِ بدونِ ورود نباید روی «پوستهٔ خالیِ پنل» بنشیند (فیدبک:
+// «از فوترِ میز کار سازنده وارد پنل میشه»). فقط «خودِ» مسیرِ داشبورد گِیت می‌شود — پروفایل‌های
+// عمومیِ /agency/{slug} و /builder/{slug} و /materials/{slug} دست‌نخورده می‌مانند (matcher دقیق).
+// کاربرِ واردشده (حتی بدونِ پلن) رد می‌شود تا «حالتِ مشاهده» ببیند. داده هرگز لو نمی‌رفت (APIها
+// از قبل سمتِ سرور ۴۰۱/خالی می‌دهند و هر استور با session.phone ایزوله است) — این فقط ریدایرکتِ UX است.
+const BIZ_PANELS = new Set(['/builder', '/crm', '/agency', '/marketing', '/materials', '/website-builder', '/workflow'])
+
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname
+  if (BIZ_PANELS.has(path)) {
+    const t = req.cookies.get(SESSION_COOKIE)?.value
+    const toAuth = () => NextResponse.redirect(new URL('/auth?next=' + encodeURIComponent(path), req.url))
+    if (!t) return toAuth()
+    try { await jwtVerify(t, secret); return NextResponse.next() } catch { return toAuth() }
+  }
   const isAdminPage = path.startsWith('/admin')
   const isAdminApi = path.startsWith('/api/admin')
   if (!isAdminPage && !isAdminApi) return NextResponse.next()
@@ -45,5 +58,6 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*'],
+  // مسیرهای پنلِ کسب‌وکار «دقیق» (بدونِ :path*) تا پروفایل‌های عمومیِ {type}/{slug} گِیت نشوند.
+  matcher: ['/admin/:path*', '/api/admin/:path*', '/builder', '/crm', '/agency', '/marketing', '/materials', '/website-builder', '/workflow'],
 }

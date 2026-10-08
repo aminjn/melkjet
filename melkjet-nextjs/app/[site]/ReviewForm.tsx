@@ -17,7 +17,7 @@ export default function ReviewForm({ slug, primary }: { slug: string; primary: s
   const [doneMsg, setDoneMsg] = useState('')
 
   const inputStyle: React.CSSProperties = {
-    minHeight: 48, background: 'var(--mjs-bg)', border: '1px solid #e6ddcd', borderRadius: 12,
+    minHeight: 48, background: 'var(--mjs-bg)', border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)', borderRadius: 12,
     padding: '0 16px', fontSize: 14.5, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box',
   }
 
@@ -61,7 +61,7 @@ export default function ReviewForm({ slug, primary }: { slug: string; primary: s
 
   return (
     <form onSubmit={submit} style={{
-      maxWidth: 560, margin: '36px auto 0', background: 'var(--mjs-bg)', border: '1px solid #efe9df',
+      maxWidth: 560, margin: '36px auto 0', background: 'var(--mjs-bg)', border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)',
       borderRadius: 18, padding: 'clamp(22px,4vw,30px)', boxShadow: CARD_SHADOW, direction: 'rtl',
     }}>
       <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--mjs-heading)', marginBottom: 18 }}>ثبتِ نظرِ شما</div>
@@ -86,7 +86,7 @@ export default function ReviewForm({ slug, primary }: { slug: string; primary: s
               onMouseLeave={() => setHover(0)}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer', padding: 2, lineHeight: 1,
-                fontSize: 28, color: filled ? primary : '#e3dccf', transition: 'color .15s ease',
+                fontSize: 28, color: filled ? primary : 'color-mix(in srgb, var(--mjs-text) 25%, transparent)', transition: 'color .15s ease',
               }}
             >★</button>
           )

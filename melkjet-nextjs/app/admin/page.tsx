@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
@@ -19,10 +19,10 @@ import { FA_DIGITS, faDigit } from '@/app/lib/digits'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
-  | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
+  | 'overview' | 'scraper' | 'persiansaze' | 'tarh2tarh' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
-  | 'reos' | 'suspension' | 'site' | 'staffCrm'
+  | 'reos' | 'suspension' | 'site' | 'staffCrm' | 'dirReviews' | 'userSites'
   | 'empire' | 'empirePlayers' | 'empireEconomy' | 'empireCapital' | 'empireMissions' | 'empireEngage' | 'empireWorld' | 'empireLiveops' | 'empireAccess' | 'empireMetrics' | 'empireAi' | 'empireRewards'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string; accent?: boolean }
@@ -75,6 +75,7 @@ const sections: NavSection[] = [
       { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس (دیوار)' },
       { id: 'catalog',     icon: '🧱', label: 'کاتالوگِ مصالح (اسکرپ)' },
       { id: 'persiansaze', icon: '🏗', label: 'سازنده‌ها (پرشین‌سازه)' },
+      { id: 'tarh2tarh', icon: '📐', label: 'معماران (طرح‌۲طرح)' },
     ],
   },
   {
@@ -82,6 +83,8 @@ const sections: NavSection[] = [
     items: [
       { id: 'users',       icon: '◍',  label: 'کاربران' },
       { id: 'profiles',    icon: '👁', label: 'پروفایل‌ها' },
+      { id: 'dirReviews',  icon: '💬', label: 'نظرات و تیک آبی' },
+      { id: 'userSites',   icon: '🌐', label: 'سایت‌سازها' },
       { id: 'staffCrm',    icon: '📞', label: 'CRM مرکزی (مشتریان)', accent: true },
       { id: 'crm',         icon: '👁',  label: 'نظارت بر CRM کاربران' },
       { id: 'roles',       icon: '🛡', label: 'نقش‌ها و دسترسی' },
@@ -128,6 +131,9 @@ const viewTitles: Record<View, string> = {
   scraper:    'موتور اسکرپی هوشمند',
   catalog:    'کاتالوگِ مرجعِ مصالح',
   persiansaze: 'سازنده‌ها (پرشین سازه)',
+  tarh2tarh: 'معماران (طرح‌۲طرح)',
+  dirReviews: 'نظراتِ متخصصان و تیکِ آبی',
+  userSites: 'سایت‌سازها — سایت‌های اختصاصیِ کاربران',
   listings:   'مدیریت آگهی‌ها و محتوا',
   products:   'مدیریت محصولات فروشگاه',
   categories: 'دسته‌بندی‌ها',
@@ -1910,6 +1916,400 @@ interface PSState {
   revealLog: string
 }
 
+// ─── سایت‌سازها — فاز ۲۹۶ب: سایت‌های اختصاصیِ کاربران + آمارِ بازدید/جستجو ────────
+interface UserSiteRow { slug: string; title: string; owner: string; ownerName: string; role: string; auto: boolean; pending: boolean; smsState: string; smsAt: number; smsTries: number; smsErr: string; siteAt: number; lastLogin: number; createdAt: number; updatedAt: number; today: number; d7v: number; d7s: number; d7p: number; totalV: number; totalS: number; totalP: number; lastAt: number; topQueries: string[] }
+function UserSitesView() {
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const [rows, setRows] = useState<UserSiteRow[]>([])
+  const [totals, setTotals] = useState<{ sites: number; pending: number; auto: number; manual: number; smsSent: number; viewsToday: number; views7d: number; searches7d: number; phones7d: number; loggedInEver: number; loggedIn7d: number; smsFailed: number; smsInvalid: number; smsWaiting: number; smsSampleErr: string } | null>(null)
+  const [smsMsg, setSmsMsg] = useState('')
+  const [q, setQ] = useState('')
+  // فاز ۲۹۷ج — فیلترهای پنل (خواستهٔ صریح: «تو سوپرادمین فیلتر بزار»)
+  const [fType, setFType] = useState<'all' | 'auto' | 'manual'>('all')
+  // فاز ۲۹۷ن — وضعیتِ سایت (ساخته/در صفِ ساخت) و وضعیتِ دقیقِ پیامک، ردیف‌به‌ردیف
+  const [fSite, setFSite] = useState<'all' | 'built' | 'queued'>('all')
+  const [fSms, setFSms] = useState<'all' | 'sent' | 'waiting' | 'failed' | 'invalid'>('all')
+  const [fLogin, setFLogin] = useState<'all' | 'yes' | 'never'>('all')
+  const [fVisit, setFVisit] = useState<'all' | 'has' | 'zero'>('all')
+  const [fRole, setFRole] = useState('')
+  const [open, setOpen] = useState('')
+  // فاز ۲۹۷س — انتخابِ دستیِ کاربرها برای ارسالِ پیامکِ سایت (یکی یا دسته‌ای)
+  const [sel, setSel] = useState<string[]>([])
+  const [sending, setSending] = useState(false)
+  const [sendMsg, setSendMsg] = useState('')
+  const [loading, setLoading] = useState(true)
+  const load = async () => {
+    setLoading(true)
+    try { const r = await fetch('/api/admin/sites'); if (r.ok) { const j = await r.json(); setRows(j.rows || []); setTotals(j.totals || null) } } catch {}
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+  const roles297 = Array.from(new Set(rows.map(r => r.role).filter(Boolean))).sort()
+  const filtered = rows.filter(r =>
+    (!q || r.ownerName.includes(q) || r.title.includes(q) || r.slug.includes(q) || r.owner.includes(q)) &&
+    (fType === 'all' || (fType === 'auto' ? r.auto : !r.auto)) &&
+    (fSite === 'all' || (fSite === 'queued' ? r.pending : !r.pending)) &&
+    (fSms === 'all' || (fSms === 'waiting' ? (r.smsState === 'waiting' || r.smsState === 'queued') : r.smsState === fSms)) &&
+    (fLogin === 'all' || (fLogin === 'yes' ? !!r.lastLogin : !r.lastLogin)) &&
+    (fVisit === 'all' || (fVisit === 'has' ? r.totalV > 0 : r.totalV === 0)) &&
+    (!fRole || r.role === fRole)
+  )
+  // گروهِ چیپ‌های یک فیلتر — گزینهٔ فعال طلایی است
+  const chips = <V extends string>(label: string, value: V, set: (v: V) => void, opts: [V, string][]) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, color: 'var(--faint)' }}>{label}:</span>
+      {opts.map(([v, t]) => (
+        <button key={v} onClick={() => set(v)} style={{ padding: '4px 11px', borderRadius: 999, border: '1px solid ' + (value === v ? 'var(--gold)' : 'var(--line2)'), background: value === v ? 'rgba(201,168,76,.14)' : 'var(--bg2)', color: value === v ? 'var(--gold)' : 'var(--muted)', fontSize: 11.5, fontWeight: value === v ? 800 : 600, cursor: 'pointer', fontFamily: 'inherit' }}>{t}</button>
+      ))}
+    </span>
+  )
+  const tile = (label: string, val: string, color?: string) => (
+    <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 110 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{label}</div><div style={{ fontSize: 22, fontWeight: 900, color: color || 'var(--text)' }}>{val}</div></div>
+  )
+  const ago = (ts: number) => { if (!ts) return '—'; const m = Math.floor((Date.now() - ts) / 60000); if (m < 60) return `${fa(m)} دقیقه پیش`; const h = Math.floor(m / 60); if (h < 24) return `${fa(h)} ساعت پیش`; return `${fa(Math.floor(h / 24))} روز پیش` }
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(95,217,138,.08), transparent 60%), var(--surface)', borderColor: 'rgba(95,217,138,.35)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 24 }}>🌐</span>
+          <div><div style={{ fontWeight: 900, fontSize: 17 }}>سایت‌سازها</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.8 }}>سایتِ اختصاصیِ هر کاربر (خودکار یا دست‌ساز) با آمارِ بازدید و جستجوی داخلِ سایت. بازدید از مرورگرِ واقعیِ بازدیدکننده شمرده می‌شود.</div></div>
+        </div>
+      </Card>
+      {totals && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+          {tile('کل سایت‌ها', fa(totals.sites))}
+          {tile('در صفِ ساخت', fa(totals.pending), totals.pending ? '#e7a14a' : undefined)}
+          {tile('خودکار', fa(totals.auto), '#5fd98a')}
+          {tile('دست‌ساز', fa(totals.manual))}
+          {tile('پیامک رفته', fa(totals.smsSent), 'var(--gold)')}
+          {tile('بازدید امروز', fa(totals.viewsToday), '#60a5fa')}
+          {tile('بازدید ۷ روز', fa(totals.views7d), '#60a5fa')}
+          {tile('نمایشِ شماره ۷ر', fa(totals.phones7d ?? 0), '#34d399')}
+          {tile('جستجو ۷ روز', fa(totals.searches7d))}
+          {tile('ورودِ کاربر (کل)', fa(totals.loggedInEver))}
+          {tile('ورودِ ۷ روز', fa(totals.loggedIn7d), '#5fd98a')}
+          {tile('پیامکِ ناموفق', fa(totals.smsFailed), totals.smsFailed ? '#e7674a' : undefined)}
+          {totals.smsInvalid > 0 && tile('شمارهٔ ثابت (پیامک‌ناپذیر)', fa(totals.smsInvalid), 'var(--muted)')}
+        </div>
+      )}
+      {totals && totals.smsFailed > 0 && (
+        <Card style={{ marginBottom: 14, borderColor: 'rgba(231,103,74,.4)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
+            <span style={{ color: '#e7674a', fontWeight: 800 }}>⚠ {fa(totals.smsFailed)} پیامکِ سایت‌ساز نرفته است.</span>
+            {totals.smsSampleErr && <span style={{ color: 'var(--muted)' }}>آخرین خطا: <code style={{ direction: 'ltr', display: 'inline-block' }}>{totals.smsSampleErr}</code></span>}
+            <span style={{ color: 'var(--faint)', fontSize: 12 }}>معمولاً یعنی «کد پترنِ سایت‌ساز» در بخشِ «پیامک و الگوها» تنظیم نشده. بعد از تنظیم، این دکمه را بزن (شماره‌های ثابت که پیامک‌ناپذیرند جداگانه شمرده می‌شوند و دوباره تلاش نمی‌شوند):</span>
+            <button disabled={!!smsMsg} onClick={async () => {
+              setSmsMsg('در حال بازنشانی…')
+              try { const r = await fetch('/api/admin/sites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resetSms' }) }); const j = await r.json(); setSmsMsg(j.ok ? `✓ ${fa(j.reset || 0)} پیامک دوباره در صفِ ارسال رفت (هر ۴۵ ثانیه چندتا می‌رود)` : '✗ خطا') } catch { setSmsMsg('✗ خطای شبکه') }
+              await load()
+            }} style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: '#e7a14a', color: '#241d00', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>🔁 تلاشِ دوباره برای همه</button>
+            {smsMsg && <span style={{ fontSize: 12.5, color: smsMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{smsMsg}</span>}
+          </div>
+        </Card>
+      )}
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <input style={{ ...inp, flex: '1 1 220px' }} placeholder="جستجو: نام، شماره، اسلاگ…" value={q} onChange={e => setQ(e.target.value)} />
+          <button onClick={load} style={{ padding: '9px 18px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>↻ تازه‌سازی</button>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(filtered.length)} ردیف</span>
+          {sel.length > 0 && (
+            <>
+              <button disabled={sending} onClick={async () => {
+                setSending(true); setSendMsg('در حال ارسال…')
+                try {
+                  const r = await fetch('/api/admin/sites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sendSms', phones: sel }) })
+                  const j = await r.json()
+                  if (j.ok) { setSendMsg(`✓ ${fa(j.sent)} پیامک رفت${j.failed ? ` · ✗ ${fa(j.failed)} خطا (علت روی ردیفِ هر کاربر)` : ''}`); setSel([]) }
+                  else setSendMsg(`✗ ${j.error || 'خطا'}`)
+                } catch { setSendMsg('✗ خطای شبکه') }
+                setSending(false); await load()
+              }} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: 'var(--gold)', color: '#241d00', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', opacity: sending ? .6 : 1 }}>📩 ارسالِ پیامک به {fa(sel.length)} کاربر</button>
+              <button onClick={() => setSel([])} style={{ padding: '9px 12px', borderRadius: 10, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--faint)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+            </>
+          )}
+          {sendMsg && <span style={{ fontSize: 12.5, color: sendMsg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{sendMsg}</span>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 12, padding: '10px 12px', background: 'var(--bg2)', borderRadius: 12 }}>
+          {chips('نوع', fType, setFType, [['all', 'همه'], ['auto', 'خودکار'], ['manual', 'دست‌ساز']])}
+          {chips('سایت', fSite, setFSite, [['all', 'همه'], ['built', 'ساخته‌شده'], ['queued', 'در صفِ ساخت']])}
+          {chips('پیامک', fSms, setFSms, [['all', 'همه'], ['sent', 'رفته 📩'], ['waiting', 'در صف'], ['failed', 'ناموفق'], ['invalid', 'پیامک‌ناپذیر']])}
+          {chips('ورودِ کاربر', fLogin, setFLogin, [['all', 'همه'], ['yes', 'وارد شده'], ['never', 'هرگز']])}
+          {chips('بازدید', fVisit, setFVisit, [['all', 'همه'], ['has', 'بازدیددار'], ['zero', 'صفر']])}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--faint)' }}>نقش:</span>
+            <select value={fRole} onChange={e => setFRole(e.target.value)} style={{ ...inp, padding: '5px 10px', fontSize: 11.5, borderRadius: 999 }}>
+              <option value="">همه</option>
+              {roles297.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </span>
+          {(fType !== 'all' || fSite !== 'all' || fSms !== 'all' || fLogin !== 'all' || fVisit !== 'all' || fRole) && (
+            <button onClick={() => { setFType('all'); setFSite('all'); setFSms('all'); setFLogin('all'); setFVisit('all'); setFRole('') }} style={{ padding: '4px 11px', borderRadius: 999, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--faint)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✕ پاک‌کردن فیلترها</button>
+          )}
+        </div>
+        {loading ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>در حال بارگذاری…</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead><tr style={{ color: 'var(--muted)', fontSize: 11.5, textAlign: 'right' }}>
+                <th style={{ padding: '8px 6px' }}><input type="checkbox" checked={filtered.slice(0, 300).length > 0 && filtered.slice(0, 300).every(r => sel.includes(r.owner))} onChange={e => setSel(e.target.checked ? [...new Set([...sel, ...filtered.slice(0, 300).map(r => r.owner)])] : sel.filter(p => !filtered.slice(0, 300).some(r => r.owner === p)))} style={{ cursor: 'pointer' }} /></th>
+                <th style={{ padding: '8px 6px' }}>کاربر</th><th style={{ padding: '8px 6px' }}>نقش</th><th style={{ padding: '8px 6px' }}>سایت</th><th style={{ padding: '8px 6px' }}>نوع</th><th style={{ padding: '8px 6px' }}>پیامک</th><th style={{ padding: '8px 6px' }}>امروز</th><th style={{ padding: '8px 6px' }}>۷ روز</th><th style={{ padding: '8px 6px' }}>جستجو ۷ر</th><th style={{ padding: '8px 6px' }}>شماره ۷ر</th><th style={{ padding: '8px 6px' }}>کل</th><th style={{ padding: '8px 6px' }}>آخرین بازدید</th><th style={{ padding: '8px 6px' }}>آخرین ورودِ کاربر</th>
+              </tr></thead>
+              <tbody>
+                {filtered.slice(0, 300).map(r => {
+                  const rk = r.slug || r.owner
+                  const smsChip = r.smsState === 'sent' ? ['📩 رفته', '#5fd98a'] : r.smsState === 'failed' ? ['✗ ناموفق', '#e7674a'] : r.smsState === 'invalid' ? ['☎ پیامک‌ناپذیر', 'var(--faint)'] : r.smsState === 'manual' ? ['—', 'var(--faint)'] : [r.smsTries ? `⏳ در صف (${fa(r.smsTries)} تلاش)` : '⏳ در صف', '#e7a14a']
+                  return (
+                  <Fragment key={rk}>
+                    <tr onClick={() => setOpen(open === rk ? '' : rk)} style={{ borderTop: '1px solid var(--line)', cursor: 'pointer' }}>
+                      <td style={{ padding: '9px 6px' }} onClick={e => e.stopPropagation()}><input type="checkbox" checked={sel.includes(r.owner)} onChange={e => setSel(e.target.checked ? [...sel, r.owner] : sel.filter(p => p !== r.owner))} style={{ cursor: 'pointer' }} /></td>
+                      <td style={{ padding: '9px 6px' }}><b>{r.ownerName}</b><div style={{ fontSize: 10.5, color: 'var(--faint)', direction: 'ltr', textAlign: 'right' }}>{r.owner}</div></td>
+                      <td style={{ padding: '9px 6px', color: 'var(--muted)' }}>{r.role || '—'}</td>
+                      <td style={{ padding: '9px 6px' }}>{r.pending ? <span style={{ fontSize: 10.5, color: '#e7a14a', background: 'rgba(231,161,74,.12)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>⏳ در صفِ ساخت</span> : <a href={`/${encodeURIComponent(r.slug)}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--gold)', textDecoration: 'none' }}>{r.slug} ↗</a>}</td>
+                      <td style={{ padding: '9px 6px' }}>{r.auto ? <span style={{ fontSize: 10.5, color: '#5fd98a', background: 'rgba(95,217,138,.1)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>خودکار</span> : <span style={{ fontSize: 10.5, color: 'var(--muted)', background: 'var(--bg2)', borderRadius: 999, padding: '2px 9px' }}>دست‌ساز</span>}</td>
+                      <td style={{ padding: '9px 6px' }}><span title={r.smsErr || ''} style={{ fontSize: 10.5, color: smsChip[1], fontWeight: 800, whiteSpace: 'nowrap' }}>{smsChip[0]}</span></td>
+                      <td style={{ padding: '9px 6px', fontWeight: 800, color: r.today ? '#60a5fa' : 'var(--faint)' }}>{fa(r.today)}</td>
+                      <td style={{ padding: '9px 6px', fontWeight: 800 }}>{fa(r.d7v)}</td>
+                      <td style={{ padding: '9px 6px' }}>{fa(r.d7s)}</td>
+                      <td style={{ padding: '9px 6px', fontWeight: 800, color: r.d7p ? '#34d399' : 'var(--faint)' }} title="نمایشِ شماره ۷ روز">{fa(r.d7p || 0)}</td>
+                      <td style={{ padding: '9px 6px', color: 'var(--muted)' }}>{fa(r.totalV)}</td>
+                      <td style={{ padding: '9px 6px', color: 'var(--faint)', fontSize: 11.5 }}>{ago(r.lastAt)}</td>
+                      <td style={{ padding: '9px 6px', fontSize: 11.5, color: r.lastLogin ? 'var(--muted)' : '#e7a14a' }}>{r.lastLogin ? ago(r.lastLogin) : 'هرگز وارد نشده'}</td>
+                    </tr>
+                    {open === rk && (
+                      <tr style={{ background: 'var(--bg2)' }}><td colSpan={13} style={{ padding: '10px 14px', fontSize: 12 }}>
+                        <b style={{ color: 'var(--muted)' }}>جستجوهای اخیرِ بازدیدکننده‌ها:</b>{' '}
+                        {r.topQueries.length ? r.topQueries.map((x, i) => <span key={i} style={{ display: 'inline-block', margin: '2px 4px', padding: '3px 10px', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999 }}>{x}</span>) : <span style={{ color: 'var(--faint)' }}>هنوز جستجویی ثبت نشده</span>}
+                        <span style={{ marginInlineStart: 14, color: 'var(--faint)' }}>{r.pending ? `حساب ساخته‌شده: ${new Date(r.createdAt).toLocaleString('fa-IR')} — سایت در صفِ جاروِ خودکار (هر ۴۵ ثانیه چندتا ساخته می‌شود)` : `ساختِ سایت: ${new Date(r.createdAt).toLocaleDateString('fa-IR')} · کل جستجو: ${fa(r.totalS)}`}</span>
+                        {r.smsAt ? <div style={{ marginTop: 6, color: '#5fd98a' }}>📩 پیامک رفته: {new Date(r.smsAt).toLocaleString('fa-IR')}</div> : null}
+                        {r.smsErr ? <div style={{ marginTop: 6, color: '#e7674a' }}>خطای آخرین پیامک ({fa(r.smsTries)} تلاش): <code style={{ direction: 'ltr', display: 'inline-block', background: 'var(--surface)', padding: '2px 8px', borderRadius: 8 }}>{r.smsErr}</code></div> : null}
+                      </td></tr>
+                    )}
+                  </Fragment>
+                )})}
+              </tbody>
+            </table>
+            {filtered.length > 300 && <div style={{ padding: 10, fontSize: 11.5, color: 'var(--faint)' }}>۳۰۰ ردیفِ اول نمایش داده شد — با جستجو محدود کن.</div>}
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ─── نظراتِ متخصصان و تیکِ آبی — فاز ۲۹۲ ─────────────────────────────────────
+interface DirPendingReview { id: string; source?: string; ownerPhone: string; ownerName: string; name: string; text: string; rating: number; createdAt: number; aiHint: string; byPhone?: string }
+function DirReviewsView() {
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const [pending, setPending] = useState<DirPendingReview[]>([])
+  const [approvedCount, setApprovedCount] = useState(0)
+  const [verified, setVerified] = useState<{ phone: string; name: string }[]>([])
+  const [tickPhone, setTickPhone] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState('')
+  const load = async () => {
+    try { const r = await fetch('/api/admin/reviews'); if (r.ok) { const j = await r.json(); setPending(j.pending || []); setApprovedCount(j.approvedCount || 0); setVerified(j.verified || []) } } catch {}
+  }
+  useEffect(() => { load() }, [])
+  const act = async (action: string, extra: Record<string, unknown> = {}) => {
+    setBusy(action + (extra.id || extra.phone || '')); setMsg('')
+    try {
+      const r = await fetch('/api/admin/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...extra }) })
+      const j = await r.json()
+      if (j.error) setMsg(`✗ ${j.error}`)
+      else setMsg(action === 'verify' ? (extra.on ? `✓ تیکِ آبی برای ${j.name || extra.phone} فعال شد` : `✓ تیکِ آبی برداشته شد`) : '✓ انجام شد')
+      await load()
+    } catch { setMsg('✗ خطای شبکه') } finally { setBusy('') }
+  }
+  const stars = (n: number) => <span style={{ color: 'var(--gold)', whiteSpace: 'nowrap' }}>{'★'.repeat(Math.max(1, Math.min(5, Math.round(n))))}<span style={{ color: 'var(--line2)' }}>{'★'.repeat(5 - Math.max(1, Math.min(5, Math.round(n))))}</span></span>
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(47,129,247,.08), transparent 60%), var(--surface)', borderColor: 'rgba(47,129,247,.35)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 24 }}>💬</span>
+          <div><div style={{ fontWeight: 900, fontSize: 17 }}>نظراتِ متخصصان و تیکِ آبی</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.8 }}>نظراتی که کاربران روی صفحاتِ دایرکتوری (مشاور/آژانس/معمار و…) ثبت می‌کنند فقط بعد از تاییدِ شما نمایش داده می‌شوند و در امتیاز/مرتب‌سازیِ دایرکتوری اثر می‌گذارند. تیکِ آبی نشانِ پولیِ تاییدِ ملک‌جت است — بعد از دریافتِ وجه، اینجا برای شمارهٔ حساب فعالش کن.</div></div>
+        </div>
+      </Card>
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>🔵 تیکِ آبی (نشانِ پولی)</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <input style={{ ...inp, direction: 'ltr', width: 180 }} placeholder="۰۹… شمارهٔ حساب" value={tickPhone} onChange={e => setTickPhone(e.target.value)} />
+          <button disabled={!!busy} onClick={() => { act('verify', { phone: tickPhone, on: true }); setTickPhone('') }} style={{ padding: '9px 20px', borderRadius: 10, border: 'none', background: '#2f81f7', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>فعال‌سازی تیک</button>
+        </div>
+        {verified.length > 0 ? (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {verified.map(v => (
+              <span key={v.phone} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '7px 12px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: '#2f81f7', color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>
+                <b>{v.name}</b><span style={{ color: 'var(--faint)', direction: 'ltr' }}>{v.phone}</span>
+                <button disabled={!!busy} onClick={() => act('verify', { phone: v.phone, on: false })} title="برداشتنِ تیک" style={{ background: 'none', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 13, fontWeight: 800 }}>✕</button>
+              </span>
+            ))}
+          </div>
+        ) : <div style={{ fontSize: 12.5, color: 'var(--faint)' }}>هنوز هیچ حسابی تیکِ آبی ندارد.</div>}
+      </Card>
+
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>در انتظارِ تایید {pending.length > 0 && <span style={{ fontSize: 12, color: '#e7a14a', fontWeight: 800 }}>({fa(pending.length)})</span>}</div>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(approvedCount)} نظرِ تاییدشده روی سایت</span>
+        </div>
+        {msg && <div style={{ marginBottom: 10, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
+        {pending.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--faint)', padding: '18px 0', textAlign: 'center' }}>صفِ تایید خالی است ✓</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 10 }}>
+            {pending.map(r => (
+              <div key={r.id} style={{ background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 12, padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6, fontSize: 12.5 }}>
+                  <b>{r.name}</b>
+                  {stars(r.rating)}
+                  <span style={{ color: 'var(--muted)' }}>برای <b style={{ color: 'var(--goldText)' }}>{r.ownerName}</b></span>
+                  {r.source === 'builder' && <span style={{ fontSize: 10.5, color: '#e7a14a', background: 'rgba(231,161,74,.1)', border: '1px solid rgba(231,161,74,.35)', borderRadius: 999, padding: '2px 9px', fontWeight: 800 }}>🏗 سازنده</span>}
+                  <span style={{ color: 'var(--faint)', fontSize: 11.5 }}>{new Date(r.createdAt).toLocaleDateString('fa-IR')}</span>
+                  {r.byPhone && <span title="شمارهٔ کاربرِ ثبت‌کننده" style={{ color: 'var(--faint)', fontSize: 11, direction: 'ltr' }}>👤 {r.byPhone}</span>}
+                  {r.aiHint && <span style={{ fontSize: 11, color: r.aiHint.includes('تایید') ? '#5fd98a' : '#e7a14a', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 999, padding: '2px 10px' }}>{r.aiHint.slice(0, 80)}</span>}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.9, marginBottom: 10 }}>{r.text}</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button disabled={!!busy} onClick={() => act('approve', { id: r.id, source: r.source, ownerPhone: r.ownerPhone })} style={{ padding: '7px 20px', borderRadius: 9, border: 'none', background: 'rgba(95,217,138,.15)', color: '#5fd98a', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', outline: '1px solid rgba(95,217,138,.4)' }}>✓ تایید و انتشار</button>
+                  <button disabled={!!busy} onClick={() => act('reject', { id: r.id, source: r.source, ownerPhone: r.ownerPhone })} style={{ padding: '7px 20px', borderRadius: 9, border: 'none', background: 'rgba(231,103,74,.12)', color: '#e7674a', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', outline: '1px solid rgba(231,103,74,.35)' }}>✕ رد و حذف</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ─── معماران (طرح‌۲طرح) — فاز ۲۸۸: اسکرپِ بانکِ معمارانِ tarh2tarh ─────────────
+interface T2tStats { handles: number; pageCursor: number; listDoneAt: number | null; fetched: number; errors: number; withPhone: number; lastTickAt: number | null; lastError: string; sampleErrors?: string[] }
+interface T2tRow { handle: string; name: string; title?: string; rank?: number; score?: number; phone?: string; projDone?: number; skills?: string[] }
+function Tarh2tarhView() {
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const [st, setSt] = useState<{ config: { enabled: boolean; cookieSet: boolean; pagesPerTick: number; profilesPerTick: number; delayMs: number }; stats: T2tStats } | null>(null)
+  const [cookie, setCookie] = useState('')
+  const [enabled, setEnabled] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [rows, setRows] = useState<T2tRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
+  const [q, setQ] = useState('')
+  const [onlyPhone, setOnlyPhone] = useState(false)
+  const [busy, setBusy] = useState('')
+  const load = async () => { try { const r = await fetch('/api/admin/tarh2tarh'); if (r.ok) { const j = await r.json(); setSt(j); setEnabled(!!j.config?.enabled) } } catch {} }
+  const loadProfiles = async (pg = 1, qq = q, ph = onlyPhone) => {
+    try { const r = await fetch(`/api/admin/tarh2tarh?view=profiles&page=${pg}&q=${encodeURIComponent(qq)}&withPhone=${ph ? 1 : 0}`); if (r.ok) { const j = await r.json(); setRows(j.items || []); setTotal(j.total || 0); setPage(j.page || 1); setPages(j.pages || 1) } } catch {}
+  }
+  useEffect(() => { load(); loadProfiles(1) }, [])
+  const act = async (action: string, extra: Record<string, unknown> = {}, label = '') => {
+    setBusy(action); setMsg(label || 'در حال اجرا…')
+    try {
+      const r = await fetch('/api/admin/tarh2tarh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...extra }) })
+      const j = await r.json()
+      if (j.ok === false || j.error) setMsg(`✗ ${j.error || 'خطا'}`)
+      else if (action === 'accounts') setMsg(`✓ ${(j.created || 0).toLocaleString('fa-IR')} حساب ساخته شد، ${(j.skipped || 0).toLocaleString('fa-IR')} از قبل بود، ${(j.noPhone || 0).toLocaleString('fa-IR')} بدونِ شماره`)
+      else setMsg('✓ انجام شد')
+      await load(); await loadProfiles(page)
+    } catch { setMsg('✗ خطای شبکه') } finally { setBusy('') }
+  }
+  const saveCfg = () => act('config', { enabled, ...(cookie.trim() ? { cookie: cookie.trim() } : {}) }, 'ذخیره…')
+  const s = st?.stats
+  const tile = (label: string, val: string, color?: string) => (
+    <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 110 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{label}</div><div style={{ fontSize: 22, fontWeight: 900, color: color || 'var(--text)' }}>{val}</div></div>
+  )
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 24 }}>📐</span>
+          <div><div style={{ fontWeight: 900, fontSize: 17 }}>معماران (طرح‌۲طرح)</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.8 }}>بانکِ معمارانِ tarh2tarh — پروفایل، آمار، پروژه‌ها و شماره‌ها اسکرپ و برای دستهٔ «معماران و طراحان» حسابِ معمار ساخته می‌شود. متن‌ها برای سئو با جمله‌بندیِ خودِ ملک‌جت تولید می‌شوند، نه کپی.</div></div>
+        </div>
+      </Card>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>پیکربندی</div>
+        <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 12, lineHeight: 1.9 }}>
+          برای شماره‌ها: یک‌بار در tarh2tarh.com لاگین کن، از DevTools (Network → هر درخواست → Request Headers) مقدارِ کاملِ هدرِ <b>Cookie</b> را کپی و اینجا بگذار. {st?.config.cookieSet ? <span style={{ color: '#5fd98a' }}>✓ کوکی ذخیره شده</span> : <span style={{ color: '#e7674a' }}>کوکی هنوز ذخیره نشده (اسکرپ بدونِ شماره پیش می‌رود)</span>}
+        </div>
+        <textarea style={{ ...inp, direction: 'ltr', textAlign: 'left', minHeight: 60, width: '100%', fontFamily: 'monospace', fontSize: 11 }} placeholder="مثلا: XSRF-TOKEN=…; tarh2tarh_session=…" value={cookie} onChange={e => setCookie(e.target.value)} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} style={{ width: 16, height: 16 }} /> اسکرپِ خودکار (زمان‌بندی‌شده روی سرور)</label>
+          <GoldButton onClick={saveCfg} disabled={busy === 'config'}>ذخیره</GoldButton>
+          {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : msg.startsWith('✗') ? '#e7674a' : 'var(--muted)' }}>{msg}</span>}
+        </div>
+      </Card>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>وضعیت</div>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
+          {tile('هندل‌های یافته', s ? fa(s.handles) : '—')}
+          {tile('پروفایلِ گرفته‌شده', s ? fa(s.fetched) : '—', 'var(--gold)')}
+          {tile('شماره‌دار', s ? fa(s.withPhone) : '—', '#5fd98a')}
+          {tile('خطا', s ? fa(s.errors) : '—', s?.errors ? '#e7674a' : undefined)}
+          {tile('صفحهٔ فهرستِ بعدی', s ? fa(s.pageCursor) : '—')}
+        </div>
+        {s?.lastError && <div style={{ fontSize: 12, color: '#e7674a', marginBottom: 10 }}>آخرین خطا: {s.lastError}</div>}
+        {(s?.sampleErrors?.length || 0) > 0 && (
+          <div style={{ fontSize: 11.5, color: '#e7674a', marginBottom: 10, lineHeight: 1.9, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px' }}>
+            {s!.sampleErrors!.map((e, i) => <div key={i}>{e}</div>)}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <GoldButton onClick={() => act('scan', {}, 'در حال اسکن…')} disabled={busy === 'scan'}>{busy === 'scan' ? 'در حال اسکن…' : '🔄 اسکنِ الان (چند صفحه/پروفایل)'}</GoldButton>
+          <GoldButton onClick={() => act('accounts')} disabled={busy === 'accounts'}>👤 ساختِ حسابِ معمار (شماره‌دارها)</GoldButton>
+          <OutlineButton onClick={() => { if (confirm('همهٔ داده‌های اسکرپ‌شدهٔ طرح‌۲طرح پاک شود؟ (حساب‌های ساخته‌شده می‌مانند)')) act('clear') }}>🗑 پاک‌کردنِ داده‌ها</OutlineButton>
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 10, lineHeight: 1.8 }}>اسکرپِ خودکار تدریجی است: هر تیک چند صفحهٔ فهرست و چند پروفایل، با مکث بینِ درخواست‌ها — تا فشار به سایتِ مبدأ نیاید و بلاک نشویم. ~۱۴هزار معمار یعنی چند روز تا تکمیل؛ لازم نیست کاری کنی.</div>
+      </Card>
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>پروفایلِ معماران</div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <input style={{ ...inp, width: 240 }} placeholder="جستجوی نام/هندل…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') loadProfiles(1, q, onlyPhone) }} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={onlyPhone} onChange={e => { setOnlyPhone(e.target.checked); loadProfiles(1, q, e.target.checked) }} /> فقط شماره‌دار</label>
+          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{fa(total)} معمار</span>
+        </div>
+        {rows.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '18px 0', textAlign: 'center' }}>هنوز پروفایلی گرفته نشده — «اسکنِ الان» را بزن.</div>
+        ) : (
+          <div className="mjc-table" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 620 }}>
+              <thead><tr style={{ color: 'var(--muted)', textAlign: 'right' }}>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>نام</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>عنوان</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>رتبه</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>شماره</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}></th>
+              </tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.handle} style={{ borderTop: '1px solid var(--line2)' }}>
+                    <td style={{ padding: '8px 6px', fontWeight: 700 }}>{r.name}</td>
+                    <td style={{ padding: '8px 6px', color: 'var(--muted)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title || '—'}</td>
+                    <td style={{ padding: '8px 6px' }}>{r.rank ? fa(r.rank) : '—'}</td>
+                    <td style={{ padding: '8px 6px', direction: 'ltr', textAlign: 'right', color: r.phone ? '#5fd98a' : 'var(--faint)' }}>{r.phone || '—'}</td>
+                    <td style={{ padding: '8px 6px' }}><a href={`https://www.tarh2tarh.com/@${r.handle}`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)' }}>دیدن در مبدأ ↗</a></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {pages > 1 && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
+            <OutlineButton onClick={() => loadProfiles(page - 1)} disabled={page <= 1}>قبلی</OutlineButton>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{fa(page)} / {fa(pages)}</span>
+            <OutlineButton onClick={() => loadProfiles(page + 1)} disabled={page >= pages}>بعدی</OutlineButton>
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
 // ── هوشِ آژانس ───────────────────────────────────────────────────────────────
 interface OwnCluster { slug: string; advisors: { phone: string; name: string; type: string }[] }
 const PTYPE_LABEL: Record<string, string> = { pros: 'مشاور', agency: 'آژانس', builder: 'سازنده', architect: 'معمار', contractor: 'پیمانکار', materials: 'مصالح', legal: 'وکیل', lawfirm: 'دفتر حقوقی', finance: 'مالی', appraiser: 'کارشناس', notary: 'دفترخانه' }
@@ -3553,13 +3953,13 @@ function ModelSelect({ models, value, onChange, only }: { models: string[]; valu
 
 // ─── IPPanel SMS config ───────────────────────────────────────────────────
 function IPPanelConfig() {
-  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code', automationPattern: '', automationVar: 'name', outreachPattern: '', outreachVar: 'name', linkVar: '' })
+  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code', automationPattern: '', automationVar: 'name', outreachPattern: '', outreachVar: 'name', autositePattern: '', autositeVar: 'name', linkVar: '' })
   const [masked, setMasked] = useState('')
   const [msg, setMsg] = useState('')
-  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code', automationPattern: d.automationPattern || '', automationVar: d.automationVar || 'name', outreachPattern: d.outreachPattern || '', outreachVar: d.outreachVar || 'name', linkVar: d.linkVar || '' })) } }) }, [])
+  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code', automationPattern: d.automationPattern || '', automationVar: d.automationVar || 'name', outreachPattern: d.outreachPattern || '', outreachVar: d.outreachVar || 'name', autositePattern: d.autositePattern || '', autositeVar: d.autositeVar || 'name', linkVar: d.linkVar || '' })) } }) }, [])
   const save = async () => {
     setMsg('')
-    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar, automationPattern: f.automationPattern, automationVar: f.automationVar, outreachPattern: f.outreachPattern, outreachVar: f.outreachVar, linkVar: f.linkVar }
+    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar, automationPattern: f.automationPattern, automationVar: f.automationVar, outreachPattern: f.outreachPattern, outreachVar: f.outreachVar, autositePattern: f.autositePattern, autositeVar: f.autositeVar, linkVar: f.linkVar }
     if (f.apiKey.trim()) payload.apiKey = f.apiKey.trim()
     const r = await fetch('/api/admin/ippanel-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     const d = await r.json()
@@ -3583,6 +3983,8 @@ function IPPanelConfig() {
         <div><label style={lab}>نام متغیرِ پترنِ اتوماسیون</label><input style={inp} placeholder="name" value={f.automationVar} onChange={e => setF({ ...f, automationVar: e.target.value })} /></div>
         <div><label style={lab}>کد پترنِ دعوت (مالکانِ آگهی)</label><input style={inp} placeholder="کدِ پترنِ دعوت/ثبت‌نام" value={f.outreachPattern} onChange={e => setF({ ...f, outreachPattern: e.target.value })} /></div>
         <div><label style={lab}>نام متغیرِ پترنِ دعوت</label><input style={inp} placeholder="name" value={f.outreachVar} onChange={e => setF({ ...f, outreachVar: e.target.value })} /></div>
+        <div><label style={lab}>کد پترنِ سایت‌ساز (اعلامِ «سایتِ شما آماده شد»)</label><input style={inp} placeholder="کدِ پترنِ سایت‌ساز" value={f.autositePattern} onChange={e => setF({ ...f, autositePattern: e.target.value })} /></div>
+        <div><label style={lab}>نام متغیرِ پترنِ سایت‌ساز</label><input style={inp} placeholder="name" value={f.autositeVar} onChange={e => setF({ ...f, autositeVar: e.target.value })} /></div>
         <div style={{ gridColumn: '1 / -1' }}><label style={lab}>نام متغیرِ لینک در پترن‌ها (مثلاً link) — برای کوتاه‌کنندهٔ لینک</label><input style={inp} placeholder="link" value={f.linkVar} onChange={e => setF({ ...f, linkVar: e.target.value })} /></div>
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: -4, marginBottom: 10, lineHeight: 1.8 }}>پترنِ اتوماسیون و دعوت برای خطِ خدماتی‌اند (متنِ ثابت + متغیرِ کوتاهِ نام). اگر خالی بمانند و خطِ تبلیغاتی داشته باشی، متنِ آزاد فرستاده می‌شود.</div>
@@ -3657,6 +4059,7 @@ function SmsView() {
     { ch: 'تکمیل پروفایل', v: 'message', text: 'کاربر گرامی ملک‌جت، وضعیت پروفایل کسب‌وکار شما: %message%. برای رفع، وارد پنل شوید.' },
     { ch: 'اتوماسیون گردش‌کار', v: 'name', text: 'سلام %name%، کارشناسِ ملک‌جت به‌زودی با شما تماس می‌گیرد. با تشکر.' },
     { ch: 'دعوت مالکانِ آگهی', v: 'name', text: '%name% گرامی، آگهی‌های شما رایگان و خودکار در ملک‌جت منتشر می‌شود! پنل اختصاصی، وب‌سایت‌ساز، CRM و دستیار هوش مصنوعی — همگی رایگان. همین حالا ثبت‌نام کنید: melkjet.com' },
+    { ch: 'سایت‌ساز (سایتِ اختصاصی آماده شد)', v: 'name + link', text: 'سلام %name% عزیز؛ سایت اختصاصی شما در ملک‌جت آماده شد: %link%\nملک‌جت' },
   ]
   return (
     <div style={{ animation: 'fade .35s ease' }}>
@@ -6749,10 +7152,10 @@ function SiteView() {
       {/* ── فاز ۲۷۰: هویتِ سایت (برند) ── */}
       <div style={card}>
         <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>🎨 هویتِ سایت (برند)</div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>نام، لوگو (روشن/تیره)، فاوآیکون و رنگِ برند. لوگو خالی = نمایشِ نام و نشانِ پیش‌فرض.</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>نام، لوگو (روشن/تیره)، فاوآیکون، عکسِ هیروی صفحهٔ اصلی و رنگِ برند. لوگو خالی = نمایشِ نام و نشانِ پیش‌فرض. عکسِ هیرو خالی = گرادیانِ سینمایی.</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={{ gridColumn: '1 / -1' }}><span style={lbl}>نامِ سایت</span><input style={inp} value={cfg.brand?.name || ''} onChange={e => setCfg({ ...cfg, brand: { ...cfg.brand, name: e.target.value } })} placeholder="ملک‌جت" /></div>
-          {(([['logoLight', 'لوگوی روشن (روی پس‌زمینهٔ روشن)'], ['logoDark', 'لوگوی تیره (روی پس‌زمینهٔ تیره)'], ['favicon', 'فاوآیکون (آیکونِ تبِ مرورگر)']]) as [string, string][]).map(([key, label]) => (
+          {(([['logoLight', 'لوگوی روشن (روی پس‌زمینهٔ روشن)'], ['logoDark', 'لوگوی تیره (روی پس‌زمینهٔ تیره)'], ['favicon', 'فاوآیکون (آیکونِ تبِ مرورگر)'], ['heroImage', 'عکسِ هیروی صفحهٔ اصلی (خالی = گرادیان)']]) as [string, string][]).map(([key, label]) => (
             <div key={key}>
               <span style={lbl}>{label}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -7329,6 +7732,9 @@ export default function SuperAdminPage() {
       case 'overview':   return <OverviewView />
       case 'scraper':    return <ScraperView />
       case 'persiansaze': return <PersianSazeView />
+      case 'tarh2tarh': return <Tarh2tarhView />
+      case 'dirReviews': return <DirReviewsView />
+      case 'userSites': return <UserSitesView />
       case 'support':    return <AdminSupportView />
       case 'listings':   return <ListingsView />
       case 'products':   return <ProductsView />

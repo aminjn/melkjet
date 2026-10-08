@@ -43,7 +43,7 @@ export default function PromoSpotlight({ items }: { items: SpotlightItem[] }) {
             {/* بصری: عکس یا آواتارِ حروف */}
             <div style={{ flexShrink: 0 }}>
               {cur.image
-                ? <div style={{ width: 'clamp(84px,12vw,120px)', height: 'clamp(84px,12vw,120px)', borderRadius: cur.isProfile ? '50%' : 16, background: `center/cover no-repeat url(${cur.image})`, border: '2px solid var(--gold)', boxShadow: '0 8px 24px -8px rgba(0,0,0,.5)' }} />
+                ? <div style={{ width: 'clamp(84px,12vw,120px)', height: 'clamp(84px,12vw,120px)', borderRadius: cur.isProfile ? '50%' : 16, background: `${cur.isProfile ? 'top' : 'center'}/cover no-repeat url(${cur.image})`, border: '2px solid var(--gold)', boxShadow: '0 8px 24px -8px rgba(0,0,0,.5)' }} />
                 : <div style={{ width: 'clamp(84px,12vw,120px)', height: 'clamp(84px,12vw,120px)', borderRadius: cur.isProfile ? '50%' : 16, background: `linear-gradient(140deg, ${col}, ${col}88)`, border: '2px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 'clamp(28px,4vw,40px)', fontWeight: 900, letterSpacing: '-1px', boxShadow: '0 8px 24px -8px rgba(0,0,0,.5)' }}>{initials(cur.title)}</div>}
             </div>
             {/* متن */}

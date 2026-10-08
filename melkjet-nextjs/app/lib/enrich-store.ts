@@ -28,7 +28,20 @@ export interface Enrichment {
 
 type DB = Record<string, Enrichment>
 
-function load(): DB { return readJsonCached<DB>(FILE, {}) }
+// فاز ۲۹۳ — اسناددهیِ وزنِ حافظه: پایگاهِ enrich بعد از اولین لمس دائمی در heap می‌ماند؛
+// یک بار در هر پروسه لحظهٔ بار و اندازه‌اش لاگ می‌شود تا سهمش در سقفِ حافظه معلوم باشد.
+let loadLogged293 = false
+function load(): DB {
+  const db = readJsonCached<DB>(FILE, {})
+  if (!loadLogged293) {
+    const n = Object.keys(db).length
+    if (n) {
+      loadLogged293 = true   // بارِ خالیِ اولِ بوت پرچم را نسوزاند — لاگ برای اولین بارِ «واقعی» است
+      try { console.log(`[mem] enrich baseline loaded: ${n} entries, heapUsed=${Math.round(process.memoryUsage().heapUsed / 1048576)}MB`) } catch {}
+    }
+  }
+  return db
+}
 function save(db: DB) { writeJsonCached(FILE, db) }
 
 export function getEnrichment(id: string): Enrichment | null {

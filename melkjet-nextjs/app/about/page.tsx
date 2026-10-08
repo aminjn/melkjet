@@ -1,4 +1,5 @@
 import Nav from '@/app/components/Nav'
+import PageHeader from '@/app/components/PageHeader'
 import Footer from '@/app/components/Footer'
 import PageBody from '@/app/components/PageBody'
 import { getHomeData } from '@/app/lib/home-data'
@@ -28,8 +29,8 @@ export default async function AboutPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <Nav />
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 18px 70px' }}>
-        <h1 style={{ fontSize: 30, fontWeight: 800, marginBottom: 14 }}>{page.title}</h1>
+      <PageHeader eyebrow="دربارهٔ ملک‌جت" title={page.title} />
+      <main style={{ maxWidth: 900, margin: '0 auto', padding: '36px 18px 70px' }}>
         <PageBody body={page.body} />
         {stats.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 14, margin: '30px 0' }}>

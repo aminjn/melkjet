@@ -151,6 +151,12 @@ export async function listAllLeads(): Promise<Lead[]> {
 }
 
 // فاز ۱۴۲ — انتقالِ مالکیتِ لیدها در ادغامِ دو حساب
+// فاز ۲۹۸ه — حذفِ همهٔ سرنخ‌های یک مالک (cascade حذفِ حساب).
+export async function deleteLeadsByOwner(owner: string): Promise<number> {
+  const o = String(owner || '').trim(); if (!o) return 0
+  return mutate(db => { const before = db.leads.length; db.leads = db.leads.filter(l => l.owner !== o); return before - db.leads.length })
+}
+
 export async function reassignLeadsOwner(from: string, to: string): Promise<number> {
   return mutate(db => {
     let n = 0

@@ -8,6 +8,7 @@ import { FA_DIGITS, faDigit } from '../lib/digits'
 import { resolveScrapedLocation } from './geo-store'
 import { hasTimePrefix } from './location-match'
 import { deriveListing, seoListingTitle } from './listing-search'
+import { slugText } from './listing-url'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 const KV_KEY = 'scraper'          // بلابِ قدیمی — بعد از migration دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند
@@ -79,6 +80,9 @@ export interface Item {
   /** اولین باری که این فایل دیده شد. برخلافِ scrapedAt در هر به‌روزرسانی ریست نمی‌شود،
    *  پس تنها مبنای درستِ «تازگی» و «رَوندِ قیمت» است. */
   firstSeenAt?: number
+  /** فاز ۲۹۸ی — اسلاگِ سئوِ «منجمد»: یک‌بار هنگامِ ساخت تعیین و در هر اسکرپِ بعدی حفظ می‌شود،
+   *  تا URLِ آگهی با تغییرِ عنوان/قیمت عوض نشود (ریشهٔ «Page with redirect»ِ انبوه در GSC). */
+  seoSlug?: string
   status: ItemStatus
   expiresAt?: number              // آگهی‌های کاربر ۳۰ روزه‌اند و منقضی می‌شوند
 }
@@ -140,6 +144,11 @@ function fileSave(db: DB) {
 // نوشتن (mutate) کش را باطل می‌کند تا همان اینستنس نوشتهٔ خودش را فوری ببیند. کهنگیِ
 // چند-ثانیه‌ایِ فیدِ آگهی بینِ اینستنس‌ها بی‌ضرر است (نوشتن‌ها اتمیک روی PG می‌مانند).
 let pgCache: { loadedAt: number; checkedAt: number; fullAt: number; data: DB; rev: number } | null = null
+// فاز ۲۹۸ — singleflight: وقتی کش سرد است (ری‌استارت/باطل‌شدن) چند درخواستِ همزمان روی
+// همین اینستنس هرکدام یک «SELECT data FROM listings» ۱۶۶مگی می‌زدند — رمهٔ کوئریِ ۱۰ثانیه‌ایِ
+// موازی که CPUِ پستگرس و استخرِ اتصال را می‌بلعید (ریشهٔ ۵۰۲/کندیِ هر ری‌استارت). حالا همهٔ
+// خواننده‌های همزمان یک بارگذاری را share می‌کنند.
+let fullLoadInflight: Promise<DB> | null = null
 
 // بازخوانیِ افزایشی (۲۰ سپتامبر).
 //
@@ -156,10 +165,17 @@ let pgCache: { loadedAt: number; checkedAt: number; fullAt: number; data: DB; re
 // انجام می‌شود. پلِ ایمنیِ دوم: هر FULL_RESYNC_MS یک بازخوانیِ کامل، حتی اگر لاگ سالم باشد.
 interface RevLog { rev: number; ids?: string[]; del?: string[]; full?: boolean }
 type MetaDoc = Partial<DB> & { __rev?: number; __log?: RevLog[] }
-const LOG_MAX = 120          // چند rev اخیر نگه داشته می‌شود
-const LOG_IDS_MAX = 200      // بیش از این شناسه در یک rev → برای آن rev بازخوانیِ کامل
-const LOG_IDS_BUDGET = 2000  // سقفِ مجموعِ شناسه‌های کلِ لاگ
-const FULL_RESYNC_MS = 10 * 60_000
+// فاز ۲۹۳ج (۳۰ سپتامبر — لاگِ [mem]: «۶ بازخوانیِ کاملِ ۵۲هزارتایی در ۲ دقیقه»): وسطِ سینکِ
+// رُستر، عمل‌های دسته‌ای (finalize/publish/lexicon) بیش از ۲۰۰ شناسه داشتند → revشان مارکرِ
+// full می‌گرفت → «هر» تلاشِ دلتا به بازخوانیِ کامل سقوط می‌کرد؛ هر بازخوانی چند ثانیه event loop
+// را برای پارسِ صدها مگابایت فریز می‌کرد و همان لحظه‌ها بقیهٔ کوئری‌ها «timeout exceeded when
+// trying to connect» می‌خوردند. سقف‌ها بالا رفتند تا دستهٔ چندصدتایی هم «دلتا» بماند (کوئریِ
+// چندصد ردیف ≪ ۵۲هزار)، و پلِ ایمنیِ کامل از ۱۰ دقیقه به ۱ ساعت رفت (درستی با rev/log است؛
+// پل فقط بیمهٔ رانش است). بازخوانیِ کاملِ باقی‌مانده علتش را لاگ می‌کند (قانونِ شمارهٔ یک).
+const LOG_MAX = 240          // چند rev اخیر نگه داشته می‌شود
+const LOG_IDS_MAX = 600      // بیش از این شناسه در یک rev → برای آن rev بازخوانیِ کامل
+const LOG_IDS_BUDGET = 4000  // سقفِ مجموعِ شناسه‌های کلِ لاگ
+const FULL_RESYNC_MS = 60 * 60_000
 
 // لاگ در همان سندِ متاداتاست که هر نویسنده زیرِ قفل می‌خواند، پس رشدِ بی‌مرزش
 // خودش گلوگاهِ بعدی می‌شد — همان اشتباهی که با بلابِ آگهی‌ها یک بار کردیم. دو سقف:
@@ -181,7 +197,9 @@ function withLog(meta: MetaDoc, rev: number, ids: string[], del: string[]): RevL
 // حالا: چکِ rev حداکثر هر REV_CHECK_MS؛ بازخوانیِ کامل حداکثر هر RELOAD_FLOOR_MS (سِروِ stale
 // در این پنجره عمدی و بی‌ضرر است). نوشتنِ همین instance همچنان فوری کش را باطل می‌کند (read-your-writes).
 const REV_CHECK_MS = 5_000
-const RELOAD_FLOOR_MS = 15_000
+// فاز ۲۹۳ج — کفِ ۱۵ث یعنی مجوزِ بازخوانیِ کاملِ ۵۲هزارتایی هر ۱۵ ثانیه؛ با دلتاهای سالم‌شده
+// این کف فقط تازگیِ فهرست‌ها را تا ۳۰ث عقب می‌اندازد ولی بدترین حالتِ فریز را نصف می‌کند.
+const RELOAD_FLOOR_MS = 30_000
 
 // ── معماریِ دائمی: آگهی‌ها در جدولِ نرمالِ `listings` (هر ردیف یک آگهی)، متادیتای کوچک
 // (sources/categories/owners) در kv['scraper']. خواندن از جدول (کش‌شده)، نوشتن فقط روی
@@ -227,16 +245,19 @@ async function ensureMigrated(): Promise<void> {
  * وگرنه تأییدِ ادمین روی یک اینستنس تا ~۲۰ث در اینستنسِ دیگر دیده نمی‌شد و آگهی «برمی‌گشت» به لیست. */
 // تلاش برای به‌روزرسانیِ افزایشی. null یعنی نشد — صدازننده بازخوانیِ کامل می‌کند.
 async function applyDelta(cache: NonNullable<typeof pgCache>, now: number): Promise<DB | null> {
-  if (now - cache.fullAt > FULL_RESYNC_MS) return null   // پلِ ایمنی: دوره‌ای کامل بخوان
+  // فاز ۲۹۳ج — هر سقوط به بازخوانیِ کامل باید علتش را بگوید؛ «چرا full شد» قبلاً نامرئی بود.
+  const bail = (why: string): null => { console.log(`[scraper-store] full reload (${why})`); return null }
+  if (now - cache.fullAt > FULL_RESYNC_MS) return bail('پلِ ایمنیِ دوره‌ای')
   const meta = await kvGet<MetaDoc>(KV_META, {})
   const cur = meta.__rev || 0
-  if (cur < cache.rev) return null                       // rev عقب رفته (بازگردانی/مهاجرت) — اعتماد نکن
+  if (cur < cache.rev) return bail(`rev عقب رفت ${cache.rev}→${cur}`)   // بازگردانی/مهاجرت — اعتماد نکن
   const gap = cur - cache.rev
   if (gap === 0) { cache.loadedAt = now; return cache.data }
   const log = Array.isArray(meta.__log) ? meta.__log : []
   const span = log.filter(e => e.rev > cache.rev && e.rev <= cur)
   // لاگ باید تمامِ فاصله را پوشش دهد؛ یک revِ ثبت‌نشده کافی است تا به دلتا اعتماد نکنیم.
-  if (span.length !== gap || span.some(e => e.full)) return null
+  if (span.length !== gap) return bail(`لاگ فاصله را نمی‌پوشاند gap=${gap} span=${span.length}`)
+  if (span.some(e => e.full)) return bail(`revِ درشت (full) در فاصله، gap=${gap}`)
   const ids = [...new Set(span.flatMap(e => e.ids || []))]
   const del = new Set(span.flatMap(e => e.del || []))
   let items = cache.data.items
@@ -289,7 +310,14 @@ async function load(fresh = false): Promise<DB> {
       if (stepped) return stepped
     } catch { return pgCache.data }
   }
-  try {
+  // فاز ۲۹۸ — singleflight روی بارگذاریِ کامل: اگر همین الان یک بارگذاری در جریان است،
+  // همان را await کن به‌جای زدنِ یک SELECT 166مگی دوم. این مسیر هم سردِ اولیه و هم سقوطِ
+  // دلتا به بازخوانیِ کامل را پوشش می‌دهد (هر دو به اینجا می‌رسند).
+  if (fullLoadInflight) {
+    try { return await fullLoadInflight }
+    catch { if (pgCache) return pgCache.data; throw new Error('scraper full load failed') }
+  }
+  fullLoadInflight = (async (): Promise<DB> => {
     await ensureMigrated()
     // متادیتای زنده از KV_META؛ اگر هنوز نبود (لحظهٔ گذار)، از بلابِ قدیمی bootstrap کن.
     const [meta, items] = await Promise.all([kvGet<Partial<DB> & { __rev?: number }>(KV_META, {}), pgListingsAll() as Promise<Item[]>])
@@ -301,13 +329,21 @@ async function load(fresh = false): Promise<DB> {
       owners: m.owners || [],
     }
     pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), fullAt: Date.now(), data, rev: meta.__rev || 0 }
+    // فاز ۲۹۳ — اسناددهیِ وزنِ حافظه (ری‌استارت‌های سقفِ ۱۸۰۰M وسطِ سینک، ۳۰ سپتامبر):
+    // این کش بعد از اولین لمس دائمی است؛ این خط می‌گوید «کی» بار شد و heap بعدش چند شد.
+    try { console.log(`[mem] scraper corpus full load: ${items.length} items, heapUsed=${Math.round(process.memoryUsage().heapUsed / 1048576)}MB`) } catch {}
     // فاز ۲۴۰ (خودترمیم): بعدِ هر بازخوانیِ کامل، revِ Redis با kv همگام می‌شود (اگر Redis تازه روشن/کهنه بود).
     try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled()) void rSetMax('scraper_rev', meta.__rev || 0) } catch {}
     return data
+  })()
+  try {
+    return await fullLoadInflight
   } catch (e) {
     // تاب‌آوری: اگر دیتابیس لحظه‌ای کند/اشباع بود، کشِ کهنه را سِرو کن (نه ۵۰۰/۵۰۴).
     if (pgCache) return pgCache.data
     throw e
+  } finally {
+    fullLoadInflight = null
   }
 }
 
@@ -316,7 +352,11 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   if (!pgEnabled()) { const d = fileLoad(); const r = fn(d); fileSave(d); return r }
   await ensureMigrated()
   let revOut = 0   // فاز ۲۴۰: revِ جدید برای انتشار در Redis (چکِ ارزانِ بین‌اینستنسی)
+  let dbOut: DB | null = null   // فاز ۲۹۸ — حالتِ پس‌از‌نوشتن برای گرم‌نگه‌داشتنِ کش (به‌جای null)
   const r = await pgTx(async (c) => {
+    // مثلِ kvMutate (۲۸ سپتامبر): خواندنِ کاملِ جدول + انتظارِ صفِ قفل زیرِ بار از ۱۵ث رد
+    // می‌شود و کشته‌شدنش یعنی تکرارِ کلِ کار (توفانِ retry). داخلِ همین تراکنش سقف ۴۵ث.
+    await c.query(`SET LOCAL statement_timeout = '45s'`)
     // سریالایزِ نویسنده‌ها روی ردیفِ کوچکِ متادیتا (KV_META، نه بلابِ بزرگ).
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
     const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
@@ -354,9 +394,17 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
       )
     }
     if (del.length) await c.query(`DELETE FROM listings WHERE id = ANY($1::text[])`, [del])
+    dbOut = db
     return result
   })
-  pgCache = null
+  // فاز ۲۹۸ — دیگر «هر نوشتن» کش را null نمی‌کند (که خواندنِ بعدی را به SELECT 166مگی مجبور
+  // می‌کرد — ریشهٔ طوفانِ بازخوانیِ کاملِ وسطِ سینکِ رُستر). db که همین الان با SELECT کامل
+  // خوانده و با fn به‌روز شد، «عینِ» حالتِ جدیدِ جدول است (مرجع، مستقل از کشِ قبلی)، پس کش را
+  // با همان گرم نگه می‌داریم — read-your-writes فوری + بدونِ بازخوانیِ کامل.
+  if (dbOut) {
+    const items = [...(dbOut as DB).items].sort((a, b) => (b.scrapedAt || 0) - (a.scrapedAt || 0))
+    pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), fullAt: Date.now(), data: { ...(dbOut as DB), items }, rev: revOut }
+  } else pgCache = null
   // فاز ۲۴۰: انتشارِ revِ جدید در Redis (best-effort) — چکِ اعتبارِ کشِ بقیهٔ اینستنس‌ها حافظه‌ای می‌شود.
   try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled() && revOut) void rSetMax('scraper_rev', revOut) } catch {}
   return r
@@ -385,7 +433,9 @@ async function mutateMeta<R>(fn: (meta: { sources: Source[]; categories?: string
   if (!pgEnabled()) { const d = fileLoad(); const r = fn({ sources: d.sources, categories: d.categories, owners: d.owners || [] }); fileSave(d); return r }
   await ensureMigrated()
   let revOut = 0
+  let boxOut: { sources: Source[]; categories?: string[]; owners: Owner[] } | null = null
   const r = await pgTx(async (c) => {
+    await c.query(`SET LOCAL statement_timeout = '45s'`)   // انتظارِ صفِ قفل ≠ کوئریِ سرکش (۲۸ سپتامبر)
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
     const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
     const meta = (metaRow.rows[0]?.data || {}) as Partial<DB> & { __rev?: number }
@@ -400,9 +450,16 @@ async function mutateMeta<R>(fn: (meta: { sources: Source[]; categories?: string
     // لاگِ خالی: rev بالا رفته ولی هیچ آگهی‌ای عوض نشده، پس خواننده هیچ ردیفی نمی‌خواند.
     const logMeta = withLog(meta as MetaDoc, rev, [], [])
     await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...box, __rev: rev, __log: logMeta })])
+    boxOut = box
     return result
   })
-  pgCache = null
+  // فاز ۲۹۸ — فقط متادیتا عوض شد (آگهی‌ها دست‌نخورده). اگر کشِ همین اینستنس دقیقاً روی
+  // revِ پیش از این نوشتن بود (یعنی هیچ نویسندهٔ دیگری میان‌کار commit نکرده)، به‌جای null
+  // کش را با متادیتای تازه و همان آگهی‌ها گرم نگه می‌داریم.
+  if (pgCache && boxOut && pgCache.rev === revOut - 1) {
+    const b = boxOut as { sources: Source[]; categories?: string[]; owners: Owner[] }
+    pgCache = { ...pgCache, loadedAt: Date.now(), checkedAt: Date.now(), rev: revOut, data: { ...pgCache.data, sources: b.sources, categories: b.categories, owners: b.owners } }
+  } else pgCache = null
   try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled() && revOut) void rSetMax('scraper_rev', revOut) } catch {}
   return r
 }
@@ -417,7 +474,9 @@ async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Par
   }
   await ensureMigrated()
   let revOut = 0
+  let changedOut: Item[] = []   // فاز ۲۹۸ — ردیف‌های تغییرکرده برای وصله به کشِ گرم
   const r = await pgTx(async (c) => {
+    await c.query(`SET LOCAL statement_timeout = '45s'`)   // انتظارِ صفِ قفل ≠ کوئریِ سرکش (۲۸ سپتامبر)
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
     const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
     const meta = (metaRow.rows[0]?.data || {}) as Partial<DB> & { __rev?: number }
@@ -437,9 +496,18 @@ async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Par
         [it.id, it.scrapedAt || 0, it.type, it.status, JSON.stringify(it)],
       )
     }
+    changedOut = changed
     return result
   })
-  pgCache = null
+  // فاز ۲۹۸ — نوشتنِ هدفمند هم کش را null نکند: اگر کشِ همین اینستنس دقیقاً روی revِ پیش از
+  // این نوشتن بود، ردیف‌های تغییرکرده را روی همان کش upsert می‌کنیم (مرجعِ تازه از SELECT،
+  // مستقل از کش). وگرنه نمی‌توانیم مطمئن بازسازی کنیم → null (مسیرِ خواندنِ کامل خودش را درست می‌کند).
+  if (pgCache && pgCache.rev === revOut - 1) {
+    const map = new Map(pgCache.data.items.map(i => [i.id, i]))
+    for (const it of changedOut) map.set(it.id, it)
+    const nextItems = [...map.values()].sort((a, b) => (b.scrapedAt || 0) - (a.scrapedAt || 0))
+    pgCache = { loadedAt: Date.now(), checkedAt: Date.now(), fullAt: pgCache.fullAt, data: { ...pgCache.data, items: nextItems }, rev: revOut }
+  } else pgCache = null
   try { const { redisEnabled, rSetMax } = await import('./redis'); if (redisEnabled() && revOut) void rSetMax('scraper_rev', revOut) } catch {}
   return r
 }
@@ -862,6 +930,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
           if (r.url) twin.url = r.url
           if (r.phone && !twin.phone) twin.phone = r.phone
           twin.scrapedAt = Date.now()
+          if (!twin.seoSlug) twin.seoSlug = slugText(twin.title, twin.location)   // فاز ۲۹۸ی — انجمادِ تنبلِ آیتم‌های قدیمی
           // بازنشر = ملک هنوز فعال است → مهرِ فروخته/اجاره‌رفتهٔ قبلی برداشته می‌شود
           if (twin.meta?.['__dealStatus']) { delete twin.meta['__dealStatus']; delete twin.meta['__soldAt'] }
           // فاز ۱۵۶ (A2): ردیفِ قبلاً-تکراری با اسکرپِ تازه بازپس گرفته می‌شود → صفِ ممیزی
@@ -901,6 +970,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
         id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
         category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
         ...r, title, location: loc, ownerId, firstSeenAt: Date.now(),
+        seoSlug: slugText(title, loc),   // فاز ۲۹۸ی — اسلاگِ منجمد (دیگر با اسکرپِ بعدی عوض نمی‌شود)
       }
       db.items.unshift(item)
       existingByKey.set(key, item)
@@ -970,6 +1040,7 @@ function addUserListingCore(db: DB, raw: UserListingRaw, twinIdx: TwinIndex<Item
     // firstSeenAt فقط وقتی «حالا» است که فایل واقعاً تازه باشد. مسیرِ انتشار تاریخِ
     // ثبتِ اصلی را پاس می‌دهد. (تبدیلِ نوعِ محلی چون UserListingRaw این فیلد را اعلام نکرده.)
     scrapedAt: Date.now(), firstSeenAt: (raw as { firstSeenAt?: number }).firstSeenAt || Date.now(),
+    seoSlug: (raw as { seoSlug?: string }).seoSlug || slugText(raw.title, raw.location),   // فاز ۲۹۸ی — منجمد (انتشار اگر از قبل داشت حفظ می‌کند)
     status: twin ? 'duplicate' : 'pending',
     aiReason: twin ? `تکراری در لحظهٔ ثبت — هم‌ملکِ «${twin.title.slice(0, 60)}»` : undefined,
     expiresAt: Date.now() + LISTING_TTL,
@@ -1023,19 +1094,38 @@ export async function updateUserListing(itemId: string, raw: UserListingRaw, opt
 // همان آیتم است، نه آگهیِ گم‌شده/تکراری.
 export interface PublishUserListingReq { prevId?: string; raw: UserListingRaw }
 const PUBLISH_CHUNK = 15   // قفلِ KV_META را طولانی نکن — بزرگ‌ترش نکنید (هشدارِ CLAUDE.md)
+// ۲۸ سپتامبر — هر چانک قبلاً با mutateِ کامل کلِ جدولِ ~۴۶هزارتایی را داخلِ تراکنش می‌خواند
+// (~۱۶۶MB زیرِ قفلِ KV_META). زیرِ بارِ اسکرِیپرِ زنده (که همین جدول را مدام می‌نویسد) این
+// از سقفِ statement رد می‌شد → «transfer: statement timeout» و تکرارِ کلِ کار؛ اتصال‌های
+// طولانی هم استخر را خشک می‌کردند. حالا ایندکسِ هم‌ملک‌یابی «یک‌بار، بیرونِ تراکنش» از مسیرِ
+// خواندنِ کش‌دار ساخته می‌شود و هر چانک با mutateSome فقط ردیف‌های موردنیازش (prev/twin) را
+// می‌خواند. انحرافِ آگاهانه: هم‌ملک‌یابی روی اسنپ‌شاتِ بیرونِ تراکنش است — تنها مصرف‌کنندهٔ
+// این مسیر صفِ «سریالِ» اینستنسِ ۰ است (انتقال/ترمیمِ رُستر)، پس درجِ هم‌زمانِ هم‌ملک عملاً
+// منتفی است؛ مسیرِ تکیِ ثبتِ کاربر (addUserListing) همچنان داخلِ تراکنش چک می‌کند.
 export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): Promise<{ item: Item; created: boolean }[]> {
   const out: { item: Item; created: boolean }[] = []
+  const idx = buildUserTwinIndex(await load())
+  const probeOf = (raw: UserListingRaw) => simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta })
   for (let c = 0; c < reqs.length; c += PUBLISH_CHUNK) {
     const chunk = reqs.slice(c, c + PUBLISH_CHUNK)
-    const part = await mutate(db => {
-      const idx = buildUserTwinIndex(db)
+    // ردیف‌هایی که این چانک ممکن است دست بزند: prevِ اعلام‌شده + هم‌ملکِ یافته در ایندکس.
+    const cand = new Set<string>()
+    for (const { prevId, raw } of chunk) {
+      if (prevId) cand.add(prevId)
+      const t = idx.find(probeOf(raw))
+      if (t) cand.add(t.id)
+    }
+    const part = await mutateSome([...cand], ({ items, meta }) => {
+      // نمای db برای هسته‌ها: itemsِ همین تراکنش + ownersِ متادیتا (همان مرجع، تا push بنشیند).
+      meta.owners = meta.owners || []
+      const view = { items, owners: meta.owners } as DB
       const res: { item: Item; created: boolean }[] = []
       for (const { prevId, raw } of chunk) {
         // مثلِ publishListing: prev باید آیتمِ listing موجود باشد (وضعیتش هرچه باشد — حتی duplicate)
-        const prev = prevId ? db.items.find(x => x.id === prevId && x.type === 'listing') : undefined
+        const prev = prevId ? items.find(x => x.id === prevId && x.type === 'listing') : undefined
         if (prev) {
           const textChanged = prev.title !== raw.title || (prev.excerpt || '') !== (raw.excerpt || '')
-          const it = updateUserListingCore(db, prev.id, raw, { remoderate: textChanged })
+          const it = updateUserListingCore(view, prev.id, raw, { remoderate: textChanged })
           if (it) {
             // فاز ۲۸۴ — اول اسنپ‌شاتِ کهنهٔ همین آیتم از ایندکس برداشته می‌شود (هم‌رفتاری با مسیرِ تکی
             // که هر بار ایندکس را تازه می‌سازد)، بعد فیلدهای جدید می‌نشیند.
@@ -1046,10 +1136,11 @@ export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): P
           }
         }
         // publicId شکسته/غایب → هم‌ملکِ عمومیِ موجود بازپس گرفته می‌شود (فاز ۱۵۶A4)
-        const twin = idx.find(simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta }))
+        const twin0 = idx.find(probeOf(raw))
+        const twin = twin0 ? items.find(x => x.id === twin0.id && x.type === 'listing') : undefined
         if (twin) {
           const textChanged = twin.title !== raw.title || (twin.excerpt || '') !== (raw.excerpt || '')
-          const it = updateUserListingCore(db, twin.id, raw, { remoderate: textChanged })
+          const it = updateUserListingCore(view, twin.id, raw, { remoderate: textChanged })
           if (it) {
             idx.remove(it)
             if (it.status !== 'duplicate' && it.status !== 'rejected') idx.add(simFieldsOf(it), it)
@@ -1057,7 +1148,7 @@ export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): P
             continue
           }
         }
-        const it = addUserListingCore(db, raw, idx)
+        const it = addUserListingCore(view, raw, idx)
         if (it.status !== 'duplicate') idx.add(simFieldsOf(it), it)
         res.push({ item: it, created: true })
       }
@@ -1068,6 +1159,16 @@ export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): P
   return out
 }
 // فاز ۱۴۲ — در ادغامِ دو حساب، مالکیتِ آگهی‌های عمومی (نگاشتِ «آگهی‌های من») به شمارهٔ اصلی می‌رود.
+// فاز ۲۹۸ه — حذفِ همهٔ آگهی‌های عمومیِ متعلق به یک مالک (cascade حذفِ حساب) تا در سایت نماند.
+export async function deleteListingsByOwnerPhone(phone: string): Promise<number> {
+  const p = String(phone || '').trim(); if (!p) return 0
+  return mutate(db => {
+    const before = db.items.length
+    db.items = db.items.filter(it => it.meta?.['__ownerPhone'] !== p)
+    return before - db.items.length
+  })
+}
+
 export async function reassignListingOwnerPhone(from: string, to: string): Promise<number> {
   return mutate(db => {
     let n = 0
@@ -1225,6 +1326,7 @@ export async function addItemManual(raw: {
       image: raw.image, url: raw.url, excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner,
       meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
       scrapedAt: Date.now(), firstSeenAt: Date.now(), status: 'approved', edited: true,
+      seoSlug: raw.type === 'listing' ? slugText(raw.title, raw.location) : undefined,   // فاز ۲۹۸ی
     }
     db.items.unshift(item)
     return item

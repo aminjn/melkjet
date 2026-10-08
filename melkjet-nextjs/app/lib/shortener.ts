@@ -7,9 +7,11 @@ function cfg() {
   return { key: c.apiKey, base: (c.baseUrl || 'https://nxal.ir').replace(/\/$/, ''), domain: c.domain }
 }
 
-// کوتاه‌کردنِ لینک با nxal — id را هم برمی‌گرداند تا بعداً آمارش گرفته شود.
-export async function shortenUrl(longUrl: string): Promise<{ shortUrl: string; id: string } | null> {
-  const c = cfg(); if (!c) return null
+// فاز ۲۹۷ص — کوتاه‌کردن با «علتِ دقیقِ» شکست؛ شکستِ بی‌صدا ممنوع (قانون شمارهٔ یک):
+// nxal که خطا بدهد باید معلوم شود چرا (کلید نامعتبر؟ URL رد شد؟ شبکه؟) نه این‌که
+// لینکِ بلندِ درصد-encoded بی‌خبر راهیِ پیامک شود.
+export async function shortenUrlDetailed(longUrl: string): Promise<{ ok: true; shortUrl: string; id: string } | { ok: false; error: string }> {
+  const c = cfg(); if (!c) return { ok: false, error: 'کوتاه‌کننده پیکربندی نشده (کلیدِ nxal خالی است)' }
   try {
     const res = await shecanRequest(`${c.base}/api/v1/shorten`, {
       method: 'POST',
@@ -17,11 +19,34 @@ export async function shortenUrl(longUrl: string): Promise<{ shortUrl: string; i
       body: JSON.stringify({ url: longUrl, domain: c.domain || undefined, utmSource: 'sms' }),
       timeout: 15000,
     })
-    if (res.status < 200 || res.status >= 300) return null
+    if (res.status < 200 || res.status >= 300) return { ok: false, error: `HTTP ${res.status} از nxal: ${String(res.body || '').slice(0, 120)}` }
     const d = JSON.parse(res.body)
-    if (d?.success && d?.data?.shortUrl) return { shortUrl: String(d.data.shortUrl), id: String(d.data.id || '') }
-    return null
-  } catch { return null }
+    if (d?.success && d?.data?.shortUrl) return { ok: true, shortUrl: String(d.data.shortUrl), id: String(d.data.id || '') }
+    return { ok: false, error: `پاسخِ نامعتبرِ nxal: ${String(res.body || '').slice(0, 120)}` }
+  } catch (e: any) { return { ok: false, error: `خطای شبکه تا nxal: ${e?.message || 'نامشخص'}` } }
+}
+
+// کوتاه‌کردنِ لینک با nxal — id را هم برمی‌گرداند تا بعداً آمارش گرفته شود.
+export async function shortenUrl(longUrl: string): Promise<{ shortUrl: string; id: string } | null> {
+  const r = await shortenUrlDetailed(longUrl)
+  if (r.ok) return { shortUrl: r.shortUrl, id: r.id }
+  // کانال‌هایی که با لینکِ بلند هم می‌توانند ادامه بدهند، دستِ‌کم باید در لاگ فریاد بزنند.
+  if (getAdminData().shortener?.apiKey) console.error(`[shortener] کوتاه‌کردن شکست خورد: ${r.error} — ${longUrl.slice(0, 100)}`)
+  return null
+}
+
+// فاز ۲۹۷ص — لینکِ کوتاهِ «الزامی» برای کانال‌هایی که لینکِ بلند برایشان قابل‌قبول نیست
+// (پیامکِ سایت‌ساز: لینکِ درصد-encodedِ فارسی چند صفحه پیامک هزینه دارد و اعتماد را می‌کُشد).
+// شکست = خطا برمی‌گردد تا ارسال متوقف و علت در پنل دیده شود؛ نه ارسالِ لینکِ غول‌پیکر.
+export async function mustShortenUrl(url: string, opts: { channel: string; phone?: string; title?: string }): Promise<{ ok: true; shortUrl: string } | { ok: false; error: string }> {
+  const r = await shortenUrlDetailed(url)
+  if (!r.ok) return { ok: false, error: r.error }
+  try {
+    const { createLink, setLinkMeta } = await import('./tracker-links-store')
+    const link = await createLink({ dest: url, title: opts.title, phone: opts.phone, channel: opts.channel })
+    await setLinkMeta(link.code, { shortUrl: r.shortUrl, linkId: r.id })
+  } catch { /* شکستِ ثبتِ گزارش نباید ارسال را بشکند — لینکِ کوتاه معتبر است */ }
+  return { ok: true, shortUrl: r.shortUrl }
 }
 
 // آمارِ کلیکِ یک لینک از nxal.

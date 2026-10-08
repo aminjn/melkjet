@@ -1,6 +1,6 @@
 import { getAdminData } from './admin-store'
 import { shecanRequest } from './shecan-https'
-import { shortenLinksInText, linkVarName, firstUrl, siteBase } from './shortener'
+import { shortenLinksInText, linkVarName, firstUrl, siteBase, mustShortenUrl } from './shortener'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ارسالِ پیامکِ متنِ آزاد با IPPanel — برای اتوماسیون/پیام‌های دلخواه.
@@ -37,5 +37,41 @@ export async function sendServiceSms(phone: string, text: string, summary = 'ا�
     const res = await shecanRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
     const ok = res.status >= 200 && res.status < 300
     return ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` }
+  } catch (e: any) { return { ok: false, error: e?.message || 'خطا' } }
+}
+
+// ─── فاز ۲۹۷ب — پیامکِ سایت‌ساز: پترنِ «اختصاصیِ» خودش ───────────────────────────
+// سایت‌ساز نباید پترنِ عمومیِ اتوماسیون (با متنِ «کارشناس تماس می‌گیرد») را بدزدد؛
+// متنِ پیامکِ پترنی از خودِ پترنِ ثبت‌شده می‌آید، پس هر کارکرد پترنِ خودش را می‌خواهد.
+// اولویت: autositePattern؛ نبود → متنِ آزادِ bulk (فقط خطِ تبلیغاتی).
+export async function sendAutoSiteSms(phone: string, name: string, url: string): Promise<{ ok: boolean; error?: string }> {
+  const a = getAdminData()
+  const apiKey = process.env.IPPANEL_API_KEY || a.ippanel?.apiKey
+  const sender = process.env.IPPANEL_SENDER || a.ippanel?.sender
+  if (!apiKey || !sender) return { ok: false, error: 'پیامک پیکربندی نشده' }
+  const recipient = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
+  if (!/^09\d{9}$/.test(recipient)) return { ok: false, error: 'شمارهٔ نامعتبر' }
+  const patternCode = (a.ippanel?.autositePattern || '').trim()
+  const nameVar = (a.ippanel?.autositeVar || 'name').trim() || 'name'
+  try {
+    if (patternCode) {
+      // فاز ۲۹۷ص — لینکِ پیامکِ سایت‌ساز «باید» کوتاه باشد؛ لینکِ بلندِ درصد-encoded
+      // (melkjet.com/%D8%B2…) یعنی چند صفحه پیامک و پیامی زشت. قبلاً شکستِ کوتاه‌کننده
+      // بی‌صدا بلعیده می‌شد و لینکِ غول‌پیکر می‌رفت — حالا شکست = ارسال متوقف + علت در پنل.
+      const sh = await mustShortenUrl(url, { channel: 'autosite', phone: recipient, title: name })
+      if (!sh.ok) return { ok: false, error: `کوتاه‌کننده: ${sh.error}` }
+      const variable: Record<string, string> = { [nameVar]: String(name || 'همکار').slice(0, 60) }
+      // فاز ۲۹۷ع — پترنِ سایت‌ساز همیشه لینک دارد؛ فیلدِ خالیِ «متغیرِ لینک» نباید ارسال را
+      // بشکند («تکمیل گزینه params.link الزامی») — پیش‌فرضِ قراردادیِ IPPanel: link.
+      const lv = linkVarName() || 'link'
+      variable[lv] = sh.shortUrl
+      const body = { code: patternCode, sender, recipient, variable }
+      const res = await shecanRequest('https://api2.ippanel.com/api/v1/sms/pattern/normal/send', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
+      const ok = res.status >= 200 && res.status < 300
+      // فاز ۲۹۷ن — پاسخِ IPPanel علتِ دقیق را می‌گوید (پترن تایید نشده/متغیر غلط/…) — دور نریز.
+      return ok ? { ok: true } : { ok: false, error: `HTTP ${res.status} (پترن سایت‌ساز): ${String(res.body || '').slice(0, 160)}` }
+    }
+    // بدونِ پترنِ اختصاصی → متنِ آزاد (خطِ تبلیغاتی لازم دارد؛ خطِ خدماتی رد می‌کند)
+    return sendServiceSms(recipient, `سلام ${name} عزیز؛ سایت اختصاصی شما در ملک‌جت آماده شد:\n${url}\nملک‌جت`, 'سایت‌ساز ملک‌جت', name)
   } catch (e: any) { return { ok: false, error: e?.message || 'خطا' } }
 }

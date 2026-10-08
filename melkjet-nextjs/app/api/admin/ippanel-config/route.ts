@@ -17,6 +17,8 @@ export async function GET() {
     automationVar: data.ippanel?.automationVar || 'name',
     outreachPattern: data.ippanel?.outreachPattern || '',
     outreachVar: data.ippanel?.outreachVar || 'name',
+    autositePattern: data.ippanel?.autositePattern || '',
+    autositeVar: data.ippanel?.autositeVar || 'name',
     linkVar: data.ippanel?.linkVar || '',
     configured: !!data.ippanel?.apiKey,
   })
@@ -40,13 +42,15 @@ export async function POST(req: NextRequest) {
   const automationVar = (b.automationVar ? String(b.automationVar) : (cur.automationVar || 'name')).trim() || 'name'
   const outreachPattern = b.outreachPattern !== undefined ? String(b.outreachPattern) : (cur.outreachPattern || '')
   const outreachVar = (b.outreachVar ? String(b.outreachVar) : (cur.outreachVar || 'name')).trim() || 'name'
+  const autositePattern = b.autositePattern !== undefined ? String(b.autositePattern) : (cur.autositePattern || '')
+  const autositeVar = (b.autositeVar ? String(b.autositeVar) : (cur.autositeVar || 'name')).trim() || 'name'
   const linkVar = (b.linkVar !== undefined ? String(b.linkVar) : (cur.linkVar || '')).trim()
 
   if (!apiKey || !sender) {
     return NextResponse.json({ error: 'کلید API و خط ارسال الزامی است' }, { status: 400 })
   }
 
-  data.ippanel = { apiKey, sender, pattern, patternVar, automationPattern, automationVar, outreachPattern, outreachVar, linkVar }
+  data.ippanel = { apiKey, sender, pattern, patternVar, automationPattern, automationVar, outreachPattern, outreachVar, autositePattern, autositeVar, linkVar }
   saveAdminData(data)
   return NextResponse.json({ ok: true })
 }

@@ -62,17 +62,25 @@ function instance(port, idx) {
       WARM_PORTS: '3000,3001,3002,3003',
     },
     autorestart: true,
-    // Sized for the 8GB server, not the 2GB one these numbers were written for.
-    // At 1200M pm2 was killing healthy serving instances roughly every two
-    // minutes (28-32 restarts in one hour, current_memory up to 1.68GB in
-    // pm2.log) - the cap had stopped protecting anything and had become the
-    // cause of the instability it was meant to prevent.
-    max_memory_restart: idx === 0 ? '3000M' : '2500M',
+    // ۲۸ سپتامبر ۲۰۲۶ — سقفِ ۲۵۰۰/۳۰۰۰M «گاردِ خنثی» بود: نشتِ next-server هر ۴ اینستنس را
+    // هم‌زمان بالا می‌بَرد و رمِ ۷.۸GiB «کلِ ماشین» قبل از رسیدنِ تک‌اینستنس به سقف تمام می‌شود
+    // (ساعت ۲۲:۰۸ همین شب: ۱.۱–۱.۹GB×۴ + پستگرس → سواپ/لود ۹ → ۵۰۴ سراسری، دومین بار در یک روز).
+    // اگر اینستنسی «بدونِ نشت» به این سقف بخورد (ری‌استارتِ مکررِ چنددقیقه‌ای در pm2 log)،
+    // مشکل مصرفِ واقعی است و باید ریشه‌یابی شود — نه اینکه سقف را دوباره خنثی کنیم.
+    // ۳۰ سپتامبر (فاز ۲۹۳) — اندازه‌گیریِ [mem] نشان داد سینکِ رُستر روی اینستنسِ ۰ به‌طورِ
+    // «عادی» تا rss≈۱۷۵۶MB می‌رسد (پیکره‌های دائمی: آگهی‌های اسکرپر + پایگاهِ enrich + کارِ
+    // ایمپورت) و سقفِ ۱۸۰۰M هر ۱۰-۲۵ دقیقه وسطِ پاس می‌کُشتش — سینک در حلقهٔ «از اول» بود.
+    // سقفِ اینستنسِ ۰ = نیازِ اندازه‌گیری‌شده + حاشیه: 2600+1300×3=۶.۵GB + پستگرس/سیستم ≈ ۷.۵GB.
+    // درمانِ واقعی، کوچک‌سازیِ خودِ پیکره‌هاست (لاگ‌های [mem] corpus سهمِ هرکدام را می‌گویند).
+    max_memory_restart: idx === 0 ? '2600M' : '1300M',
     // اگر هنگامِ بوت خطا داد، به‌جای crash-loopِ بی‌نهایت بعد از ۱۵ تلاش بایستد.
     min_uptime: '10s',
     max_restarts: 15,
     restart_delay: 2000,
     merge_logs: true,
+    // ۳۰ سپتامبر — بدونِ تاریخ روی خط‌های لاگ، «این خطا مالِ الان است یا دیروز؟» جواب ندارد
+    // و عیب‌یابیِ خاموشی‌ها کور پیش می‌رود. (اعمال فقط با pm2 startOrRestart، نه reload.)
+    log_date_format: 'YYYY-MM-DD HH:mm:ss',
   }
 }
 

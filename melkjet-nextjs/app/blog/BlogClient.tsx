@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
+import PageHeader from '@/app/components/PageHeader'
 import Footer from '@/app/components/Footer'
 import { fetchContent, gradientFor } from '@/app/lib/content-display'
 import { categorySlugForName } from '@/app/lib/blog-taxonomy'
@@ -89,18 +90,14 @@ export default function BlogClient({ initial }: { initial: BlogIndexData }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
       <Nav />
+      {/* هدرِ سینمایی (ری‌برندِ ۲۹۸ی۷) */}
+      <PageHeader eyebrow="بلاگِ ملک‌جت" title="مقالات و راهنمای املاک" subtitle="راهنمای خرید و اجاره، تحلیل بازار، سرمایه‌گذاری و نکات حقوقی — به‌قلم کارشناسان ملک‌جت." />
 
-      {/* ── هیروِ فشرده (هم‌خانوادهٔ هیروِ صفحهٔ مقاله) ── */}
-      <header style={{ background: 'linear-gradient(180deg, var(--bg2), var(--bg))', borderBottom: '1px solid var(--line)' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto', padding: '24px 18px 16px' }}>
+      {/* ── نوارِ ابزار: جستجو + دسته‌ها ── */}
+      <header style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--line)' }}>
+        <div style={{ maxWidth: 1180, margin: '0 auto', padding: '16px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 240 }}>
-              <h1 style={{ fontSize: 24, fontWeight: 900, margin: '0 0 5px', display: 'flex', alignItems: 'center', gap: 9 }}>
-                <span style={{ color: 'var(--gold)', fontSize: 18 }}>✦</span> مقالات و راهنمای املاک
-              </h1>
-              <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, lineHeight: 1.8 }}>راهنمای خرید و اجاره، تحلیل بازار، سرمایه‌گذاری و نکات حقوقی — به‌قلم کارشناسان ملک‌جت.</p>
-            </div>
-            <div style={{ position: 'relative', flexShrink: 0, width: 'min(300px, 100%)' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 'min(300px, 100%)' }}>
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="جستجو در مقالات…"
                 style={{ width: '100%', boxSizing: 'border-box', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 11, padding: '10px 14px 10px 36px', color: 'var(--text)', fontSize: 13.5, fontFamily: 'inherit', outline: 'none' }} />
               <span style={{ position: 'absolute', insetInlineEnd: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--faint)', fontSize: 14, pointerEvents: 'none' }}>🔍</span>

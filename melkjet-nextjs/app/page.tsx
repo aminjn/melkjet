@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import HomeClient from './HomeClient'
 import { getHomeData } from './lib/home-data'
+import { siteConfig } from './lib/site-store'
 
 // فاز ۲۲۰ (ممیزیِ سئو): canonicalِ صریحِ صفحهٔ اصلی
 export const metadata: Metadata = { alternates: { canonical: 'https://melkjet.com/' } }
@@ -11,5 +12,6 @@ export const revalidate = 300
 
 export default async function Home() {
   const initial = await getHomeData()
-  return <HomeClient initial={initial} />
+  const heroImage = siteConfig().brand?.heroImage || ''   // عکسِ هیرو از پنلِ ادمین (خالی = گرادیان)
+  return <HomeClient initial={initial} heroImage={heroImage} />
 }

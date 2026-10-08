@@ -33,7 +33,8 @@ export { validName, addressTokens } from './agency-name-lexicon'
 // همان را برمی‌گرداند — قطعی، رایگان، بدونِ AI. هستهٔ «یادگیریِ تدریجیِ ماشین».
 // deEmoji (اموجی/نماد → فاصله؛ کلیدِ رفعِ «♀️محمدی») از واژه‌نامهٔ مشترک می‌آید.
 const normTxt = (s: string) => (' ' + deEmoji(s).replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک') + ' ')
-function lexiconMatch(text: string, learned: { name: string }[]): string {
+// (exported برای scripts/roster-casestudy.mjs — کیس‌استادی باید «عینِ» منطقِ تولید را بسنجد)
+export function lexiconMatch(text: string, learned: { name: string }[]): string {
   if (!learned.length) return ''
   const t = normTxt(text)
   let best = ''
@@ -77,8 +78,19 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   // همین یک بازگشت، همهٔ بهبودهای مدل را در آگهی‌های بی‌امضا خنثی می‌کرد.
   const ner = bestName(title, desc)
   if (hasSparseModel() || ner) {
-    const v = ner ? validName(ner.name, agencyName) : ''
-    return v ? [v] : []
+    // فاز ۲۹۸ی۳ — نامِ برآمده از سیگنالِ قطعیِ شخص (عنوان/برچسب/معرفیِ خود، ner.trust) از
+    // بانِ «شهرِ تک‌کلمه‌ای» عبور می‌کند: «خانم شهریار»/«شهریار هستم» واقعاً شخص‌اند.
+    const v = ner ? validName(ner.name, agencyName, undefined, { trustPerson: !!ner.trust }) : ''
+    if (!v) return []
+    // فاز ۲۹۷ت — کیس‌استادیِ شاهان: حدسِ مدل («تمیز»، «سخت»، «همراهتان») بدونِ هیچ
+    // دروازهٔ دومی پذیرفته می‌شد و با ۲ فایل مشاورِ جعلی می‌ساخت، درحالی‌که مسیرِ regex
+    // همهٔ کاندیداها را از nameProbSync می‌گذرانْد. حالا حدسِ «خالصِ» مدل هم از همان
+    // دروازه می‌گذرد؛ امضای برچسب‌دار/معرفیِ خود (p≥۰.۹۷ — شواهدِ قطعیِ متنی) مستثناست.
+    if (ner!.p < 0.97) {
+      const bp = nameProbSync(v)
+      if (bp !== null && bp < NAME_THRESHOLD) return []
+    }
+    return [v]
   }
 
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
@@ -191,7 +203,8 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
 
 // (اختیاری) پالایشِ AI: نامِ کانونیِ مشاورِ هر آگهی را برمی‌گرداند (فارسی؛ خالی اگر امضا نبود).
 // دسته‌ای صدا زده می‌شود تا هزینهٔ AI کم بماند. اگر مدل نبود/خطا داد → [] (تکیه بر heuristic).
-async function aiCanonical(items: { i: number; title: string; desc: string }[]): Promise<{ map: Record<number, string>; raw: string }> {
+// (exported برای اسکریپتِ کیس‌استادی scripts/roster-casestudy.mjs — فاز ۲۹۷ش)
+export async function aiCanonical(items: { i: number; title: string; desc: string }[]): Promise<{ map: Record<number, string>; raw: string }> {
   const { model, provider } = resolveAgent([['content', 'text'], ['chat', 'text']])
   if (!model) return { map: {}, raw: '(هیچ مدلی تنظیم نشده)' }
   // اموجی/نماد را به فاصله تبدیل می‌کنیم تا اسمِ چسبیده به اموجی («♀️محمدی») برای AI هم خوانا شود.
@@ -296,8 +309,13 @@ export async function buildAgencyRoster(
   // فاز ۱۹۴ (فیدبک: «کلاً گیر کرده») — این فاز تا ۴۵ فراخوانِ AI دارد و قبلاً بی‌صدا بود؛ حالا:
   // پیشرفتِ per-chunk + اگر ۳ تکهٔ پیاپی هیچ نامی نداد (AI مرده/کلیدِ خراب) بقیه skip می‌شود
   // (heuristic + نام‌های آموخته‌شده کار را ادامه می‌دهند) + سقفِ ۸ دقیقه برای کلِ فاز.
+  // فاز ۲۹۷خ — «فقط ماشین‌لرنینگ»: به‌دستورِ صریحِ مالک، شناساییِ نام کاملاً ML-only شد
+  // (مثلِ ممیزیِ نظرات، فاز ۲۹۷ک). سهمیهٔ گپ منفی بود و فازِ AI فقط ۴۵ خطای ۴۰۳ تولید می‌کرد
+  // و هر سینک را کُند می‌کرد. مدلِ خلوت (۹۵٪) + قواعدِ امضا + واژه‌نامهٔ آموخته کار را می‌کنند.
+  // برگرداندن = AI_NAMING را true کن (و گپ را شارژ کن). flagِ per-scrapeِ useAI دست‌نخورده مانده.
+  const AI_NAMING = false
   let aiMap: Record<number, string> = {}
-  if (opts.useAI !== false) {
+  if (AI_NAMING && opts.useAI !== false) {
     // فاز ۱۹۶ (فیدبک: «شناساییِ AI را دوبار انجام داده، خواندنِ فهرست را ۴ بار») — نامِ AI هم مثلِ متن
     // در کشِ ازسرگیری می‌ماند؛ پاسِ بعدی فقط ردیف‌های نپرسیده را می‌پرسد، نه ۴۵ فراخوانِ تکراری.
     const pending: { idx: number; row: (typeof rows)[number] }[] = []

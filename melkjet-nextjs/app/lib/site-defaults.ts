@@ -34,6 +34,7 @@ export interface SiteBrand {
   logoDark?: string    // لوگو برای تمِ تاریک
   favicon?: string
   accent?: string      // رنگِ برند (hex)
+  heroImage?: string   // عکسِ پس‌زمینهٔ هیروی صفحهٔ اصلی — خالی = گرادیانِ سینمایی (فاز ۲۹۸ی۸)
 }
 export interface SiteConfig {
   brand: SiteBrand
@@ -45,13 +46,15 @@ export interface SiteConfig {
 }
 
 export const DEFAULT_SITE: SiteConfig = {
-  brand: { name: 'ملک‌جت', accent: '#c9a84c' },
+  brand: { name: 'ملک‌جت', accent: '#c9a84c', heroImage: '/hero-villa.webp' },
   blog: { tldr: true, market: true },
   footer: {
     blurb: 'بزرگ‌ترین اکوسیستم هوشمند صنعت املاک و ساختمان ایران. تصمیم بهتر، با داده‌ی بهتر.',
     cols: [
-      { h: 'محصول', links: [{ t: 'جستجوی هوشمند', href: '/search' }, { t: 'فروشگاه', href: '/store' }, { t: 'بازار مصالح', href: '/materials' }, { t: 'بلاگ', href: '/blog' }] },
-      { h: 'برای کسب‌وکار', links: [{ t: 'پنل آژانس', href: '/agency' }, { t: 'مارکتینگ', href: '/marketing' }, { t: 'پلن‌ها و اشتراک', href: '/pricing' }, { t: 'میز کار سازنده', href: '/builder' }, { t: 'CRM مشاوران', href: '/crm' }] },
+      { h: 'محصول', links: [{ t: 'جستجوی هوشمند', href: '/search' }, { t: 'فروشگاه', href: '/store' }, { t: 'بازار مصالح', href: '/store' }, { t: 'بلاگ', href: '/blog' }] },
+      // فاز ۲۹۸د — لینک‌های «برای کسب‌وکار» به صفحهٔ معرفیِ عمومیِ ابزار می‌روند (نه مستقیم به
+      // داشبوردِ گِیت‌شده)، تا کاربرِ بدونِ ورود روی پوستهٔ خالیِ پنل ننشیند و اول ابزار را بشناسد.
+      { h: 'برای کسب‌وکار', links: [{ t: 'پنل آژانس', href: '/features/agency' }, { t: 'مارکتینگ', href: '/features/marketing' }, { t: 'پلن‌ها و اشتراک', href: '/pricing' }, { t: 'میز کار سازنده', href: '/features/builder' }, { t: 'CRM مشاوران', href: '/features/crm' }] },
       { h: 'ملک‌جت', links: [{ t: 'درباره ما', href: '/about' }, { t: 'تماس با ما', href: '/contact' }, { t: 'قوانین و شرایط', href: '/terms' }, { t: 'حریم خصوصی', href: '/privacy' }, { t: 'سؤالات متداول', href: '/faq' }] },
     ],
     copyright: '© ۱۴۰۵ ملک‌جت · تمام حقوق محفوظ است',

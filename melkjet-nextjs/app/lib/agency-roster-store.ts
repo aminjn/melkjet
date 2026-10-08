@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { cacheRemote } from './listing-image'
 import { join } from 'path'
-import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete } from './db'
+import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete, kvGetPrefix, kvGetPrefixField } from './db'
 import { buildAgencyRoster } from './agency-roster'
 import { importDivarToken } from './advisor-divar-import'
 import { warmEnrichment } from './enrich-warm'
@@ -9,7 +9,7 @@ import { getEnrichment, patchEnrichment } from './enrich-store'
 import { parseFaNum, rentPartsOf } from './reos/features'
 import { getDivar, recordImport, clearImports } from './advisor-divar-store'
 import { getAdvisor, addListing, publishListingsBatch, deleteListing, setListingStatus, updateAdvisorProfile, type Listing , updateListing} from './advisor-store'
-import { createAccount, accountExists } from './account-store'
+import { createAccount, accountExists, adminUpdate } from './account-store'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ── «هوش آژانس»: یک لینکِ آژانسِ دیوار → مشاورها + آژانس، هر کدام حسابِ جدا ──
@@ -32,7 +32,7 @@ export interface RosterAdvisor {
   transferFrom?: string  // فاز ۲۷۷ — ownerِ موقتِ مبدأ تا وقتی انتقالِ فایل‌ها تمام نشده (ازسرگیریِ امن)
 }
 // کارِ صفِ «ساختِ حساب» — سنگین (انتقالِ فایل‌ها)، روی اینستنسِ ۰ اجرا می‌شود تا درخواستِ ادمین قفل نشود.
-export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; error?: string }   // فاز ۱۹۹ — claim برای صفِ at-least-once
+export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; attempts?: number; prepared?: boolean; error?: string }   // attempts: شمارِ خطاهای گذرا؛ prepared: بخشِ آنی (حساب+شماره) انجام شده (۲۸ سپتامبر)   // فاز ۱۹۹ — claim برای صفِ at-least-once
 export interface RosterScrape {
   id: string
   slug: string
@@ -47,7 +47,8 @@ export interface RosterScrape {
   startHour?: number
   endHour?: number
   createdAt: number
-  lastRun?: number
+  lastRun?: number        // آخرین «تلاش» (موفق یا ناموفق) — برای زمان‌بندی
+  lastOkAt?: number       // فاز ۲۹۷ض — آخرین سینکِ «موفقِ کامل» (گزارش این را نشان می‌دهد، نه تلاش)
   lastError?: string
   lastTotal?: number
   lastUnnamed?: number
@@ -72,12 +73,106 @@ const DEFAULT_SETTINGS: RosterSettings = { autoSync: true, startHour: 0, endHour
 interface DB { scrapes: Record<string, RosterScrape>; settings?: RosterSettings; graduateQueue?: GradJob[] }
 
 const FILE = join(process.cwd(), '.agency-roster-data.json')
-const KV = 'agency_roster'
+const KV = 'agency_roster'                       // بلابِ قدیمی — فقط منبعِ مهاجرتِ یک‌باره؛ دیگر نه خوانده و نه نوشته می‌شود
 const empty = (): DB => ({ scrapes: {} })
 function fileLoad(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return empty() }
 function fileSave(db: DB) { writeFileSync(FILE, JSON.stringify(db, null, 2), 'utf-8') }
-async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV, empty()) : fileLoad() }
-async function mutate<R>(fn: (db: DB) => R): Promise<R> { if (pgEnabled()) return kvMutate<DB, R>(KV, empty(), fn); const db = fileLoad(); const r = fn(db); fileSave(db); return r }
+
+// ── فاز ۲۹۱ — شاردِ رُستر: «هر آژانس ردیفِ خودش» (همان الگوی فاز ۲۵۹ برای advisor) ──────
+// ریشهٔ دو روز مرگِ سینک‌ها با «timeout exceeded when trying to connect»: همهٔ آژانس‌ها،
+// تنظیمات و صفِ ساخت حساب در «یک» ردیفِ kv بودند؛ هر mutate کلِ سند را زیرِ FOR UPDATE
+// بازنویسی می‌کرد و ده‌ها نویسندهٔ هم‌زمان (سینک‌ها، ضربان‌ها، صف، پنل) پشتِ همان یک قفل
+// اتصال‌های استخر را پارک می‌کردند تا استخر خشک شود. حالا: هر آژانس `roster:s:{id}`،
+// صف `roster:q` (ردیفِ کوچکِ مستقل)، تنظیمات `roster:meta`. سینکِ یک آژانس فقط ردیفِ
+// خودش را قفل می‌کند و صف/بقیه هرگز با آن رقابت نمی‌کنند.
+// حالتِ فایل (dev/تست) همان تک‌فایلِ قبلی است — منطق یکسان می‌ماند و تست‌ها همان را می‌سنجند.
+const S = (id: string) => `roster:s:${id}`
+const MK = 'roster:meta'
+const QK = 'roster:q'
+
+// مهاجرتِ یک‌بارهٔ تنبل از بلابِ قدیمی. کپی «فقط اگر ردیف غایب است» انجام می‌شود تا مسابقهٔ
+// چند اینستنس، به‌روزرسانیِ تازهٔ همدیگر را با نسخهٔ کهنهٔ بلاب بازنویسی نکند؛ بلابِ قدیمی
+// دست‌نخورده می‌ماند (پشتیبانِ بازگشت).
+let shardsOnce: Promise<void> | null = null
+async function ensureRosterShards(): Promise<void> {
+  if (!pgEnabled()) return
+  if (!shardsOnce) shardsOnce = (async () => {
+    const meta = await kvGet<{ migratedAt?: number } | null>(MK, null)
+    if (meta?.migratedAt) return
+    const legacy = await kvGet<DB | null>(KV, null)
+    if (legacy?.scrapes && Object.keys(legacy.scrapes).length) {
+      let copied = 0
+      for (const s of Object.values(legacy.scrapes)) {
+        if (!(await kvGet<RosterScrape | null>(S(s.id), null))?.id) { await kvSet(S(s.id), s); copied++ }
+      }
+      if (!(await kvGet<{ jobs?: GradJob[] } | null>(QK, null))) await kvSet(QK, { jobs: legacy.graduateQueue || [] })
+      await kvSet(MK, { settings: legacy.settings, migratedAt: Date.now() })
+      console.log(`[roster] shard-migration: ${copied} scrape rows copied from legacy blob`)
+    } else {
+      await kvSet(MK, { migratedAt: Date.now() })
+    }
+  })().catch(e => { shardsOnce = null; throw e })
+  return shardsOnce
+}
+
+/** خواندنِ همه (فهرست/زمان‌بندی) — بدونِ هیچ قفلی. */
+async function loadAll(): Promise<DB> {
+  if (!pgEnabled()) return fileLoad()
+  await ensureRosterShards()
+  const rows = await kvGetPrefix<RosterScrape>('roster:s:')
+  const scrapes: Record<string, RosterScrape> = {}
+  for (const { data } of rows) if (data?.id) scrapes[data.id] = data
+  const meta = await kvGet<{ settings?: RosterSettings }>(MK, {})
+  const q = await kvGet<{ jobs?: GradJob[] }>(QK, { jobs: [] })
+  return { scrapes, settings: meta.settings, graduateQueue: q.jobs || [] }
+}
+async function getScrapeRow(id: string): Promise<RosterScrape | null> {
+  if (!pgEnabled()) return fileLoad().scrapes[id] || null
+  await ensureRosterShards()
+  const s = await kvGet<RosterScrape | null>(S(id), null)
+  return s?.id ? s : null
+}
+/** تغییرِ اتمیکِ «فقط همین آژانس» — قفل فقط روی ردیفِ خودش. */
+async function mutateScrape<R>(id: string, fn: (s: RosterScrape | undefined) => R): Promise<R> {
+  if (!pgEnabled()) { const db = fileLoad(); const r = fn(db.scrapes[id]); fileSave(db); return r }
+  await ensureRosterShards()
+  const exists = await kvGet<RosterScrape | null>(S(id), null)
+  if (!exists?.id) return fn(undefined)   // نبود → بدونِ نوشتن (ردیفِ خالی نسازیم)
+  return kvMutate<RosterScrape, R>(S(id), exists, s => fn(s))
+}
+async function putScrape(s: RosterScrape): Promise<void> {
+  if (!pgEnabled()) { const db = fileLoad(); db.scrapes[s.id] = s; fileSave(db); return }
+  await ensureRosterShards(); await kvSet(S(s.id), s)
+}
+async function deleteScrapeRow(id: string): Promise<void> {
+  if (!pgEnabled()) { const db = fileLoad(); delete db.scrapes[id]; fileSave(db); return }
+  await ensureRosterShards(); await kvDelete(S(id))
+}
+async function getQueue(): Promise<GradJob[]> {
+  if (!pgEnabled()) return fileLoad().graduateQueue || []
+  await ensureRosterShards()
+  return (await kvGet<{ jobs?: GradJob[] }>(QK, { jobs: [] })).jobs || []
+}
+/** صفِ ساخت حساب — ردیفِ کوچکِ مستقل؛ claim/ضربان/حذف هرگز با سینک‌ها رقابت نمی‌کند. */
+async function mutateQueue<R>(fn: (jobs: GradJob[]) => R): Promise<R> {
+  if (!pgEnabled()) { const db = fileLoad(); db.graduateQueue = db.graduateQueue || []; const r = fn(db.graduateQueue); fileSave(db); return r }
+  await ensureRosterShards()
+  return kvMutate<{ jobs?: GradJob[] }, R>(QK, { jobs: [] }, box => { box.jobs = box.jobs || []; return fn(box.jobs) })
+}
+async function anyScrapeRunning(): Promise<boolean> {
+  const now = Date.now()
+  if (!pgEnabled()) return Object.values(fileLoad().scrapes).some(s => !!s.running && !isStale(s, now))
+  await ensureRosterShards()
+  // فاز ۲۹۱ب — رانِ مرده (running=true از پروسهٔ کشته‌شده) «در جریان» نیست: بدونِ این چک، یک
+  // پرچمِ مرده جارویِ enrich و انتقالِ فایل‌های ساختِ حساب را ابدی متوقف می‌کرد (۳۰ سپتامبر).
+  // پرچم‌خورده‌ها معمولاً ۰-۳ ردیف‌اند؛ فقط برای همان‌ها سندِ کامل خوانده می‌شود.
+  const flagged = (await kvGetPrefixField<boolean>('roster:s:', 'running')).filter(r => r.data === true)
+  for (const r of flagged) {
+    const s = await kvGet<RosterScrape | null>(r.key, null)
+    if (s?.id && !isStale(s, now)) return true
+  }
+  return false
+}
 
 // ── چک‌پوینتِ ازسرگیری: متنِ آگهی‌های اسکرپ‌شده (توکن→{title,desc}) در یک کلیدِ جدا، برای هر اسکرپ ──
 // اگر سینک نیمه‌کاره بماند (reload/کیل)، رانِ بعدی آگهی‌های کش‌شده را دوباره از دیوار نمی‌گیرد و ادامه می‌دهد.
@@ -126,7 +221,7 @@ const isStale = (s: RosterScrape, now = Date.now()) => !!s.running && (now - (s.
 
 export async function listScrapes(): Promise<RosterScrape[]> {
   const now = Date.now()
-  const db = await load()
+  const db = await loadAll()
   const q = db.graduateQueue || []
   return Object.values(db.scrapes)
     .map(s => isStale(s, now) ? { ...s, running: false, lastError: s.lastError || 'همگام‌سازی نیمه‌کاره ماند — خودکار از همان‌جا ادامه می‌یابد' } : s)
@@ -134,29 +229,48 @@ export async function listScrapes(): Promise<RosterScrape[]> {
     .map(s => ({ ...s, advisors: (s.advisors || []).map(a => a.graduating && !q.some(j => j.id === s.id && j.key === a.key) ? { ...a, graduating: false } : a) }))
     .sort((a, b) => b.createdAt - a.createdAt)
 }
-export async function getScrape(id: string): Promise<RosterScrape | null> { return (await load()).scrapes[id] || null }
+export async function getScrape(id: string): Promise<RosterScrape | null> { return getScrapeRow(id) }
+
+// فاز ۲۹۸و — آزادسازیِ «زامبی»ها موقعِ بوتِ اینستنسِ ۰ (ریشهٔ «رُستر هیچ‌وقت تمام نمی‌شود»):
+// هر ری‌استارت (= هر دیپلوی) سینک‌های در حالِ اجرا را می‌کُشت ولی ردیفشان running=true می‌ماند؛
+// listScrapes فقط در حافظه stale می‌کند (ذخیره نمی‌کند)، پس تا STALE_MS=۸دقیقه این ردیف‌ها
+// ۴ اسلات را قفل می‌کردند و «هیچ سینکِ تازه‌ای» شروع نمی‌شد — پنجرهٔ مردهٔ ۸دقیقه بعد از هر بوت.
+// چون پروسه تازه بالا آمده، هیچ سینکی واقعاً در حال اجرا نیست؛ پس همهٔ running=true زامبی‌اند و
+// فوری آزاد می‌شوند. RowCache حفظ می‌شود، پس سینکِ بعدی از همان‌جا (مثلِ ۶۰/۶۳۹) ادامه می‌دهد.
+export async function reconcileRunningOnBoot(): Promise<number> {
+  const db = await loadAll()
+  const running = Object.values(db.scrapes).filter(s => !!s.running)
+  let freed = 0
+  for (const s of running) {
+    await mutateScrape(s.id, x => {
+      if (!x || !x.running) return
+      x.running = false
+      x.lastError = x.lastError || 'همگام‌سازی با ری‌استارتِ سرور نیمه‌کاره ماند — خودکار از همان‌جا ادامه می‌یابد'
+    }).then(() => { freed++ }).catch(() => {})
+  }
+  return freed
+}
 
 // ساختِ یک اسکرپِ آژانس (فقط ثبت — سینکِ واقعی را کرون/دکمه می‌زند).
 export async function addScrape(input: { slug: string; agencyName?: string; useAI?: boolean; schedule?: RosterScrape['schedule'] }): Promise<{ ok: boolean; error?: string; scrape?: RosterScrape }> {
   const slug = cleanSlug(input.slug)
   if (!slug || !/^[A-Za-z0-9_-]{2,}$/.test(slug)) return { ok: false, error: 'لینک/slugِ آژانس نامعتبر است' }
-  return mutate(db => {
-    if (Object.values(db.scrapes).some(s => s.slug === slug)) return { ok: false, error: 'این آژانس از قبل اضافه شده است' }
-    const s: RosterScrape = {
-      id: sid(), slug, agencyName: String(input.agencyName || '').trim() || slug, agencyOwner: `agency:${slug}`,
-      advisors: [], useAI: input.useAI !== false, schedule: input.schedule || 'daily', createdAt: Date.now(),
-    }
-    db.scrapes[s.id] = s
-    return { ok: true, scrape: s }
-  })
+  const all = await loadAll()
+  if (Object.values(all.scrapes).some(s => s.slug === slug)) return { ok: false, error: 'این آژانس از قبل اضافه شده است' }
+  const s: RosterScrape = {
+    id: sid(), slug, agencyName: String(input.agencyName || '').trim() || slug, agencyOwner: `agency:${slug}`,
+    advisors: [], useAI: input.useAI !== false, schedule: input.schedule || 'daily', createdAt: Date.now(),
+  }
+  await putScrape(s)
+  return { ok: true, scrape: s }
 }
-export async function removeScrape(id: string): Promise<void> { await mutate(db => { delete db.scrapes[id] }) }
+export async function removeScrape(id: string): Promise<void> { await deleteScrapeRow(id) }
 
 // «همگام‌سازیِ الان» — سینکِ دستی همیشه «تازه» است: کشِ ازسرگیری پاک می‌شود تا آگهی‌ها دوباره
 // از دیوار گرفته شوند (کشِ کهنهٔ دورهٔ پروکسیِ مرده که متنِ خالی داشت، دیگر استفاده نمی‌شود).
 export async function requestRun(id: string): Promise<boolean> {
   let hadError = false
-  const ok = await mutate(db => { const s = db.scrapes[id]; if (!s) return false; hadError = !!s.lastError; s.runRequested = true; s.stopRequested = false; s.runAttempts = 0; s.lastError = ''; if (isStale(s)) s.running = false; return true })   // فاز ۱۹۶ب: کلیکِ دستی = شروعِ تمیز
+  const ok = await mutateScrape(id, s => { if (!s) return false; hadError = !!s.lastError; s.runRequested = true; s.stopRequested = false; s.runAttempts = 0; s.lastError = ''; if (isStale(s)) s.running = false; return true })   // فاز ۱۹۶ب: کلیکِ دستی = شروعِ تمیز
   // فاز ۱۹۸ — کش دائمی است (اینکرمنتال)؛ کلیکِ دستی هرگز کش را دور نمی‌ریزد. تازگی با چرخشِ ۱۴روزه تأمین می‌شود.
   void hadError
   return ok
@@ -164,8 +278,8 @@ export async function requestRun(id: string): Promise<boolean> {
 // فاز ۱۹۶ — «⏹ توقفِ همگام‌سازی» (درخواستِ کاربر بعدِ لوپِ دوروزه): state همان لحظه بسته می‌شود و
 // اگر پروسه‌ای زنده وسطِ کار باشد، در اولین چکِ بعدی (حداکثر چند ثانیه) تمیز می‌ایستد و دیگر صف نمی‌شود.
 export async function requestStop(id: string): Promise<boolean> {
-  return mutate(db => {
-    const s = db.scrapes[id]; if (!s) return false
+  return mutateScrape(id, s => {
+    if (!s) return false
     s.stopRequested = true; s.runRequested = false; s.running = false; s.runAttempts = 0
     s.lastError = 'با دکمهٔ توقف متوقف شد'
     return true
@@ -175,17 +289,22 @@ const PERIOD: Record<RosterScrape['schedule'], number> = { off: 0, '6h': 6 * 360
 
 // ── تنظیماتِ سراسریِ زمان‌بندی ──
 export async function getRosterSettings(): Promise<RosterSettings> {
-  const s = (await load()).settings
-  return { ...DEFAULT_SETTINGS, ...(s || {}) }
+  if (!pgEnabled()) return { ...DEFAULT_SETTINGS, ...(fileLoad().settings || {}) }
+  await ensureRosterShards()
+  const meta = await kvGet<{ settings?: RosterSettings }>(MK, {})
+  return { ...DEFAULT_SETTINGS, ...(meta.settings || {}) }
 }
 export async function saveRosterSettings(patch: Partial<RosterSettings>): Promise<RosterSettings> {
-  return mutate(db => {
-    const cur = { ...DEFAULT_SETTINGS, ...(db.settings || {}) }
+  const apply = (cur: RosterSettings): RosterSettings => {
     if (typeof patch.autoSync === 'boolean') cur.autoSync = patch.autoSync
     if (patch.startHour != null) cur.startHour = Math.max(0, Math.min(23, Math.floor(Number(patch.startHour))))
     if (patch.endHour != null) cur.endHour = Math.max(0, Math.min(23, Math.floor(Number(patch.endHour))))
-    db.settings = cur
     return cur
+  }
+  if (!pgEnabled()) { const db = fileLoad(); const cur = apply({ ...DEFAULT_SETTINGS, ...(db.settings || {}) }); db.settings = cur; fileSave(db); return cur }
+  await ensureRosterShards()
+  return kvMutate<{ settings?: RosterSettings; migratedAt?: number }, RosterSettings>(MK, {}, m => {
+    const cur = apply({ ...DEFAULT_SETTINGS, ...(m.settings || {}) }); m.settings = cur; return cur
   })
 }
 // ساعتِ کنونی به وقتِ ایران (UTC+3:30، بدونِ ساعتِ تابستانی از ۱۴۰۱).
@@ -208,7 +327,7 @@ export function inSyncWindow(hour: number, start: number, end: number): boolean 
 // اسکرپ‌هایی که باید سینک شوند و در حالِ اجرا نیستند (یا رانشان مرده).
 // درخواستِ دستی («همگام‌سازی الان») همیشه؛ زمان‌بندیِ خودکار فقط اگر autoSync روشن و در پنجرهٔ شبانه باشیم.
 export async function listDueRosters(now: number): Promise<RosterScrape[]> {
-  const db = await load()
+  const db = await loadAll()
   const g = { ...DEFAULT_SETTINGS, ...(db.settings || {}) }
   const hour = iranHour(now)
   const dueList = Object.values(db.scrapes).filter(s => {
@@ -234,15 +353,15 @@ export async function listDueRosters(now: number): Promise<RosterScrape[]> {
 }
 // تنظیمِ زمان‌بندیِ اختصاصیِ یک اسکرپ.
 export async function saveScrapeSchedule(id: string, patch: { autoSync?: boolean; startHour?: number; endHour?: number }): Promise<boolean> {
-  return mutate(db => {
-    const s = db.scrapes[id]; if (!s) return false
+  return mutateScrape(id, s => {
+    if (!s) return false
     if (typeof patch.autoSync === 'boolean') s.autoSync = patch.autoSync
     if (patch.startHour != null) s.startHour = Math.max(0, Math.min(23, Math.floor(Number(patch.startHour))))
     if (patch.endHour != null) s.endHour = Math.max(0, Math.min(23, Math.floor(Number(patch.endHour))))
     return true
   })
 }
-export async function patchScrape(id: string, patch: Partial<RosterScrape>): Promise<void> { await mutate(db => { if (db.scrapes[id]) Object.assign(db.scrapes[id], patch) }) }
+export async function patchScrape(id: string, patch: Partial<RosterScrape>): Promise<void> { await mutateScrape(id, s => { if (s) Object.assign(s, patch) }) }
 
 // ── ایمپورتِ یک خوشه (توکن‌ها) زیرِ یک owner — dedup-safe ──
 // رفعِ باگِ «تکراری + فروخته‌شده»: «رفته» بر اساسِ listingIdِ لمس‌شده در همین دور محاسبه می‌شود،
@@ -338,9 +457,14 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
           new Promise<{ ok: false; reason: string }>(r => setTimeout(() => r({ ok: false, reason: 'timeout 2min — رد شد' }), 120_000)),   // فاز ۱۹۵
         ])
         const ms = Date.now() - t0
-        if (ms > 30_000 || !res.ok) console.log(`[roster] token=${token} ms=${ms} ok=${res.ok}${!res.ok && 'reason' in res ? ' reason=' + String((res as any).reason).slice(0, 80) : ''}`)
+        // فاز ۲۹۳ب — ترمز فقط با «زمانِ دیوار» (fetch)، نه کلِ ms که کندیِ DB/عکسِ خودمان را هم دارد.
+        // ۳۰ سپتامبر: طوفانِ DB باعث می‌شد ms>20s شود، ترمز دیوار را مقصر بداند و ۲۵ث خوابِ بی‌جا
+        // به هر توکن اضافه کند — مارپیچِ «سینکِ خزنده». بدونِ تفکیک (timeout race) همان ms مبناست.
+        const t293 = (res as { t?: { fetch: number; img: number } }).t
+        const netMs = t293 ? t293.fetch : ms
+        if (ms > 30_000 || !res.ok) console.log(`[roster] token=${token} ms=${ms}${t293 ? ` fetch=${t293.fetch} img=${t293.img} db=${ms - t293.fetch - t293.img}` : ''} ok=${res.ok}${!res.ok && 'reason' in res ? ' reason=' + String((res as any).reason).slice(0, 80) : ''}`)
         // موفقِ سریع → کاهشِ تدریجیِ استرِیک (نه صفرِ ناگهانی) تا نوسانِ backoff کم شود
-        if (!res.ok || ms > 20_000) slowStreak193 = Math.min(slowStreak193 + 1, 5)
+        if (!res.ok || netMs > 20_000) slowStreak193 = Math.min(slowStreak193 + 1, 5)
         else slowStreak193 = Math.max(0, slowStreak193 - 1)
         // pace به‌ازای هر کارگر؛ چون CONC کارگر موازی داریم، فاصلهٔ مؤثر ~CONC برابر کمتر است.
         const pace = slowStreak193 === 0 ? 250 : [1_500, 4_000, 8_000, 15_000, 25_000][slowStreak193 - 1]
@@ -382,7 +506,9 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
   console.log(`[roster] pass start id=${id} slug=${scrape.slug} attempt=${(scrape.runAttempts || 0) + 1}`)
   const attempts192 = (scrape.runAttempts || 0) + 1
   if (attempts192 > 8) {
-    await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastError: 'چند بار پشتِ‌سرِهم ناتمام ماند — لاگِ سرور را ببین و دوباره «همگام‌سازی الان» را بزن' })
+    // فاز ۲۹۷ض — علتِ آخرین شکست را نگه دار (lastError هنوز پاک نشده) تا در پنل معلوم باشد چرا.
+    const why = String(scrape.lastError || '').replace(/^خطای گذرا[^:]*:\s*/, '').slice(0, 120)
+    await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastError: `۸ بار پشتِ‌سرِهم ناتمام ماند${why ? ` — علت: ${why}` : ''} — «همگام‌سازی الان» را بزن` })
     return { ok: false, error: 'تلاش‌های ناتمامِ زیاد', advisors: 0, total: 0, unnamed: 0 }
   }
   await patchScrape(id, { running: true, runStartedAt: Date.now(), lastProgressAt: Date.now(), runAttempts: attempts192, phase: 'scrape', progress: { done: 0, total: 0 }, lastError: '' })
@@ -460,9 +586,12 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // فاز ۱۹۶ — flushِ نهاییِ کشِ ازسرگیری: ذخیرهٔ throttled (هر ۵ث) دُمِ کش (و نام‌های AI) را جا می‌گذاشت
     // → پاسِ بعد دوباره از دیوار می‌خواند و AI را دوباره می‌پرسید. (خودِ تستِ شبیه‌سازی این را گرفت.)
     await saveRowCache(id, rowCache).catch(() => {})
-    // فاز ۱۹۶ب — پیشرفتِ واقعی شمارندهٔ تلاش را می‌بخشد: رسیدن به این‌جا یعنی اسکرپ+AI کامل شد؛
-    // کیلِ دیپلوی وسطِ ایمپورت نباید به سمتِ «چند بار ناتمام ماند» بشمارد (فیدبک: give-up الکی).
-    if (roster.ok) await patchScrape(id, { runAttempts: 0 })
+    // فاز ۲۹۷ض — ریشهٔ «۱۴ ساعت در صف، هرگز کامل نمی‌شود» (۳۸ آژانس): اینجا runAttempts صفر
+    // می‌شد، «پیش از» فازِ ایمپورت. پس اگر ایمپورت هر بار خطای گذرا می‌داد، شمارنده هرگز بالا
+    // نمی‌رفت و سقفِ ۸ هرگز فعال نمی‌شد → حلقهٔ بی‌پایانِ خاموش (و lastRun هر بار تازه می‌شد، پس
+    // گزارش دروغ می‌گفت «۲ ساعت پیش سینک شد»). بخششِ واقعی به مسیرِ «بودجه تمام شد» منتقل شد
+    // (آن‌جا پیشرفتِ واقعی رخ داده)؛ خطای گذرای ایمپورت حالا می‌شمارد و بعد از ۸ بار «با علتِ
+    // واقعی» تسلیم می‌شود تا در پنل دیده شود، نه این‌که ابدی بچرخد.
     console.log(`[roster] scrape+AI done: rows=${roster.scanned} advisors=${roster.advisors.length} unnamed=${roster.unnamed.tokens.length}`)
     if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
@@ -516,20 +645,22 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     if (budgetHit) {
       done = true
       const wasStopped = stopFlag || (await getScrape(id))?.stopRequested === true
-      await mutate(db => {
-        const s2 = db.scrapes[id]; if (!s2) return
+      await mutateScrape(id, s2 => {
+        if (!s2) return
         s2.advisors = recs; s2.running = false
+        // فاز ۲۹۷ض — «بودجه تمام شد» = پیشرفتِ واقعی (بخشی ایمپورت شد)؛ پس شمارندهٔ تلاش بخشیده
+        // می‌شود (این همان بخششی است که قبلاً اشتباهاً پیش از ایمپورت انجام می‌شد).
         if (wasStopped) { s2.runRequested = false; s2.stopRequested = false; s2.runAttempts = 0; s2.lastError = 'با دکمهٔ توقف متوقف شد' }
-        else s2.lastError = 'بودجهٔ زمانیِ این ران تمام شد — ادامه خودکار در چند لحظهٔ دیگر'
+        else { s2.runAttempts = 0; s2.lastError = 'بودجهٔ زمانیِ این ران تمام شد — ادامه خودکار در چند لحظهٔ دیگر' }
       })
       console.log(`[roster] pass end (${wasStopped ? 'stopped' : 'budget'}) imported=${done193}/${totalTokens193}`)
       return { ok: false, error: wasStopped ? 'متوقف شد' : 'بودجهٔ زمانی — ادامه خودکار', advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
     }
 
-    await mutate(db => {
-      const s = db.scrapes[id]; if (!s) return
+    await mutateScrape(id, s => {
+      if (!s) return
       s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
-      s.running = false; s.runRequested = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastError = ''
+      s.running = false; s.runRequested = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastOkAt = Date.now(); s.lastError = ''
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
     })
@@ -557,8 +688,10 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // حالا مسیرِ زمان‌بندی‌شده هم همان رفتارِ فاز ۱۹۲ را می‌گیرد: تیکِ بعدیِ کرون از همان‌جا
     // (RowCache) ادامه می‌دهد. سقفِ ۸ تلاشِ خط ۳۸۴ جلوی حلقهٔ بی‌پایان را می‌گیرد و بعد از آن
     // با پیامِ روشن تسلیم می‌شود، پس نه حلقهٔ بی‌صدا می‌ماند نه فشارِ بی‌پایان روی دیوار.
+    // فاز ۲۹۷ض — علتِ واقعی دیگر دور ریخته نمی‌شود (قانون شمارهٔ یک): بدونِ آن، «۳۸ آژانس خطای
+    // گذرا» بود ولی هیچ‌کس نمی‌دانست «چه چیزی» تایم‌اوت می‌خورد (PG؟ دیوار؟ سوکت؟).
     await patchScrape(id, transient
-      ? { running: false, runRequested: true, lastRun: Date.now(), lastError: 'خطای گذرای زیرساخت — ادامهٔ خودکار در چند لحظه' }
+      ? { running: false, runRequested: true, lastRun: Date.now(), lastError: `خطای گذرا (تلاشِ ${attempts192}/۸): ${msg.slice(0, 140)}` }
       : { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: msg })
     return { ok: false, error: msg, advisors: 0, total: 0, unnamed: 0 }
   } finally {
@@ -573,44 +706,18 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
 // کدام روی PG یک فول‌اسکنِ جدولِ listings بود (~۵ث/فایل). حالا فایل‌های فعال در چانک‌های
 // ~۱۵تایی جمع و با publishListingsBatch (یک mutateِ اسکرپر برای هر چانک، همان منطقِ
 // prev/twin/remoderate per-item) منتشر می‌شوند. کپی/حذفِ per-file اتمی (فاز ۲۷۷) دست نخورد.
+// ── فاز ۲۸۷ (فیدبک: «اول آگهی‌ها بیاید، نمایش نده؛ بعد صفِ جداگانه تکراری‌نبودن را چک و منتشر کند») ──
+// انتقال و انتشار از هم جدا شدند. این تابع فقط «کپیِ» فایل‌هاست: چند عملیاتِ کوچک روی
+// شاردهای advisor/divar — سبک و سریع. انتشار (که چکِ ضدتکراری و کارِ سنگینِ دیتابیس دارد و
+// با سینک/اسکرِیپر رقابت می‌کرد و statement-timeout می‌خورد) به «جارویِ انتشار»
+// (repairOrphanPublishes، هر تیکِ ۴۵ثانیه‌ای، چندتا-چندتا) سپرده شد. publicIdِ قبلیِ هر
+// فایل در enrichFrom می‌ماند تا جارو غنی‌سازی را از آن کپی کند و دیوار دوباره خوانده نشود.
 async function reassignListings(fromO: string, toO: string, sourceId: string): Promise<number> {
   const from = await getAdvisor(fromO)
   const moved: { oldId: string; newId: string }[] = []
   const t0 = Date.now()
-  // فایل‌های در انتظارِ انتشارِ دسته‌ای: {fid: شناسهٔ فایلِ مقصد، prevEnrichId: publicIdِ قبلی برای کپیِ غنی‌سازی}
-  const pending: { fid: string; prevEnrichId?: string }[] = []
-  const flush = async () => {
-    if (!pending.length) return
-    const chunk = pending.splice(0, pending.length)
-    const rs = await publishListingsBatch(toO, chunk.map(x => x.fid))
-    for (const r of rs) {
-      // فاز ۲۷۷ («فایل‌ها را ده بار می‌گیرد؛ باید یک‌بار بگیرد و نگه دارد») — غنی‌سازیِ آگهیِ
-      // قبلی (گالری/تحلیل/دسترسی‌ها) روی شناسهٔ عمومیِ جدید کپی می‌شود، پس warmEnrichment
-      // آن را «غنی» می‌بیند و هیچ درخواستِ تازه‌ای به دیوار نمی‌زند. قبلاً هر انتقال — و هر
-      // تلاشِ دوبارهٔ صف — همهٔ فایل‌ها را دوباره از دیوار می‌گرفت: هم کند، هم خوردن به
-      // سقفِ ضدِاسکرپِ دیوار.
-      const prevId = chunk.find(x => x.fid === r.fid)?.prevEnrichId
-      const prev = prevId ? getEnrichment(prevId) : null
-      if (prev) patchEnrichment(r.publicId, prev)
-      warmEnrichment(r.publicId)
-    }
-  }
-  // ── مسیرِ ترمیم (پنجرهٔ کرشِ انتشارِ معوق): فایلی که در تلاشِ قبلی copy+delete شد ولی
-  // چانکش publish نشد، این‌جا با «فعال + بدونِ publicId + رکوردِ ایمپورتِ همین sourceId»
-  // شناسایی و به اولین چانک اضافه می‌شود (بدونِ prevEnrichId — فقط warmEnrichment).
-  const impIdsTo = new Set(getDivar(toO).imports.filter(i => i.sourceId === sourceId).map(i => i.listingId))
-  for (const l of (await getAdvisor(toO)).listings) {
-    // فاز ۲۸۴ (یافتهٔ بازبین): unpublishedAt یعنی مشاور «عمداً» از انتشار درآورده — ترمیم نکن.
-    if (l.status === 'active' && !l.publicId && !l.unpublishedAt && impIdsTo.has(l.id)) pending.push({ fid: l.id })
-  }
-  // فاز ۲۷۷ — انتقال «per-فایل اتمی» شد: کپی، سپس بلافاصله حذفِ مبدأ.
-  // قبلاً همهٔ کپی‌ها انجام می‌شد و حذفِ مبدأ *در پایان*. اگر کار وسطِ راه می‌مرد (ری‌لودِ
-  // دیپلوی، یا claimِ دوبارهٔ صف بعد از ۱۰ دقیقه)، مبدأ دست‌نخورده می‌ماند و تلاشِ بعدی
-  // همان فایل‌ها را **دوباره** کپی می‌کرد → آگهیِ تکراری روی حسابِ مشاور. کامنتِ فاز ۱۹۹
-  // ادعای ایدمپوتنت‌بودن داشت ولی این حلقه آن را نقض می‌کرد.
-  // حالا هر فایل که منتقل شد از مبدأ می‌رود؛ پس ازسرگیری فقط باقی‌مانده‌ها را می‌برد.
+  // فاز ۲۷۷ — انتقال «per-فایل اتمی»: کپی، سپس بلافاصله حذفِ مبدأ؛ ازسرگیری فقط باقی‌مانده‌ها را می‌برد.
   const items = [...from.listings]   // اسنپ‌شات: داخلِ حلقه از مبدأ حذف می‌کنیم
-  // رکوردهای ایمپورتِ مبدأ به تفکیکِ listingId — برای انتقالِ per-file (لازمهٔ مسیرِ ترمیمِ بالا)
   const impsByOld = new Map<string, ReturnType<typeof getDivar>['imports']>()
   for (const im of getDivar(fromO).imports.filter(i => i.sourceId === sourceId)) {
     const arr = impsByOld.get(im.listingId) || []; arr.push(im); impsByOld.set(im.listingId, arr)
@@ -620,22 +727,16 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
     const l = items[i]
     const tf = Date.now()
     const { id: _id, publicId: _p, ...fields } = l as Listing & { publicId?: string }
-    const nl = await addListing(toO, fields)
-    // حالا که به کاربرِ واقعی رسید: هر آگهیِ فعال عمومی و با AI تحلیل می‌شود (چیزی که هنگامِ
-    // مالکِ موقت عمداً انجام نشد). آگهیِ فروخته/اجاره‌رفته عمومی نمی‌شود.
+    // آگهیِ فعال بعداً توسطِ جارو عمومی می‌شود؛ publicIdِ قبلی برای کپیِ غنی‌سازی همراهش می‌ماند.
+    const nl = await addListing(toO, l.status === 'active' && _p ? { ...fields, enrichFrom: _p } : fields)
     if (l.status !== 'active') await setListingStatus(toO, nl.id, l.status)
-    else pending.push({ fid: nl.id, prevEnrichId: _p })
-    moved.push({ oldId: l.id, newId: nl.id })
-    // رکوردِ ایمپورتِ همین فایل «همین‌جا» منتقل می‌شود (recordImport بر اساسِ token جایگزین
-    // می‌کند — ایدمپوتنت)؛ وگرنه فایلِ copy+deleteشده که چانکش publish نشده بعدِ کرش با
-    // sourceId قابلِ‌شناسایی نبود و برای همیشه بدونِ publicId می‌ماند.
+    // رکوردِ ایمپورتِ همین فایل «همین‌جا» منتقل می‌شود (recordImport بر اساسِ token جایگزین می‌کند — ایدمپوتنت).
     for (const im of impsByOld.get(l.id) || []) recordImport(toO, { ...im, listingId: nl.id })
+    moved.push({ oldId: l.id, newId: nl.id })
     try { await deleteListing(fromO, l.id) } catch {}   // ← اتمی: مبدأ همین‌جا آزاد می‌شود
-    if (pending.length >= 15) await flush()   // یک mutateِ اسکرپر برای هر ~۱۵ فایل
     const ms = Date.now() - tf
     if (ms > 3000 || (i + 1) % 5 === 0 || i === items.length - 1) console.log(`[roster] reassign ${i + 1}/${items.length} (${ms}ms)`)
   }
-  await flush()   // flushِ پایانی: باقی‌ماندهٔ چانک + فایل‌های مسیرِ ترمیم
   // انتقالِ رکوردهای ایمپورت (توکن→listingId جدید) تا آپدیتِ بعدی همان فایل‌ها را بشناسد.
   for (const im of getDivar(fromO).imports.filter(i => i.sourceId === sourceId)) {
     const m = moved.find(x => x.oldId === im.listingId)
@@ -647,10 +748,13 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
 }
 
 // ── graduate: به یک مشاورِ کشف‌شده شمارهٔ موبایل بده → حسابِ واقعی بساز و آگهی‌ها را منتقل کن ──
-export async function graduateAdvisor(id: string, key: string, phone: string, role = 'advisor'): Promise<{ ok: boolean; error?: string; moved?: number }> {
+export async function graduateAdvisor(id: string, key: string, phone: string, role = 'advisor', opts?: { deferTransfer?: boolean }): Promise<{ ok: boolean; error?: string; moved?: number; deferred?: boolean }> {
   const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   // مسیرِ graduate همیشه پشتِ گاردِ سوپرادمین/staff است ⇒ ثابت (۰۲۱xxxxxxxx) هم مجاز؛ پیامکی هم نمی‌فرستد.
   if (!/^0\d{10}$/.test(p)) return { ok: false, error: 'شمارهٔ معتبر نیست (موبایل ۰۹… یا ثابت با کدِ شهر)' }
+  // نامِ مرحله واردِ پیامِ خطا می‌شود تا لاگِ صف بگوید timeout دقیقاً در کدام مرحله بوده (۲۸ سپتامبر).
+  let step = 'scrape'
+  try {
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد' }
   const isAgency = key === '__agency__'
@@ -661,29 +765,41 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   const fromOwner = isAgency ? scrape.agencyOwner : (rec!.transferFrom || rec!.owner)
   if (fromOwner === p) return { ok: false, error: 'این شماره از قبل تنظیم شده' }
 
+  step = 'account'
   if (!accountExists(p)) {
     // فاز ۱۹۸ (فیدبک: «حساب ساخته شد ولی نقشِ مشاور املاک را نداد») — شناسهٔ نقش در role-store تصادفی است؛
     // رشتهٔ ثابتِ 'advisor' هیچ نقشی نبود. نقشِ واقعی با داشبورد پیدا می‌شود: مشاور=/pros، آژانس=/agency.
+    // فاز ۲۹۸ع — تخصیصِ نقش مقاوم شد: اگر جست‌وجو با داشبورد خالی بود، با «نامِ نقش» و سپس
+    // نسخهٔ غیرفعال هم امتحان می‌شود. حسابِ بی‌نقش در دایرکتوری «نامرئی» است (ROLE_CAT به آن
+    // نگاشت نمی‌کند) — پس آژانسِ graduateشده بی‌نقش یعنی «برایش حساب ساختیم ولی هیچ‌جا دیده نشد».
+    const wantAgency = isAgency || role === 'agency'
     let roleId = ''
     try {
       const { listRoles } = await import('./role-store')
-      const roles = listRoles()
-      const wantDash = isAgency || role === 'agency' ? '/agency' : '/pros'
-      roleId = roles.find(r => r.dashboard === wantDash && r.active)?.id || ''
+      const rs = listRoles()
+      const wantDash = wantAgency ? '/agency' : '/pros'
+      const wantName = wantAgency ? 'آژانس املاک' : 'مشاور املاک'
+      roleId = rs.find(r => r.dashboard === wantDash && r.active)?.id
+            || rs.find(r => r.name === wantName && r.active)?.id
+            || rs.find(r => r.dashboard === wantDash)?.id
+            || rs.find(r => r.name === wantName)?.id || ''
     } catch {}
+    if (!roleId) console.error(`[roster] ⚠️ نقشِ ${wantAgency ? 'آژانس املاک' : 'مشاور املاک'} پیدا نشد — حساب ${p} بی‌نقش ساخته می‌شود و در دایرکتوری دیده نمی‌شود (قانونِ شمارهٔ یک)`)
     const cr = createAccount(p, { name, role: roleId || undefined })
     if (!cr.ok) return { ok: false, error: cr.error }
     console.log(`[roster] graduate: account created phone=${p} name=${name} role=${roleId || '(نقش پیدا نشد!)'}`)
   }
+  step = 'profile'
   try { await updateAdvisorProfile(p, { name, phone: p, agency: scrape.agencyName }) } catch {}
+  step = 'record'
 
   // فاز ۲۷۷ (فیدبک: «ساخت حساب باید کمتر از ۱ ثانیه باشد») — حساب همین‌جا «تمام‌شده» ثبت می‌شود.
   // قبلاً رکورد فقط *بعد از* انتقالِ همهٔ فایل‌ها به‌روز می‌شد، پس پنل ساعت‌ها «در حال ساخت حساب»
   // نشان می‌داد در حالی که حساب از ثانیهٔ اول ساخته شده بود. انتقالِ فایل‌ها کارِ پس‌زمینه است.
   // `transferFrom` مبدأ را نگه می‌دارد تا اگر انتقال نیمه‌کاره ماند، تلاشِ بعدی بداند از کجا
   // ادامه دهد (وگرنه owner دیگر شماره است و مبدأ برای همیشه گم می‌شد).
-  await mutate(db => {
-    const s = db.scrapes[id]; if (!s) return
+  await mutateScrape(id, s => {
+    if (!s) return
     if (isAgency) { s.agencyOwner = p; s.agencyPhone = p }
     else {
       const r = s.advisors.find(x => x.key === key)
@@ -691,43 +807,52 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
     }
   })
 
+  // ۲۸ سپتامبر — «بخشِ آنی» از «انتقالِ سنگین» جدا شد. تا این‌جا فقط چند کوئریِ کوچک بود:
+  // حساب ساخته و شماره روی رکورد نشسته (پنل همین حالا ✅ نشان می‌دهد). انتقالِ فایل‌ها با
+  // سینکِ در حالِ اجرا سرِ استخرِ اتصال و قفل‌ها می‌جنگد و statement-timeout می‌خورد
+  // (همان درسِ ۳۰ اوتِ repairOrphanPublishes)، پس وسطِ سینک عقب می‌افتد؛ transferFrom
+  // مبدأ را نگه داشته و تلاشِ بعدیِ صف از همین‌جا ادامه می‌دهد.
+  if (opts?.deferTransfer) return { ok: true, moved: 0, deferred: true }
+
+  step = 'transfer'
   const moved = await reassignListings(fromOwner, p, scrape.id)
-  await mutate(db => {
-    const s = db.scrapes[id]; if (!s) return
+  step = 'finalize'
+  await mutateScrape(id, s => {
+    if (!s) return
     const r = s.advisors.find(x => x.key === key)
     if (r) { r.graduating = false; delete r.transferFrom }   // انتقال تمام شد
   })
   // یادگیریِ ماشین: تأییدِ ادمین قوی‌ترین سیگنال است → این نام برای همیشه یاد گرفته می‌شود.
   if (!isAgency && name) { try { const { learnName } = await import('./agency-roster-ml'); await learnName(name, 'admin') } catch {} }
   return { ok: true, moved }
+  } catch (e: any) {
+    throw new Error(`${step}: ${String(e?.message || e)}`)
+  }
 }
 
 // ── حذفِ دستیِ یک مشاور از رُستر (برای اسم‌های خراب یا حسابِ حذف‌شده) ──
 // فقط رکوردِ رُستر را برمی‌دارد؛ حساب/فایل‌های واقعی (اگر graduate شده) دست‌نخورده می‌مانند.
 export async function removeAdvisor(id: string, key: string): Promise<{ ok: boolean; error?: string }> {
   // نامِ مشاور را پیش از حذف برمی‌داریم تا به ماشین «فراموشی» یاد بدهیم (بازخوردِ منفی).
-  const badName = await mutate(db => {
-    const s = db.scrapes[id]; if (!s) return null
-    return s.advisors.find(a => a.key === key)?.name || ''
-  })
-  const r = await mutate(db => {
-    const s = db.scrapes[id]; if (!s) return { ok: false, error: 'اسکرپ یافت نشد' }
+  const badName = (await getScrapeRow(id))?.advisors.find(a => a.key === key)?.name || ''
+  const r = await mutateScrape(id, s => {
+    if (!s) return { ok: false, error: 'اسکرپ یافت نشد' }
     const before = s.advisors.length
     s.advisors = s.advisors.filter(a => a.key !== key)
-    if (db.graduateQueue) db.graduateQueue = db.graduateQueue.filter(j => !(j.id === id && j.key === key))
     return s.advisors.length < before ? { ok: true } : { ok: false, error: 'مشاور یافت نشد' }
   })
+  if (r.ok) await mutateQueue(jobs => { const i = jobs.findIndex(j => j.id === id && j.key === key); if (i >= 0) jobs.splice(i, 1) })
   // یادگیریِ منفی: حذفِ دستیِ ادمین یعنی «این اسم خراب بود» → از واژه‌نامه پاک و «منفی» علامت می‌شود
   // تا دیگر تشخیص داده نشود (فاز ۲۷۴ — بستنِ حلقهٔ بازخورد؛ forgetName قبلاً هرگز صدا زده نمی‌شد).
   if (r.ok && badName) { try { const { forgetName } = await import('./agency-roster-ml'); await forgetName(badName) } catch {} }
   return r
 }
 
-// ── جارویِ ترمیمِ انتشارِ یتیم ────────────────────────────────────────────────
-// فایلِ فعالِ بدونِ publicId یعنی انتقال انجام شده ولی چانکِ انتشار نیمه‌کاره مانده
-// (کیل شدنِ اینستنس وسطِ flush). مسیرِ ترمیمِ داخلِ reassignListings فقط با graduateِ
-// دوباره فعال می‌شود، و آن هم برای مشاورِ دارای حساب مسدود است — پس این فایل‌ها هیچ
-// راهِ برگشتی نداشتند. ۲۹ اوت ۲۰۲۶: ۲۸۳۶ فایل در ۱۹۴ حساب این‌طور یتیم مانده بود.
+// ── جارویِ انتشار (فاز ۲۸۷: صفِ رسمیِ انتشارِ انتقال‌ها) ─────────────────────────
+// reassign فقط کپی می‌کند؛ هر فایلِ «فعال + بدونِ publicId + بدونِ unpublishedAt» را این
+// جارو در تیک‌های ۴۵ثانیه‌ای، چندتا-چندتا، با چکِ ضدتکراری عمومی می‌کند — بیرون از مسیرِ
+// ساختِ حساب، تا خطای دیتابیسیِ انتشار هرگز «در حال ساخت حساب» را گروگان نگیرد.
+// (قبلاً فقط «ترمیمِ» کرش بود؛ ۲۹ اوت: ۲۸۳۶ فایلِ یتیم در ۱۹۴ حساب.)
 // unpublishedAt رعایت می‌شود: آنچه مشاور عمداً از انتشار درآورده دوباره منتشر نمی‌شود.
 // مکان‌نمای چرخشی تا یک حسابِ پرفایل بقیه را گرسنه نگذارد.
 let _orphanCursor = 0
@@ -742,17 +867,26 @@ export async function repairOrphanPublishes(limit = 10): Promise<number> {
   if (!phones.length) return 0
   for (let n = 0; n < phones.length; n++) {
     const p = phones[(_orphanCursor + n) % phones.length]
-    const ids = ((await getAdvisor(p)).listings || [])
+    const pick = ((await getAdvisor(p)).listings || [])
       .filter(l => l.status === 'active' && !l.publicId && !l.unpublishedAt)
-      .slice(0, limit).map(l => l.id)
-    if (!ids.length) continue
+      .slice(0, limit)
+    if (!pick.length) continue
     _orphanCursor = (_orphanCursor + n + 1) % phones.length
     try {
-      const done = await publishListingsBatch(p, ids)
-      console.log(`[roster] orphan-publish phone=${p} n=${done.length}`)
+      const done = await publishListingsBatch(p, pick.map(l => l.id))
+      // فاز ۲۸۷ — این جارو حالا «صفِ رسمیِ انتشارِ» انتقال‌هاست، نه فقط ترمیم. غنی‌سازیِ
+      // publicIdِ قبلی (enrichFrom) کپی می‌شود تا warmEnrichment هیچ درخواستی به دیوار نزند
+      // («یک‌بار بگیر، نگه دار» — فاز ۲۷۷).
+      for (const r of done) {
+        const prevId = pick.find(x => x.id === r.fid)?.enrichFrom
+        const prev = prevId ? getEnrichment(prevId) : null
+        if (prev) patchEnrichment(r.publicId, prev)
+        warmEnrichment(r.publicId)
+      }
+      console.log(`[roster] publish-sweep phone=${p} n=${done.length}`)
       return done.length
     } catch (e) {
-      console.log(`[roster] orphan-publish failed phone=${p}: ${String((e as Error).message).slice(0, 80)}`)
+      console.log(`[roster] publish-sweep failed phone=${p}: ${String((e as Error).message).slice(0, 80)}`)
       return 0
     }
   }
@@ -767,21 +901,26 @@ export async function enqueueGraduate(id: string, key: string, phone: string, ro
   const p = String(phone).replace(FA_DIGITS, faDigit).replace(/\D/g, '')
   // هم‌قاعده با graduateAdvisor: مسیرِ ادمین ⇒ ثابت هم پذیرفته می‌شود (پیامکی در کار نیست).
   if (!/^0\d{10}$/.test(p)) return { ok: false, error: 'شمارهٔ معتبر نیست (موبایل ۰۹… یا ثابت با کدِ شهر)' }
-  return mutate(db => {
-    const s = db.scrapes[id]; if (!s) return { ok: false, error: 'اسکرپ یافت نشد' }
+  // فاز ۲۹۱: پرچمِ آژانس و صف دو ردیفِ جدایند. اگر بینشان قطع شود، پرچمِ بی‌کار در نمایش
+  // خودکار خاموش می‌شود (خودترمیمِ فاز ۱۹۹ در listScrapes) — پس اتمیک‌بودنِ سراسری لازم نیست.
+  const v = await mutateScrape(id, s => {
+    if (!s) return { ok: false as const, error: 'اسکرپ یافت نشد' }
     const isAgency = key === '__agency__'
     if (!isAgency) {
       const rec = s.advisors.find(a => a.key === key)
-      if (!rec) return { ok: false, error: 'مشاور یافت نشد' }
-      if (rec.phone) return { ok: false, error: 'این مشاور از قبل حساب دارد' }
+      if (!rec) return { ok: false as const, error: 'مشاور یافت نشد' }
+      if (rec.phone) return { ok: false as const, error: 'این مشاور از قبل حساب دارد' }
       rec.graduating = true
-    } else if (s.agencyPhone) return { ok: false, error: 'آژانس از قبل حساب دارد' }
-    db.graduateQueue = db.graduateQueue || []
-    if (!db.graduateQueue.some(j => j.id === id && j.key === key)) {
-      db.graduateQueue.push({ jid: 'grd_' + Math.random().toString(36).slice(2, 8), id, key, phone: p, role, at: Date.now() })
-    }
-    return { ok: true, queued: true }
+    } else if (s.agencyPhone) return { ok: false as const, error: 'آژانس از قبل حساب دارد' }
+    return { ok: true as const }
   })
+  if (!v.ok) return v
+  await mutateQueue(jobs => {
+    if (!jobs.some(j => j.id === id && j.key === key)) {
+      jobs.push({ jid: 'grd_' + Math.random().toString(36).slice(2, 8), id, key, phone: p, role, at: Date.now() })
+    }
+  })
+  return { ok: true, queued: true }
 }
 
 // اینستنسِ ۰: یک کارِ صفِ graduate را بردار و اجرا کن (خارج از قفلِ mutate اجرا می‌شود).
@@ -790,10 +929,42 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
   // از صف برداشته می‌شد؛ کیلِ وسطِ کار (دیپلوی/reload) = کارِ گم‌شده و پرچمِ ابدی. حالا at-least-once:
   // کار claim می‌شود (startedAt) و فقط بعدِ اتمام حذف؛ claimِ رهاشده (>۱۰د) دوباره برداشته می‌شود —
   // graduateAdvisor هم ایدمپوتنت است (حسابِ موجود دوباره ساخته نمی‌شود، فایل‌های باقی‌مانده منتقل می‌شوند).
-  const job = await mutate(db => {
-    const q = db.graduateQueue || []
+  // ۲۸ سپتامبر — وسطِ سینکِ رُستر فقط «بخشِ آنی» اجرا می‌شود (برای همهٔ کارهای صف، نه یکی):
+  // حساب و شماره در چند کوئریِ کوچک می‌نشیند و «در حال ساخت حساب…» فوراً ✅ می‌شود؛ انتقالِ
+  // سنگینِ فایل‌ها تا پایانِ سینک صبر می‌کند تا با آن سرِ استخر/قفل نجنگد و timeout نخورد.
+  const preJobs = await getQueue()
+  if (!preJobs.length) return { ran: false }
+  const syncRunning = await anyScrapeRunning()
+  // «بخشِ آنی» برای همهٔ کارهای منتظر همیشه اول اجرا می‌شود — نه فقط وسطِ سینک. وگرنه
+  // انتقالِ سنگینِ نفرِ اول (~۱ دقیقه)، ثبتِ شمارهٔ نفرهای بعدی را پشتِ خودش نگه می‌داشت
+  // و پنل برای آنها دقیقه‌ها «در حال ساخت حساب…» می‌ماند (فیدبکِ ۲۸ سپتامبر).
+  {
+    let did = 0
+    for (const job of preJobs) {
+      if (job.prepared || job.startedAt) continue
+      try {
+        const r = await graduateAdvisor(job.id, job.key, job.phone, job.role, { deferTransfer: true })
+        if (r.ok) {
+          did++
+          await mutateQueue(jobs => { const j = jobs.find(x => x.jid === job.jid); if (j) j.prepared = true })
+        } else {
+          // خطای قطعی (شمارهٔ نامعتبر/تکراری و…) — همان رفتارِ مسیرِ کامل: کار حذف و علت ثبت می‌شود.
+          console.error(`[roster] graduate prepare FAILED key=${job.key}: ${r.error || 'خطا'}`)
+          await mutateQueue(jobs => { const i = jobs.findIndex(x => x.jid === job.jid); if (i >= 0) jobs.splice(i, 1) })
+          await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` } })
+        }
+      } catch (e: any) {
+        // گذرا — تیکِ بعدی (۴۵ث) دوباره تلاش می‌کند؛ بخشِ آنی ایدمپوتنت است.
+        console.error(`[roster] graduate prepare transient key=${job.key}: ${String(e?.message || e).slice(0, 120)}`)
+      }
+    }
+    if (did) console.log(`[roster] graduate: ${did} حسابِ آنی ساخته شد${syncRunning ? ' — انتقالِ فایل‌ها بعد از پایانِ سینک' : ' — انتقالِ فایل‌ها در پس‌زمینه'}`)
+    // وسطِ سینک انتقالِ سنگین اجرا نمی‌شود (رقابتِ استخر/قفل — درسِ ۳۰ اوت)؛ فقط بخشِ آنی.
+    if (syncRunning) return { ran: did > 0 }
+  }
+  const job = await mutateQueue(jobs => {
     const now = Date.now()
-    const j = q.find(x => !x.startedAt || now - x.startedAt > 10 * 60_000)
+    const j = jobs.find(x => !x.startedAt || now - x.startedAt > 10 * 60_000)
     if (j) j.startedAt = now
     return j ? { ...j } : null
   })
@@ -803,34 +974,38 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
   // روی یک مشاور). حالا تا وقتی زنده است هر ۲ دقیقه startedAt تازه می‌شود؛ فقط کاری که واقعاً
   // مرده (ری‌لود/کیل) مهلتش تمام می‌شود و از سر گرفته می‌شود.
   const beat = setInterval(() => {
-    mutate(db => { const j = (db.graduateQueue || []).find(x => x.jid === job.jid); if (j) j.startedAt = Date.now() }).catch(() => {})
+    mutateQueue(jobs => { const j = jobs.find(x => x.jid === job.jid); if (j) j.startedAt = Date.now() }).catch(() => {})
   }, 2 * 60_000)
   try {
     console.log(`[roster] graduate job start key=${job.key} phone=${job.phone}`)
     const t0 = Date.now()
     const r = await graduateAdvisor(job.id, job.key, job.phone, job.role)
     console.log(`[roster] graduate job end ok=${r.ok} moved=${r.moved ?? 0} ms=${Date.now() - t0}${r.error ? ' err=' + r.error : ''}`)
-    await mutate(db => { db.graduateQueue = (db.graduateQueue || []).filter(x => x.jid !== job.jid) })   // فاز ۱۹۹: حذف فقط بعدِ اتمام
+    await mutateQueue(jobs => { const i = jobs.findIndex(x => x.jid === job.jid); if (i >= 0) jobs.splice(i, 1) })   // فاز ۱۹۹: حذف فقط بعدِ اتمام
     if (!r.ok) {
       // رکوردِ مشاور را از حالتِ «در حالِ ساخت» درآور و خطا را ثبت کن.
-      await mutate(db => { const s = db.scrapes[job.id]; if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) { rec.graduating = false } s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` } })
+      await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) { rec.graduating = false } s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` } })
     }
     return { ran: true, ok: r.ok, error: r.error }
   } catch (e: any) {
-    // فاز ۱۹۹: خطای گذرا (شبکه/PG) → کار در صف می‌ماند (claim بعدِ ۱۰د آزاد و دوباره تلاش)؛ خطای قطعی → حذف + پیام
+    // ۲۸ سپتامبر (فیدبک: «ساخت حساب‌ها خیلی طول می‌کشد؛ چند ردیف با هم گیرند») — ریشه: خطای
+    // گذرا کار را در صف نگه می‌داشت ولی claim را آزاد نمی‌کرد، پس تلاشِ بعدی فقط بعدِ انقضای
+    // ۱۰دقیقه‌ایِ claim می‌آمد. آن مهلت برای پروسهٔ «کشته‌شده» است؛ این‌جا خطا را خودمان گرفته‌ایم
+    // و می‌دانیم کار زنده نیست → claim همان لحظه آزاد می‌شود و تیکِ بعدی (۴۵ث) دوباره برمی‌دارد.
+    // شمارندهٔ attempts جلوی حلقهٔ بی‌پایانِ خطای تکرارشونده را می‌گیرد (سقف ۸ ≈ ۶ دقیقه تلاش).
     const msg = String(e?.message || e || 'خطا')
-    const transient = /timeout|connect|ECONN|pool|terminat|socket/i.test(msg)
-    console.error(`[roster] graduate job ${transient ? 'transient-fail (retry later)' : 'FAILED'}: ${msg.slice(0, 150)}`)
-    if (!transient) {
-      await mutate(db => {
-        db.graduateQueue = (db.graduateQueue || []).filter(x => x.jid !== job.jid)
-        const s = db.scrapes[job.id]; if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; s.lastError = `ساختِ حساب ناموفق: ${msg}` }
-      })
+    const transient = /timeout|connect|ECONN|pool|terminat|socket/i.test(msg) && (job.attempts || 0) < 8
+    console.error(`[roster] graduate job ${transient ? `transient-fail (retry ~45s, attempt ${(job.attempts || 0) + 1}/8)` : 'FAILED'}: ${msg.slice(0, 150)}`)
+    if (transient) {
+      await mutateQueue(jobs => { const j = jobs.find(x => x.jid === job.jid); if (j) { j.startedAt = undefined; j.attempts = (j.attempts || 0) + 1 } })
+    } else {
+      await mutateQueue(jobs => { const i = jobs.findIndex(x => x.jid === job.jid); if (i >= 0) jobs.splice(i, 1) })
+      await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; s.lastError = `ساختِ حساب ناموفق: ${msg}` } })
     }
     return { ran: true, ok: false, error: msg }
   } finally { clearInterval(beat) }
 }
-export async function hasGraduateJobs(): Promise<boolean> { return ((await load()).graduateQueue || []).length > 0 }
+export async function hasGraduateJobs(): Promise<boolean> { return (await getQueue()).length > 0 }
 
 // ── یکتاییِ شماره و ویرایشِ مشاور (۲۱ آگوست) ────────────────────────────────
 // چرا لازم شد: `graduateAdvisor` وقتی شماره از قبل حساب داشت، بی‌هیچ هشداری همان
@@ -917,7 +1092,15 @@ export async function editAdvisor(id: string, key: string, patch: { name?: strin
     owner: newPhone ? newPhone : a.owner,
   })
   await patchScrape(id, { advisors } as any)
-  if (newPhone) {
+  // فاز ۲۹۸ن — تغییرِ نام را به پروفایل و حساب هم ببر (نه فقط وقتی شماره عوض می‌شود).
+  // قبلاً تغییرِ نامِ یک مشاورِ graduateشده فقط در ردیفِ رُستر می‌نشست و دایرکتوری/پروفایل
+  // همان نامِ قدیمی (مثلِ «شهریار هستم») را نشان می‌داد — چون نامِ دایرکتوری از حساب می‌آید.
+  const effPhone = newPhone || rec.phone || ''
+  const newName = patch.name != null && patch.name.trim() ? patch.name.trim() : ''
+  if (effPhone && newName && newName !== rec.name) {
+    try { await updateAdvisorProfile(effPhone, { name: newName, phone: effPhone, agency: scrape.agencyName }) } catch {}
+    try { adminUpdate(effPhone, { name: newName }) } catch {}   // نامِ حساب (منبعِ نامِ دایرکتوری)
+  } else if (newPhone) {
     try { await updateAdvisorProfile(newPhone, { name: patch.name || rec.name, phone: newPhone, agency: scrape.agencyName }) } catch {}
   }
   return { ok: true, moved }

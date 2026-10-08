@@ -552,16 +552,12 @@ const waNumber = (s?: string): string => {
 
 // ─── Shared visual shell helpers ────────────────────────────────────────────────
 
-// The page-level CSS-var theme, reused by both the real and template profiles.
+// فاز ۲۹۴ — پالتِ تیرهٔ میخ‌شده حذف شد: متغیرها از تمِ سراسری (html.light) می‌آیند
+// تا سوییچِ دارک/لایت روی این صفحه هم اثر کند.
 const themeVars: React.CSSProperties = {
-  '--bg': '#0d0d0f', '--bg2': '#141417', '--surface': '#18181c',
-  '--navbg': 'rgba(13,13,15,0.72)', '--line': 'rgba(255,255,255,0.08)',
-  '--line2': 'rgba(255,255,255,0.14)', '--text': '#f2f1ee',
-  '--muted': '#9a9a98', '--faint': '#6a6a68',
-  '--gold': '#c9a96a', '--gold2': '#e0c489', '--goldDim': 'rgba(201,169,106,0.12)',
   minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)',
   fontFamily: "'Vazirmatn', system-ui, sans-serif",
-} as React.CSSProperties
+}
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
 const heroGradients = [
@@ -661,7 +657,7 @@ function RealAdvisorProfile({ phone }: { phone: string }) {
           <div className="mjpp-hero" style={{ display: 'flex', alignItems: 'flex-end', gap: 20, padding: '0 26px 22px', marginTop: -44, position: 'relative', flexWrap: 'wrap' }}>
             <div style={{
               width: 96, height: 96, borderRadius: 24, flexShrink: 0,
-              background: data.photo ? `center/cover no-repeat url(${data.photo})` : heroAv,
+              background: data.photo ? `top/cover no-repeat url(${data.photo})` : heroAv,
               border: '4px solid var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: '#fff', fontSize: 34, fontWeight: 800,
             }}>{data.photo ? '' : initial}</div>
@@ -906,15 +902,7 @@ function RoleTemplateProfile({ urlId }: { urlId: string }) {
   const meetTimes = ['۹:۰۰', '۱۰:۳۰', '۱۲:۰۰', '۱۴:۰۰', '۱۵:۳۰', '۱۷:۰۰']
 
   return (
-    <div dir="rtl" style={{
-      '--bg': '#0d0d0f', '--bg2': '#141417', '--surface': '#18181c',
-      '--navbg': 'rgba(13,13,15,0.72)', '--line': 'rgba(255,255,255,0.08)',
-      '--line2': 'rgba(255,255,255,0.14)', '--text': '#f2f1ee',
-      '--muted': '#9a9a98', '--faint': '#6a6a68',
-      '--gold': '#c9a96a', '--gold2': '#e0c489', '--goldDim': 'rgba(201,169,106,0.12)',
-      minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)',
-      fontFamily: "'Vazirmatn', system-ui, sans-serif",
-    } as React.CSSProperties}>
+    <div dir="rtl" style={themeVars}>
 
       <Nav />
 
@@ -948,7 +936,7 @@ function RoleTemplateProfile({ urlId }: { urlId: string }) {
             <span style={{ position: 'absolute', top: 14, left: 14, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px', borderRadius: 999, background: 'rgba(20,18,14,0.7)', backdropFilter: 'blur(6px)', color: 'var(--gold2)', fontSize: 12, fontWeight: 800, border: '1px solid var(--gold)' }}>★ پروفایل پروموت‌شده در {p.area}</span>
           </div>
           <div className="mjpp-hero" style={{ display: 'flex', alignItems: 'flex-end', gap: 20, padding: '0 26px 22px', marginTop: -44, position: 'relative', flexWrap: 'wrap' }}>
-            <div style={{ width: 96, height: 96, borderRadius: 24, background: realAvatar ? `center/cover no-repeat url(${realAvatar})` : p.av, border: '4px solid var(--surface)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 34, fontWeight: 800 }}>{realAvatar ? '' : p.initial}</div>
+            <div style={{ width: 96, height: 96, borderRadius: 24, background: realAvatar ? `top/cover no-repeat url(${realAvatar})` : p.av, border: '4px solid var(--surface)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 34, fontWeight: 800 }}>{realAvatar ? '' : p.initial}</div>
             <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
                 <h1 style={{ fontSize: 'clamp(20px,2.8vw,26px)', fontWeight: 800, color: 'var(--text)', margin: 0 }}>{p.name}</h1>

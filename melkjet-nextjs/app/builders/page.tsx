@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Nav from '../components/Nav'
 import Footer from '../components/Footer'
+import PageHeader from '../components/PageHeader'
 import StaticMap from '../components/StaticMap'
 import NeshanMap from '../components/NeshanMap'
 import { readCity } from '../components/CitySelector'
@@ -13,7 +14,7 @@ interface MapPoint { id: string; lat: number; lng: number; title?: string; price
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 
 interface Item {
-  hashId: string; address?: string; builderId: string; builderName: string
+  hashId: string; slug?: string; address?: string; builderId: string; builderName: string
   region?: string; city?: string
   regionId?: number; cityId?: number; phaseId?: number; floors?: number; units?: number
   residentialArea?: number; groundArea?: number; latitude?: number; longitude?: number
@@ -158,17 +159,19 @@ export default function Sazandeha() {
     </div>
   )
 
+  // فاز ۲۹۸ی۲ — نگاشتِ hashId→slug از آیتم‌ها؛ پینِ نقشه به /projects/{slug} می‌رود (وگرنه /proje/{id}ِ ریدایرکتی)
+  const slugByHash = useMemo(() => { const m: Record<string, string> = {}; for (const it of items) if (it.hashId && it.slug) m[it.hashId] = it.slug; return m }, [items])
+  const goProject = (id: string) => { window.location.href = slugByHash[id] ? `/projects/${slugByHash[id]}` : `/proje/${id}` }
+
   return (
     <>
       <Nav />
+      {/* هدرِ سینمایی (ری‌برندِ ۲۹۸ی۷) */}
+      <PageHeader eyebrow="دایرکتوری پروژه‌ها" title="پروژه‌های ساختمانی و سازنده‌ها" subtitle="پیش‌فروش تا آمادهٔ تحویل — از سازنده‌های واقعی، با آدرس، مرحلهٔ ساخت و اطلاعاتِ تماس." />
       <main style={{ maxWidth: 1240, margin: '0 auto', padding: '22px 16px 60px' }}>
-        {/* سرتیتر */}
-        <div style={{ marginBottom: 16 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>پروژه‌های ساختمانی و سازنده‌ها</h1>
-          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
-            {facets ? `${fa(facets.total)} پروژه از سازنده‌های واقعی` : 'در حال بارگذاری…'}
-            {activeCount > 0 && ` · ${fa(total)} نتیجه با فیلترِ فعلی`}
-          </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', margin: '2px 0 16px' }}>
+          {facets ? `${fa(facets.total)} پروژه از سازنده‌های واقعی` : 'در حال بارگذاری…'}
+          {activeCount > 0 && ` · ${fa(total)} نتیجه با فیلترِ فعلی`}
         </div>
 
         {/* نوار جستجو + ابزار */}
@@ -189,8 +192,8 @@ export default function Sazandeha() {
         {/* نقشهٔ تعاملی (زوم/جابه‌جایی) با پینِ نتایج — اگر SDK بارگذاری نشد، نقشهٔ استاتیک */}
         {showMap && (
           <div style={{ marginBottom: 18 }}>
-            <NeshanMap points={points} height={460} onSelect={(id) => { window.location.href = `/proje/${id}` }}
-              fallback={<StaticMap points={points.map(p => ({ id: p.id, lat: p.lat, lng: p.lng }))} aspect={2.4} onSelect={(id) => { window.location.href = `/proje/${id}` }} />} />
+            <NeshanMap points={points} height={460} onSelect={goProject}
+              fallback={<StaticMap points={points.map(p => ({ id: p.id, lat: p.lat, lng: p.lng }))} aspect={2.4} onSelect={goProject} />} />
             <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 6 }}>{fa(points.length)} پروژه روی نقشه · روی هر پین بزنید تا صفحهٔ پروژه باز شود</div>
           </div>
         )}
@@ -205,7 +208,7 @@ export default function Sazandeha() {
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}>
                   {items.map(p => (
-                    <Link key={p.hashId} href={`/proje/${p.hashId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <Link key={p.hashId} href={p.slug ? `/projects/${p.slug}` : `/proje/${p.hashId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                       <article style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 14, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ position: 'relative' }}>
                           {p.photo?.imageThumbnailUrl || p.photo?.imageUrl ? (

@@ -3,6 +3,7 @@ import { getPublic, findManual, STATUS_LABEL } from './builder-public-store'
 import { getProfile } from './persiansaze-store'
 import { getItemById } from './scraper-store'
 import { listingHref } from './listing-url'
+import { ensureProjectSlug } from './project-slug-store'   // فاز ۲۹۸ی۲ — hrefِ canonicalِ اسلاگی
 
 // شکلِ یکسانِ یک موردِ مقایسه (آگهی یا پروژه) با ردیف‌های مشخصات.
 export interface CompareItem {
@@ -17,7 +18,7 @@ export interface CompareItem {
 
 const faNum = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 
-function projectCompare(id: string): CompareItem | null {
+async function projectCompare(id: string): Promise<CompareItem | null> {
   const ps = publicProject(id)
   if (ps) {
     const p = ps.project, b = ps.builder
@@ -35,7 +36,8 @@ function projectCompare(id: string): CompareItem | null {
       { label: 'قیمت', value: meta.priceText || '—' },
       { label: 'سازنده', value: b.name || '—' },
     ]
-    return { kind: 'project', id, title: p.address || 'پروژه', subtitle: regionLabel(p), photo: photos[0] || '', href: `/proje/${id}`, specs }
+    const slug = await ensureProjectSlug(id, p.address || b.name || 'پروژه').catch(() => '')
+    return { kind: 'project', id, title: p.address || 'پروژه', subtitle: regionLabel(p), photo: photos[0] || '', href: slug ? `/projects/${slug}` : `/proje/${id}`, specs }
   }
   const man = findManual(id)
   if (man) {
@@ -49,7 +51,8 @@ function projectCompare(id: string): CompareItem | null {
       { label: 'قیمت', value: m.priceText || '—' },
       { label: 'سازنده', value: prof?.name || '—' },
     ]
-    return { kind: 'project', id, title: m.name, subtitle: m.location || '', photo: (m.photos && m.photos[0]) || '', href: `/proje/${id}`, specs }
+    const slug = await ensureProjectSlug(id, m.name || prof?.name || 'پروژه').catch(() => '')
+    return { kind: 'project', id, title: m.name, subtitle: m.location || '', photo: (m.photos && m.photos[0]) || '', href: slug ? `/projects/${slug}` : `/proje/${id}`, specs }
   }
   return null
 }
@@ -69,5 +72,5 @@ async function itemCompare(id: string): Promise<CompareItem | null> {
 }
 
 export async function normalizeForCompare(kind: string, id: string): Promise<CompareItem | null> {
-  return kind === 'project' ? projectCompare(id) : itemCompare(id)
+  return kind === 'project' ? await projectCompare(id) : itemCompare(id)
 }

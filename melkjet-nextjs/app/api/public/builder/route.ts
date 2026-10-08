@@ -26,8 +26,9 @@ export async function POST(req: NextRequest) {
   if (a === 'review') {
     const text = String(b.text || '').trim()
     if (!text) return NextResponse.json({ error: 'متنِ نظر الزامی است' }, { status: 400 })
-    const rev = addReview(id, { name: String(b.name || 'کاربر'), rating: Number(b.rating) || 5, text, projectName: b.projectName, phone: s.phone })
-    return NextResponse.json({ ok: true, review: rev })
+    // فاز ۲۹۲ — انتشار فقط با تاییدِ ادمین (پنلِ «نظرات و تیک آبی»).
+    addReview(id, { name: String(b.name || 'کاربر'), rating: Number(b.rating) || 5, text, projectName: b.projectName, phone: s.phone })
+    return NextResponse.json({ ok: true, pending: true, message: 'نظرِ شما ثبت شد و پس از تاییدِ مدیر نمایش داده می‌شود. سپاسگزاریم!' })
   }
   return NextResponse.json({ error: 'اقدام نامعتبر' }, { status: 400 })
 }

@@ -64,6 +64,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
     try { maybeRunScrape(Date.now()) } catch { /* فاز ۲۰۰ — اسکرپِ هفتگیِ فهرستِ پروژه‌های پرشین سازه */ }
     try { maybeCreateAccounts() } catch { /* ساختِ خودکارِ حسابِ سازنده پس از به‌روزشدنِ پروفایل‌ها */ }
     try { maybeAutoScrape(Date.now()) } catch { /* اسکرپِ خودکارِ زمان‌بندی‌شدهٔ کاتالوگ */ }
+    // فاز ۲۸۸ — معماران (طرح‌۲طرح): اسکرپِ تدریجیِ فهرست + پروفایل‌ها (خودِ tick نرخ/قفل دارد).
+    ;(async () => { try { const { tickScrape } = await import('./tarh2tarh-store'); await tickScrape() } catch { /* تیکِ بعد */ } })()
     maybeAutoSyncCost(Date.now()).catch(() => { /* سینکِ هفتگیِ قیمتِ مدل‌های AI از API */ })
     // REOS: تنظیماتِ سوپرادمین را بارگذاری کن + صفِ رویداد را فلاش کن + آموزشِ دوره‌ای طبقِ تنظیمات.
     let reosCfg = { training: { autoHours: 6, enabled: true } }
@@ -155,6 +157,11 @@ export function ensureCronStarted() {
   const g = globalThis.__mjCron!
   if (g.started) return
   g.started = true
+  // قانونِ شمارهٔ یک: روشن‌شدنِ زمان‌بند باید در لاگ رد بگذارد — «کرونِ خاموش» ماه‌ها نامرئی بود.
+  console.log(`[cron] scheduler armed (instance=${inst ?? 'dev'}, queueTick=${QUEUE_TICK_MS / 1000}s, tick=${TICK_MS / 60000}m)`)
+  // فاز ۲۹۸و — آزادسازیِ فوریِ سینک‌های «زامبی» که ری‌استارتِ همین بوت کشته (running=true مانده‌اند).
+  // بدونِ این، تا ۸ دقیقه اسلات‌ها قفل‌اند و «هیچ آژانسی سینک نمی‌شود» — بدترین وقتی که مدام دیپلوی می‌شود.
+  setTimeout(() => { import('./agency-roster-store').then(m => m.reconcileRunningOnBoot()).then(n => { if (n) console.log(`[cron] boot reconcile: freed ${n} zombie roster sync(s) — queue unblocked`) }).catch(() => {}) }, 3_000)
   setTimeout(() => { warmUp().catch(() => {}) }, 8_000)         // یک‌بار گرم‌کردنِ سبک پس از بوت
   setTimeout(() => { tick().catch(() => {}) }, 30_000)          // کمی بعد از بوت
   setInterval(() => { tick().catch(() => {}) }, TICK_MS)
@@ -173,7 +180,12 @@ const MAX_ACTIVE_SYNCS = 4          // حداکثر همگام‌سازیِ هم
 // قفلِ rosterRunning تا پایانِ همان یکی) — با هزاران آژانس ریاضی جواب نمی‌داد. حالا استخرِ N موازی:
 // هر تیک تا سقفِ همزمانی، آژانس‌های سررسیده fire-and-forget اجرا می‌شوند (هرکدام چک‌پوینت/بودجهٔ خودش).
 // مقدار از env قابلِ تنظیم (ROSTER_SYNCS) — اگر دیوار rate-limit کرد کمش کن.
-const MAX_ROSTER_SYNCS = Math.max(1, Math.min(8, Number(process.env.ROSTER_SYNCS) || 3))
+// فاز ۲۹۷ظ — پیش‌فرض ۱ (سریال): روی این سرورِ کم‌توان (۱ vCPU، پستگرس روی همان ماشین) حتی ۲
+// سینکِ هم‌زمان هم باعثِ statement/connect timeout می‌شد و ۳۰ آژانس گیر می‌کردند. سریال‌کردن
+// «هر رقابتِ پایگاه‌داده» را حذف می‌کند — هر سینک کامل می‌شود، بعد نوبتِ بعدی. چون سینک‌ها
+// افزایشی‌اند (فقط آگهیِ جدید)، اغلب چنددقیقه‌ای‌اند و سریال هم به صف می‌رسد. اگر سرور قوی شد
+// با ROSTER_SYNCS در env زیادش کن.
+const MAX_ROSTER_SYNCS = Math.max(1, Math.min(8, Number(process.env.ROSTER_SYNCS) || 1))
 const QUEUE_TICK_MS = 45 * 1000     // هر ۴۵ ثانیه صف را درین کن (پاسخ‌گوییِ خوب به کاربر)
 let queueRunning = false
 let queueRunningSince = 0
@@ -182,6 +194,7 @@ let moderatingSince = 0
 let rosterRunning = false
 let graduateRunning = false   // فاز ۱۷۶ — صفِ ساختِ حساب، مستقل از سینکِ رُستر
 let enrichSweeping = false    // فاز ۱۹۱ — جارویِ تحلیلِ هوشمند
+let autoSiting = false        // فاز ۲۹۶ — سایت‌سازِ خودکارِ اهالیِ دایرکتوری
 
 async function queueTick(): Promise<void> {
   if (queueRunning) {
@@ -298,8 +311,24 @@ async function queueTick(): Promise<void> {
         } catch { /* جاروی بعدی در تیکِ بعد */ } finally { enrichSweeping = false }
       })()
     }
+    // فاز ۲۹۶ — سایت‌سازِ خودکار: هر تیک چند سایتِ اختصاصی برای حساب‌های نقش‌دارِ بدونِ سایت
+    // + پیامکِ خوش‌آمدِ معوق (سقف‌دار). جارو همیشگی است → حسابِ تازه هم خودکار سایت می‌گیرد.
+    if (!autoSiting) {
+      autoSiting = true
+      ;(async () => {
+        try {
+          const { sweepAutoSites } = await import('./auto-site')
+          const r = await sweepAutoSites()
+          if (r.created || r.sms) console.log(`[autosite] +${r.created} سایت، +${r.sms} پیامک — در صف: ${r.pending}`)
+        } catch (e) {
+          console.error(`[autosite] sweep failed: ${String((e as Error)?.message || e).slice(0, 150)}`)
+        } finally { autoSiting = false }
+      })()
+    }
     if (!rosterRunning) {
       rosterRunning = true
+      // (این بلوک آخرِ تیک است؛ اگر هرگز به اینجا نرسیدیم یعنی یکی از awaitهای بالاتر مرده —
+      //  catchِ سراسریِ پایینِ همین تابع حالا آن را فریاد می‌زند.)
       ;(async () => {
         try {
           const { listDueRosters, syncRoster, listScrapes } = await import('./agency-roster-store')
@@ -321,9 +350,17 @@ async function queueTick(): Promise<void> {
               }
             }
           }
-        } catch { /* اسکرپِ بعدی در تیکِ بعد */ } finally { rosterRunning = false }
+        } catch (e) {
+          // قانونِ شمارهٔ یک: راه‌اندازِ سینک اگر بمیرد باید فریاد بزند — سکوتِ این catch
+          // یعنی «در صف» ماندنِ ابدیِ آژانس‌ها بدونِ هیچ ردی (۳۰ سپتامبر).
+          console.error(`[cron] roster launcher failed: ${String((e as Error)?.message || e).slice(0, 200)}`)
+        } finally { rosterRunning = false }
       })()
     }
+  } catch (e) {
+    // قانونِ شمارهٔ یک: هر throw بی‌محافظ در بدنهٔ تیک (heartbeat، import، drain و…) کلِ ادامهٔ
+    // تیک را می‌کُشت و چون فراخوان‌ها catch(() => {}) دارند، هیچ ردی نمی‌ماند — «هیچ اتفاقی نمیوفته».
+    console.error(`[cron] queueTick failed: ${String((e as Error)?.message || e).slice(0, 200)}`)
   } finally { queueRunning = false }
 }
 

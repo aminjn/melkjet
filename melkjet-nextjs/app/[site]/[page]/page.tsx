@@ -8,6 +8,9 @@ import { SiteShell } from '../page'
 // /neighborhood/[id] take precedence over this dynamic [site]/[page]; this only
 // catches builder-site sub-pages. 404 if the site or the page slug is unknown.
 
+// فاز ۲۹۶و — مثلِ صفحهٔ اصلیِ سایت: بدونِ revalidate تا دیپلویِ بعدی کش می‌مانْد.
+export const revalidate = 300
+
 export async function generateMetadata(
   { params }: { params: Promise<{ site: string; page: string }> }
 ): Promise<Metadata> {

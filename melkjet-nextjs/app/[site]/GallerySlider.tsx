@@ -47,7 +47,7 @@ export default function GallerySlider({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
         {Array.from({ length: n }).map((_, i) => (
           <div key={i} style={{
-            height: 200, borderRadius: 16, border: '1px solid #efe9df', boxShadow: CARD_SHADOW,
+            height: 200, borderRadius: 16, border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)', boxShadow: CARD_SHADOW,
             background: `linear-gradient(135deg, ${grads[i % grads.length]}, ${primary})`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.55)', fontSize: 34,
           }}>▥</div>
@@ -80,7 +80,7 @@ export default function GallerySlider({
           onClick={() => scrollByPage(-1)}
           style={{
             flex: '0 0 auto', alignSelf: 'center', width: 44, height: 44, borderRadius: '50%',
-            border: '1px solid #e6ddcd', background: 'var(--mjs-bg)', color: primary,
+            border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)', background: 'var(--mjs-bg)', color: primary,
             fontSize: 20, fontWeight: 900, cursor: 'pointer', boxShadow: CARD_SHADOW, lineHeight: 1,
           }}
         >‹</button>
@@ -100,7 +100,7 @@ export default function GallerySlider({
               style={{
                 flex: `0 0 ${cardWidth}`, minWidth: 220, scrollSnapAlign: 'start',
                 borderRadius: 16, overflow: 'hidden', boxShadow: CARD_SHADOW,
-                border: '1px solid #efe9df', background: 'var(--mjs-bg)',
+                border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)', background: 'var(--mjs-bg)',
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -115,7 +115,7 @@ export default function GallerySlider({
           onClick={() => scrollByPage(1)}
           style={{
             flex: '0 0 auto', alignSelf: 'center', width: 44, height: 44, borderRadius: '50%',
-            border: '1px solid #e6ddcd', background: 'var(--mjs-bg)', color: primary,
+            border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)', background: 'var(--mjs-bg)', color: primary,
             fontSize: 20, fontWeight: 900, cursor: 'pointer', boxShadow: CARD_SHADOW, lineHeight: 1,
           }}
         >›</button>

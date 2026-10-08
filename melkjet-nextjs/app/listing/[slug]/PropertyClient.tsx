@@ -84,7 +84,10 @@ export interface InitialEnrich {
   geo?: { lat: number; lng: number } | null
   nearby?: { type?: string; name?: string; time: string }[]
 }
-export default function PropertyClient({ id, initial, originality, initialEnrich }: { id: string; initial?: Item | null; originality?: { score: number; level: 'high' | 'medium' | 'low' | 'insufficient'; reasons: string[]; checked: number } | null; initialEnrich?: InitialEnrich | null }) {
+// فاز ۲۹۷د — همین موتور داخلِ سایت‌سازِ شخصی هم رندر می‌شود («امکانات دقیقا مثل سایت اصلی»):
+// با پراپِ site ناوبریِ ملک‌جت حذف و بردکرامب داخلیِ همان سایت می‌شود؛ باقیِ صفحه عیناً یکی است.
+export interface SiteEmbed { slug: string; title: string; hasListingsPage?: boolean }
+export default function PropertyClient({ id, initial, originality, initialEnrich, site }: { id: string; initial?: Item | null; originality?: { score: number; level: 'high' | 'medium' | 'low' | 'insufficient'; reasons: string[]; checked: number } | null; initialEnrich?: InitialEnrich | null; site?: SiteEmbed }) {
   const [item, setItem] = useState<Item | null>(initial || null)
   const [saved, toggleSave] = useFav(item?.id)   // ذخیرهٔ واقعی (favorites + رویدادِ REOS برای کوئست)
   const [loading, setLoading] = useState(!initial)
@@ -313,23 +316,30 @@ export default function PropertyClient({ id, initial, originality, initialEnrich
   const monthly = (() => { const r = 0.18 / 12, n = 240; return loan * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1) })()
 
   return (
-    <div dir="rtl" className="mjp-page" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
-      <Nav />
+    <div dir="rtl" className="mjp-page" style={{ minHeight: site ? undefined : '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
+      {!site && <Nav />}
       {loading ? (
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '80px 24px', textAlign: 'center', color: 'var(--muted)' }}>در حال بارگذاری…</div>
       ) : !item ? (
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '80px 24px', textAlign: 'center' }}>
           <div style={{ fontSize: 48, opacity: 0.3, marginBottom: 16 }}>🏠</div>
           <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>این آگهی یافت نشد</h1>
-          <Link href="/search" style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>← بازگشت به جستجو</Link>
+          <Link href={site ? `/${encodeURIComponent(site.slug)}` : '/search'} style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>← {site ? `بازگشت به ${site.title}` : 'بازگشت به جستجو'}</Link>
         </div>
       ) : (
         <>
           {/* gallery */}
           <section style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 24px 0' }}>
             <nav style={{ display: 'flex', gap: 8, fontSize: 13, color: 'var(--muted)', marginBottom: 16, flexWrap: 'wrap' }}>
-              <Link href="/" style={{ color: 'var(--muted)', textDecoration: 'none' }}>خانه</Link><span style={{ color: 'var(--faint)' }}>›</span>
-              <Link href="/search" style={{ color: 'var(--muted)', textDecoration: 'none' }}>آگهی‌ها</Link>
+              {/* داخلِ سایتِ شخصی، بردکرامب به صفحه‌های خودِ همان سایت می‌رود — کاربر از سایتِ شخص بیرون نمی‌افتد */}
+              <Link href={site ? `/${encodeURIComponent(site.slug)}` : '/'} style={{ color: 'var(--muted)', textDecoration: 'none' }}>خانه</Link><span style={{ color: 'var(--faint)' }}>›</span>
+              {site ? (
+                site.hasListingsPage
+                  ? <Link href={`/${encodeURIComponent(site.slug)}/listings`} style={{ color: 'var(--muted)', textDecoration: 'none' }}>آگهی‌ها</Link>
+                  : <span style={{ color: 'var(--muted)' }}>{site.title}</span>
+              ) : (
+                <Link href="/search" style={{ color: 'var(--muted)', textDecoration: 'none' }}>آگهی‌ها</Link>
+              )}
               {item.location && <><span style={{ color: 'var(--faint)' }}>›</span><span style={{ color: 'var(--text)' }}>{item.location}</span></>}
             </nav>
             <div className="mjp-gallery" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gridTemplateRows: '200px 200px', gap: 10, borderRadius: 20, overflow: 'hidden', height: 410 }}>

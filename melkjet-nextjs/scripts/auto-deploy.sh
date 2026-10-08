@@ -38,38 +38,89 @@ else
 fi
 echo "$REMOTE" > "$FAILED_MARK"   # تا وقتی build+reload موفق نشده، «ناتمام» حساب می‌شود
 
-# nice/ionice مثلِ deploy.sh: build تمامِ ۴ هسته را نمی‌بلعد و سایت وسطِ دیپلویِ خودکار ۵۰۴ نمی‌دهد.
-# هرسِ کشِ اجراییِ ISR پیش از بیلد. سایت زنده است و خزنده‌ها مدام زیرِ
-# .next/server/app فایل می‌سازند؛ اگر فقط فایل‌ها پاک شوند پوشه‌های خالی
-# می‌مانند و next build با ENOTEMPTY روی rmdir شکست می‌خورد.
-# ۲۹ اوت ۲۰۲۶: دو بیلدِ پشتِ سرِ هم به همین دلیل شکست خوردند.
-prune_isr() {
-  [ -f "$APP_DIR/.next/BUILD_ID" ] || return 0
-  find "$APP_DIR/.next/server/app" -type f -newer "$APP_DIR/.next/BUILD_ID" -delete 2>/dev/null || true
-  find "$APP_DIR/.next/server/app" -depth -type d -empty -delete 2>/dev/null || true
+# ── فاز ۲۹۷ر — سه حصار که «مرگِ سرور با هر دیپلوی» را می‌بندند ──────────────────
+# ریشه (free/load شبِ ۳ اکتبر): بودجهٔ رمِ اینستنس‌ها (۲۶۰۰M + ۳×۱۳۰۰M) + پستگرس ≈ کلِ
+# ۷.۸GB را می‌گیرد؛ build (~۲GB) هیچ جایی نداشت → سواپ‌ترش → لود ۱۵+ → حتی SSH می‌مُرد.
+# nice فقط اولویتِ CPU است و جلوی «فشارِ رم» را نمی‌گیرد — این سه حصار می‌گیرند:
+# (۱) گاردِ پیش‌پرواز: رم/لودِ تنگ یعنی «الان نه» — مارکر مانده و دورِ بعدِ کرون ادامه می‌دهد.
+avail_mb=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
+load1=$(awk '{print int($1)}' /proc/loadavg)
+if [ "${avail_mb:-0}" -lt 1100 ] || [ "${load1:-99}" -gt 10 ]; then   # فاز ۲۹۷غ۳ — سقفِ لود ۶→۱۰ (سرور ۴ هسته است، نه ۱)
+  echo "$(date) ⏸ سرور تنگ است (رمِ آزاد ${avail_mb}MB، لود ${load1}) — بیلد به دورِ بعدِ کرون موکول شد"
+  exit 0
+fi
+
+# ⚠️ بیلد باید در «اسلاتِ خاموش» انجام شود، دقیقاً مثلِ deploy.sh.
+# ecosystem.config.js پوشهٔ سِرو را از `.next-current` می‌خواند (.next-a/.next-b).
+# نسخهٔ قبلیِ این اسکریپت در `.next` بیلد می‌کرد و به اشاره‌گر دست نمی‌زد؛ نتیجه
+# (۲۸ سپتامبر ۲۰۲۶): بیلدِ سالمِ ۱۰ دقیقه‌ای در پوشه‌ای نشست که هیچ اینستنسی از آن
+# سِرو نمی‌کرد، «✓ دیپلوی انجام شد» چاپ شد ولی سایت روی کدِ قدیمی ماند — دیپلویِ
+# دروغین، بدترین نوعِ «کارِ بی‌صدا مرده»ی قانونِ شمارهٔ یک.
+CUR=".next"
+if [ -f "$APP_DIR/.next-current" ]; then CUR="$(cat "$APP_DIR/.next-current")"; fi
+[ -f "$APP_DIR/$CUR/BUILD_ID" ] || CUR=".next"
+case "$CUR" in .next-a) NEW=".next-b" ;; *) NEW=".next-a" ;; esac
+echo "$(date) → بیلد در اسلاتِ خاموش: $NEW   (زنده: $CUR)"
+
+# (۲) آزادسازیِ رم در پنجرهٔ بیلد: ۳۰۰۳ موقتاً خاموش می‌شود (۱.۳GB آزاد؛ nginx با ۳۰۰۱/۳۰۰۲
+# سرویس می‌دهد) و با trap «در هر خروجی» برمی‌گردد — حتی اگر build وسطِ راه بمیرد.
+pm2 stop melkjet-3003 >/dev/null 2>&1 || true
+trap 'pm2 start melkjet-3003 >/dev/null 2>&1 || true' EXIT
+
+# (۳) حصارِ cgroup روی خودِ build: سقفِ CPU/RAM/سواپ — در بدترین حالت «بیلد» کشته می‌شود
+# (و مارکرِ ناتمام دورِ بعد دوباره تلاش می‌کند)، نه کلِ سرور. بدونِ systemd-run → nice/ionice.
+# فاز ۲۹۷غ — «Nice=19» یک propertyِ نامعتبر برای systemd-run --scope بود و با «Unknown
+# assignment: Nice=19» خطا می‌داد؛ چون set -e داریم، کلِ دیپلوی همان‌جا می‌مرد و بیلد هرگز
+# اجرا نمی‌شد — یعنی از فاز ۲۹۷ر به بعد «هیچ» تغییری به سرور نرسید. nice به «دستور» منتقل شد،
+# و probe حالا «دقیقاً همان propertyها» را می‌سنجد تا اگر یکی هم پشتیبانی نشد، تمیز fallback شود.
+FENCE_PROPS="-p CPUQuota=300% -p MemoryMax=2600M -p MemorySwapMax=512M -p IOWeight=20"
+fence() {
+  if systemd-run --scope --quiet $FENCE_PROPS /bin/true 2>/dev/null; then
+    systemd-run --scope --quiet $FENCE_PROPS -- nice -n 19 ionice -c3 "$@"
+  else
+    nice -n 19 ionice -c3 "$@"
+  fi
 }
-build() { prune_isr; NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build; }
-# ENOTEMPTY (`rmdir … not empty`) گلیچِ `.next`ِ کهنهٔ توربوپک است، نه ایرادِ کد — درمانش پاک‌کردنِ
-# `.next` و buildِ دوباره است. پس خودمان یک‌بار همین کار را می‌کنیم به‌جای مردن.
+# اسلاتِ خاموش هر بار از صفر ساخته می‌شود، پس ENOTEMPTY/ISRِ کهنه اصلاً پیش نمی‌آید.
+# فاز ۲۹۷غ۲ — سرعتِ بیلد: کشِ گرمِ بیلدِ قبلی (webpack/swc) به اسلاتِ جدید کپی می‌شود تا Next
+# از صفر کامپایل نکند. بزرگ‌ترین علتِ بیلدِ ۱۰دقیقه‌ای همین «کشِ سرد» بود (هر اسلات rm -rf می‌شد).
+build() {
+  rm -rf "$APP_DIR/$NEW"; mkdir -p "$APP_DIR/$NEW"
+  cp -a "$APP_DIR/$CUR/cache" "$APP_DIR/$NEW/cache" 2>/dev/null || true
+  fence env NEXT_DIST_DIR="$NEW" NODE_OPTIONS="--max-old-space-size=2048" npm run build
+}
 if ! build; then
-  echo "$(date) ✗ build شکست خورد — .next پاک می‌شود و یک‌بارِ دیگر تلاش می‌کنم (گلیچِ ENOTEMPTY)"
-  rm -rf .next
+  echo "$(date) ✗ build شکست خورد — یک‌بارِ دیگر تلاش می‌کنم"
   if ! build; then
     echo "$(date) ✗✗ buildِ دوم هم شکست خورد. سرور روی نسخهٔ قبلی است و کرون خودکار باز تلاش می‌کند."
-    echo "$(date)    اگر تکرار شد دستی ببین:  cd $APP_DIR && rm -rf .next && npm run build"
+    echo "$(date)    اگر تکرار شد دستی ببین:  cd $APP_DIR && sudo scripts/deploy.sh"
+    rm -rf "$APP_DIR/$NEW"
     exit 1                                              # مارکر می‌ماند → دورِ بعد دوباره تلاش
   fi
-  echo "$(date) ✓ تلاشِ دوم پس از پاک‌کردنِ .next موفق شد"
+  echo "$(date) ✓ تلاشِ دوم موفق شد"
 fi
-# restart نه reload: سرورِ زندهٔ Next فایل‌های .next را باز نگه می‌دارد و بعد از
-# جایگزینیِ بیلد، reload خطای «client reference manifest does not exist» می‌دهد.
-pm2 restart ecosystem.config.js --update-env
+# اسلاتِ نیمه‌ساخته هرگز نباید زنده شود.
+if [ ! -f "$APP_DIR/$NEW/BUILD_ID" ]; then
+  echo "$(date) ✗ بیلد ناقص ماند (BUILD_ID نیست) — اشاره‌گر عوض نشد و سایت روی نسخهٔ قبلی ماند."
+  rm -rf "$APP_DIR/$NEW"
+  exit 1
+fi
+echo "$NEW" > "$APP_DIR/.next-current"
+# reload (نه restart): با اسلات‌ها پوشهٔ در حالِ سِرو هیچ‌وقت دست نمی‌خورد، پس
+# reloadِ نوبتی امن است و داون‌تایم صفر — همان کاری که deploy.sh می‌کند.
+pm2 reload ecosystem.config.js --update-env
 rm -f "$FAILED_MARK"                                     # از این‌جا به بعد دیپلوی تمام‌شده است
 
 # چکِ سلامت: اگر اینستنسی ۲۰۰ نداد، در لاگ فریاد بزن (ولی خروجی را غیرصفر نکن تا کرون هی هشدار نفرستد).
 sleep 3
+ok=1
 for port in 3001 3002 3003; do
   code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 12 "http://localhost:$port/" || echo "000")
-  [ "$code" = "200" ] && echo "$(date)   ✓ $port=$code" || echo "$(date)   ✗ $port=$code — بررسی کن: pm2 logs --err"
+  [ "$code" = "200" ] && echo "$(date)   ✓ $port=$code" || { echo "$(date)   ✗ $port=$code — بررسی کن: pm2 logs --err"; ok=0; }
 done
-echo "$(date) ✓ دیپلوی انجام شد"
+# فقط وقتی همه سالم‌اند اسلاتِ قدیمی پاک می‌شود (دیسک محدود است؛ دو اسلات نباید بمانند).
+if [ "$ok" = "1" ] && [ "$CUR" != "$NEW" ] && [ -d "$APP_DIR/$CUR" ]; then
+  rm -rf "$APP_DIR/$CUR"
+  echo "$(date)   ✓ اسلاتِ قدیمی پاک شد: $CUR"
+fi
+echo "$(date) ✓ دیپلوی انجام شد — سِرو از $NEW"

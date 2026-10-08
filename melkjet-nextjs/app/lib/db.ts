@@ -13,12 +13,25 @@ export function pgEnabled(): boolean { return !!process.env.DATABASE_URL }
 let pool: Pool | null = null
 function getPool(): Pool {
   if (!pool) {
-    // max: هر instance تا ۱۵ connection (۴ instance × ۱۵ = ۶۰ < سقفِ پیش‌فرضِ ۱۰۰ پستگرس).
-    // statement_timeout: یک کوئریِ کندِ سرکش نباید connection را تا ابد بگیرد (۱۵ث سقف).
-    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 15, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 8_000, statement_timeout: 15_000 })
+    // ۳۰ سپتامبر — اندازهٔ استخر بر اساسِ «نقش»: اینستنسِ ۰ همهٔ کارهای پس‌زمینه را می‌دواند
+    // (سینکِ رُستر + صفِ حساب + t2t + غنی‌سازی + کرون) و با ۱۵ اتصال دو روز تمام همه‌چیز با
+    // «timeout exceeded when trying to connect» می‌مرد — اتصال‌ها پشتِ قفل‌ها پارک بودند.
+    // ۳۰ برای اینستنسِ ۰ + ۱۲×۳ سرویس‌ده = ۶۶ < سقفِ ۱۰۰ پستگرس.
+    const poolMax = process.env.NODE_APP_INSTANCE === '0' ? 30 : 12
+    // فاز ۲۹۷ف۲ — سقفِ کوئری به ۱۵s برگشت و connect سریع (۴s) شکست می‌خورد: سقفِ ۳۰s + acquire-retryِ
+    // فاز ظ، «درخواستِ کاربر» را هم زیرِ فشار تا ~۲۷s معطل می‌کرد و nginx ۵۰۲ می‌داد (قطعیِ زنده).
+    // درخواستِ کاربر باید «سریع» شکست بخورد، نه معطل بماند؛ بارِ سینک با سریال‌بودن (conc=1) کم است.
+    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: poolMax, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 4_000, statement_timeout: 15_000 })
     pool.on('error', () => { /* خطای idle client، pool خودش بازیابی می‌کند */ })
   }
   return pool
+}
+
+// فاز ۲۹۷ف۲ — یک تلاشِ connect، سریع (۴s). acquire-retryِ سه‌باره‌ی فاز ظ درخواستِ کاربر را
+// زیرِ فشار تا ~۲۷s معطل می‌کرد (۵۰۲). حالا تک‌تلاش: شکستِ سریع برای کاربر؛ خودِ سینک در سطحِ
+// بالاتر (صف + سریال) مقاوم است و نیازی به retryِ سطحِ اتصال ندارد.
+async function acquire(): Promise<PoolClient> {
+  return getPool().connect()
 }
 
 // schemaOnce — پیش از این یک بولین بود که *در انتهای* تابع ست می‌شد. نتیجه: هنگام بالا
@@ -78,7 +91,7 @@ async function ensureSchemaOnce(client: PoolClient) {
 
 /** اجرای یک تابع داخلِ یک تراکنش (BEGIN/COMMIT با rollback خودکار). client خام برای کوئری‌های دلخواه. */
 export async function pgTx<R>(fn: (client: PoolClient) => Promise<R>): Promise<R> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     await client.query('BEGIN')
@@ -93,7 +106,7 @@ export async function pgTx<R>(fn: (client: PoolClient) => Promise<R>): Promise<R
 
 /** خواندنِ همهٔ ردیف‌های listings (فقط ستونِ data). خارج از تراکنش، سبک. */
 export async function pgListingsAll(): Promise<unknown[]> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     const r = await client.query('SELECT data FROM listings ORDER BY scraped_at DESC')
@@ -103,7 +116,7 @@ export async function pgListingsAll(): Promise<unknown[]> {
 
 /** خواندنِ سندِ یک استور. اگر نبود، fallback. */
 export async function kvGet<T>(key: string, fallback: T): Promise<T> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     const r = await client.query('SELECT data FROM kv WHERE key = $1', [key])
@@ -113,7 +126,7 @@ export async function kvGet<T>(key: string, fallback: T): Promise<T> {
 
 /** نوشتنِ سندِ کامل (upsert). */
 export async function kvSet(key: string, data: unknown): Promise<void> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     await client.query(
@@ -132,7 +145,7 @@ export async function pgStats(): Promise<
 > {
   if (!pgEnabled()) return { enabled: false }
   try {
-    const client = await getPool().connect()
+    const client = await acquire()
     try {
       await ensureSchema(client)
       const rows = await client.query('SELECT count(*)::int AS n FROM kv')
@@ -157,10 +170,16 @@ export async function pgStats(): Promise<
  * دو نوشتنِ همزمان روی همان کلید سریالایز می‌شوند → هیچ به‌روزرسانی‌ای گم نمی‌شود (برخلافِ فایل).
  */
 export async function kvMutate<T, R>(key: string, fallback: T, fn: (data: T) => R): Promise<R> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     await client.query('BEGIN')
+    // ۲۸ سپتامبر — انتظار پشتِ FOR UPDATE «کوئریِ سرکش» نیست؛ صف‌بستن برای نوبت است
+    // (pg_stat_activity: چند اتصال Lock-wait پشتِ یک تراکنشِ idle-in-transaction). سقفِ
+    // سراسریِ ۱۵ث آن انتظار را می‌کُشت و کلِ کار از نو شروع می‌شد → توفانِ retry و بارِ
+    // بیشتر. داخلِ همین تراکنش سقف ۴۵ث است؛ SET LOCAL با COMMIT/ROLLBACK خودش برمی‌گردد
+    // و سقفِ ۱۵ثِ بقیهٔ کوئری‌ها (خواندن‌ها/API) دست‌نخورده می‌ماند.
+    await client.query(`SET LOCAL statement_timeout = '45s'`)
     const r = await client.query('SELECT data FROM kv WHERE key = $1 FOR UPDATE', [key])
     const data: T = r.rows.length ? (r.rows[0].data as T) : fallback
     const result = fn(data)
@@ -179,7 +198,7 @@ export async function kvMutate<T, R>(key: string, fallback: T, fn: (data: T) => 
 /** خواندنِ همهٔ کلیدهایی که با prefix شروع می‌شوند (اسکنِ رِنجِ روی PKِ key — سبک).
  *  برای استورهای «شاردشده به ازای هر مالک» (مثلِ advisor:{owner}) تا list-all با یک کوئری بیاید. */
 export async function kvGetPrefix<T>(prefix: string): Promise<{ key: string; data: T }[]> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     const like = prefix.replace(/([%_\\])/g, '\\$1') + '%'
@@ -188,9 +207,22 @@ export async function kvGetPrefix<T>(prefix: string): Promise<{ key: string; dat
   } finally { client.release() }
 }
 
+/** خواندنِ «فقط یک فیلدِ» سندِ همهٔ کلیدهای یک prefix — سمتِ سرور بریده می‌شود، انتقال سبک است.
+ *  فاز ۲۸۹: دایرکتوری برای غنی‌سازیِ مشاورها کلِ سندها (با آرایه‌های آگهیِ چندمگابایتی) را
+ *  می‌کشید؛ با این، همان اطلاعات در چند کیلوبایت می‌آید. */
+export async function kvGetPrefixField<T>(prefix: string, field: string): Promise<{ key: string; data: T | null }[]> {
+  const client = await acquire()
+  try {
+    await ensureSchema(client)
+    const like = prefix.replace(/([%_\\])/g, '\\$1') + '%'
+    const r = await client.query(`SELECT key, data -> $2 AS f FROM kv WHERE key LIKE $1 ESCAPE '\\'`, [like, field])
+    return r.rows.map(x => ({ key: x.key as string, data: (x.f ?? null) as T | null }))
+  } finally { client.release() }
+}
+
 /** حذفِ یک کلید از kv. */
 export async function kvDelete(key: string): Promise<void> {
-  const client = await getPool().connect()
+  const client = await acquire()
   try {
     await ensureSchema(client)
     await client.query('DELETE FROM kv WHERE key = $1', [key])

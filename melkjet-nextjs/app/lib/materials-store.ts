@@ -465,6 +465,12 @@ export async function updateProduct(owner: string, productId: string, patch: any
   })
   return result
 }
+// فاز ۲۹۸ه — حذفِ کاملِ فروشگاهِ مصالحِ یک مالک (محصولات/سفارش‌ها/استعلام‌ها) هنگامِ حذفِ حساب.
+export async function deleteMaterialsData(owner: string): Promise<boolean> {
+  const o = String(owner || '').trim(); if (!o) return false
+  return withDb(db => { const had = !!db.shops[o]; delete db.shops[o]; return had })
+}
+
 export async function deleteProduct(owner: string, productId: string): Promise<void> {
   await mutate(owner, s => { s.products = s.products.filter(p => p.id !== productId) })
 }

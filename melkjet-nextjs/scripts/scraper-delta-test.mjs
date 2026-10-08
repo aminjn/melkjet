@@ -20,8 +20,11 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ok   ' + m) } else { fail
 // لاگِ دلتا را می‌گیریم تا بدانیم مسیرِ افزایشی واقعاً اجرا شد یا بازخوانیِ کامل
 let logs = []
 const realLog = console.log
-console.log = (...a) => { const s = a.join(' '); if (s.includes('[scraper-store]')) logs.push(s); else realLog(...a) }
+console.log = (...a) => { const s = a.join(' '); if (s.includes('[scraper-store]') || s.includes('scraper corpus full load')) logs.push(s); else realLog(...a) }
 const sawDelta = () => { const had = logs.some(l => l.includes('delta')); logs = []; return had }
+// فاز ۲۹۸ — «بازخوانیِ کاملِ ۱۶۶مگی» دو ردِ لاگ دارد: «[mem] scraper corpus full load»
+// (مسیرِ سردِ load) و «[scraper-store] full reload (…)» (سقوطِ دلتا). هر دو را می‌گیریم.
+const sawFull = () => { const had = logs.some(l => l.includes('full load') || l.includes('full reload')); logs = []; return had }
 
 const src = await S.addSource({ name: 'تست', type: 'listing', url: 'https://x/', selector: '', category: '' })
 // آگهی‌ها باید واقعاً متمایز باشند، وگرنه گیتِ تشخیصِ تکراری همه را یکی می‌کند
@@ -90,6 +93,22 @@ ok(items.find(i => i.id === target)?.status === 'approved', 'setItemStatus از 
 // ۶) لاگ در دیتابیس مرزدار است
 const rl = await pool.query("SELECT jsonb_array_length(data->'__log') AS n FROM kv WHERE key='scraper_meta'")
 ok(Number(rl.rows[0].n) > 0 && Number(rl.rows[0].n) <= 120, 'طولِ لاگ در مرز است (' + rl.rows[0].n + ')')
+
+// ۷) فاز ۲۹۸ — نوشتنِ خودی کش را «گرم» نگه می‌دارد (ریشهٔ طوفانِ بازخوانیِ کاملِ وسطِ سینک):
+//    پیش از این، هر نوشتن pgCache را null می‌کرد و خواندنِ بلافاصله بعدش کلِ ۱۶۶مگ جدول را
+//    دوباره می‌خواند. حالا باید بدونِ هیچ بازخوانیِ کامل، نوشتهٔ خودش را فوری ببیند.
+logs = []
+await S.setItemStatus(target, 'pending')
+await S.listItems('listing', { fresh: true })
+ok(!sawFull(), 'بعد از mutateSome کش گرم می‌ماند — خواندنِ بعدی full نمی‌زند')
+logs = []
+await S.addCategory('دستهٔ گرم‌مانی')   // mutateMeta
+await S.listItems('listing', { fresh: true })
+ok(!sawFull(), 'بعد از mutateMeta کش گرم می‌ماند — خواندنِ بعدی full نمی‌زند')
+logs = []
+await S.insertItems(src, [{ title: 'آپارتمانِ گرم‌مانی ۱۲۳ متری', price: '9000000000 تومان', location: 'تهران، ولنجک', url: 'https://x/warm1', excerpt: 'یکتا برای تستِ گرم‌مانیِ کش', meta: { 'متراژ': '123', 'محله': 'ولنجک', 'شهر': 'تهران' } }])
+await S.listItems('listing', { fresh: true })
+ok(!sawFull(), 'بعد از insertItems (mutate کامل) هم کش گرم می‌ماند — خواندنِ بعدی full نمی‌زند')
 
 console.log = realLog
 console.log('\n' + pass + ' پاس · ' + fail + ' شکست')

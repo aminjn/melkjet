@@ -96,6 +96,12 @@ export async function updateUnit(owner: string, pid: string, uid: string, patch:
     Object.assign(u, patch); return u
   })
 }
+// فاز ۲۹۸ه — حذفِ همهٔ دادهٔ سازندهٔ یک مالک (پروژه‌ها/واحدها/سرمایه‌گذاران) هنگامِ حذفِ حساب.
+export async function deleteBuilderData(owner: string): Promise<boolean> {
+  const o = String(owner || '').trim(); if (!o) return false
+  return withDb(db => { const had = !!db[o]; delete db[o]; return had })
+}
+
 export async function deleteUnit(owner: string, pid: string, uid: string): Promise<void> {
   await withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; p.units = p.units.filter(x => x.id !== uid) })
 }

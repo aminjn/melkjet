@@ -61,7 +61,7 @@ function bedsFromItem(it: ContentItem): string {
   return m ? m[1] : '—'
 }
 
-export default function HomeClient({ initial }: { initial: HomeData }) {
+export default function HomeClient({ initial, heroImage = '' }: { initial: HomeData; heroImage?: string }) {
   // دادهٔ اولیه از سرور می‌آید (SSR با محتوا).
   const { listings, advisorItems, promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight, sysStats } = initial
 
@@ -135,45 +135,61 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
     : []   // بدونِ متخصصِ واقعی، «مشاوران برتر»ِ فیک نشان نده
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
-      <Nav />
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', position: 'relative' }}>
+      {/* فاز ۲۹۸ی۱۱ — ناوِ شفافِ شناور روی هیرو (مطابقِ موکاپ) */}
+      <Nav overlay />
 
       <main>
-      {/* HERO */}
-      <section style={{ position: 'relative', overflow: 'hidden', padding: 'clamp(52px,7vw,104px) 24px clamp(44px,5vw,80px)' }}>
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(900px 460px at 78% -8%,var(--goldDim),transparent 60%)' }}></div>
-        <div className="mjh-orb" style={{ position: 'absolute', top: '-12%', insetInlineEnd: '-8%', width: 'clamp(300px,38vw,560px)', height: 'clamp(300px,38vw,560px)', borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,175,55,.28), transparent 68%)', filter: 'blur(24px)', pointerEvents: 'none', animation: 'mjfloat 9s ease-in-out infinite' }}></div>
-        <div className="mjh-orb" style={{ position: 'absolute', bottom: '-18%', insetInlineStart: '-10%', width: 'clamp(280px,34vw,520px)', height: 'clamp(280px,34vw,520px)', borderRadius: '50%', background: 'radial-gradient(circle, rgba(122,143,174,.22), transparent 68%)', filter: 'blur(28px)', pointerEvents: 'none', animation: 'mjfloat 11s ease-in-out infinite reverse' }}></div>
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px)', backgroundSize: '54px 54px', opacity: 0.35, maskImage: 'radial-gradient(60% 55% at 50% 30%, #000, transparent 80%)', WebkitMaskImage: 'radial-gradient(60% 55% at 50% 30%, #000, transparent 80%)' }}></div>
-        <div style={{ position: 'relative', maxWidth: 980, margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, border: '1px solid var(--gold)', background: 'var(--goldDim)', fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 0 4px var(--goldDim)', animation: 'glow 2s infinite', display: 'inline-block' }}></span>
-            سیستمِ جامعِ املاک، ساختمان و مصالح
+      {/* HERO — تمام‌ارتفاع (مطابقِ موکاپ)؛ عکس از پنلِ ادمین، خالی = گرادیانِ غروب */}
+      <section style={{ position: 'relative', overflow: 'hidden', background: '#080b14', color: '#f3ede0', minHeight: '100vh', display: 'flex', alignItems: 'center', padding: 'clamp(92px,10vw,120px) 24px clamp(56px,6vw,80px)' }}>
+        {heroImage ? (<>
+          {/* عکسِ هیرو (full-bleed) + روکشِ خوانایی */}
+          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: `url(${heroImage})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
+          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(to left, rgba(6,8,16,.18) 0%, rgba(6,8,16,.5) 50%, rgba(6,8,16,.8) 100%), linear-gradient(180deg, rgba(6,8,16,.55) 0%, transparent 26%, rgba(4,6,11,.62) 100%)' }}></div>
+        </>) : (<>
+          {/* بدونِ عکس → گرادیانِ سینماییِ غروب */}
+          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(1200px 560px at 70% 48%, rgba(236,151,56,.40), rgba(188,108,38,.14) 42%, transparent 70%), radial-gradient(880px 440px at 85% -12%, rgba(247,222,146,.20), transparent 62%), linear-gradient(180deg,#060810 0%,#0a0e1a 36%,#171209 100%)' }}></div>
+          <div className="mjh-orb" style={{ position: 'absolute', top: '-10%', insetInlineEnd: '-6%', width: 'clamp(300px,38vw,560px)', height: 'clamp(300px,38vw,560px)', borderRadius: '50%', background: 'radial-gradient(circle, rgba(236,170,70,.30), transparent 68%)', filter: 'blur(26px)', pointerEvents: 'none', animation: 'mjfloat 9s ease-in-out infinite' }}></div>
+          <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', pointerEvents: 'none', background: 'linear-gradient(180deg,transparent,rgba(4,6,11,.82))' }}></div>
+        </>)}
+
+        <div className="mjhero-grid" style={{ position: 'relative', width: '100%', maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr', gap: 'clamp(30px,4vw,52px)', alignItems: 'center' }}>
+          {/* ستونِ متن (سمتِ راست/آغاز در RTL) */}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, border: '1px solid rgba(247,222,146,.4)', background: 'rgba(247,222,146,.09)', fontSize: 13, fontWeight: 700, color: '#F7DE92' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#F7DE92', boxShadow: '0 0 0 4px rgba(247,222,146,.18)', animation: 'glow 2s infinite', display: 'inline-block' }}></span>
+              سیستمِ جامعِ املاک، ساختمان و مصالح
+            </div>
+            <h1 style={{ marginTop: 20, fontSize: 'clamp(34px,5.6vw,62px)', lineHeight: 1.14, fontWeight: 800, letterSpacing: '-1px', color: '#F6F1E6', textShadow: '0 2px 30px rgba(0,0,0,.4)' }}>
+              خانه‌ی بعدی‌ات،<br />
+              <span style={{ background: 'linear-gradient(120deg,#F7DE92,#D9AD3E)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>هوشمندانه</span> انتخاب می‌شود
+            </h1>
+            <p style={{ margin: '20px 0 0', maxWidth: 560, fontSize: 'clamp(15px,2vw,18.5px)', lineHeight: 1.85, color: 'rgba(244,238,225,.78)' }}>
+              به زبان خودت بگو چه می‌خواهی. ملک‌جت بازار را تحلیل می‌کند، دلیل هر پیشنهاد را توضیح می‌دهد و کنارت می‌ماند تا بهترین تصمیم را بگیری.
+            </p>
+            {/* دسترسیِ سریع — ایکون‌های حرفه‌ایِ SVG در قابِ شیشه‌ای (فاز ۲۹۸ی۱۲) */}
+            <div className="mjhero-quicklinks" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 26 }}>
+              {[
+                { l: 'خرید و اجارهٔ ملک', h: '/search', svg: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /><path d="M10 20v-5h4v5" /></> },
+                { l: 'بازارِ مصالح', h: '/materials-market', svg: <><rect x="3" y="4.5" width="18" height="4.5" rx="1" /><rect x="3" y="9.5" width="7" height="4.5" rx="1" /><rect x="11" y="9.5" width="10" height="4.5" rx="1" /><rect x="3" y="14.5" width="11" height="4.5" rx="1" /><rect x="15" y="14.5" width="6" height="4.5" rx="1" /></> },
+                { l: 'نرخِ روزِ مصالح', h: '/materials-prices', svg: <><path d="M4 20V13" /><path d="M9.3 20V8.5" /><path d="M14.6 20v-5.5" /><path d="M20 20V5" /></> },
+                { l: 'متخصصان', h: '/directory', svg: <><circle cx="9" cy="7.5" r="3" /><path d="M3.5 20c0-3 2.5-5.3 5.5-5.3S14.5 17 14.5 20" /><path d="M16 4.7a2.8 2.8 0 0 1 0 5.6" /><path d="M17.2 14.9c2 .4 3.3 2.1 3.3 4.6" /></> },
+                { l: 'سازندگان', h: '/builders', svg: <><path d="M4 21V6l9-2.6V21" /><path d="M13 9.5l7 2V21" /><path d="M3 21h18" /><path d="M7 9h2.5M7 13h2.5M7 17h2.5M16 13.5h1.6M16 17h1.6" /></> },
+                { l: 'دستیارِ AI', h: '/plan-ai', svg: <><path d="M12 3.2l1.9 4.5 4.6 1.9-4.6 1.9L12 16l-1.9-4.5L5.5 9.6l4.6-1.9z" /><path d="M18.5 14.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" /></> },
+              ].map(p => (
+                <Link key={p.l} href={p.h} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 16px 7px 7px', borderRadius: 999, border: '1px solid rgba(247,222,146,.22)', background: 'rgba(255,255,255,.05)', color: 'rgba(244,238,225,.92)', textDecoration: 'none', fontSize: 13, fontWeight: 600, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                  <span style={{ width: 30, height: 30, flexShrink: 0, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(247,222,146,.4)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.12)' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5D982" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{p.svg}</svg>
+                  </span>
+                  {p.l}
+                </Link>
+              ))}
+            </div>
           </div>
-          <h1 style={{ marginTop: 22, fontSize: 'clamp(34px,6vw,64px)', lineHeight: 1.12, fontWeight: 800, letterSpacing: '-1px', color: 'var(--text)' }}>
-            خانه‌ی بعدی‌ات،<br />
-            <span style={{ background: 'linear-gradient(120deg,var(--gold2),var(--gold))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>هوشمندانه</span> انتخاب می‌شود
-          </h1>
-          <p style={{ margin: '20px auto 0', maxWidth: 620, fontSize: 'clamp(15px,2vw,18.5px)', lineHeight: 1.85, color: 'var(--muted)' }}>
-            به زبان خودت بگو چه می‌خواهی. ملک‌جت بازار را تحلیل می‌کند، دلیل هر پیشنهاد را توضیح می‌دهد و کنارت می‌ماند تا بهترین تصمیم را بگیری.
-          </p>
 
-          <HeroSearch examples={examples} />
-
-          {/* دسترسیِ سریع به همهٔ اکوسیستم‌ها */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 26 }}>
-            {[
-              { l: 'خرید و اجارهٔ ملک', h: '/search', ic: '🏠' },
-              { l: 'بازارِ مصالح', h: '/materials-market', ic: '🧱' },
-              { l: 'نرخِ روزِ مصالح', h: '/materials-prices', ic: '📊' },
-              { l: 'متخصصان', h: '/directory', ic: '👷' },
-              { l: 'سازندگان', h: '/builders', ic: '🏗️' },
-              { l: 'دستیارِ AI', h: '/plan-ai', ic: '🤖' },
-            ].map(p => (
-              <Link key={p.l} href={p.h} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
-                <span>{p.ic}</span>{p.l}
-              </Link>
-            ))}
+          {/* ستونِ پنلِ جست‌وجو (سمتِ چپ/پایان) — پنلِ شیشه‌ای */}
+          <div style={{ width: '100%' }}>
+            <HeroSearch examples={examples} glass />
           </div>
         </div>
       </section>

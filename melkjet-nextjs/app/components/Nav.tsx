@@ -4,6 +4,7 @@ import Link from 'next/link'
 import ThemeToggle from './ThemeToggle'
 import CitySelector from './CitySelector'
 import { openAuth } from './AuthModal'
+import Logo from './Logo'
 
 const DASH_LABEL: Record<string, string> = {
   '/admin': 'پنل مدیریت', '/builder': 'پنل سازنده', '/pros': 'پنل مشاور',
@@ -55,12 +56,11 @@ const MENUS: Menu[] = [
   ] },
 ]
 
-export default function Nav() {
+export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [open, setOpen] = useState<string | null>(null)        // منوی دسکتاپِ بازشده
   const [mobOpen, setMobOpen] = useState<string | null>(null)  // بخشِ بازشدهٔ موبایل
   const [me, setMe] = useState<{ dash: string } | null | undefined>(undefined)
-  const [brand, setBrand] = useState<{ name?: string; logoLight?: string; logoDark?: string } | null>(null)   // فاز ۲۷۰
   // «قصدِ هاور»: بستنِ منو با کمی تأخیر تا رد شدن از فاصلهٔ بینِ دکمه و منو، آن را نبندد (پرش/فلیکر).
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const openMenu = (label: string) => { if (closeTimer.current) clearTimeout(closeTimer.current); setOpen(label) }
@@ -70,7 +70,6 @@ export default function Nav() {
     let cancelled = false
     const loadMe = () => fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => { if (!cancelled) setMe(d && d.phone ? { dash: d.dash || '/buyer' } : null) }).catch(() => { if (!cancelled) setMe(null) })
     loadMe()
-    fetch('/api/site').then(r => r.ok ? r.json() : null).then(d => { if (!cancelled && d?.brand) setBrand(d.brand) }).catch(() => {})   // فاز ۲۷۰ — برند
     window.addEventListener('mj-auth-success', loadMe)
     return () => { cancelled = true; window.removeEventListener('mj-auth-success', loadMe) }
   }, [])
@@ -82,28 +81,15 @@ export default function Nav() {
   }
   const dashLabel = me ? (DASH_LABEL[me.dash] || 'پنل من') : ''
 
-  // ۸ اکتبر — نوار باید روی هر پس‌زمینه‌ای خوانا باشد. قبلاً فقط `background: var(--navbg)`
-  // بود که آلفای ۰٫۹۲ دارد، پس هر چیزی زیرِ نوار (هیرویِ تیره، تصویر، بنر) از همان هشت درصد
-  // رد می‌شد و برچسب‌ها را می‌خورد. حالا دو لایه است: تینتِ navbg روی پایهٔ ماتِ bg — طرح
-  // همان می‌ماند ولی هیچ‌چیز رد نمی‌شود. برچسب‌ها هم از --muted به --text رفتند.
   return (
-    <header style={{ position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', background: 'linear-gradient(var(--navbg),var(--navbg)), var(--bg)', borderBottom: '1px solid var(--line2)', boxShadow: '0 6px 24px -14px rgba(0,0,0,.5)' }}>
+    <header style={overlay
+      ? { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, background: 'transparent', color: '#f3ede0' }
+      : { position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(18px)', background: 'var(--navbg)', borderBottom: '1px solid var(--line)' }}>
       <nav style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', height: 64, display: 'flex', alignItems: 'center', gap: 18 }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'var(--text)', flexShrink: 0 }}>
-          {brand?.logoLight && brand?.logoDark ? (<>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={brand.logoLight} alt={brand.name || 'ملک‌جت'} className="mj-logo-light" style={{ height: 34, maxWidth: 170, objectFit: 'contain' }} />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={brand.logoDark} alt={brand.name || 'ملک‌جت'} className="mj-logo-dark" style={{ height: 34, maxWidth: 170, objectFit: 'contain' }} />
-          </>) : (brand?.logoLight || brand?.logoDark) ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={(brand.logoLight || brand.logoDark) as string} alt={brand.name || 'ملک‌جت'} style={{ height: 34, maxWidth: 170, objectFit: 'contain' }} />
-          ) : (<>
-            <span style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)' }}>
-              <span style={{ width: 13, height: 13, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }} />
-            </span>
-            <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-.5px' }}>{brand?.name || 'ملک‌جت'}</span>
-          </>)}
+          {/* ری‌برندِ ۲۹۸ی۵ — لوگومارکِ «M» طلایی همیشه نمایش داده می‌شود (برندِ ذخیره‌شدهٔ قدیمیِ
+              پنلِ ادمین دیگر override نمی‌کند؛ لوگوی واحدِ وکتور، تیز در هر اندازه). */}
+          <Logo height={32} word />
         </Link>
 
         <CitySelector />
@@ -112,7 +98,7 @@ export default function Nav() {
         <div className="mj-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 14.5, fontWeight: 600 }}>
           {MENUS.map(m => (
             <div key={m.label} style={{ position: 'relative' }} onMouseEnter={() => openMenu(m.label)} onMouseLeave={scheduleClose}>
-              <button onClick={() => (open === m.label ? setOpen(null) : openMenu(m.label))} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: 'var(--text)', background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>
+              <button onClick={() => (open === m.label ? setOpen(null) : openMenu(m.label))} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: open === m.label ? 'var(--text)' : 'var(--muted)', background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>
                 {m.label}<span style={{ fontSize: 9, opacity: .7 }}>▾</span>
               </button>
               {open === m.label && (

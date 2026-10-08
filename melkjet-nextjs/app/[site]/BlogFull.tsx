@@ -28,7 +28,7 @@ function ArticleCard({ a, i, primary, siteSlug }: { a: BlogArticle; i: number; p
   const href = articleHref(a, siteSlug)
   return (
     <a href={href} className="mjs-card" style={{
-      background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df',
+      background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden', border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)',
       textDecoration: 'none', display: 'flex', flexDirection: 'column', boxShadow: CARD_SHADOW,
     }}>
       {a.image ? (
@@ -49,7 +49,7 @@ function ArticleCard({ a, i, primary, siteSlug }: { a: BlogArticle; i: number; p
         {a.excerpt ? (
           <p style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.95, margin: '0 0 16px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.excerpt}</p>
         ) : null}
-        <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTop: '1px solid #f2ede4', paddingTop: 14 }}>
+        <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTop: '1px solid color-mix(in srgb, var(--mjs-text) 8%, transparent)', paddingTop: 14 }}>
           <span style={{ fontSize: 12, color: MUTED }}>
             {[a.author, a.date].filter(Boolean).join(' · ')}
           </span>
@@ -99,7 +99,7 @@ export default function BlogFull({
   const recent = articles.slice(0, 5)
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', minHeight: 48, background: 'var(--mjs-bg)', border: '1px solid #e6ddcd',
+    width: '100%', minHeight: 48, background: 'var(--mjs-bg)', border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)',
     borderRadius: 12, padding: '0 16px', fontSize: 14.5, fontFamily: 'inherit', boxSizing: 'border-box',
     color: 'var(--mjs-text)',
   }
@@ -107,7 +107,7 @@ export default function BlogFull({
   // بدونِ مقالهٔ واقعی → حالتِ خالی (هیچ دادهٔ نمونه نمایش داده نمی‌شود).
   if (!articles.length) {
     return (
-      <div style={{ background: 'var(--mjs-bg)', border: '1px dashed #ddd4c5', borderRadius: 18, padding: '64px 24px', textAlign: 'center', color: '#9b9285', fontSize: 15, lineHeight: 2 }}>
+      <div style={{ background: 'var(--mjs-bg)', border: '1px dashed color-mix(in srgb, var(--mjs-text) 24%, transparent)', borderRadius: 18, padding: '64px 24px', textAlign: 'center', color: 'var(--mjs-muted)', fontSize: 15, lineHeight: 2 }}>
         <div style={{ fontSize: 40, opacity: .3, marginBottom: 10 }}>🗞</div>
         هنوز مقاله‌ای منتشر نشده است.
       </div>
@@ -137,7 +137,7 @@ export default function BlogFull({
             />
           </div>
           {filtered.length === 0 ? (
-            <div style={{ background: 'var(--mjs-surface)', border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>
+            <div style={{ background: 'var(--mjs-surface)', border: '1px dashed color-mix(in srgb, var(--mjs-text) 24%, transparent)', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: 'var(--mjs-muted)', fontSize: 14.5 }}>
               مقاله‌ای با این فیلتر یافت نشد.
             </div>
           ) : (
@@ -150,7 +150,7 @@ export default function BlogFull({
         {/* ساید‌بار */}
         {hasSidebar ? (
           <aside style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ background: 'var(--mjs-bg)', border: '1px solid #efe9df', borderRadius: 16, padding: 18, boxShadow: CARD_SHADOW }}>
+            <div style={{ background: 'var(--mjs-bg)', border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)', borderRadius: 16, padding: 18, boxShadow: CARD_SHADOW }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: INK, marginBottom: 12 }}>جستجو</div>
               <input
                 value={q}
@@ -160,7 +160,7 @@ export default function BlogFull({
               />
             </div>
 
-            <div style={{ background: 'var(--mjs-bg)', border: '1px solid #efe9df', borderRadius: 16, padding: 18, boxShadow: CARD_SHADOW }}>
+            <div style={{ background: 'var(--mjs-bg)', border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)', borderRadius: 16, padding: 18, boxShadow: CARD_SHADOW }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: INK, marginBottom: 12 }}>دسته‌بندی‌ها</div>
               <button
                 onClick={() => setCat('__all__')}
@@ -181,7 +181,7 @@ export default function BlogFull({
               ))}
             </div>
 
-            <div style={{ background: 'var(--mjs-bg)', border: '1px solid #efe9df', borderRadius: 16, padding: 18, boxShadow: CARD_SHADOW }}>
+            <div style={{ background: 'var(--mjs-bg)', border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)', borderRadius: 16, padding: 18, boxShadow: CARD_SHADOW }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: INK, marginBottom: 12 }}>آخرین مطالب</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {recent.map((a, i) => (

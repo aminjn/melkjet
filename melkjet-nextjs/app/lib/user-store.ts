@@ -75,6 +75,12 @@ export async function addFavorite(userId: string, listingId: string): Promise<Us
   return getPrefs(userId)
 }
 
+// فاز ۲۹۸ه — حذفِ ترجیحاتِ کاربر (علاقه‌مندی/جستجوی ذخیره‌شده) هنگامِ حذفِ حساب.
+export async function deletePrefs(userId: string): Promise<boolean> {
+  const u = String(userId || '').trim(); if (!u) return false
+  return withDb(db => { const had = !!db[u]; delete db[u]; return had })
+}
+
 export async function removeFavorite(userId: string, listingId: string): Promise<UserPrefs> {
   await withDb((db) => {
     const p = ensure(db, userId)

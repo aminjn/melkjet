@@ -23,12 +23,40 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ reviews: listReviews(s.phone, { all: true }) }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
 
-// ثبتِ نظر توسطِ بازدیدکننده (عمومی) — با slugِ سایت.
+// ثبتِ نظر — با slugِ سایت، یا (فاز ۲۹۲) با متخصصِ دایرکتوری.
+// فاز ۲۹۲ب — «همه‌جا» نیازمندِ ورود (خواستِ صریح: ضدِ اسپم)؛ شمارهٔ ثبت‌کننده هم ذخیره می‌شود.
 export async function POST(req: NextRequest) {
+  const sess = await getSession()
+  if (!sess) return NextResponse.json({ error: 'برای ثبتِ نظر ابتدا وارد شوید' }, { status: 401 })
   const b = await req.json().catch(() => ({} as any))
+  // فاز ۲۹۲ — نظر روی صفحهٔ متخصصِ دایرکتوری (/{type}/{slug}): شمارهٔ مالک سمتِ سرور
+  // از slug حل می‌شود (لو نمی‌رود) و انتشار فقط با تاییدِ ادمین است؛ AI صرفاً پیشنهاد می‌دهد.
+  if (b.ptype && b.pslug) {
+    // وکیلِ اسکرپ‌شده (بدونِ حسابِ ملک‌جتی) → کلیدِ عمومیِ lw:{slug}؛ بقیه → شمارهٔ حساب از slug.
+    let owner292 = ''
+    if (b.ptype === 'lawyer') {
+      const { getLawyerProfile } = await import('@/app/lib/bonyad-profiles')
+      const lw = await getLawyerProfile(String(b.pslug)).catch(() => null)
+      if (!lw) return NextResponse.json({ error: 'متخصص یافت نشد' }, { status: 404 })
+      owner292 = 'lw:' + String(b.pslug)
+    } else {
+      const { resolveProvider } = await import('@/app/lib/provider-public')
+      const p = await resolveProvider(String(b.ptype), String(b.pslug)).catch(() => null)
+      if (!p) return NextResponse.json({ error: 'متخصص یافت نشد' }, { status: 404 })
+      owner292 = p.phone
+    }
+    const r = addReview(owner292, { name: b.name, text: b.text, rating: b.rating, byPhone: sess.phone })
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
+    try {
+      // فاز ۲۹۷ک — پیشنهاد از ماشین‌لرنینگِ خودی (قواعد + یادگیری از داوری‌های قبلی)، نه AIِ پولی.
+      const v = await moderateReview(r.review!.name, r.review!.text)
+      applyReviewModeration(r.review!.id, false, v.verdict === 'review' ? v.reason : `پیشنهادِ خودکار: ${v.verdict === 'approve' ? 'تایید' : 'رد'} — ${v.reason}`)
+    } catch { /* بدونِ پیشنهاد هم در صفِ ادمین می‌ماند */ }
+    return NextResponse.json({ ok: true, published: false, message: 'نظرِ شما ثبت شد و پس از تاییدِ مدیر نمایش داده می‌شود. سپاسگزاریم!' })
+  }
   const owner = await ownerOfSlug(b.slug)
   if (!owner) return NextResponse.json({ error: 'سایت یافت نشد' }, { status: 404 })
-  const r = addReview(owner, { name: b.name, text: b.text, rating: b.rating })
+  const r = addReview(owner, { name: b.name, text: b.text, rating: b.rating, byPhone: sess.phone })
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
   // ممیزیِ هوش مصنوعی: تأیید/رد. در صورتِ نبودِ مدل → در انتظارِ تأییدِ دستیِ مالک می‌ماند.
   let published = false
@@ -50,7 +78,11 @@ export async function PATCH(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'وارد شوید' }, { status: 401 })
   const b = await req.json().catch(() => ({} as any))
-  if (b.delete) { deleteReview(s.phone, String(b.id)); return NextResponse.json({ ok: true }) }
-  if (b.approved !== undefined) { setReviewApproved(s.phone, String(b.id), !!b.approved); return NextResponse.json({ ok: true }) }
+  // فاز ۲۹۷ک — داوریِ مالکِ سایت هم خوراکِ یادگیرندهٔ نظرات است.
+  const learn297 = async (id: string, approved: boolean) => {
+    try { const t = listReviews(s.phone, { all: true }).find(r => r.id === id)?.text; if (t) { const { learnReview } = await import('@/app/lib/review-ml'); await learnReview(t, approved) } } catch {}
+  }
+  if (b.delete) { await learn297(String(b.id), false); deleteReview(s.phone, String(b.id)); return NextResponse.json({ ok: true }) }
+  if (b.approved !== undefined) { if (b.approved) await learn297(String(b.id), true); setReviewApproved(s.phone, String(b.id), !!b.approved); return NextResponse.json({ ok: true }) }
   return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
 }

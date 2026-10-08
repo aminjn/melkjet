@@ -19,10 +19,26 @@ function save(db: SiteConfig) {
 
 /** پیکربندیِ کامل — ذخیره‌شده روی پیش‌فرض‌ها merge می‌شود تا فیلد/صفحهٔ جدیدِ
  *  نسخه‌های بعدی هیچ‌وقت گم نشود (صفحه‌های سیستمیِ جاافتاده اضافه می‌شوند). */
+// فاز ۲۹۸غ — هیچ لینکِ فوتر نباید بازدیدکنندهٔ «بدونِ ورود» را مستقیم به پنلِ گِیت‌شده ببرد
+// (نگرانیِ امنیتیِ کاربر: «وارد پنل میشه»). کانفیگِ فوترِ ذخیره‌شدهٔ قدیمی — پیش از فاز ۲۹۸د —
+// هنوز href‌های /agency،/crm،… را داشت و چون روی پیش‌فرضِ کد merge می‌شود آن را بازنویسی می‌کرد،
+// پس «درست‌کردنِ فوتر» روی سایتِ زنده دیده نمی‌شد. این‌جا هر لینکِ پنل را «هنگامِ خواندن» به
+// صفحهٔ معرفیِ عمومیِ همان ابزار (/features/*) ترمیم می‌کنیم — بدونِ نیاز به مهاجرتِ داده.
+const PANEL_TO_FEATURE: Record<string, string> = {
+  '/agency': '/features/agency', '/crm': '/features/crm', '/builder': '/features/builder',
+  '/marketing': '/features/marketing', '/materials': '/features/materials', '/website-builder': '/features/website-builder',
+}
+function healFooterCols(footer: SiteFooter): SiteFooter {
+  if (!Array.isArray(footer.cols)) return footer
+  footer.cols = footer.cols.map(c => ({ ...c, links: (c.links || []).map(l => PANEL_TO_FEATURE[l.href] ? { ...l, href: PANEL_TO_FEATURE[l.href] } : l) }))
+  return footer
+}
+
 export function siteConfig(): SiteConfig {
   const raw = load()
   const footer: SiteFooter = { ...DEFAULT_SITE.footer, ...(raw.footer || {}) }
   if (!Array.isArray(footer.cols) || !footer.cols.length) footer.cols = DEFAULT_SITE.footer.cols
+  healFooterCols(footer)
   const contact: SiteContact = { ...DEFAULT_SITE.contact, ...(raw.contact || {}) }
   const blog = { ...DEFAULT_SITE.blog, ...((raw as Partial<SiteConfig>).blog || {}) }
   const pages: SitePage[] = Array.isArray(raw.pages) && raw.pages.length ? raw.pages.slice() : DEFAULT_SITE.pages.slice()

@@ -22,6 +22,7 @@ export interface ProviderPublic {
   badges: { id: string; label: string; icon: string; desc?: string }[]
   listings: { id: string; title: string; price?: string; location?: string; image?: string }[]
   hasPhone: boolean
+  verified: boolean   // فاز ۲۹۲ — تیکِ آبیِ ملک‌جت (ادمین می‌دهد)
 }
 
 export async function getProviderPublic(phone: string): Promise<ProviderPublic | null> {
@@ -37,7 +38,7 @@ export async function getProviderPublic(phone: string): Promise<ProviderPublic |
   const soldCount = mine.filter(it => { const ds = String(it.meta?.__dealStatus || ''); return ds === 'sold' || ds === 'rented' }).length
   const badges = computeRepBadges({ createdAt: acc.createdAt, listingCount: mine.length, soldCount, profileComplete: !!(name && (photo || specialties.length) && (gp.contactPhone || gp.landline)), responsive: !!(gp.contactPhone || gp.landline) })
   const slug = await ensureProviderSlug(phone, name)
-  return { phone, type, typeLabel: typeLabel(type), slug, name, photo, bio, city, specialties, badges, listings: mine.slice(0, 12).map(it => ({ id: it.id, title: it.title, price: it.price, location: it.location, image: it.image })), hasPhone: !!(gp.contactPhone || gp.landline) }
+  return { phone, type, typeLabel: typeLabel(type), slug, name, photo, bio, city, specialties, badges, listings: mine.slice(0, 12).map(it => ({ id: it.id, title: it.title, price: it.price, location: it.location, image: it.image })), hasPhone: !!(gp.contactPhone || gp.landline), verified: !!gp.verified }
 }
 
 export interface ProviderCard { name: string; slug: string; type: string; typeLabel: string; photo: string; city: string; phone: string; promoted: boolean }

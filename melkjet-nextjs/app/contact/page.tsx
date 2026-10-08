@@ -1,4 +1,5 @@
 import Nav from '@/app/components/Nav'
+import PageHeader from '@/app/components/PageHeader'
 import Footer from '@/app/components/Footer'
 import ContactForm from './ContactForm'
 import { siteConfig } from '@/app/lib/site-store'
@@ -17,9 +18,8 @@ export default function ContactPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <Nav />
-      <main style={{ maxWidth: 620, margin: '0 auto', padding: '40px 18px 70px' }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 10 }}>تماس با ما</h1>
-        <p style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.9, marginBottom: 24 }}>{contact.intro}</p>
+      <PageHeader eyebrow="ارتباط با ما" title="تماس با ما" subtitle={contact.intro} />
+      <main style={{ maxWidth: 620, margin: '0 auto', padding: '36px 18px 70px' }}>
         {rows.length > 0 && (
           <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
             {rows.map(r => (

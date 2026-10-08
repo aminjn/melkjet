@@ -34,6 +34,10 @@ export interface BusinessProfile {
   areas: string[]                       // مناطقِ فعالیت
   social: { instagram?: string; telegram?: string; whatsapp?: string; eitaa?: string; linkedin?: string }
   updatedAt: number
+  // فاز ۲۹۲ — تیکِ آبی (نشانِ پولیِ تاییدِ ملک‌جت). فقط ادمین با setVerified می‌دهد/می‌گیرد؛
+  // saveProfile عمداً به آن دست نمی‌زند (با ...cur حفظ می‌شود) تا کاربر نتواند به خودش تیک بدهد.
+  verified?: boolean
+  verifiedAt?: number
 }
 
 type DB = Record<string, BusinessProfile>
@@ -95,6 +99,19 @@ export function saveProfile(phone: string, patch: Partial<BusinessProfile>): Bus
   return p
 }
 
+// فاز ۲۹۲ — تیکِ آبی: فقط از پنلِ ادمین (پرداختِ دستی تایید و اینجا ثبت می‌شود).
+export function setVerified(phone: string, on: boolean): void {
+  const db = load()
+  const cur = { ...emptyProfile(), ...(db[phone] || {}) }
+  cur.verified = !!on
+  cur.verifiedAt = on ? Date.now() : 0
+  db[phone] = cur; save(db)
+}
+export function listVerifiedPhones(): string[] {
+  const db = load()
+  return Object.keys(db).filter(ph => db[ph]?.verified)
+}
+
 // درصدِ تکمیلِ پروفایل (برای نوارِ پیشرفت)
 // فاز ۱۴۲ — ادغامِ پروفایلِ عمومی: فیلدهای خالیِ مقصد از مبدأ پر می‌شود؛ مبدأ حذف.
 export function mergeProfiles(from: string, to: string): void {
@@ -110,6 +127,15 @@ export function mergeProfiles(from: string, to: string): void {
   }
   delete db[from]
   save(db)
+}
+
+// فاز ۲۹۸ه — حذفِ پروفایلِ عمومیِ یک کاربر (cascade حذفِ حساب) تا در دایرکتوری نماند.
+export function deleteProfile(phone: string): boolean {
+  const db = load()
+  if (!db[phone]) return false
+  delete db[phone]
+  save(db)
+  return true
 }
 
 export function completeness(p: BusinessProfile): number {

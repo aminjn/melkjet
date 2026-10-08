@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { publicProject, publicQuery, regionLabel, phaseLabel, getProfile } from '@/app/lib/persiansaze-store'
-import { getPublic, findManual, STATUS_LABEL } from '@/app/lib/builder-public-store'
+import { getPublic, findManual, STATUS_LABEL, approvedBuilderReviews } from '@/app/lib/builder-public-store'
 import { unitStatusesForHash } from '@/app/lib/builder-store'
 import { hashForProjectSlug, ensureProjectSlug } from '@/app/lib/project-slug-store'
+import { ensureBuilderSlug } from '@/app/lib/builder-slug-store'   // فاز ۲۹۸ی۲ — لینکِ سازنده با اسلاگِ canonical
 import ProjectView from '@/app/components/ProjectView'
 
 export const revalidate = 600
@@ -116,6 +117,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
   const statusLabel = (enrich.status && STATUS_LABEL[enrich.status as keyof typeof STATUS_LABEL]) || phase || 'در حال ساخت'
   const realUnits = ps ? await unitStatusesForHash(hashId) : null
+  // فاز ۲۹۸ی۲ — اسلاگِ canonicalِ سازنده (لینکِ پروفایلِ سازنده دیگر idِ عددیِ ریدایرکتی نباشد)
+  const builderSlug = builderId ? await ensureBuilderSlug(builderId, builderName).catch(() => '') : ''
 
   const view = {
     hashId, title, region, phase, progress, milestones, statusLabel, photos,
@@ -124,7 +127,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
     lat, lng, usage,
     amenities: enrich.amenities || [], plans: enrich.plans || [],
     priceText: enrich.priceText, salesProgress: enrich.salesProgress,
-    builder: { id: builderId, name: builderName, hasPhone: !!builderPhones[0], projectCount: builderProjectCount, regions: builderRegions.map(r => regionLabel({ cityId: 1, regionId: r })).filter(Boolean).slice(0, 6) },
+    builder: { id: builderId, slug: builderSlug, name: builderName, hasPhone: !!builderPhones[0], projectCount: builderProjectCount, regions: builderRegions.map(r => regionLabel({ cityId: 1, regionId: r })).filter(Boolean).slice(0, 6) },
+    // فاز ۲۹۲ — نظراتِ تاییدشدهٔ سازنده روی صفحهٔ پروژه (رندرِ سروری، سئو).
+    builderReviews: approvedBuilderReviews(builderId).slice(0, 10).map(r => ({ name: r.name, text: r.text, rating: r.rating, projectName: r.projectName, at: r.at })),
     similar,
   }
 

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/app/components/Nav'
+import PageHeader from '@/app/components/PageHeader'
 import Footer from '@/app/components/Footer'
 
 // Shape returned by GET /api/plans (active plans, sorted by order).
@@ -16,6 +17,8 @@ interface ApiPlan {
   cta?: string
   order: number
   active: boolean
+  dashboard?: string
+  roleId?: string
 }
 
 // Card shape consumed by the plans grid below.
@@ -30,6 +33,30 @@ interface CardPlan {
   cta: string
   ctaStyle: 'gold' | 'outline'
   features: string[]
+  dashboard?: string
+}
+
+// فاز ۲۹۸ق — «هر صنف فقط پلن‌های خودش» (نه ۳۶ پلنِ همه‌صنف که گیج می‌کند). نگاشتِ داشبورد → برچسبِ صنف
+// برای چیپ‌های انتخابِ مخاطب. پلنِ بدونِ داشبورد = «عمومی» و همیشه دیده می‌شود.
+const AUDIENCES: { dash: string; label: string }[] = [
+  { dash: '/pros', label: 'مشاوران املاک' },
+  { dash: '/agency', label: 'آژانس‌ها' },
+  { dash: '/builder', label: 'سازندگان' },
+  { dash: '/materials', label: 'فروشندگان مصالح' },
+  { dash: '/architect', label: 'معماران' },
+  { dash: '/contractor', label: 'پیمانکاران' },
+  { dash: '/appraiser', label: 'کارشناسان رسمی' },
+  { dash: '/lawfirm', label: 'دفاتر حقوقی' },
+  { dash: '/legal', label: 'وکلا' },
+  { dash: '/finance', label: 'بانک و بیمه' },
+  { dash: '/notary', label: 'دفاتر اسناد رسمی' },
+  { dash: '/buyer', label: 'خریداران' },
+]
+const audLabel = (dash: string) => AUDIENCES.find(a => a.dash === dash)?.label || ''
+// نگاشتِ ابزارِ لندینگ (?for=) → داشبوردِ صنفِ پلن‌ها.
+const TOOL_DASH: Record<string, string> = {
+  crm: '/pros', marketing: '/pros', 'website-builder': '/pros',
+  agency: '/agency', builder: '/builder', materials: '/materials',
 }
 
 // Persian-digit + تومان price formatter for live plans.
@@ -58,6 +85,7 @@ function apiPlanToCard(p: ApiPlan): CardPlan {
     cta: p.cta || 'شروع',
     ctaStyle: p.highlighted ? 'gold' : 'outline',
     features: p.features,
+    dashboard: p.dashboard,
   }
 }
 
@@ -287,8 +315,31 @@ export default function PricingPage() {
     return () => { cancelled = true }
   }, [])
 
+  // فاز ۲۹۸ق — مخاطبِ انتخابی: هر صنف فقط پلن‌های خودش را ببیند تا از انبوهِ پلن‌ها گیج نشود.
+  // منبعِ پیش‌فرض: ?for=<ابزار> یا ?dash=<داشبورد> از لندینگ، وگرنه داشبوردِ کاربرِ واردشده.
+  const [audience, setAudience] = useState<string>('')   // '' = هنوز تعیین نشده (همه)
+  const [audReady, setAudReady] = useState(false)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const forTool = sp.get('for') || ''
+    const dash = sp.get('dash') || (forTool && TOOL_DASH[forTool]) || ''
+    if (dash) { setAudience(dash); setAudReady(true); return }
+    // کاربرِ واردشده → داشبوردِ خودش؛ وگرنه «همه».
+    fetch('/api/auth/profile', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { const dsh = d?.dash && d.dash !== '/admin' ? d.dash : ''; if (dsh && AUDIENCES.some(a => a.dash === dsh)) setAudience(dsh) })
+      .catch(() => {})
+      .finally(() => setAudReady(true))
+  }, [])
+
   // فقط پلن‌های واقعی از API — نه قیمتِ ساختگیِ هاردکد (تا کاربر بر اساسِ قیمتِ غیرواقعی تصمیم نگیرد).
-  const cardPlans: CardPlan[] = livePlans ?? []
+  const allPlans: CardPlan[] = livePlans ?? []
+  // چیپ‌های مخاطب فقط برای صنف‌هایی که واقعاً پلن دارند.
+  const audChips = AUDIENCES.filter(a => allPlans.some(p => p.dashboard === a.dash))
+  // پلن‌های نمایش‌داده‌شده: صنفِ انتخابی + پلن‌های عمومی (بدونِ داشبورد). بدونِ انتخاب = همه.
+  const cardPlans: CardPlan[] = audience
+    ? allPlans.filter(p => p.dashboard === audience || !p.dashboard)
+    : allPlans
 
   // بنر نتیجهٔ پرداخت (پس از بازگشت از زرین‌پال)
   const [payBanner, setPayBanner] = useState<{ ok: boolean; text: string } | null>(null)
@@ -382,29 +433,17 @@ export default function PricingPage() {
         </div>
       )}
 
-      {/* Hero */}
-      <section style={{ textAlign: 'center', padding: '80px 24px 60px', position: 'relative', overflow: 'hidden' }}>
+      {/* هدرِ سینمایی (ری‌برندِ ۲۹۸ی۷) */}
+      <PageHeader eyebrow="شفاف، منعطف، بدون هزینه پنهان" title="پلن‌ها و اشتراک" subtitle="از جستجوی رایگان تا راه‌حل سازمانی — هر پلن برای یک نیاز واقعی طراحی شده است. بدون قرارداد بلندمدت اجباری، هر زمان که خواستید تغییر دهید." />
+
+      {/* Hero (فقط تاگلِ صورتحساب) */}
+      <section style={{ textAlign: 'center', padding: '36px 24px 44px', position: 'relative', overflow: 'hidden' }}>
         <div style={{
           position: 'absolute', inset: 0, zIndex: 0,
           background: 'radial-gradient(ellipse 70% 50% at 50% 0%, var(--goldDim), transparent)',
           pointerEvents: 'none',
         }} />
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <span style={{
-            display: 'inline-block', marginBottom: 18,
-            background: 'var(--goldDim)', border: '1px solid var(--gold)',
-            borderRadius: 999, padding: '5px 18px',
-            fontSize: 13, color: 'var(--gold)', fontWeight: 600,
-          }}>
-            شفاف، منعطف، بدون هزینه پنهان
-          </span>
-          <h1 style={{ fontSize: 'clamp(32px,5vw,54px)', fontWeight: 900, lineHeight: 1.2, marginBottom: 18 }}>
-            پلن‌ها و اشتراک
-          </h1>
-          <p style={{ fontSize: 18, color: 'var(--muted)', maxWidth: 560, margin: '0 auto 40px', lineHeight: 1.8 }}>
-            از جستجوی رایگان تا راه‌حل سازمانی — هر پلن برای یک نیاز واقعی طراحی شده است.
-            بدون قرارداد بلندمدت اجباری، هر زمان که خواستید تغییر دهید.
-          </p>
 
           {/* Billing toggle */}
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '6px 6px 6px 18px' }}>
@@ -439,10 +478,31 @@ export default function PricingPage() {
         </div>
       </section>
 
+      {/* فاز ۲۹۸ق — انتخابِ صنف: هر مخاطب فقط پلن‌های خودش را ببیند (نه انبوهِ ۳۶ پلن) */}
+      {audChips.length > 1 && (
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 8px' }}>
+          <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--muted)', marginBottom: 12 }}>پلن‌ها را بر اساسِ صنفت ببین:</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', justifyContent: 'center', paddingBottom: 6 }}>
+            {[{ dash: '', label: 'همه' }, ...audChips].map(a => {
+              const active = audience === a.dash
+              return (
+                <button key={a.dash || 'all'} onClick={() => { setAudience(a.dash); try { const u = new URL(window.location.href); if (a.dash) u.searchParams.set('dash', a.dash); else u.searchParams.delete('dash'); u.searchParams.delete('for'); window.history.replaceState(null, '', u.toString()) } catch {} }}
+                  style={{ flexShrink: 0, whiteSpace: 'nowrap', padding: '8px 18px', borderRadius: 999, fontSize: 13, fontWeight: active ? 800 : 600, cursor: 'pointer', fontFamily: 'inherit', border: active ? '1px solid var(--gold)' : '1px solid var(--line2)', background: active ? 'var(--goldDim)' : 'var(--surface)', color: active ? 'var(--gold)' : 'var(--muted)', transition: 'all .15s' }}>
+                  {a.label}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Plans grid */}
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 80px' }}>
         {cardPlans.length === 0 && (
-          <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>در حال دریافتِ پلن‌ها…</div>
+          <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>{audReady && livePlans ? 'برای این صنف پلنی ثبت نشده.' : 'در حال دریافتِ پلن‌ها…'}</div>
+        )}
+        {audience && audChips.length > 1 && (
+          <div style={{ textAlign: 'center', fontSize: 12.5, color: 'var(--muted)', marginBottom: 18 }}>نمایشِ پلن‌های <b style={{ color: 'var(--gold)' }}>{audLabel(audience)}</b> — برای دیدنِ بقیه، صنفِ دیگری را از بالا انتخاب کن.</div>
         )}
         <div className="mjr-grid" style={{
           display: 'grid',

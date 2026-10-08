@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import PriceGuideHint from '@/app/components/PriceGuideHint';
 import Nav from '@/app/components/Nav';
+import PageHeader from '@/app/components/PageHeader';
 import Footer from '@/app/components/Footer';
 import LocationPicker from '@/app/components/LocationPicker';
 import LiveScore from '@/app/components/LiveScore';
@@ -630,9 +631,8 @@ export default function SubmitPage() {
     <div dir="rtl" style={containerStyle}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <Nav />
+      <PageHeader eyebrow="ثبتِ آگهی" title="ثبت آگهی ملک" subtitle="اطلاعات ملک خود را در چند مرحله وارد کنید." />
       <div className="mjsub-grid" style={innerStyle}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8, color: 'var(--text)' }}>ثبت آگهی ملک</h1>
-        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 32 }}>اطلاعات ملک خود را در چند مرحله وارد کنید.</p>
         {progressBar}
         {STEP_CONTENT[step - 1]}
         {/* امتیاز و تحلیلِ زندهٔ آگهی هنگامِ ثبت */}

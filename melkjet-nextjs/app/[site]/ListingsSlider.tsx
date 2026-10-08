@@ -74,7 +74,7 @@ export default function ListingsSlider({
                   fontSize: 13.5, fontWeight: on ? 800 : 600, cursor: 'pointer',
                   color: on ? '#fff' : 'var(--mjs-text)',
                   background: on ? primary : 'var(--mjs-surface)',
-                  border: on ? `1px solid ${primary}` : '1px solid #e6ddcd',
+                  border: on ? `1px solid ${primary}` : '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)',
                   borderRadius: 999, padding: '8px 18px', fontFamily: 'inherit',
                   boxShadow: on ? `0 10px 24px -14px ${primary}` : 'none',
                 }}
@@ -91,7 +91,7 @@ export default function ListingsSlider({
           onClick={() => scrollByPage(-1)}
           style={{
             flex: '0 0 auto', alignSelf: 'center', width: 44, height: 44, borderRadius: '50%',
-            border: '1px solid #e6ddcd', background: 'var(--mjs-bg)', color: primary,
+            border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)', background: 'var(--mjs-bg)', color: primary,
             fontSize: 20, fontWeight: 900, cursor: 'pointer', boxShadow: CARD_SHADOW, lineHeight: 1,
           }}
         >‹</button>
@@ -116,22 +116,33 @@ export default function ListingsSlider({
               style={{
                 flex: `0 0 ${cardWidth}`, minWidth: 240, scrollSnapAlign: 'start',
                 background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden',
-                border: '1px solid #efe9df', textDecoration: 'none', display: 'block',
+                border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)', textDecoration: 'none', display: 'block',
                 boxShadow: CARD_SHADOW,
               }}
             >
-              {it.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={it.image} alt="" style={{ width: '100%', height: 190, objectFit: 'cover', display: 'block' }} />
-              ) : (
-                <div style={{ height: 190, background: `linear-gradient(135deg,${GRADS[i % GRADS.length]})` }} />
-              )}
+              {/* فاز ۲۹۷ق۳ — کارتِ محصولی: چیپِ دسته روی عکس + زومِ نرمِ هاور + گرادیانِ پایینِ عکس */}
+              <div style={{ position: 'relative', height: 200, overflow: 'hidden' }}>
+                {it.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={it.image} alt="" className="mjs-gallery-img" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                ) : (
+                  <div style={{ height: '100%', background: `linear-gradient(135deg,${GRADS[i % GRADS.length]})` }} />
+                )}
+                <div aria-hidden style={{ position: 'absolute', insetInline: 0, bottom: 0, height: 70, background: 'linear-gradient(180deg, transparent, rgba(10,8,5,.45))', pointerEvents: 'none' }} />
+                {it.category ? (
+                  <span style={{
+                    position: 'absolute', top: 12, insetInlineStart: 12, fontSize: 11.5, fontWeight: 800,
+                    color: '#fff', background: 'rgba(10,8,5,.55)', backdropFilter: 'blur(6px)',
+                    border: '1px solid rgba(255,255,255,.25)', borderRadius: 999, padding: '5px 12px',
+                  }}>{it.category}</span>
+                ) : null}
+              </div>
               <div style={{ padding: 20 }}>
                 <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--mjs-heading)', marginBottom: 7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
                 <div style={{ fontSize: 13, color: 'var(--mjs-text)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ opacity: .7 }}>📍</span>{it.location || 'موقعیت نامشخص'}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f2ede4', paddingTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid color-mix(in srgb, var(--mjs-text) 8%, transparent)', paddingTop: 12 }}>
                   <span style={{ fontSize: 17, fontWeight: 900, color: primary }}>{it.price || 'قیمت توافقی'}</span>
                   <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--mjs-text)' }}>مشاهده ←</span>
                 </div>
@@ -146,7 +157,7 @@ export default function ListingsSlider({
           onClick={() => scrollByPage(1)}
           style={{
             flex: '0 0 auto', alignSelf: 'center', width: 44, height: 44, borderRadius: '50%',
-            border: '1px solid #e6ddcd', background: 'var(--mjs-bg)', color: primary,
+            border: '1px solid color-mix(in srgb, var(--mjs-text) 20%, transparent)', background: 'var(--mjs-bg)', color: primary,
             fontSize: 20, fontWeight: 900, cursor: 'pointer', boxShadow: CARD_SHADOW, lineHeight: 1,
           }}
         >›</button>
