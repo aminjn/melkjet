@@ -57,6 +57,26 @@ const MENUS: Menu[] = [
 ]
 
 export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
+  // ۸ اکتبر — حالتِ overlay (صفحهٔ اصلی) دو نشانه می‌ساخت: `position: absolute` یعنی با اسکرول
+  // نمی‌چسبید، و `background: transparent` یعنی نواری وجود نداشت. طرحِ «نوارِ شفاف روی هیرو»
+  // عمدی است و نگه داشته می‌شود — ولی فقط تا وقتی هیرو زیرِ نوار است. بعد از عبور، نوارِ ماتِ
+  // چسبان می‌شود؛ همان الگوی استانداردی که کاربر هم انتظارش را داشت.
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    if (!overlay) return
+    const onScroll = () => setScrolled(window.scrollY > 56)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [overlay])
+  // «روی هیرو»: شفاف و متنِ کرم. در این حالت رنگِ تمِ سایت به‌کار نمی‌آید، چون پشتِ نوار
+  // تصویرِ تیره است نه پس‌زمینهٔ تم — و همین بود که در تمِ روشن برچسب‌ها را نامرئی می‌کرد.
+  // روی هیرو پشتِ نوار همیشه تیره است (هیرو background '#080b14' دارد، با عکس یا بی‌عکس)،
+  // پس رنگِ کرم به اسکرول وابسته نیست — فقط ماتیِ نوار وابسته است.
+  const onHero = overlay
+  const navText = onHero ? '#f3ede0' : 'var(--text)'
+  const navDim = onHero ? 'rgba(243,237,224,0.78)' : 'var(--muted)'
+  const navShadow = onHero ? '0 1px 10px rgba(0,0,0,.55)' : undefined
   const [menuOpen, setMenuOpen] = useState(false)
   const [open, setOpen] = useState<string | null>(null)        // منوی دسکتاپِ بازشده
   const [mobOpen, setMobOpen] = useState<string | null>(null)  // بخشِ بازشدهٔ موبایل
@@ -83,8 +103,17 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
 
   return (
     <header style={overlay
-      ? { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, background: 'transparent', color: '#f3ede0' }
-      : { position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(18px)', background: 'var(--navbg)', borderBottom: '1px solid var(--line)' }}>
+      // روی هیرو: بیرونِ جریانِ صفحه (تا هیرو از زیرش رد شود) ولی fixed، نه absolute —
+      // absolute با اسکرول می‌رفت بالا، و sticky نوار را داخلِ جریان می‌آورد و هیرو را
+      // ۶۴ پیکسل پایین می‌انداخت (متنِ کرم روی زمینهٔ روشن = نامرئی).
+      // اسکریمِ گرادیانی عمدی است: بدونِ جاوااسکریپت هم متن خوانا می‌ماند، و رنگش
+      // همان rgba(6,8,16) روکشِ خودِ هیروست تا درز معلوم نشود.
+      ? { position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, color: '#f3ede0',
+          background: scrolled ? 'linear-gradient(rgba(8,11,20,.94),rgba(8,11,20,.94))' : 'linear-gradient(to bottom, rgba(6,8,16,.72), rgba(6,8,16,.3) 72%, rgba(6,8,16,0))',
+          backdropFilter: scrolled ? 'blur(18px)' : undefined, WebkitBackdropFilter: scrolled ? 'blur(18px)' : undefined,
+          borderBottom: scrolled ? '1px solid rgba(243,237,224,0.14)' : '1px solid transparent',
+          boxShadow: scrolled ? '0 6px 24px -14px rgba(0,0,0,.6)' : undefined, transition: 'background .25s, border-color .25s' }
+      : { position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', background: 'linear-gradient(var(--navbg),var(--navbg)), var(--bg)', borderBottom: '1px solid var(--line2)', boxShadow: '0 6px 24px -14px rgba(0,0,0,.45)' }}>
       <nav style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', height: 64, display: 'flex', alignItems: 'center', gap: 18 }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'var(--text)', flexShrink: 0 }}>
           {/* ری‌برندِ ۲۹۸ی۵ — لوگومارکِ «M» طلایی همیشه نمایش داده می‌شود (برندِ ذخیره‌شدهٔ قدیمیِ
@@ -98,7 +127,7 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
         <div className="mj-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 14.5, fontWeight: 600 }}>
           {MENUS.map(m => (
             <div key={m.label} style={{ position: 'relative' }} onMouseEnter={() => openMenu(m.label)} onMouseLeave={scheduleClose}>
-              <button onClick={() => (open === m.label ? setOpen(null) : openMenu(m.label))} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: open === m.label ? 'var(--text)' : 'var(--muted)', background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>
+              <button onClick={() => (open === m.label ? setOpen(null) : openMenu(m.label))} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: open === m.label ? 'var(--text)' : navText, textShadow: open === m.label ? undefined : navShadow, background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>
                 {m.label}<span style={{ fontSize: 9, opacity: .7 }}>▾</span>
               </button>
               {open === m.label && (
@@ -128,13 +157,13 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
           <ThemeToggle size={40} />
           {me ? (
             <>
-              <button onClick={logout} title="خروج از حساب" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontFamily: 'inherit', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>خروج</button>
-              {me.dash !== '/buyer' && <Link href="/content" title="مقالاتِ من" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>✎ مقالات</Link>}
+              <button onClick={logout} title="خروج از حساب" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid rgba(243,237,224,0.38)' : '1px solid var(--line2)', background: 'transparent', color: navDim, textShadow: navShadow, fontFamily: 'inherit', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>خروج</button>
+              {me.dash !== '/buyer' && <Link href="/content" title="مقالاتِ من" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid rgba(243,237,224,0.38)' : '1px solid var(--line2)', background: 'transparent', color: navText, textShadow: navShadow, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>✎ مقالات</Link>}
               <Link href={me.dash} style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>{dashLabel}</Link>
             </>
           ) : (
             <>
-              <button onClick={() => openAuth()} style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600 }}>ورود / ثبت‌نام</button>
+              <button onClick={() => openAuth()} style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid rgba(243,237,224,0.38)' : '1px solid var(--line2)', background: 'transparent', color: navText, textShadow: navShadow, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600 }}>ورود / ثبت‌نام</button>
               <Link href="/submit" style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>ثبت آگهی</Link>
             </>
           )}
