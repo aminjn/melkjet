@@ -43,8 +43,8 @@ function matches(s: SavedSearch, it: any): boolean {
 // حادثهٔ ۸ اکتبر — کاربری با ۴ جستجوی ذخیره‌شده (یکی بدونِ محله و سقفِ قیمت) در نیم‌روز
 // بیش از ۱۵۰ پیامک گرفت، چون چرخه هر ۵ دقیقه اجرا می‌شود و به ازای «هر جستجو» یک پیامک
 // می‌رفت، بی‌هیچ سقفی. سقفِ نظری برای همان کاربر ۱٬۱۵۲ پیامک در روز بود.
-const ALERT_MIN_GAP_MS = 12 * 3600_000   // حداقل فاصلهٔ دو پیامکِ هشدار به یک نفر
-const ALERT_PER_DAY = 2                  // و در هر ۲۴ ساعت حداکثر دو تا
+export const ALERT_MIN_GAP_MS = 12 * 3600_000   // حداقل فاصلهٔ دو پیامکِ هشدار به یک نفر
+export const ALERT_PER_DAY = 2                  // و در هر ۲۴ ساعت حداکثر دو تا
 
 async function sendSms(phone: string, label: string) {
   const admin = getAdminData()

@@ -94,10 +94,17 @@ try {
       '  محله=' + (s.area || '—') + '  سقف=' + (s.priceMax || '—') + '  آخرین بررسی=' + (s.lastCheck ? when(s.lastCheck) : '—') + broad)
   }
   if (rows.length) {
+    // این بخش قبلاً «سقفِ نظری ۱٬۱۵۲ در روز» را چاپ می‌کرد و بعد از اعمالِ سقف دیگر
+    // درست نبود — همان برچسبِ گمراه‌کننده. حالا سقفِ واقعی و حکمِ زندهٔ دروازه را می‌گوید.
+    const { ALERT_MIN_GAP_MS, ALERT_PER_DAY } = await import('../app/lib/alerts-runner.ts')
+    const { canSendSms, lastSentAt } = await import('../app/lib/sms-log.ts')
     console.log('')
-    console.log('  چرخهٔ هشدار هر ۵ دقیقه اجرا می‌شود (TICK_MS) و به ازای «هر جستجو» که آگهیِ')
-    console.log('  تازهٔ منطبق داشته باشد یک پیامک می‌فرستد — بدونِ هیچ سقفِ روزانه.')
-    console.log('  سقفِ نظری: ' + fa(rows.length * 288) + ' پیامک در روز برای همین کاربر.')
+    console.log('  چرخه هر ۵ دقیقه اجرا می‌شود، ولی پیامک به ازای «هر کاربر» جمع می‌شود نه هر جستجو،')
+    console.log('  و از دروازه می‌گذرد: حداقل ' + fa(ALERT_MIN_GAP_MS / 3600000) + ' ساعت فاصله، حداکثر ' + fa(ALERT_PER_DAY) + ' در ۲۴ ساعت.')
+    const last = await lastSentAt(arg, 'alert')
+    console.log('  آخرین هشدارِ ثبت‌شده: ' + (last ? when(last) : 'هیچ‌وقت (لاگ از ۸ اکتبر شروع شده)'))
+    const g = await canSendSms(arg, 'alert', { minGapMs: ALERT_MIN_GAP_MS, perDay: ALERT_PER_DAY })
+    console.log('  حکمِ دروازه همین الان: ' + (g.ok ? 'مجاز (اگر آگهیِ تازهٔ منطبق باشد یک پیامک می‌رود)' : 'مسدود — ' + g.reason))
   }
 } catch (e) { console.log('  خطا: ' + (e?.message || e)) }
 
