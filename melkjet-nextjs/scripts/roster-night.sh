@@ -23,7 +23,12 @@ if [ ${#LOGS[@]} -eq 0 ]; then
   exit 1
 fi
 echo "لاگ‌ها: ${LOGS[*]}"
-[ -n "$DAY" ] && echo "فیلترِ روز: $DAY"
+if [ -n "$DAY" ]; then
+  echo "فیلترِ روز: $DAY"
+else
+  echo "⚠ بدونِ آرگومانِ روز، همهٔ عددها «تجمعیِ کلِ لاگ»اند — نه یک شب."
+  echo "  برای یک شب:  sudo bash scripts/roster-night.sh 2026-10-08"
+fi
 
 # فیلترِ روز فقط اگر pm2 log_date_format فعال باشد؛ وگرنه کلِ فایل.
 feed() {
@@ -44,18 +49,31 @@ printf '  %-34s %6s\n' "اسکنِ ناقصِ پروفایل"     "$(n 'اسکن
 
 echo
 echo "— بارِ تازه‌سازیِ هر پاس (سقفِ مشتق‌شده از ردیف‌ها) —"
-REFRESH=$(feed | grep -F -- '[roster] incremental: refreshing' | sed -E 's/.*refreshing ([0-9]+) stale rows of ([0-9]+) \(cap ([0-9]+)\).*/\1 \2 \3/')
-if [ -z "$REFRESH" ]; then
+ALL_REF=$(feed | grep -F -- '[roster] incremental: refreshing')
+NREF=$(printf '%s' "$ALL_REF" | grep -c . || true)
+# خطوطِ «فرمتِ تازه» (دارای cap) — تنها جایی که سقف و کلِ ردیف‌ها خوانا است
+NEW_REF=$(printf '%s\n' "$ALL_REF" | sed -nE 's/.*refreshing ([0-9]+) stale rows of ([0-9]+) \(cap ([0-9]+)\).*/\1 \2 \3/p')
+# خطوطِ «فرمتِ قدیم» — فقط تعدادِ ردیفِ تازه‌شده را دارند
+OLD_REF=$(printf '%s\n' "$ALL_REF" | sed -nE 's/.*refreshing ([0-9]+) stale rows$/\1/p')
+if [ "$NREF" -eq 0 ]; then
   echo "  هیچ خطی نبود — یعنی هیچ پاسی ردیفِ کهنه نداشته، یا لاگ چرخیده."
 else
-  echo "$REFRESH" | awk '{ r+=$1; if ($3>mc) mc=$3; n++ } END {
-    printf "  %-30s %6d\n", "پاس‌های دارای تازه‌سازی", n
-    printf "  %-30s %6d\n", "جمعِ ردیف‌های تازه‌شده", r
-    printf "  %-30s %6.1f\n", "میانگین در هر پاس", r/n
-    printf "  %-30s %6d\n", "بیشترین سقفِ دیده‌شده", mc }'
-  # میانه با sort، چون asort فقط در gawk هست و سرور ممکن است mawk باشد
-  MED=$(echo "$REFRESH" | awk '{print $1}' | sort -n | awk '{v[NR]=$1} END{print v[int((NR+1)/2)]}')
-  printf '  %-30s %6s\n' "میانهٔ هر پاس" "$MED"
+  printf '  %-30s %6s\n' "خطِ تازه‌سازی (کل)" "$NREF"
+  if [ -n "$NEW_REF" ]; then
+    printf '%s\n' "$NEW_REF" | awk '{ r+=$1; t+=$2; if ($3+0>mc) mc=$3+0; n++ } END {
+      printf "  %-30s %6d\n", "فرمتِ تازه (دارای cap)", n
+      printf "  %-30s %6.1f\n", "میانگینِ ردیف در هر پاس", r/n
+      printf "  %-30s %6.1f\n", "میانگینِ کلِ ردیفِ آژانس", t/n
+      printf "  %-30s %6d\n", "بیشترین capِ دیده‌شده", mc }'
+    MED=$(printf '%s\n' "$NEW_REF" | awk '{print $1}' | sort -n | awk '{v[NR]=$1} END{print v[int((NR+1)/2)]}')
+    printf '  %-30s %6s\n' "میانهٔ ردیف در هر پاس" "$MED"
+  else
+    echo "  هیچ خطِ فرمتِ تازه‌ای نیست — این دیپلوی تازه رفته؛ فردا دوباره بزن."
+  fi
+  if [ -n "$OLD_REF" ]; then
+    printf '%s\n' "$OLD_REF" | awk '{ r+=$1; n++ } END {
+      printf "  %-30s %6d   %s\n", "فرمتِ قدیم (بی‌cap)", n, "میانگین " sprintf("%.1f", r/n) " ردیف" }'
+  fi
 fi
 
 echo
@@ -74,7 +92,8 @@ echo "  عقب‌نشینیِ نرخ (پیامِ کند/محدودِ دیوار)
 
 echo
 echo "— ری‌استارتِ اینستنسِ ۰ وسطِ کار (هر دیپلوی یکی) —"
-printf '  %-34s %6s\n' "سینکِ نیمه‌کاره از ری‌استارت" "$(n 'ری‌استارتِ سرور نیمه‌کاره')"
+echo "  (شمارشِ «سینکِ نیمه‌کارهٔ ری‌استارت» این‌جا نیست: آن پیام فقط در lastError ذخیره"
+echo "   می‌شود و لاگ نمی‌شود — عددش را roster-health از خودِ رکوردها می‌دهد.)"
 printf '  %-34s %6s\n' "scheduler armed (بوتِ کرون)"  "$(n 'scheduler armed')"
 
 echo
