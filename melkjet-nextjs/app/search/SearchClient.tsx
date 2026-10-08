@@ -8,6 +8,7 @@ import PromoBadge from '@/app/components/PromoBadge'
 import BannerSlot from '@/app/components/BannerSlot'
 import CompareButton from '@/app/components/CompareButton'
 import { IconSvg } from '../components/GlassIcon'
+import PhotoFade from '../components/PhotoFade'
 import CardImg from '@/app/components/CardImg'
 import LikeHeart from '@/app/components/home/LikeHeart'
 import TileBase from '@/app/components/TileBase'
@@ -624,7 +625,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
                   <Link href={listingHref(p.id, p.title, p.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ height: 156, background: p.img, position: 'relative', overflow: 'hidden', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
                       {p.image && <CardImg src={p.image} alt={p.title} eager={index < 4} priority={index < 2 ? 'high' : 'low'} />}
-                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
+                      <PhotoFade />
                       {/* فاز ۲۰۸ (فیدبک: «آگهی‌ها معلوم نیست برای کی هست») — سنِ آگهی از مهرِ واقعیِ ثبت */}
                       {p.scrapedAt > 0 && (
                         <span suppressHydrationWarning style={{ position: 'absolute', bottom: 9, insetInlineStart: 10, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3.5px 9px', borderRadius: 999, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1px', ...(isFreshListing(p.scrapedAt) ? { background: 'linear-gradient(140deg,var(--gold2,#e8cf7a),var(--gold))', color: '#16140f', boxShadow: '0 2px 10px -2px rgba(201,168,76,0.55)' } : { background: 'rgba(10,9,8,0.72)', color: '#f0ede6', border: '1px solid rgba(255,255,255,0.18)', backdropFilter: 'blur(6px)' }) }}>

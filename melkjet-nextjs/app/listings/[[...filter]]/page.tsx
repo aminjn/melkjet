@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import CardImg from '@/app/components/CardImg'
+import PhotoFade from '@/app/components/PhotoFade'
 import { listItemsStable } from '@/app/lib/scraper-store'
 import { derivedFrom } from '@/app/lib/derived-cache'
 import { gradientFor } from '@/app/lib/content-display'
@@ -108,6 +109,7 @@ export default async function Listings({ params, searchParams }: { params: Promi
               <Link key={it.id} href={listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
                 <div style={{ height: 152, position: 'relative', overflow: 'hidden', background: it.image ? undefined : gradientFor(it.title) }}>
                   {it.image && <CardImg src={it.image} alt={it.title} eager={i < 3} priority={i < 2 ? 'high' : undefined} />}
+                  <PhotoFade />
                 </div>
                 <div style={{ padding: '13px 15px' }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gold)' }}>{money(it.price) || '—'}</div>

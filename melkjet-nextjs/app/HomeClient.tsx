@@ -7,6 +7,7 @@ import GlassIcon, { IconSvg, type IconName } from './components/GlassIcon'
 import Footer from './components/Footer'
 import PropertyCard from './components/PropertyCard'
 import PromoBadge from './components/PromoBadge'
+import PhotoFade from './components/PhotoFade'
 import PromoSpotlight from './components/PromoSpotlight'
 import HeroSearch from './components/home/HeroSearch'
 import FaqAccordion from './components/home/FaqAccordion'
@@ -38,8 +39,6 @@ const faqs = [
   { q: 'آیا ثبت آگهی و استفاده رایگان است؟', a: 'پلن رایگان برای جستجو، ذخیره و دریافت پیشنهادهای هوشمند در دسترس است. مشاوران و آژانس‌ها می‌توانند با پلن‌های حرفه‌ای به CRM، اتوماسیون و ابزارهای بازاریابی دسترسی پیدا کنند.' },
   { q: 'دستیار هوشمند چه کارهایی انجام می‌دهد؟', a: 'دستیار همیشگی ملک‌جت در خرید، فروش، اجاره، تحلیل قیمت، مذاکره و راهنمایی حقوقی کنار توست و ۲۴ ساعته پاسخ‌گوست.' }
 ]
-// ماسکِ محوشدنِ کارت‌های «نگاهِ اول»ِ هیرو — عکس از ۴۶٪ به پایین کم‌کم می‌رود تا صفر.
-const PEEK_MASK = 'linear-gradient(180deg,#000 0%,#000 46%,rgba(0,0,0,.42) 74%,transparent 100%)'
 const examples = ['آپارتمان نوساز در زعفرانیه با ویو', 'خانه زیر ۱۰ میلیارد برای سرمایه‌گذاری', 'اجاره ۲ خوابه نزدیک مترو ونک', 'ویلا در شمال با باغ']
 const materials: { l: string; ic: IconName; bg: string; color: string }[] = [
   { l: 'آهن و میلگرد', ic: 'bars', bg: 'rgba(122,143,174,0.15)', color: '#7a8fae' },
@@ -164,11 +163,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
         <div className="mjhero-grid" style={{ position: 'relative', width: '100%', maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr', gap: 'clamp(30px,4vw,52px)', alignItems: 'center' }}>
           {/* ستونِ متن (سمتِ راست/آغاز در RTL) */}
           <div style={{ textAlign: 'right' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, border: '1px solid rgba(247,222,146,.4)', background: 'rgba(247,222,146,.09)', fontSize: 13, fontWeight: 700, color: '#F7DE92' }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#F7DE92', boxShadow: '0 0 0 4px rgba(247,222,146,.18)', animation: 'glow 2s infinite', display: 'inline-block' }}></span>
-              سیستمِ جامعِ املاک، ساختمان و مصالح
-            </div>
-            <h1 style={{ marginTop: 20, fontSize: 'clamp(34px,5.6vw,62px)', lineHeight: 1.14, fontWeight: 800, letterSpacing: '-1px', color: '#F6F1E6', textShadow: '0 2px 30px rgba(0,0,0,.4)' }}>
+            <h1 style={{ marginTop: 0, fontSize: 'clamp(34px,5.6vw,62px)', lineHeight: 1.14, fontWeight: 800, letterSpacing: '-1px', color: '#F6F1E6', textShadow: '0 2px 30px rgba(0,0,0,.4)' }}>
               خانه‌ی بعدی‌ات،<br />
               <span style={{ background: 'linear-gradient(120deg,#F7DE92,#D9AD3E)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>هوشمندانه</span> انتخاب می‌شود
             </h1>
@@ -205,9 +200,8 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
                     aria-label={it.title}
                     style={{ position: 'relative', display: 'block', flex: '1 1 0', minWidth: 0, maxWidth: 268, aspectRatio: '16 / 10', borderRadius: 18, overflow: 'hidden', border: '1px solid rgba(247,222,146,.26)', boxShadow: '0 26px 60px -26px rgba(0,0,0,.8)', textDecoration: 'none' }}
                   >
-                    <span aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${it.image})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(16px)', transform: 'scale(1.18)' }} />
-                    <span aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${it.image})`, backgroundSize: 'cover', backgroundPosition: 'center', maskImage: PEEK_MASK, WebkitMaskImage: PEEK_MASK }} />
-                    <span aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,transparent 38%,rgba(8,11,20,.42) 76%,rgba(8,11,20,.88) 100%)' }} />
+                    <span aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${it.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                    <PhotoFade to="#080b14" blur={34} height="64%" />
                   </Link>
                 ))}
               </div>
@@ -321,7 +315,8 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 18 }}>
           {investCards.map(o => (
             <Link key={o.id} href={listingHref(o.id, o.title, o.location)} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden' }}>
-              <div style={{ position: 'relative', height: 150, background: o.img }}>
+              <div style={{ position: 'relative', height: 150, overflow: 'hidden', background: o.img }}>
+                <PhotoFade />
                 {o.promoted && <span style={{ position: 'absolute', top: 12, left: 12, zIndex: 2 }}><PromoBadge kind={o.promoKind} /></span>}
               </div>
               <div style={{ padding: '16px 18px' }}>

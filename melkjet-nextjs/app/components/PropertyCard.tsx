@@ -2,6 +2,7 @@ import Link from 'next/link'
 import CompareButton from './CompareButton'
 import LikeHeart from './home/LikeHeart'
 import PromoBadge from './PromoBadge'
+import PhotoFade from './PhotoFade'
 import SeenBadge from './SeenBadge'
 import { IconSvg } from './GlassIcon'
 import { listingHref } from '@/app/lib/listing-url'
@@ -27,7 +28,7 @@ export default function PropertyCard({ id = '1', title, location, price, size, b
     <Link href={listingHref(id, title, location)} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', transition: '.2s' }}>
       <div style={{ position: 'relative', height: 184, background: img }}>
         <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.025) 9px,rgba(255,255,255,0.025) 10px)' }}></div>
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.35),transparent 55%)' }}></div>
+        <PhotoFade />
         {promoKind ? (
           <span style={{ position: 'absolute', top: 12, right: 12 }}><PromoBadge kind={promoKind} /></span>
         ) : tag && (
