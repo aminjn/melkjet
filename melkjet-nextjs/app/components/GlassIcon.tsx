@@ -17,6 +17,7 @@ export type IconName =
   | 'home' | 'key' | 'people' | 'crane' | 'bricks' | 'store' | 'bars' | 'spark'
   | 'ruler' | 'briefcase' | 'article' | 'trend' | 'dashboard' | 'office' | 'search' | 'plus'
   | 'brain' | 'link' | 'chartDown' | 'tools' | 'pin'
+  | 'layers' | 'clipboard' | 'scale' | 'bank' | 'doc' | 'crown' | 'star' | 'sun' | 'moon'
 
 // مسیرها همه ۲۴×۲۴، فقط stroke — بدونِ fill و بدونِ رنگِ سخت، تا رنگ از قاب بیاید.
 const ICONS: Record<IconName, ReactNode> = {
@@ -41,6 +42,15 @@ const ICONS: Record<IconName, ReactNode> = {
   chartDown: <><path d="M3.5 6.5 9 13l3.6-3.4 7.9 8.4" /><path d="M20.5 18.4h-4.9v-4.9" /><path d="M3.5 20.5h17" /></>,
   tools: <><path d="M14.2 6.3a3.4 3.4 0 0 1 4.6 4.6l-8.4 8.4-4.6-4.6z" /><path d="M5.8 14.7 4 20.5l5.8-1.8" /><path d="M12.4 8.1l3.5 3.5" /></>,
   pin: <><path d="M12 21s6.5-6 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15 12 21 12 21z" /><circle cx="12" cy="10" r="2.4" /></>,
+  layers: <><path d="M12 3.5 21 8l-9 4.5L3 8z" /><path d="M3.5 12.2 12 16.5l8.5-4.3" /><path d="M3.5 16.2 12 20.5l8.5-4.3" /></>,
+  clipboard: <><rect x="5" y="4.5" width="14" height="16" rx="2.2" /><path d="M9 4.5V3.6c0-.6.5-1.1 1.1-1.1h3.8c.6 0 1.1.5 1.1 1.1v.9" /><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4" /></>,
+  scale: <><path d="M12 4v16M7 20h10" /><path d="M4.5 8h15" /><path d="M7.2 8 4.5 13.5h5.4z" /><path d="M16.8 8l-2.7 5.5h5.4z" /></>,
+  bank: <><path d="M3.5 9.5 12 4.5l8.5 5" /><path d="M5.5 9.5V17M10 9.5V17M14 9.5V17M18.5 9.5V17" /><path d="M3 20h18" /></>,
+  doc: <><path d="M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z" /><path d="M13.5 3.5V9H19" /><path d="M8.5 13h7M8.5 16.5h5" /></>,
+  crown: <><path d="M4 17.5 3 7l5 3.5L12 4l4 6.5L21 7l-1 10.5z" /><path d="M4 20.5h16" /></>,
+  star: <><path d="m12 3.6 2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.8l5.9-.8z" /></>,
+  sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4" /></>,
+  moon: <><path d="M20 13.5A8 8 0 0 1 10.5 4a8 8 0 1 0 9.5 9.5z" /></>,
 }
 
 export default function GlassIcon({

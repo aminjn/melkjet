@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { IconSvg } from './GlassIcon'
 
 // فاز ۱۲۹ — یک منبعِ حقیقت برای تم در کلِ پروژه:
 // بدونِ انتخابِ صریح، تم از ساعتِ کاربر می‌آید (اسکریپتِ headِ layout)؛ این تابع انتخابِ دستی را
@@ -10,7 +11,7 @@ export function applyTheme(next: 'light' | 'dark') {
 }
 export const isLightNow = () => typeof document !== 'undefined' && document.documentElement.classList.contains('light')
 
-export default function ThemeToggle({ size = 40 }: { size?: number }) {
+export default function ThemeToggle({ size = 40, onHero = false }: { size?: number; onHero?: boolean }) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
 
   useEffect(() => {
@@ -32,14 +33,18 @@ export default function ThemeToggle({ size = 40 }: { size?: number }) {
       title={theme === 'dark' ? 'تمِ روز' : 'تمِ شب'}
       style={{
         width: size, height: size,
-        borderRadius: 11, border: '1px solid var(--line)',
-        background: 'var(--surface)', color: 'var(--text)',
-        cursor: 'pointer', fontSize: 16,
+        borderRadius: 11,
+        // ۸ اکتبر — روی هیرو قابِ سفیدِ var(--surface) وسطِ نوارِ تیره بد می‌زد؛ شیشه‌ای شد.
+        border: `1px solid ${onHero ? 'rgba(243,237,224,.38)' : 'var(--line)'}`,
+        background: onHero ? 'rgba(255,255,255,.08)' : 'var(--surface)',
+        color: onHero ? '#f3ede0' : 'var(--text)',
+        backdropFilter: onHero ? 'blur(8px)' : undefined, WebkitBackdropFilter: onHero ? 'blur(8px)' : undefined,
+        cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: '.18s', flexShrink: 0
       }}
     >
-      {theme === 'dark' ? '☀' : '☾'}
+      <IconSvg name={theme === 'dark' ? 'sun' : 'moon'} size={Math.round(size * 0.44)} />
     </button>
   )
 }

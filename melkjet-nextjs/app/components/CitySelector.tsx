@@ -89,7 +89,7 @@ export function writeCity(city: string) {
   window.dispatchEvent(new CustomEvent('mj-city-updated'))
 }
 
-export default function CitySelector() {
+export default function CitySelector({ onHero = false }: { onHero?: boolean } = {}) {
   const [city, setCity] = useState('')
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -124,20 +124,24 @@ export default function CitySelector() {
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <button onClick={() => setOpen(o => !o)} title="انتخاب شهر" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px', borderRadius: 11, border: `1px solid ${city ? 'var(--gold)' : 'var(--line2)'}`, background: city ? 'var(--goldDim)' : 'var(--surface)', color: city ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+      <button onClick={() => setOpen(o => !o)} title="انتخاب شهر" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px', borderRadius: 11,
+        ...(onHero
+          ? { border: `1px solid ${city ? 'rgba(247,222,146,.55)' : 'rgba(243,237,224,.34)'}`, background: 'rgba(255,255,255,.08)', color: city ? '#f5d982' : 'rgba(243,237,224,.9)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }
+          : { border: `1px solid ${city ? 'var(--gold)' : 'var(--line2)'}`, background: city ? 'var(--goldDim)' : 'var(--surface)', color: city ? 'var(--gold)' : 'var(--muted)' }),
+        cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
         <IconSvg name="pin" size={14} color="var(--gold)" />
         <span>{city || 'انتخاب شهر'}</span>
         <span style={{ fontSize: 10, opacity: .7 }}>▾</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: '110%', insetInlineStart: 0, zIndex: 100, width: 230, background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 12, boxShadow: '0 14px 40px -12px rgba(0,0,0,.5)', padding: 6 }}>
-          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="جست‌وجوی شهر…" style={{ width: '100%', boxSizing: 'border-box', height: 36, padding: '0 11px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 6 }} />
+        <div style={{ position: 'absolute', top: '110%', insetInlineStart: 0, zIndex: 100, width: 230, background: onHero ? 'rgba(14,18,28,.95)' : 'var(--surface)', border: `1px solid ${onHero ? 'rgba(243,237,224,.16)' : 'var(--line2)'}`, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: 12, boxShadow: '0 14px 40px -12px rgba(0,0,0,.5)', padding: 6 }}>
+          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="جست‌وجوی شهر…" style={{ width: '100%', boxSizing: 'border-box', height: 36, padding: '0 11px', borderRadius: 9, background: onHero ? 'rgba(255,255,255,.08)' : 'var(--bg2)', border: `1px solid ${onHero ? 'rgba(243,237,224,.2)' : 'var(--line2)'}`, color: onHero ? '#f3ede0' : 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 6 }} />
           <div style={{ maxHeight: 300, overflowY: 'auto' }}>
             {filtered.provinceHit && <div style={{ padding: '6px 11px 4px', fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>استانِ {filtered.provinceHit} — {filtered.cities.length.toLocaleString('fa-IR')} شهر</div>}
             {filtered.cities.length === 0 ? (
-              <div style={{ padding: '14px 11px', color: 'var(--muted)', fontSize: 12.5, textAlign: 'center' }}>شهری یافت نشد</div>
+              <div style={{ padding: '14px 11px', color: onHero ? 'rgba(243,237,224,.7)' : 'var(--muted)', fontSize: 12.5, textAlign: 'center' }}>شهری یافت نشد</div>
             ) : filtered.cities.map(c => (
-              <button key={c} onClick={() => pick(c)} style={{ display: 'block', width: '100%', textAlign: 'right', padding: '9px 11px', borderRadius: 8, border: 'none', background: city === c ? 'var(--goldDim)' : 'transparent', color: city === c ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: city === c ? 700 : 500 }}>{c}</button>
+              <button key={c} onClick={() => pick(c)} style={{ display: 'block', width: '100%', textAlign: 'right', padding: '9px 11px', borderRadius: 8, border: 'none', background: city === c ? (onHero ? 'rgba(247,222,146,.14)' : 'var(--goldDim)') : 'transparent', color: city === c ? (onHero ? '#f5d982' : 'var(--gold)') : (onHero ? '#f3ede0' : 'var(--text)'), cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: city === c ? 700 : 500 }}>{c}</button>
             ))}
           </div>
         </div>
