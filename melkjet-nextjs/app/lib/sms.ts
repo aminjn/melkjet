@@ -9,7 +9,10 @@ import { FA_DIGITS, faDigit } from '../lib/digits'
 // یک «پترنِ اتوماسیون» با متغیرِ آزاد ثبت کرده باشد، از آن استفاده می‌شود.
 // text: متنِ کامل (برای خطِ تبلیغاتی/bulk). varValue: مقدارِ کوتاهِ متغیرِ پترنِ اتوماسیون
 // (مثلاً نامِ گیرنده) برای خطِ خدماتی. اگر automationPattern تنظیم باشد، پترن استفاده می‌شود.
-export async function sendServiceSms(phone: string, text: string, summary = 'اتوماسیون ملک‌جت', varValue?: string): Promise<{ ok: boolean; error?: string }> {
+// ۸ اکتبر — هر ارسال ثبت می‌شود. بدونِ این، «چرا این کاربر ۱۵۰ پیامک گرفت؟» از دادهٔ
+// خودمان بی‌جواب بود و باید از ردِ کوتاه‌کنندهٔ لینک حدس می‌زدیم (که برای متنِ بی‌لینک خالی است).
+// کانال از صدازننده می‌آید تا در ممیزی معلوم باشد کدام سامانه فرستاده.
+export async function sendServiceSms(phone: string, text: string, summary = 'اتوماسیون ملک‌جت', varValue?: string, channel: import('./sms-log').SmsChannel = 'other'): Promise<{ ok: boolean; error?: string }> {
   const a = getAdminData()
   const apiKey = process.env.IPPANEL_API_KEY || a.ippanel?.apiKey
   const sender = process.env.IPPANEL_SENDER || a.ippanel?.sender
@@ -36,8 +39,14 @@ export async function sendServiceSms(phone: string, text: string, summary = 'ا�
     }
     const res = await shecanRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
     const ok = res.status >= 200 && res.status < 300
+    const { logSms } = await import('./sms-log')
+    await logSms(recipient, channel, ok, ok ? summary : `HTTP ${res.status}: ${String(res.body || '').slice(0, 120)}`)
     return ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` }
-  } catch (e: any) { return { ok: false, error: e?.message || 'خطا' } }
+  } catch (e: any) {
+    const { logSms } = await import('./sms-log')
+    await logSms(recipient, channel, false, e?.message || 'خطا')
+    return { ok: false, error: e?.message || 'خطا' }
+  }
 }
 
 // ─── فاز ۲۹۷ب — پیامکِ سایت‌ساز: پترنِ «اختصاصیِ» خودش ───────────────────────────
@@ -69,9 +78,11 @@ export async function sendAutoSiteSms(phone: string, name: string, url: string):
       const res = await shecanRequest('https://api2.ippanel.com/api/v1/sms/pattern/normal/send', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
       const ok = res.status >= 200 && res.status < 300
       // فاز ۲۹۷ن — پاسخِ IPPanel علتِ دقیق را می‌گوید (پترن تایید نشده/متغیر غلط/…) — دور نریز.
+      const { logSms } = await import('./sms-log')
+      await logSms(recipient, 'autosite', ok, ok ? 'پترنِ سایت‌ساز' : `HTTP ${res.status}: ${String(res.body || '').slice(0, 120)}`)
       return ok ? { ok: true } : { ok: false, error: `HTTP ${res.status} (پترن سایت‌ساز): ${String(res.body || '').slice(0, 160)}` }
     }
     // بدونِ پترنِ اختصاصی → متنِ آزاد (خطِ تبلیغاتی لازم دارد؛ خطِ خدماتی رد می‌کند)
-    return sendServiceSms(recipient, `سلام ${name} عزیز؛ سایت اختصاصی شما در ملک‌جت آماده شد:\n${url}\nملک‌جت`, 'سایت‌ساز ملک‌جت', name)
+    return sendServiceSms(recipient, `سلام ${name} عزیز؛ سایت اختصاصی شما در ملک‌جت آماده شد:\n${url}\nملک‌جت`, 'سایت‌ساز ملک‌جت', name, 'autosite')
   } catch (e: any) { return { ok: false, error: e?.message || 'خطا' } }
 }

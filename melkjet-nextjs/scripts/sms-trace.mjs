@@ -30,6 +30,31 @@ const when = t => new Date(t).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' 
 console.log('شماره: ' + arg)
 console.log('')
 
+// ۰) لاگِ مرکزی (از ۸ اکتبر). برای پیامک‌های پیش از آن خالی است — آن‌ها فقط ردِ ترکر دارند.
+console.log('— لاگِ مرکزیِ پیامک —')
+try {
+  const { recentForPhone, countSince, topRecipients } = await import('../app/lib/sms-log.ts')
+  const rows = await recentForPhone(arg, 500)
+  if (!rows.length) console.log('  خالی — یا پیش از راه‌اندازیِ لاگ بوده، یا از این شماره ارسالی نرفته.')
+  else {
+    const d1 = await countSince(arg, Date.now() - 86400000)
+    const d7 = await countSince(arg, Date.now() - 7 * 86400000)
+    console.log('  کل: ' + fa(rows.length) + '   ۲۴ ساعت: ' + fa(d1) + '   ۷ روز: ' + fa(d7))
+    const byCh = new Map()
+    for (const r of rows) byCh.set(r.ch, (byCh.get(r.ch) || 0) + 1)
+    for (const [c, n] of [...byCh.entries()].sort((a, b) => b[1] - a[1])) console.log('    ' + String(n).padStart(5) + '  ' + c)
+    console.log('  ده موردِ آخر:')
+    for (const r of rows.slice(0, 10)) console.log('    ' + when(r.at) + '  ' + r.ch + (r.ok ? '  ✓' : '  ✗ ' + (r.note || '')))
+  }
+  const top = await topRecipients(86400000, 8)
+  if (top.length) {
+    console.log('')
+    console.log('  پرگیرنده‌ترین شماره‌ها در ۲۴ ساعت (برای دیدنِ حادثه پیش از شکایت):')
+    for (const t of top) console.log('    ' + t.phone + '  ' + fa(t.n) + '  (' + t.chans + ')')
+  }
+} catch (e) { console.log('  خطا: ' + (e?.message || e)) }
+console.log('')
+
 // ۱) ردِ پای ترکر — تنها سابقهٔ واقعیِ ارسال که داریم
 console.log('— پیامک‌های لینک‌دار (از ثبتِ کوتاه‌کنندهٔ لینک) —')
 try {

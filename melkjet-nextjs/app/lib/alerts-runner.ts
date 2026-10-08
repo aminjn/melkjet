@@ -39,9 +39,20 @@ function matches(s: SavedSearch, it: any): boolean {
   return true
 }
 
+// سقفِ هشدار. این عددها «تصمیمِ محصول»اند نه جزئیاتِ فنی، پس این‌جا و با دلیل نوشته شدند:
+// حادثهٔ ۸ اکتبر — کاربری با ۴ جستجوی ذخیره‌شده (یکی بدونِ محله و سقفِ قیمت) در نیم‌روز
+// بیش از ۱۵۰ پیامک گرفت، چون چرخه هر ۵ دقیقه اجرا می‌شود و به ازای «هر جستجو» یک پیامک
+// می‌رفت، بی‌هیچ سقفی. سقفِ نظری برای همان کاربر ۱٬۱۵۲ پیامک در روز بود.
+const ALERT_MIN_GAP_MS = 12 * 3600_000   // حداقل فاصلهٔ دو پیامکِ هشدار به یک نفر
+const ALERT_PER_DAY = 2                  // و در هر ۲۴ ساعت حداکثر دو تا
+
 async function sendSms(phone: string, label: string) {
   const admin = getAdminData()
   if (!admin.alerts?.enabled) return
+  // دروازه پیش از هر کارِ دیگر — وگرنه همان حلقهٔ قبلی است با متنِ تازه.
+  const { canSendSms, logSms } = await import('./sms-log')
+  const gate = await canSendSms(phone, 'alert', { minGapMs: ALERT_MIN_GAP_MS, perDay: ALERT_PER_DAY })
+  if (!gate.ok) return
   const apiKey = process.env.IPPANEL_API_KEY || admin.ippanel?.apiKey
   const sender = process.env.IPPANEL_SENDER || admin.ippanel?.sender
   if (!apiKey || !sender) return
@@ -54,8 +65,10 @@ async function sendSms(phone: string, label: string) {
     let url: string, body: any
     if (patternCode) { const { linkVarName, trackAndShorten, siteBase } = await import('./shortener'); const variable: any = { [patternVar]: (label || 'موردِنظر') }; const lv = linkVarName(); if (lv) variable[lv] = await trackAndShorten(siteBase() + '/buyer', { channel: 'alert', phone: recipient }); url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'; body = { code: patternCode, sender, recipient, variable } }
     else { const { shortenLinksInText } = await import('./shortener'); const msg = await shortenLinksInText(text, { channel: 'alert', phone: recipient }); url = 'https://api2.ippanel.com/api/v1/sms/send/webservice/single'; body = { sender, recipient: [recipient], message: msg, description: { summary: 'هشدار آگهی ملک‌جت', count_recipient: '1' } } }
-    await shecanRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
-  } catch { /* بی‌صدا */ }
+    const res = await shecanRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
+    const ok = res.status >= 200 && res.status < 300
+    await logSms(recipient, 'alert', ok, ok ? (label || '') : `HTTP ${res.status}`)
+  } catch (e) { await logSms(recipient, 'alert', false, (e as Error)?.message || 'خطای شبکه') }
 }
 
 // چرخهٔ هشدار: برای هر جستجوی ذخیره‌شده، آگهی‌های جدیدِ منطبق را پیدا و کاربر را مطلع می‌کند.
@@ -64,6 +77,7 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
   if (!searches.length) return { searches: 0, notified: 0 }
   const items = await listItems('listing', { publicOnly: true })   // مرتب بر اساسِ scrapedAt نزولی
   let notified = 0
+  const smsFor = new Map<string, string>()   // شماره → برچسبِ نخستین جستجوی منطبق
   for (const s of searches) {
     const fresh: any[] = []
     for (const it of items) {
@@ -77,7 +91,9 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
         const txt = `🏠 آگهیِ جدید مطابقِ جستجوی شما${s.label ? ` (${s.label})` : ''}:\n«${it.title}»\n${it.price ? it.price + ' تومان\n' : ''}مشاهده: melkjet.com${listingHref(it.id, it.title, it.location)}`
         try { await pushSystemMessage(s.owner, name, txt) } catch {}
       }
-      await sendSms(s.owner, s.label)
+      // پیامک «به ازای هر کاربر» جمع می‌شود، نه به ازای هر جستجو: کاربرِ حادثه دو جستجوی
+      // عیناً تکراری داشت، پس یک آگهیِ تازه هم‌زمان چند پیامک می‌فرستاد.
+      if (!smsFor.has(s.owner)) smsFor.set(s.owner, s.label || '')
       // پوش‌نوتیفیکیشن (حتی اگر اپ بسته باشد)
       const top = fresh[0]
       const subs = listForPhone(s.owner)
@@ -91,5 +107,7 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
     }
     await setLastCheck(s.id, now)
   }
+  // یک پیامک برای هر کاربر در این چرخه؛ دروازهٔ sms-log سقفِ روزانه و فاصله را هم اعمال می‌کند.
+  for (const [owner, label] of smsFor) await sendSms(owner, label)
   return { searches: searches.length, notified }
 }
