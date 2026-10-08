@@ -58,7 +58,7 @@ export const DEFAULT_SITE: SiteConfig = {
       { h: 'ملک‌جت', links: [{ t: 'درباره ما', href: '/about' }, { t: 'تماس با ما', href: '/contact' }, { t: 'قوانین و شرایط', href: '/terms' }, { t: 'حریم خصوصی', href: '/privacy' }, { t: 'سؤالات متداول', href: '/faq' }] },
     ],
     copyright: '© ۱۴۰۵ ملک‌جت · تمام حقوق محفوظ است',
-    tagline: 'ساخته‌شده با ✦ هوش مصنوعی',
+    tagline: 'ساخته‌شده با هوش مصنوعی',
     phone: '', email: '', address: '',
     instagram: '', telegram: '', whatsapp: '',
   },

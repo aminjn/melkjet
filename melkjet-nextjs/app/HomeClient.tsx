@@ -3,7 +3,7 @@
 // اجرا می‌شوند → main-thread و JavaScriptِ کلاینت به‌شدت کمتر.
 import Link from 'next/link'
 import Nav from './components/Nav'
-import GlassIcon, { type IconName } from './components/GlassIcon'
+import GlassIcon, { IconSvg, type IconName } from './components/GlassIcon'
 import Footer from './components/Footer'
 import PropertyCard from './components/PropertyCard'
 import PromoBadge from './components/PromoBadge'
@@ -27,10 +27,10 @@ const hoods = [
   { n: 'لواسان', img: 'linear-gradient(135deg,#2f3a34,#1d231f)' },
   { n: 'میرداماد', img: 'linear-gradient(135deg,#3a3630,#241f1a)' },
 ]
-const modules = [
-  { ic: '◈', t: 'تحلیل ارزش واقعی', d: 'برآورد قیمت منصفانه بر اساس موقعیت، متراژ و داده‌های تاریخی، همراه با Confidence Score.', cta: 'محاسبه ارزش ملک' },
-  { ic: '◰', t: 'نقشه حرارتی بازار', d: 'میانگین قیمت، رشد، تقاضا و فرصت سرمایه‌گذاری هر محله را روی نقشه ببین.', cta: 'مشاهده نقشه' },
-  { ic: '◴', t: 'پیش‌بینی آینده بازار', d: 'روند رشد، احتمال کاهش و میزان ریسک هر منطقه را پیش از تصمیم بدان.', cta: 'پیش‌بینی منطقه' }
+const modules: { ic: IconName; t: string; d: string; cta: string }[] = [
+  { ic: 'scale', t: 'تحلیل ارزش واقعی', d: 'برآورد قیمت منصفانه بر اساس موقعیت، متراژ و داده‌های تاریخی، همراه با Confidence Score.', cta: 'محاسبه ارزش ملک' },
+  { ic: 'map', t: 'نقشه حرارتی بازار', d: 'میانگین قیمت، رشد، تقاضا و فرصت سرمایه‌گذاری هر محله را روی نقشه ببین.', cta: 'مشاهده نقشه' },
+  { ic: 'trend', t: 'پیش‌بینی آینده بازار', d: 'روند رشد، احتمال کاهش و میزان ریسک هر منطقه را پیش از تصمیم بدان.', cta: 'پیش‌بینی منطقه' }
 ]
 const faqs = [
   { q: 'جستجوی هوشمند ملک‌جت چطور کار می‌کند؟', a: 'کافی‌ست نیازت را به زبان طبیعی بنویسی؛ هوش مصنوعی منظور تو را تحلیل می‌کند، در صورت نیاز سؤال تکمیلی می‌پرسد و بهترین فایل‌ها را همراه با دلیل انتخاب نمایش می‌دهد.' },
@@ -38,14 +38,16 @@ const faqs = [
   { q: 'آیا ثبت آگهی و استفاده رایگان است؟', a: 'پلن رایگان برای جستجو، ذخیره و دریافت پیشنهادهای هوشمند در دسترس است. مشاوران و آژانس‌ها می‌توانند با پلن‌های حرفه‌ای به CRM، اتوماسیون و ابزارهای بازاریابی دسترسی پیدا کنند.' },
   { q: 'دستیار هوشمند چه کارهایی انجام می‌دهد؟', a: 'دستیار همیشگی ملک‌جت در خرید، فروش، اجاره، تحلیل قیمت، مذاکره و راهنمایی حقوقی کنار توست و ۲۴ ساعته پاسخ‌گوست.' }
 ]
+// ماسکِ محوشدنِ کارت‌های «نگاهِ اول»ِ هیرو — عکس از ۴۶٪ به پایین کم‌کم می‌رود تا صفر.
+const PEEK_MASK = 'linear-gradient(180deg,#000 0%,#000 46%,rgba(0,0,0,.42) 74%,transparent 100%)'
 const examples = ['آپارتمان نوساز در زعفرانیه با ویو', 'خانه زیر ۱۰ میلیارد برای سرمایه‌گذاری', 'اجاره ۲ خوابه نزدیک مترو ونک', 'ویلا در شمال با باغ']
-const materials = [
-  { l: 'آهن و میلگرد', ic: '▭', bg: 'rgba(122,143,174,0.15)', color: '#7a8fae' },
-  { l: 'سیمان و گچ', ic: '◳', bg: 'rgba(201,168,76,0.15)', color: 'var(--gold)' },
-  { l: 'کاشی و سرامیک', ic: '▦', bg: 'rgba(176,122,138,0.15)', color: '#b07a8a' },
-  { l: 'کابینت و دکور', ic: '◫', bg: 'rgba(122,168,143,0.15)', color: '#7aa88f' },
-  { l: 'شیرآلات', ic: '◌', bg: 'rgba(91,155,213,0.15)', color: '#5b9bd5' },
-  { l: 'سرمایش و گرمایش', ic: '❄', bg: 'rgba(155,122,208,0.15)', color: '#9b7ad0' },
+const materials: { l: string; ic: IconName; bg: string; color: string }[] = [
+  { l: 'آهن و میلگرد', ic: 'bars', bg: 'rgba(122,143,174,0.15)', color: '#7a8fae' },
+  { l: 'سیمان و گچ', ic: 'bricks', bg: 'rgba(201,168,76,0.15)', color: 'var(--gold)' },
+  { l: 'کاشی و سرامیک', ic: 'layers', bg: 'rgba(176,122,138,0.15)', color: '#b07a8a' },
+  { l: 'کابینت و دکور', ic: 'cabinet', bg: 'rgba(122,168,143,0.15)', color: '#7aa88f' },
+  { l: 'شیرآلات', ic: 'faucet', bg: 'rgba(91,155,213,0.15)', color: '#5b9bd5' },
+  { l: 'سرمایش و گرمایش', ic: 'snow', bg: 'rgba(155,122,208,0.15)', color: '#9b7ad0' },
 ]
 
 const faToEnDigits = (s: string) => (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
@@ -135,6 +137,11 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       }))
     : []   // بدونِ متخصصِ واقعی، «مشاوران برتر»ِ فیک نشان نده
 
+  // ۸ اکتبر (موکاپِ تازه) — دو کارتِ «نگاهِ اول» در پایینِ هیرو: عکسِ واقعیِ دو آگهیِ تازه که
+  // از پایین تار و محو می‌شوند و در خودِ هیرو حل می‌شوند. فقط آگهیِ عکس‌دار؛ کارتِ گرادیانیِ
+  // توخالی هیچ‌چیز به صفحه اضافه نمی‌کند، پس وقتی عکسی نیست اصلاً رندر نمی‌شود.
+  const heroPeek = listings.filter(it => !!it.image).slice(0, 2)
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', position: 'relative' }}>
       {/* فاز ۲۹۸ی۱۱ — ناوِ شفافِ شناور روی هیرو (مطابقِ موکاپ) */}
@@ -184,6 +191,27 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
                 </Link>
               ))}
             </div>
+
+            {/* نگاهِ اول — دو آگهیِ واقعی با لبهٔ محو/تار (طرحِ تازه). سه لایه: عکسِ تارِ
+                بزرگ‌شده در زیر، عکسِ شارپ با ماسکِ محوشدن از پایین روی آن، و روکشی که
+                باقی را به رنگِ خودِ هیرو می‌بَرد — پس کارت «در» صفحه حل می‌شود نه روی آن. */}
+            {heroPeek.length > 0 && (
+              <div className="mjhero-peek" style={{ display: 'flex', gap: 'clamp(12px,2vw,20px)', marginTop: 'clamp(24px,3.2vw,38px)' }}>
+                {heroPeek.map(it => (
+                  <Link
+                    key={it.id}
+                    href={listingHref(it.id, it.title, it.location)}
+                    title={it.title}
+                    aria-label={it.title}
+                    style={{ position: 'relative', display: 'block', flex: '1 1 0', minWidth: 0, maxWidth: 268, aspectRatio: '16 / 10', borderRadius: 18, overflow: 'hidden', border: '1px solid rgba(247,222,146,.26)', boxShadow: '0 26px 60px -26px rgba(0,0,0,.8)', textDecoration: 'none' }}
+                  >
+                    <span aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${it.image})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(16px)', transform: 'scale(1.18)' }} />
+                    <span aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${it.image})`, backgroundSize: 'cover', backgroundPosition: 'center', maskImage: PEEK_MASK, WebkitMaskImage: PEEK_MASK }} />
+                    <span aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,transparent 38%,rgba(8,11,20,.42) 76%,rgba(8,11,20,.88) 100%)' }} />
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ستونِ پنلِ جست‌وجو (سمتِ چپ/پایان) — پنلِ شیشه‌ای */}
@@ -201,7 +229,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       {/* همهٔ خدمات — ویترینِ جامعِ سیستم */}
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(40px,5vw,64px) 24px 0' }}>
         <div style={{ textAlign: 'center', maxWidth: 680, margin: '0 auto 34px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>◆ یک پلتفرم، همهٔ نیازها</div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}><IconSvg name="layers" size={14} /> یک پلتفرم، همهٔ نیازها</div>
           <h2 style={{ fontSize: 'clamp(24px,3.6vw,36px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>سیستمِ جامعِ املاک و ساختمان</h2>
           <p style={{ fontSize: 'clamp(14px,1.8vw,16px)', color: 'var(--muted)', marginTop: 12, lineHeight: 1.9 }}>از خرید و فروشِ ملک تا بازارِ مصالح، متخصصان، هوشِ مصنوعی و ابزارهای کاملِ کسب‌وکار — همه در ملک‌جت.</p>
         </div>
@@ -224,7 +252,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
               <GlassIcon name={s.ic as IconName} size={46} tint={s.c} />
               <div style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)' }}>{s.t}</div>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.85, flex: 1 }}>{s.d}</div>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)' }}>ورود ↗</div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: 'var(--gold)' }}>ورود <IconSvg name="arrowUpRight" size={13} /></div>
             </Link>
           ))}
         </div>
@@ -260,8 +288,8 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       {featuredCards.length > 0 && (
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(48px,6vw,80px) 24px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
-          <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>★ منتخب ملک‌جت</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>املاک ویژه و لوکس</h2></div>
-          <Link href="/search" style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>مشاهده همه ←</Link>
+          <div><div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}><IconSvg name="star" size={14} /> منتخب ملک‌جت</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>املاک ویژه و لوکس</h2></div>
+          <Link href="/search" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>مشاهده همه <IconSvg name="arrowLeft" size={13} /></Link>
         </div>
         <div className="mj-feat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>
           {featuredCards.map(p => (
@@ -275,7 +303,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       {trendingCards.length > 0 && (
         <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px clamp(48px,6vw,80px)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
-            <div><div style={{ fontSize: 13, fontWeight: 700, color: '#f08a6e', marginBottom: 8 }}>🔥 داغِ این روزها</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>آگهی‌های ترند</h2></div>
+            <div><div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#f08a6e', marginBottom: 8 }}><IconSvg name="fire" size={14} /> داغِ این روزها</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>آگهی‌های ترند</h2></div>
           </div>
           <div className="mj-feat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>
             {trendingCards.map(p => <PropertyCard key={p.id} {...p} />)}
@@ -287,8 +315,8 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       {investCards.length > 0 && (
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px clamp(48px,6vw,80px)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
-          <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>◈ بازده بالا</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>فرصت‌های سرمایه‌گذاری</h2></div>
-          <Link href="/owner" style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>میز کار سرمایه‌گذار ←</Link>
+          <div><div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}><IconSvg name="trend" size={14} /> بازده بالا</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>فرصت‌های سرمایه‌گذاری</h2></div>
+          <Link href="/owner" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>میز کار سرمایه‌گذار <IconSvg name="arrowLeft" size={13} /></Link>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 18 }}>
           {investCards.map(o => (
@@ -311,17 +339,17 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       <section style={{ background: 'var(--bg2)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(48px,6vw,80px) 24px' }}>
           <div style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto 40px' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 10 }}>✦ هوش مصنوعی ملک‌جت</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 10 }}><IconSvg name="spark" size={14} /> هوش مصنوعی ملک‌جت</div>
             <h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>تصمیم بگیر، نه حدس بزن</h2>
             <p style={{ marginTop: 14, fontSize: 16, lineHeight: 1.85, color: 'var(--muted)' }}>سه موتور هوشمند که قبل از هر تصمیم، تصویر کاملی از ارزش، بازار و آینده‌ی ملک به تو می‌دهند.</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 18 }}>
             {modules.map(m => (
-              <div key={m.ic} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 26 }}>
-                <div style={{ width: 50, height: 50, borderRadius: 14, background: 'var(--goldDim)', border: '1px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: 'var(--gold)' }}>{m.ic}</div>
+              <div key={m.t} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 26 }}>
+                <GlassIcon name={m.ic} size={50} box={24} />
                 <h3 style={{ fontSize: 19, fontWeight: 700, color: 'var(--text)', marginTop: 18 }}>{m.t}</h3>
                 <p style={{ fontSize: 14, lineHeight: 1.85, color: 'var(--muted)', marginTop: 10 }}>{m.d}</p>
-                <Link href="/search" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 16, fontSize: 14, fontWeight: 700, color: 'var(--gold)', textDecoration: 'none' }}>{m.cta} ←</Link>
+                <Link href="/search" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 16, fontSize: 14, fontWeight: 700, color: 'var(--gold)', textDecoration: 'none' }}>{m.cta} <IconSvg name="arrowLeft" size={14} /></Link>
               </div>
             ))}
           </div>
@@ -331,8 +359,8 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       {/* NEIGHBORHOODS */}
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(48px,6vw,80px) 24px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
-          <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>◴ نقشه بازار</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>محله‌های محبوب تهران</h2></div>
-          <Link href="/search" style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>نقشه کامل ←</Link>
+          <div><div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}><IconSvg name="map" size={14} /> نقشه بازار</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>محله‌های محبوب تهران</h2></div>
+          <Link href="/search" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>نقشه کامل <IconSvg name="arrowLeft" size={13} /></Link>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 14 }}>
           {hoods.map(h => (
@@ -340,7 +368,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.6),transparent 60%)' }}></div>
               <div style={{ position: 'absolute', bottom: 12, right: 12, left: 12 }}>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{h.n}</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>تحلیل و آگهی‌های محله ←</div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>تحلیل و آگهی‌های محله <IconSvg name="arrowLeft" size={13} /></div>
               </div>
             </Link>
           ))}
@@ -352,8 +380,8 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       <section style={{ background: 'var(--bg2)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(48px,6vw,80px) 24px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
-            <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>♛ تأییدشده</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>مشاوران برتر</h2></div>
-            <Link href="/directory" style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>همه مشاوران ←</Link>
+            <div><div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}><IconSvg name="check" size={14} /> تأییدشده</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>مشاوران برتر</h2></div>
+            <Link href="/directory" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>همه مشاوران <IconSvg name="arrowLeft" size={13} /></Link>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 18 }}>
             {advisorCards.map(a => (
@@ -364,7 +392,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
                 <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>{a.r}</div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 18, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
                   <div><div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>{a.deals}</div><div style={{ fontSize: 11, color: 'var(--faint)' }}>معامله</div></div>
-                  <div><div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)' }}>★ {a.rate}</div><div style={{ fontSize: 11, color: 'var(--faint)' }}>امتیاز</div></div>
+                  <div><div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 16, fontWeight: 800, color: 'var(--gold)' }}><IconSvg name="star" size={15} /> {a.rate}</div><div style={{ fontSize: 11, color: 'var(--faint)' }}>امتیاز</div></div>
                 </div>
               </div>
             ))}
@@ -378,16 +406,16 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
         <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 24, border: '1px solid var(--line)', background: 'var(--bg2)', padding: 'clamp(28px,4vw,44px)' }}>
           <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>⛓ بازار B2B</div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}><IconSvg name="link" size={14} /> بازار B2B</div>
               <h2 style={{ fontSize: 'clamp(22px,3vw,30px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>بازار مصالح ساختمانی</h2>
               <p style={{ fontSize: 14, color: 'var(--muted)', marginTop: 8, maxWidth: 460, lineHeight: 1.7 }}>خرید عمده، استعلام قیمت و سفارش مستقیم از تأمین‌کنندگان معتبر.</p>
             </div>
-            <Link href="/materials" style={{ flexShrink: 0, padding: '0 18px', height: 44, display: 'flex', alignItems: 'center', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 700, fontSize: 14 }}>ورود به بازار مصالح ←</Link>
+            <Link href="/materials" style={{ flexShrink: 0, padding: '0 18px', height: 44, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 700, fontSize: 14 }}>ورود به بازار مصالح <IconSvg name="arrowLeft" size={13} /></Link>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12 }}>
             {materials.map(m => (
               <Link key={m.l} href="/materials" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: 14, borderRadius: 13, background: 'var(--surface)', border: '1px solid var(--line)', textDecoration: 'none' }}>
-                <span style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: m.bg, color: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{m.ic}</span>
+                <GlassIcon name={m.ic} size={38} box={18} tint={m.color} />
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.l}</span>
               </Link>
             ))}
@@ -426,7 +454,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
           <h2 style={{ position: 'relative', fontSize: 'clamp(24px,3.6vw,38px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>همین حالا به ملک‌جت بپیوند</h2>
           <p style={{ position: 'relative', fontSize: 'clamp(14px,1.8vw,16.5px)', color: 'var(--muted)', maxWidth: 560, margin: '14px auto 0', lineHeight: 1.9 }}>ثبت‌نامِ رایگان؛ بعد نقشت را انتخاب کن و داشبوردِ اختصاصیِ خودت را با همهٔ ابزارها تحویل بگیر.</p>
           <div style={{ position: 'relative', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 12, marginTop: 26 }}>
-            <Link href="/auth" style={{ padding: '13px 30px', borderRadius: 13, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 15, textDecoration: 'none', boxShadow: '0 12px 28px -12px var(--gold)' }}>شروعِ رایگان →</Link>
+            <Link href="/auth" style={{ padding: '13px 30px', borderRadius: 13, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 15, textDecoration: 'none', boxShadow: '0 12px 28px -12px var(--gold)', display: 'inline-flex', alignItems: 'center', gap: 7 }}>شروعِ رایگان <IconSvg name="arrowLeft" size={15} /></Link>
             <Link href="/pricing" style={{ padding: '13px 28px', borderRadius: 13, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>مشاهدهٔ پلن‌ها</Link>
           </div>
           <div style={{ position: 'relative', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 22 }}>

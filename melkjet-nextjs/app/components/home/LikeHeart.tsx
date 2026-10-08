@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { IconSvg } from '../GlassIcon'
 
 // دکمهٔ ذخیرهٔ واقعی — به /api/user/prefs وصل است (addFav/removeFav) و رویدادِ REOS ثبت می‌شود؛
 // همان سیگنالی که کوئستِ «۱ آگهی ذخیره کن» و یادگیریِ سلیقهٔ کاربر از آن می‌خوانند.
@@ -51,9 +52,10 @@ export default function LikeHeart({ listingId }: { listingId?: string | number }
       onClick={e => { e.preventDefault(); e.stopPropagation(); toggle() }}
       aria-label={liked ? 'حذف از ذخیره‌ها' : 'ذخیره'}
       title={liked ? 'ذخیره شد — برای حذف دوباره بزن' : 'ذخیرهٔ آگهی'}
-      style={{ position: 'absolute', top: 12, left: 12, width: 34, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'rgba(20,18,14,0.6)', backdropFilter: 'blur(6px)', color: liked ? '#ff6b81' : 'rgba(255,255,255,0.85)', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .15s', transform: liked ? 'scale(1.12)' : 'none' }}
+      style={{ position: 'absolute', top: 12, left: 12, width: 34, height: 34, borderRadius: 10, border: '1px solid rgba(255,255,255,0.16)', cursor: 'pointer', background: 'rgba(20,18,14,0.6)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', color: liked ? '#ff6b81' : 'rgba(255,255,255,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .15s', transform: liked ? 'scale(1.12)' : 'none' }}
     >
-      ♥
+      {/* ۸ اکتبر — اموجیِ ♥ در هر دستگاه شکلِ دیگری داشت؛ ایکونِ خطی، و وقتی ذخیره شد توپُر. */}
+      <IconSvg name="heart" size={17} fill={liked ? 'currentColor' : 'none'} />
     </button>
   )
 }

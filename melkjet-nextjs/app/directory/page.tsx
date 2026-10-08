@@ -9,22 +9,23 @@ import PageHeader from '@/app/components/PageHeader'
 import RevealContact from '@/app/components/RevealContact'
 import PromoBadge from '@/app/components/PromoBadge'
 import RepBadges from '@/app/components/RepBadges'
+import { IconSvg, type IconName } from '@/app/components/GlassIcon'
 import { useState, useEffect, useMemo } from 'react'
 import { fetchContent, gradientFor, initialsFor, avatarPosFor, type ContentItem } from '@/app/lib/content-display'
 import { dirItemScore, computeDist, topPercentLabel, scoreOutOf10, type ScoreDist } from '@/app/lib/provider-score'
 
 // دسته‌های اصلی طبقِ طرح — id همان دستهٔ داخلیِ دایرکتوری است (ROLE_CAT / اسکرپ)
-const CATS: { id: string; label: string; icon: string }[] = [
-  { id: 'مشاور', label: 'مشاوران املاک', icon: '🧑‍💼' },
-  { id: 'آژانس', label: 'آژانس‌ها', icon: '🏢' },
-  { id: 'سازنده', label: 'سازندگان', icon: '🏗' },
-  { id: 'مصالح', label: 'فروشندگان مصالح', icon: '🧱' },
-  { id: 'معمار', label: 'معماران و طراحان', icon: '📐' },
-  { id: 'پیمانکار', label: 'پیمانکاران', icon: '🛠' },
-  { id: 'کارشناس', label: 'کارشناسان رسمی', icon: '📋' },
-  { id: 'حقوقی', label: 'دفاتر حقوقی و وکلا', icon: '⚖' },
-  { id: 'بیمه', label: 'بانک و بیمه', icon: '🏦' },
-  { id: 'دفترخانه', label: 'دفاتر اسناد رسمی', icon: '◆' },
+const CATS: { id: string; label: string; icon: IconName }[] = [
+  { id: 'مشاور', label: 'مشاوران املاک', icon: 'people' },
+  { id: 'آژانس', label: 'آژانس‌ها', icon: 'office' },
+  { id: 'سازنده', label: 'سازندگان', icon: 'crane' },
+  { id: 'مصالح', label: 'فروشندگان مصالح', icon: 'bricks' },
+  { id: 'معمار', label: 'معماران و طراحان', icon: 'ruler' },
+  { id: 'پیمانکار', label: 'پیمانکاران', icon: 'tools' },
+  { id: 'کارشناس', label: 'کارشناسان رسمی', icon: 'clipboard' },
+  { id: 'حقوقی', label: 'دفاتر حقوقی و وکلا', icon: 'scale' },
+  { id: 'بیمه', label: 'بانک و بیمه', icon: 'bank' },
+  { id: 'دفترخانه', label: 'دفاتر اسناد رسمی', icon: 'doc' },
 ]
 const catLabelOf = (id: string) => CATS.find(c => c.id === id)?.label || id
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -184,7 +185,7 @@ export default function DirectoryPage() {
               onFocus={(e) => { e.currentTarget.style.borderColor = '#F7DE92' }}
               onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(247,222,146,.3)' }}
             />
-            <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'rgba(244,238,225,.6)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
+            <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'rgba(244,238,225,.6)', pointerEvents: 'none', display: 'flex' }}><IconSvg name="search" size={17} /></span>
           </div>
           {heroStats.length > 0 && (
             <div style={{ display: 'flex', gap: 'clamp(18px,4vw,34px)', justifyContent: 'space-between', flexWrap: 'wrap' }}>
@@ -205,7 +206,7 @@ export default function DirectoryPage() {
         <aside className="mjdir-side" style={{ position: 'sticky', top: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', padding: '4px 8px 12px' }}>دسته‌بندی متخصصان</div>
           <div className="mjdir-cats" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {[...CATS, ...extraCats.map(c => ({ id: c, label: c, icon: '•' }))].map((cat) => {
+            {[...CATS, ...extraCats.map(c => ({ id: c, label: c, icon: 'layers' as IconName }))].map((cat) => {
               const isActive = activeCategory === cat.id
               const n = counts[cat.id] || 0
               return (
@@ -217,7 +218,7 @@ export default function DirectoryPage() {
                     background: isActive ? 'linear-gradient(135deg, var(--goldDim), transparent)' : 'transparent',
                     color: isActive ? 'var(--goldText)' : 'var(--muted)',
                   }}>
-                  <span style={{ fontSize: 15, width: 22, textAlign: 'center', flexShrink: 0 }}>{cat.icon}</span>
+                  <span style={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}><IconSvg name={cat.icon} size={16} /></span>
                   <span style={{ flex: 1, fontSize: 13, fontWeight: isActive ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat.label}</span>
                   {n > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: isActive ? 'var(--goldText)' : 'var(--faint)', background: isActive ? 'var(--goldDim)' : 'var(--bg2)', border: `1px solid ${isActive ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 999, padding: '2px 9px', flexShrink: 0 }}>{fa(n)}</span>}
                 </button>
@@ -233,12 +234,12 @@ export default function DirectoryPage() {
               {loading ? 'در حال بارگذاری…' : <><span style={{ color: 'var(--goldText)' }}>{fa(filteredProfessionals.length)}</span> {catLabelOf(activeCategory)} فعال</>}
             </h2>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              {([['score', '⬥ امتیازِ ملک‌جت'], ['top', '⭐ برترین‌ها'], ['reviews', '💬 پرنظرترین‌ها'], ['newest', '🆕 جدیدترین‌ها']] as ['score' | 'top' | 'reviews' | 'newest', string][]).map(([id, label]) => {
+              {([['score', 'medal', 'امتیازِ ملک‌جت'], ['top', 'star', 'برترین‌ها'], ['reviews', 'chat', 'پرنظرترین‌ها'], ['newest', 'bolt', 'جدیدترین‌ها']] as ['score' | 'top' | 'reviews' | 'newest', IconName, string][]).map(([id, ic, label]) => {
                 const active = sortBy === id
                 return (
                   <button key={id} onClick={() => setSortBy(id)}
-                    style={{ padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: active ? 800 : 500, cursor: 'pointer', fontFamily: 'inherit', border: active ? '1px solid var(--gold)' : '1px solid var(--line2)', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--goldText)' : 'var(--muted)', transition: 'all .15s' }}>
-                    {label}
+                    style={{ padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: active ? 800 : 500, cursor: 'pointer', fontFamily: 'inherit', border: active ? '1px solid var(--gold)' : '1px solid var(--line2)', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--goldText)' : 'var(--muted)', transition: 'all .15s', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <IconSvg name={ic} size={13} />{label}
                   </button>
                 )
               })}
@@ -290,7 +291,7 @@ export default function DirectoryPage() {
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '80px 24px', color: 'var(--muted)' }}>
-              <div style={{ fontSize: '3rem', marginBottom: 16, opacity: 0.4 }}>🔍</div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, opacity: 0.4, color: 'var(--muted)' }}><IconSvg name="search" size={48} weight={1.4} /></div>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>نتایجی یافت نشد</h3>
               <p style={{ fontSize: '.95rem', color: 'var(--muted)', margin: 0 }}>در حال حاضر متخصصی در دسته‌بندی «{catLabelOf(activeCategory)}» ثبت نشده است.</p>
             </div>
@@ -351,7 +352,7 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
       {/* کپِ گرادیانی + نشانِ ویژه و امتیاز */}
       <div style={{ height: 62, position: 'relative', background: 'radial-gradient(200px 80px at 80% 0, color-mix(in srgb, var(--gold) 26%, transparent), transparent 70%), linear-gradient(135deg, color-mix(in srgb, var(--gold) 16%, var(--surface)), var(--surface))' }}>
         {pro.promoted && <span style={{ position: 'absolute', top: 10, insetInlineStart: 12 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
-        {pro.rating > 0 && <span title={pro.registered ? `میانگینِ ${fa(s.reviews || 0)} نظرِ تأییدشده` : 'امتیاز از منبعِ آگهی'} style={{ position: 'absolute', top: 10, insetInlineEnd: 12, fontSize: 12.5, fontWeight: 800, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--bg) 55%, transparent)', backdropFilter: 'blur(6px)', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px' }}>{Number(pro.rating).toLocaleString('fa-IR')} <span style={{ color: 'var(--gold)' }}>★</span></span>}
+        {pro.rating > 0 && <span title={pro.registered ? `میانگینِ ${fa(s.reviews || 0)} نظرِ تأییدشده` : 'امتیاز از منبعِ آگهی'} style={{ position: 'absolute', top: 10, insetInlineEnd: 12, fontSize: 12.5, fontWeight: 800, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--bg) 55%, transparent)', backdropFilter: 'blur(6px)', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px' }}>{Number(pro.rating).toLocaleString('fa-IR')} <IconSvg name="star" size={12} color="var(--gold)" /></span>}
       </div>
 
       {/* position:relative ضروری است: کپِ بالا position:relative دارد و بدونِ این، آواتارِ
@@ -366,8 +367,8 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
         }}>{!pro.image && pro.initials}</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <span style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</span>
-          {pro.verified && <span title="تاییدشدهٔ ملک‌جت" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: '#2f81f7', color: '#fff', fontSize: 10.5, fontWeight: 900 }}>✓</span>}
-          {!pro.verified && pro.badges?.some(b => b.id === 'verified') && <span title="پروفایلِ کامل و تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', fontSize: 10, fontWeight: 800 }}>✓</span>}
+          {pro.verified && <span title="تاییدشدهٔ ملک‌جت" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: '#2f81f7', color: '#fff' }}><IconSvg name="check" size={10} weight={2.6} /></span>}
+          {!pro.verified && pro.badges?.some(b => b.id === 'verified') && <span title="پروفایلِ کامل و تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a' }}><IconSvg name="check" size={10} weight={2.6} /></span>}
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, textAlign: 'center' }}>
           <span style={{ color: 'var(--goldText)', fontWeight: 700 }}>{pro.role}</span>
@@ -378,7 +379,7 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
         {score.score > 0 && score.tier && (
           <div style={{ display: 'flex', justifyContent: 'center', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
             <span title="امتیازِ ملک‌جت از دادهٔ واقعی (معادلِ ۱۰)" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 11px', borderRadius: 999, background: 'linear-gradient(135deg, var(--gold2), var(--gold))', boxShadow: '0 2px 8px -3px rgba(201,168,76,.55)' }}>
-              <span style={{ color: '#3a2d07', fontSize: 12.5 }}>★</span>
+              <span style={{ color: '#3a2d07', display: 'flex' }}><IconSvg name="star" size={13} /></span>
               <span style={{ fontSize: 13, fontWeight: 900, color: '#2a2105', lineHeight: 1 }}>{scoreOutOf10(score.score)}</span>
               <span style={{ fontSize: 9.5, fontWeight: 800, color: '#5b4710', background: 'rgba(255,255,255,.45)', borderRadius: 999, padding: '2px 6px' }}>از ۱۰</span>
             </span>
@@ -405,7 +406,7 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
           {pro.hasPhone
             ? <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><RevealContact kind={pro.revealKind || 'item'} id={pro.revealId || String(pro.id)} compact label="نمایشِ شماره" /></div>
             : <span style={{ fontSize: 12, color: 'var(--faint)' }}>پروفایل عمومی</span>}
-          <span style={{ fontSize: 12.5, color: 'var(--goldText)', fontWeight: 800, whiteSpace: 'nowrap' }}>مشاهدهٔ خدمات ←</span>
+          <span style={{ fontSize: 12.5, color: 'var(--goldText)', fontWeight: 800, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>مشاهدهٔ خدمات <IconSvg name="arrowLeft" size={12} /></span>
         </div>
       </div>
     </a>

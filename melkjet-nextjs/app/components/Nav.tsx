@@ -5,7 +5,7 @@ import ThemeToggle from './ThemeToggle'
 import CitySelector from './CitySelector'
 import { openAuth } from './AuthModal'
 import Logo from './Logo'
-import GlassIcon, { type IconName } from './GlassIcon'
+import GlassIcon, { IconSvg, type IconName } from './GlassIcon'
 
 const DASH_LABEL: Record<string, string> = {
   '/admin': 'پنل مدیریت', '/builder': 'پنل سازنده', '/pros': 'پنل مشاور',
@@ -132,7 +132,7 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
           {MENUS.map(m => (
             <div key={m.label} style={{ position: 'relative' }} onMouseEnter={() => openMenu(m.label)} onMouseLeave={scheduleClose}>
               <button onClick={() => (open === m.label ? setOpen(null) : openMenu(m.label))} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: open === m.label ? 'var(--text)' : navText, textShadow: open === m.label ? undefined : navShadow, background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>
-                {m.label}<span style={{ fontSize: 9, opacity: .7 }}>▾</span>
+                {m.label}<span style={{ display: 'flex', opacity: .75 }}><IconSvg name="chevronDown" size={11} /></span>
               </button>
               {open === m.label && (
                 // ظرفِ بیرونی از لبهٔ دکمه شروع می‌شود (top:100%، بدونِ فاصلهٔ مُرده) و فاصلهٔ بصری را با

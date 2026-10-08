@@ -1,4 +1,5 @@
 'use client'
+import { IconSvg, type IconName } from './GlassIcon'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { DEFAULT_SITE, type SiteFooter } from '@/app/lib/site-defaults'
@@ -27,10 +28,10 @@ export default function Footer() {
   }, [])
 
   const contactRows = [
-    f.phone && { icon: '☎', text: f.phone, href: `tel:${f.phone.replace(/[^\d+]/g, '')}` },
-    f.email && { icon: '✉', text: f.email, href: `mailto:${f.email}` },
-    f.address && { icon: '📍', text: f.address, href: '' },
-  ].filter(Boolean) as { icon: string; text: string; href: string }[]
+    f.phone && { icon: 'phone' as IconName, text: f.phone, href: `tel:${f.phone.replace(/[^\d+]/g, '')}` },
+    f.email && { icon: 'mail' as IconName, text: f.email, href: `mailto:${f.email}` },
+    f.address && { icon: 'pin' as IconName, text: f.address, href: '' },
+  ].filter(Boolean) as { icon: IconName; text: string; href: string }[]
   const socials = [
     f.instagram && { label: 'اینستاگرام', href: f.instagram },
     f.telegram && { label: 'تلگرام', href: f.telegram },
@@ -49,8 +50,8 @@ export default function Footer() {
           {contactRows.length > 0 && (
             <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
               {contactRows.map(c => c.href
-                ? <a key={c.text} href={c.href} style={{ fontSize: 13, color: 'var(--muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 7 }}><span>{c.icon}</span><span dir="ltr">{c.text}</span></a>
-                : <span key={c.text} style={{ fontSize: 13, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 7 }}><span>{c.icon}</span>{c.text}</span>)}
+                ? <a key={c.text} href={c.href} style={{ fontSize: 13, color: 'var(--muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 7 }}><IconSvg name={c.icon} size={14} /><span dir="ltr">{c.text}</span></a>
+                : <span key={c.text} style={{ fontSize: 13, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 7 }}><IconSvg name={c.icon} size={14} />{c.text}</span>)}
             </div>
           )}
           {socials.length > 0 && (

@@ -131,7 +131,7 @@ export default function CitySelector({ onHero = false }: { onHero?: boolean } = 
         cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
         <IconSvg name="pin" size={14} color="var(--gold)" />
         <span>{city || 'انتخاب شهر'}</span>
-        <span style={{ fontSize: 10, opacity: .7 }}>▾</span>
+        <span style={{ display: 'flex', opacity: .75 }}><IconSvg name="chevronDown" size={11} /></span>
       </button>
       {open && (
         <div style={{ position: 'absolute', top: '110%', insetInlineStart: 0, zIndex: 100, width: 230, background: onHero ? 'rgba(14,18,28,.95)' : 'var(--surface)', border: `1px solid ${onHero ? 'rgba(243,237,224,.16)' : 'var(--line2)'}`, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: 12, boxShadow: '0 14px 40px -12px rgba(0,0,0,.5)', padding: 6 }}>

@@ -18,6 +18,10 @@ export type IconName =
   | 'ruler' | 'briefcase' | 'article' | 'trend' | 'dashboard' | 'office' | 'search' | 'plus'
   | 'brain' | 'link' | 'chartDown' | 'tools' | 'pin'
   | 'layers' | 'clipboard' | 'scale' | 'bank' | 'doc' | 'crown' | 'star' | 'sun' | 'moon'
+  | 'heart' | 'eye' | 'bolt' | 'clock' | 'compare' | 'check' | 'arrowLeft' | 'arrowUp'
+  | 'fire' | 'trophy' | 'flag'
+  | 'map' | 'bell' | 'close' | 'arrowUpRight' | 'cabinet' | 'faucet' | 'snow'
+  | 'chevronDown' | 'phone' | 'mail' | 'medal' | 'chat'
 
 // مسیرها همه ۲۴×۲۴، فقط stroke — بدونِ fill و بدونِ رنگِ سخت، تا رنگ از قاب بیاید.
 const ICONS: Record<IconName, ReactNode> = {
@@ -51,6 +55,31 @@ const ICONS: Record<IconName, ReactNode> = {
   star: <><path d="m12 3.6 2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.8l5.9-.8z" /></>,
   sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4" /></>,
   moon: <><path d="M20 13.5A8 8 0 0 1 10.5 4a8 8 0 1 0 9.5 9.5z" /></>,
+  // ۸ اکتبر — جایگزینِ اموجی‌های روی کارتِ آگهی (قلب، چشم، صاعقه، ساعت، مقایسه، تیک، فلش)
+  // و نشان‌های پروموت (آتش، جام، پرچم، نردبان). قلب با fill="currentColor" توپُر هم می‌شود.
+  heart: <><path d="M12 20.4s-7.6-4.7-7.6-10A4.6 4.6 0 0 1 12 7.3a4.6 4.6 0 0 1 7.6 3.1c0 5.3-7.6 10-7.6 10z" /></>,
+  eye: <><path d="M2.5 12S6.2 5.8 12 5.8 21.5 12 21.5 12 17.8 18.2 12 18.2 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="3" /></>,
+  bolt: <><path d="M13.6 2.5 5.2 13.7h5.1L9.6 21.5 18.8 10h-5.5z" /></>,
+  clock: <><circle cx="12" cy="12" r="8.6" /><path d="M12 7.2V12l3.3 2" /></>,
+  compare: <><path d="M4 9h13" /><path d="M14 6 17 9l-3 3" /><path d="M20 15H7" /><path d="M10 12 7 15l3 3" /></>,
+  check: <><path d="M4.8 12.7l4.5 4.5L19.4 7" /></>,
+  arrowLeft: <><path d="M19.5 12H4.6" /><path d="M10.4 5.6 4 12l6.4 6.4" /></>,
+  arrowUp: <><path d="M12 19.6V4.7" /><path d="M5.6 11.1 12 4.7l6.4 6.4" /></>,
+  fire: <><path d="M12 21.5c3.6 0 6-2.3 6-5.5 0-4.2-4.3-5.8-3.3-11.5-2.6 1-4.2 3.3-4.2 5.6 0 1.3.5 2.2.5 3 0 1-.8 1.7-1.6 1.7-1 0-1.6-.8-1.7-2-1 1.1-1.7 2.6-1.7 4.2 0 3.2 2.4 5.5 6 5.5z" /></>,
+  trophy: <><path d="M7.5 4h9v4.5a4.5 4.5 0 0 1-9 0z" /><path d="M7.5 5.5H5a2 2 0 0 0 2.6 2.4M16.5 5.5H19a2 2 0 0 1-2.6 2.4" /><path d="M12 13v3.5M8.5 20.5h7M9.8 20.5c0-2 .9-4 2.2-4s2.2 2 2.2 4" /></>,
+  flag: <><path d="M6 3.5v17" /><path d="M6 4.6h11.5l-2.1 3.9 2.1 3.9H6z" /></>,
+  map: <><path d="M9 3.6 3.5 5.5v15L9 18.6l6 1.9 5.5-1.9v-15L15 5.5z" /><path d="M9 3.6v15M15 5.5v15" /></>,
+  bell: <><path d="M18 9.5a6 6 0 1 0-12 0c0 5-2 6.3-2 6.3h16s-2-1.3-2-6.3z" /><path d="M10.2 19.5a2 2 0 0 0 3.6 0" /></>,
+  close: <><path d="M6 6l12 12M18 6 6 18" /></>,
+  arrowUpRight: <><path d="M6.8 17.2 17.2 6.8" /><path d="M8.6 6.8h8.6v8.6" /></>,
+  cabinet: <><rect x="4" y="3.5" width="16" height="17" rx="2" /><path d="M12 3.5v17M4 12h16" /><path d="M10.3 7.2v2.4M13.7 7.2v2.4M10.3 14.4v2.4M13.7 14.4v2.4" /></>,
+  faucet: <><path d="M6.5 20.5h7.5" /><path d="M10 20.5V11.4h5.6v3.6" /><path d="M7.6 11.4h4.8" /><path d="M10 11.4V8.8" /><path d="M8.1 8.8h3.8" /><path d="M15.6 17.6v1.4" /></>,
+  snow: <><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9" /><path d="M9.3 5.1 12 7l2.7-1.9M9.3 18.9 12 17l2.7 1.9" /></>,
+  chevronDown: <><path d="M5.5 9 12 15.4 18.5 9" /></>,
+  phone: <><path d="M8.2 3.6 10.6 8l-2 1.9a12 12 0 0 0 5.5 5.5l1.9-2 4.4 2.4-.6 3a1.6 1.6 0 0 1-1.8 1.3C12 19.3 4.7 12 3.5 5a1.6 1.6 0 0 1 1.3-1.8z" /></>,
+  mail: <><rect x="3" y="5.2" width="18" height="13.6" rx="2.2" /><path d="M3.6 6.6 12 12.8l8.4-6.2" /></>,
+  medal: <><circle cx="12" cy="14.6" r="5.4" /><path d="M12 11.8l1 2.1 2.3.3-1.7 1.6.4 2.3-2-1.1-2 1.1.4-2.3-1.7-1.6 2.3-.3z" /><path d="M8.4 9.4 6.2 3.5h11.6l-2.2 5.9" /></>,
+  chat: <><path d="M20.5 11.6c0 4-3.8 7.2-8.5 7.2a9.8 9.8 0 0 1-2.6-.35L4.8 20.5l1.1-3.4a6.9 6.9 0 0 1-2.4-5.5c0-4 3.8-7.2 8.5-7.2s8.5 3.2 8.5 7.2z" /></>,
 }
 
 export default function GlassIcon({
@@ -83,9 +112,9 @@ export default function GlassIcon({
 }
 
 /** فقط خودِ ایکون، بدونِ قابِ شیشه‌ای — برای ظرفی که خودش حاشیه/قرص دارد. */
-export function IconSvg({ name, size = 15, color = 'currentColor' }: { name: IconName; size?: number; color?: string }) {
+export function IconSvg({ name, size = 15, color = 'currentColor', fill = 'none', weight = 1.8 }: { name: IconName; size?: number; color?: string; fill?: string; weight?: number }) {
   return (
-    <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
-         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{ICONS[name]}</svg>
+    <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color}
+         strokeWidth={weight} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{ICONS[name]}</svg>
   )
 }

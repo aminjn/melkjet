@@ -7,6 +7,7 @@ import Nav from '@/app/components/Nav'
 import PromoBadge from '@/app/components/PromoBadge'
 import BannerSlot from '@/app/components/BannerSlot'
 import CompareButton from '@/app/components/CompareButton'
+import { IconSvg } from '../components/GlassIcon'
 import CardImg from '@/app/components/CardImg'
 import LikeHeart from '@/app/components/home/LikeHeart'
 import TileBase from '@/app/components/TileBase'
@@ -447,7 +448,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       <div style={{ position: 'sticky', top: 68, zIndex: 40, background: 'var(--bg2)', borderBottom: '1px solid var(--line)' }}>
         <div className="mjs-filterbar" style={{ maxWidth: 1280, margin: '0 auto', padding: '14px 24px', display: 'flex', gap: 10, alignItems: 'center' }}>
           <div style={{ flex: 1, position: 'relative' }}>
-            <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gold)', fontSize: 16, pointerEvents: 'none', zIndex: 1 }}>✦</span>
+            <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gold)', pointerEvents: 'none', zIndex: 1, display: 'flex' }}><IconSvg name="spark" size={16} /></span>
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setSearchTerm(e.target.value) }}
@@ -627,7 +628,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
                       {/* فاز ۲۰۸ (فیدبک: «آگهی‌ها معلوم نیست برای کی هست») — سنِ آگهی از مهرِ واقعیِ ثبت */}
                       {p.scrapedAt > 0 && (
                         <span suppressHydrationWarning style={{ position: 'absolute', bottom: 9, insetInlineStart: 10, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3.5px 9px', borderRadius: 999, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1px', ...(isFreshListing(p.scrapedAt) ? { background: 'linear-gradient(140deg,var(--gold2,#e8cf7a),var(--gold))', color: '#16140f', boxShadow: '0 2px 10px -2px rgba(201,168,76,0.55)' } : { background: 'rgba(10,9,8,0.72)', color: '#f0ede6', border: '1px solid rgba(255,255,255,0.18)', backdropFilter: 'blur(6px)' }) }}>
-                          <span aria-hidden="true" style={{ fontSize: 9.5 }}>{isFreshListing(p.scrapedAt) ? '⚡' : '🕐'}</span>
+                          <IconSvg name={isFreshListing(p.scrapedAt) ? 'bolt' : 'clock'} size={11} />
                           {isFreshListing(p.scrapedAt) ? `جدید · ${listingAgeLabel(p.scrapedAt)}` : listingAgeLabel(p.scrapedAt)}
                         </span>
                       )}
@@ -636,7 +637,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
                           پایین-راست مالِ چیپِ سنِ آگهی است و بالا مالِ لایک/پرومو */}
                       {isSeenCard && (
                         <span title="این آگهی را دیده‌اید" style={{ position: 'absolute', bottom: 9, insetInlineEnd: 10, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3.5px 9px', borderRadius: 999, background: 'rgba(20,18,14,0.72)', backdropFilter: 'blur(6px)', color: '#fff', fontSize: 10.5, fontWeight: 700, border: '1px solid rgba(255,255,255,0.16)' }}>
-                          <span aria-hidden style={{ fontSize: 11 }}>👁</span> دیده‌اید
+                          <IconSvg name="eye" size={11} /> دیده‌اید
                         </span>
                       )}
                       {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 44 }}><PromoBadge kind={p.promoKind || 'ویژه'} /></div>}
@@ -662,7 +663,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
                         <span>ساخت {p.year}</span>
                         <div style={{ flex: 1 }} />
                         <CompareButton entry={{ kind: 'item', id: String(p.id), title: p.title, photo: p.image, subtitle: p.location }} />
-                        <span style={{ color: 'var(--gold)', fontSize: 11.5, fontWeight: 600 }}>مشاهده ←</span>
+                        <span style={{ color: 'var(--gold)', fontSize: 11.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>مشاهده <IconSvg name="arrowLeft" size={12} /></span>
                       </div>
                     </div>
                   </Link>
@@ -692,7 +693,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       {!mapOpenMobile && (
         <button className="mjs-mapbtn" onClick={() => setMapOpenMobile(true)}
           style={{ position: 'fixed', bottom: 74, left: 14, zIndex: 60, display: 'none', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 999, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.55)', cursor: 'pointer' }}>
-          🗺 نقشه
+          <IconSvg name="map" size={15} /> نقشه
         </button>
       )}
       {/* موبایل: نقشهٔ تمام‌صفحه وقتی باز است */}
@@ -703,7 +704,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
           </div>
           <button onClick={() => setMapOpenMobile(false)}
             style={{ position: 'fixed', bottom: 84, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'flex', alignItems: 'center', gap: 7, padding: '11px 22px', borderRadius: 999, border: 'none', background: '#e7674a', color: '#fff', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.6)', cursor: 'pointer' }}>
-            ✕ بستن نقشه
+            <IconSvg name="close" size={15} /> بستن نقشه
           </button>
         </div>
       )}
@@ -718,6 +719,8 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
   const [on, setOn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  // ۸ اکتبر — پیشترها «موفق بودن» از نویسهٔ ✓ ابتدای پیام خوانده می‌شد؛ حالا خودِ state می‌گویدش.
+  const [msgOk, setMsgOk] = useState(false)
   useEffect(() => {
     let alive = true
     fetch('/api/saved-search').then(r => r.ok ? r.json() : null).then(d => { if (alive && d?.searches) setOn(d.searches.some((s: any) => s.sig === sig)) }).catch(() => {})
@@ -725,7 +728,7 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
   }, [sig])
   const toggle = async () => {
     if (busy) return
-    setBusy(true); setMsg('')
+    setBusy(true); setMsg(''); setMsgOk(false)
     const next = !on
     try {
       const r = await fetch('/api/saved-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: next ? 'add' : 'remove', city: criteria.city, area: criteria.area, deal: criteria.deal, kind: criteria.kind, priceMax: criteria.priceMax, label: [criteria.area, criteria.city].filter(Boolean).join('، ') }) })
@@ -734,7 +737,8 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
       if (d.ok) {
         setOn(next)
         if (next) { import('@/app/lib/push-client').then(m => m.ensurePushSubscribed(true)).catch(() => {}) }
-        setMsg(next ? '✓ از این پس آگهیِ جدید را با نوتیفیکیشن، گفتگو و پیامک خبر می‌دهیم.' : 'هشدار خاموش شد.')
+        setMsgOk(next)
+        setMsg(next ? 'از این پس آگهیِ جدید را با نوتیفیکیشن، گفتگو و پیامک خبر می‌دهیم.' : 'هشدار خاموش شد.')
       }
       else setMsg(d.error || 'خطا')
     } catch { setMsg('خطا در ارتباط') } finally { setBusy(false) }
@@ -742,7 +746,7 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
   return (
     <div className="mjs-notify" style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '11px 14px', marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 17 }}>🔔</span>
+        <IconSvg name="bell" size={18} color="var(--gold)" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 800 }}>آگهی جدید اومد خبرم کن</div>
           <div className="mjs-notify-desc" style={{ fontSize: 11.5, color: 'var(--muted)' }}>{count > 0 ? `${count.toLocaleString('fa-IR')} ملک در این محدوده — ` : ''}با آمدنِ آگهیِ جدید، در گفتگوها و پیامک خبرت می‌کنیم.</div>
@@ -751,7 +755,7 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
           <span style={{ position: 'absolute', top: 3, insetInlineStart: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', transition: 'inset-inline-start .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
         </button>
       </div>
-      {msg && <div style={{ fontSize: 11.5, color: msg.startsWith('✓') ? '#5fd98a' : 'var(--goldText)' }}>{msg}</div>}
+      {msg && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: msgOk ? '#5fd98a' : 'var(--goldText)' }}>{msgOk && <IconSvg name="check" size={12} />}{msg}</div>}
     </div>
   )
 }
