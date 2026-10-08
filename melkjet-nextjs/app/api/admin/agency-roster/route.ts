@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor} from '@/app/lib/agency-roster-store'
 import { debugRoster } from '@/app/lib/agency-roster'
+import { rosterCities } from '@/app/lib/agency-roster-city'
 import { logAudit } from '@/app/lib/audit-store'
 
 export const maxDuration = 60
@@ -10,10 +11,19 @@ async function guard() { const s = await getSession(); return s && (s.role === '
 const who = (s: any) => s?.name || s?.phone || 'مدیر'
 
 // GET → فهرستِ اسکرپ‌های آژانس. با ?debug=<slug> → عیب‌یابیِ استخراجِ اسم روی آگهی‌های واقعی.
+//        با ?cities=1 → نقشهٔ «آژانس → شهر» (فیلترِ شهرِ پنل).
 export async function GET(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const dbg = req.nextUrl.searchParams.get('debug')
   if (dbg) return NextResponse.json(await debugRoster(dbg), { headers: { 'Cache-Control': 'no-store' } })
+  // ۸ اکتبر — عمداً جدا از GETِ اصلی: پنل هنگامِ سینک هر ۴ ثانیه poll می‌کند و این
+  // مسیر (برای ردیف‌های بدونِ city) شاردِ advisor می‌خواند. یک‌بار در mount صدا زده
+  // می‌شود، نه در هر poll.
+  if (req.nextUrl.searchParams.get('cities')) {
+    const list = await listScrapes()
+    const force = req.nextUrl.searchParams.get('force') === '1'
+    return NextResponse.json({ ok: true, cities: await rosterCities(list, force) }, { headers: { 'Cache-Control': 'no-store' } })
+  }
   return NextResponse.json({ ok: true, scrapes: await listScrapes(), settings: await getRosterSettings() })
 }
 

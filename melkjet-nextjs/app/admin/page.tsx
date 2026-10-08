@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
@@ -2348,8 +2348,72 @@ function AgencyRosterPanel() {
   const faHour = (h: number) => `${fa(h)}:۰۰`
   const setPhone = (k: string, v: string) => setPhones(p => ({ ...p, [k]: v }))
 
+  // ── ۸ اکتبر — ابزارِ نظم: فیلترِ شهر/وضعیت، ترتیب، و زمانِ دقیقِ آخرین اسکرپ ──────
+  const [cities, setCities] = useState<Record<string, string>>({})
+  const [citiesBusy, setCitiesBusy] = useState(false)
+  const [q, setQ] = useState('')
+  const [city, setCity] = useState('')
+  const [stat, setStat] = useState<'all' | 'gap' | 'done' | 'err' | 'never'>('all')
+  const [sort, setSort] = useState<'gap' | 'oldest' | 'files' | 'name'>('gap')
+  const [schedOpen, setSchedOpen] = useState('')
+  const chip: React.CSSProperties = { fontSize: 11, padding: '2px 9px', borderRadius: 999, whiteSpace: 'nowrap' }
+  const noAcc = (x: any) => (x.advisors || []).filter((a: any) => !a.phone).length
+  const cityOf = (x: any) => x.city || cities[x.id] || ''
+  // تاریخ و ساعتِ دقیق (تقویمِ شمسی، ساعتِ مرورگرِ خودِ ادمین) + «چند وقت پیش» کنارش،
+  // چون عددِ خالی نمی‌گوید کهنه است یا تازه — و همین سؤالِ اصلیِ این پنل است.
+  const dt = (t?: number) => !t ? '' : new Date(t).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' })
+  const ago = (t?: number) => {
+    if (!t) return ''
+    const m = Math.max(0, Math.round((Date.now() - t) / 60000))
+    if (m < 60) return `${fa(m)} دقیقه پیش`
+    if (m < 1440) return `${fa(Math.round(m / 60))} ساعت پیش`
+    return `${fa(Math.round(m / 1440))} روز پیش`
+  }
+
   const load = () => fetch('/api/admin/agency-roster', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) { setScrapes(j.scrapes || []); if (j.settings) setSettings(j.settings) } })
-  useEffect(() => { load() }, [])
+  // شهرها مسیرِ جداگانه‌اند و یک‌بار گرفته می‌شوند — داخلِ pollِ ۴ثانیه‌ایِ سینک نیستند،
+  // چون برای ردیف‌هایی که هنوز city ندارند شاردِ advisor می‌خوانند.
+  const loadCities = () => { setCitiesBusy(true); return fetch('/api/admin/agency-roster?cities=1', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) setCities(j.cities || {}) }).catch(() => {}).finally(() => setCitiesBusy(false)) }
+  useEffect(() => { load().then(loadCities) }, [])
+
+  const cityList = useMemo(() => {
+    const n = new Map<string, number>()
+    for (const x of scrapes) { const c = cityOf(x); if (c) n.set(c, (n.get(c) || 0) + 1) }
+    return [...n.entries()].sort((a, b) => b[1] - a[1])
+  }, [scrapes, cities])
+  const noCityN = useMemo(() => scrapes.filter(x => !cityOf(x)).length, [scrapes, cities])
+  const statOf = (x: any): Array<'gap' | 'done' | 'err' | 'never'> => {
+    const out: Array<'gap' | 'done' | 'err' | 'never'> = []
+    if (noAcc(x) > 0) out.push('gap'); else if ((x.advisors || []).length) out.push('done')
+    if (x.lastError) out.push('err')
+    if (!x.lastOkAt) out.push('never')
+    return out
+  }
+  const statCounts = useMemo(() => {
+    const c = { all: scrapes.length, gap: 0, done: 0, err: 0, never: 0 }
+    for (const x of scrapes) for (const k of statOf(x)) c[k]++
+    return c
+  }, [scrapes])
+  const rows = useMemo(() => {
+    const nq = q.trim()
+    const l = scrapes.filter(x => {
+      if (nq && !`${x.agencyName || ''} ${x.slug}`.includes(nq)) return false
+      if (city === '__none__') { if (cityOf(x)) return false } else if (city && cityOf(x) !== city) return false
+      if (stat !== 'all' && !statOf(x).includes(stat)) return false
+      return true
+    })
+    const by: Record<typeof sort, (a: any, b: any) => number> = {
+      gap: (a, b) => noAcc(b) - noAcc(a) || (b.advisors || []).length - (a.advisors || []).length,
+      oldest: (a, b) => (a.lastOkAt || 0) - (b.lastOkAt || 0),
+      files: (a, b) => (b.lastTotal || 0) - (a.lastTotal || 0),
+      name: (a, b) => String(a.agencyName || a.slug).localeCompare(String(b.agencyName || b.slug), 'fa'),
+    }
+    return [...l].sort(by[sort])
+  }, [scrapes, cities, q, city, stat, sort])
+  const totals = useMemo(() => rows.reduce((t: { adv: number; gap: number; files: number }, x: any) => ({
+    adv: t.adv + (x.advisors || []).length, gap: t.gap + noAcc(x), files: t.files + (x.lastTotal || 0),
+  }), { adv: 0, gap: 0, files: 0 }), [rows])
+
   useEffect(() => { if (!scrapes.some(s => s.running || s.runRequested || (s.advisors || []).some((a: any) => a.graduating))) return; const id = setInterval(load, 4000); return () => clearInterval(id) }, [scrapes])
 
   const post = (body: any) => fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json())
@@ -2455,25 +2519,83 @@ function AgencyRosterPanel() {
         </p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {scrapes.map(s => (
-          <div key={s.id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontWeight: 800, fontSize: 14 }}>{s.agencyName || s.slug}</div>
-              <span dir="ltr" style={{ fontSize: 11, color: 'var(--faint)' }}>{s.slug}</span>
-              {s.running && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 999, background: 'rgba(201,168,76,0.15)', color: 'var(--gold)', fontWeight: 700 }}>{s.phase === 'import' ? 'در حال واردکردنِ آگهی‌ها از دیوار…' : s.phase === 'cluster' ? 'در حال شناساییِ نامِ مشاورها (AI)…' : 'در حال خواندنِ فهرست…'} {s.progress?.total ? `${fa(s.progress.done)}/${fa(s.progress.total)}` : ''}</span>}
+      {/* ۸ اکتبر — نوارِ نظم. پیشترها همهٔ آژانس‌ها (روی سرور ۱۵۵ تا) بی‌هیچ فیلتری
+          پشتِ‌سرِهم می‌آمدند، زمان‌بندیِ هر ردیف هم باز بود، و «آخرین اسکرپ» هیچ‌جا
+          نوشته نمی‌شد — فیدبک: «خیلی قر و قاطی هست». */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+        <input style={{ ...inp, flex: '1 1 170px', direction: 'rtl', textAlign: 'right' }} placeholder="جست‌وجوی نام یا slug…" value={q} onChange={e => setQ(e.target.value)} />
+        <select value={city} onChange={e => setCity(e.target.value)} style={{ ...inp, padding: '8px 10px', direction: 'rtl', textAlign: 'right' }}>
+          <option value="">همهٔ شهرها</option>
+          {cityList.map((c: [string, number]) => <option key={c[0]} value={c[0]}>{c[0]} ({fa(c[1])})</option>)}
+          {noCityN > 0 && <option value="__none__">بدونِ شهر ({fa(noCityN)})</option>}
+        </select>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {([['all', 'همه'], ['gap', 'بی‌حساب دارند'], ['done', 'همه حساب دارند'], ['err', 'خطا/گیرکرده'], ['never', 'هرگز سینک نشده']] as [typeof stat, string][]).map(([k, label]) => (
+            <button key={k} onClick={() => setStat(k)} style={{
+              padding: '6px 11px', borderRadius: 999, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              border: `1px solid ${stat === k ? 'var(--gold)' : 'var(--line2)'}`, background: stat === k ? 'var(--goldDim)' : 'transparent',
+              color: stat === k ? 'var(--gold)' : 'var(--muted)', fontWeight: stat === k ? 800 : 500,
+            }}>{label} {fa(statCounts[k])}</button>
+          ))}
+        </div>
+        <select value={sort} onChange={e => setSort(e.target.value as typeof sort)} style={{ ...inp, padding: '8px 10px', direction: 'rtl', textAlign: 'right' }}>
+          <option value="gap">ترتیب: بیشترین بی‌حساب</option>
+          <option value="oldest">ترتیب: قدیمی‌ترین سینک</option>
+          <option value="files">ترتیب: بیشترین آگهی</option>
+          <option value="name">ترتیب: نام</option>
+        </select>
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 10, lineHeight: 1.9 }}>
+        نمایشِ <b style={{ color: 'var(--text)' }}>{fa(rows.length)}</b> از {fa(scrapes.length)} آژانس · {fa(totals.adv)} مشاور که
+        <b style={{ color: totals.gap ? '#e7674a' : 'var(--text)' }}> {fa(totals.gap)} </b> نفرشان هنوز حساب ندارند · {fa(totals.files)} آگهی
+        {citiesBusy && <span style={{ marginInlineStart: 8 }}>· در حال یافتنِ شهرها…</span>}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map((s: any) => {
+          const advN = (s.advisors || []).length
+          const gap = noAcc(s)
+          const cty = cityOf(s)
+          return (
+          <div key={s.id} style={{ border: `1px solid ${gap > 0 ? 'rgba(231,103,74,.32)' : 'var(--line)'}`, borderRadius: 12, padding: '10px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5 }}>{s.agencyName || s.slug}</div>
+              {cty && <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--muted)' }}>{cty}</span>}
+              <span dir="ltr" style={{ fontSize: 10.5, color: 'var(--faint)' }}>{s.slug}</span>
+              {s.running && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 999, background: 'rgba(201,168,76,0.15)', color: 'var(--gold)', fontWeight: 700 }}>{s.phase === 'import' ? 'در حال واردکردنِ آگهی‌ها از دیوار…' : s.phase === 'cluster' ? 'در حال شناساییِ نامِ مشاورها…' : 'در حال خواندنِ فهرست…'} {s.progress?.total ? `${fa(s.progress.done)}/${fa(s.progress.total)}` : ''}</span>}
               {!s.running && s.runRequested && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 999, background: 'rgba(96,165,250,0.12)', color: '#60a5fa', fontWeight: 700 }}>⏳ در صف — تا ۴۵ ثانیهٔ دیگر شروع می‌شود</span>}
-              {!s.running && s.runRequested && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 999, background: 'rgba(201,168,76,0.12)', color: 'var(--muted)' }}>در صف</span>}
-              {s.lastError && <span style={{ fontSize: 11, color: '#e06666' }}>خطا: {s.lastError}</span>}
-              <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--muted)' }}>
-                {s.lastTotal != null ? `${fa(s.lastTotal)} آگهی · ${fa(s.advisors?.length || 0)} مشاور · ${fa(s.lastUnnamed || 0)} بی‌نام` : 'هنوز همگام نشده'}
+              <span style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--muted)' }}>{fa(advN)} مشاور</span>
+                {gap > 0
+                  ? <span style={{ ...chip, background: 'rgba(231,103,74,.14)', color: '#e7674a', fontWeight: 800 }}>{fa(gap)} بی‌حساب</span>
+                  : advN > 0 && <span style={{ ...chip, background: 'rgba(95,217,138,.14)', color: '#5fd98a', fontWeight: 800 }}>همه حساب دارند</span>}
               </span>
               <GoldButton disabled={s.running} onClick={() => sync(s.id)}>{s.running ? '…' : '🔄 همگام‌سازی الان'}</GoldButton>
-              {(s.running || s.runRequested) && <button onClick={() => stopSync(s.id)} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #f05252', background: 'rgba(240,82,82,.08)', color: '#f05252', fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>⏹ توقف</button>}
-              <button onClick={() => setOpen(open === s.id ? '' : s.id)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 10px', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>{open === s.id ? 'بستن' : `مشاورها (${fa(s.advisors?.length || 0)})`}</button>
+              {(s.running || s.runRequested) && <button onClick={() => stopSync(s.id)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid #f05252', background: 'rgba(240,82,82,.08)', color: '#f05252', fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>⏹ توقف</button>}
+              <button onClick={() => setOpen(open === s.id ? '' : s.id)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 10px', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>{open === s.id ? 'بستن' : `مشاورها (${fa(advN)})`}</button>
               <button onClick={() => remove(s.id)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 9px', color: '#e06666', fontSize: 12, cursor: 'pointer' }}>حذف</button>
             </div>
-            {/* زمان‌بندیِ اختصاصیِ همین آژانس */}
+
+            {/* خطِ دومِ هر ردیف: «کِی» و «چقدر» — همان چیزی که تا امروز هیچ‌جا نوشته نمی‌شد */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 7, fontSize: 11.5, color: 'var(--muted)' }}>
+              <span>آخرین اسکرپِ موفق:{' '}
+                {s.lastOkAt
+                  ? <><b dir="ltr" style={{ color: 'var(--text)' }}>{dt(s.lastOkAt)}</b> <span style={{ color: 'var(--faint)' }}>({ago(s.lastOkAt)})</span></>
+                  : <b style={{ color: '#e7a14a' }}>هرگز</b>}
+              </span>
+              {!!s.lastRun && s.lastRun !== s.lastOkAt && (
+                <span style={{ color: s.lastError ? '#e06666' : 'var(--faint)' }}>آخرین تلاش: <span dir="ltr">{dt(s.lastRun)}</span>{s.lastError ? ' ✗' : ''}</span>
+              )}
+              <span style={{ color: 'var(--faint)' }}>{s.lastTotal != null ? `${fa(s.lastTotal)} آگهی · ${fa(s.lastUnnamed || 0)} بی‌نام` : 'هنوز همگام نشده'}</span>
+              <button onClick={() => setSchedOpen(schedOpen === s.id ? '' : s.id)} style={{ marginInlineStart: 'auto', background: 'transparent', border: '1px solid var(--line2)', borderRadius: 999, padding: '4px 10px', color: 'var(--muted)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                🕛 {eff(s, 'autoSync') ? <span dir="ltr">{faHour(eff(s, 'startHour'))}–{faHour(eff(s, 'endHour'))}</span> : 'خودکار خاموش'}
+                {(s.autoSync !== undefined || s.startHour !== undefined || s.endHour !== undefined) && <span style={{ color: 'var(--gold)' }}> ●</span>}
+              </button>
+            </div>
+            {s.lastError && <div style={{ fontSize: 11, color: '#e06666', marginTop: 5, lineHeight: 1.8 }}>خطا: {s.lastError}</div>}
+
+            {/* زمان‌بندیِ اختصاصی — تاشو، تا ۱۵۵ ردیف ۱۵۵ جفت سلکتِ باز نداشته باشند */}
+            {schedOpen === s.id && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--line2)' }}>
               <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>🕛 زمان‌بندیِ این آژانس:</span>
               <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 11.5, color: 'var(--muted)' }}>
@@ -2494,6 +2616,7 @@ function AgencyRosterPanel() {
                 ? <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>(از پیش‌فرض پیروی می‌کند)</span>
                 : <span style={{ fontSize: 10.5, color: 'var(--gold)' }}>● اختصاصی</span>}
             </div>
+            )}
             {open === s.id && (
               <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {[...selAdv].filter(k => k.startsWith(s.id + ':')).length > 0 && (
@@ -2536,8 +2659,11 @@ function AgencyRosterPanel() {
               </div>
             )}
           </div>
-        ))}
-        {!scrapes.length && <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 2px' }}>هنوز آژانسی اضافه نشده.</div>}
+          )
+        })}
+        {!scrapes.length
+          ? <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 2px' }}>هنوز آژانسی اضافه نشده.</div>
+          : !rows.length && <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 2px' }}>با این فیلترها آژانسی نیست — «همه» را بزن.</div>}
       </div>
     </Card>
   )

@@ -43,6 +43,15 @@ export function geoDistanceM(lat1: number, lng1: number, lat2: number, lng2: num
   return Math.sqrt(x * x + y * y) * R
 }
 
+// شهرِ یک آگهی — همان قاعده‌ای که fieldsOf به‌کار می‌برد: متای «شهر»، وگرنه تکهٔ اولِ
+// location وقتی دو تکه باشد (تک‌تکه‌ای محله است، نه شهر). جدا شد تا مسیرهایی که «فقط
+// شهر» می‌خواهند کلِ بردار را نسازند و قاعده همچنان یک‌جا بماند — CLAUDE.md دو بار ثبت
+// کرده که ترتیبِ سگمنت‌های location در پروژه یکدست نیست و بازنویسیِ این منطق باگ ساخته.
+export function cityOfListing(it: { location?: string; meta?: Record<string, string> }): string {
+  const segs = (it.location || '').split(/[،,]/).map(x => x.trim()).filter(Boolean)
+  return norm(it.meta?.['شهر'] || (segs.length > 1 ? segs[0] : ''))
+}
+
 // از شکلِ آیتمِ اسکرپ‌شده ({title, price, location, meta}) بردارِ ویژگی می‌سازد.
 export function fieldsOf(it: { title?: string; price?: string; location?: string; meta?: Record<string, string> }): SimFields {
   const priceTxt = faToEn(it.price || '')
@@ -57,7 +66,7 @@ export function fieldsOf(it: { title?: string; price?: string; location?: string
   // فاز ۱۴۴: طبقه — تنها تمایزِ واقعیِ دو واحدِ هم‌شکل در یک ساختمان (متای «طبقه» یا خودِ عنوان)
   const floor = firstInt(it.meta?.['طبقه']) || (faToEn(it.title || '').match(/طبقه[یهٔ‌\s]*(\d+)/) ? parseInt(faToEn(it.title || '').match(/طبقه[یهٔ‌\s]*(\d+)/)![1], 10) : 0)
   // فاز ۱۴۵: شهر/استان (متا یا اولین تکهٔ location)، نوعِ ملک، سالِ ساخت، تعدادِ طبقات، مختصات
-  const city = norm(it.meta?.['شهر'] || (segs.length > 1 ? segs[0] : ''))
+  const city = cityOfListing(it)
   const province = norm(it.meta?.['استان'])
   const ptype = ptypeClassOf(it.meta?.['نوع ملک'] || it.title)
   const yearBuilt = firstInt(it.meta?.['سال ساخت'])

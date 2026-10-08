@@ -1002,6 +1002,16 @@ Playwright (دسکتاپ + موبایل). **فاز ۱ از ری‌دیزاین؛
 پایهٔ ~۵۵۰MB می‌سازند — نشتی نیست، هزینهٔ عمدیِ سرعت است؛ در سقف لحاظش کن.
 
 
+### تاییدِ بصریِ UIِ کلاینتی در این سندباکس: `next start`، نه `next dev` (۸ اکتبر)
+وب‌سوکتِ HMRِ `next dev` در این محیط بسته است (`ERR_INVALID_HTTP_RESPONSE`)، و بدونِ آن
+React **هرگز hydrate نمی‌شود** — یعنی هیچ `useEffect`ی اجرا نمی‌شود، هیچ fetchی نمی‌رود، و
+کامپوننت فقط HTMLِ SSR را نشان می‌دهد. چند دور وقت رفت تا معلوم شود «پنل خالی است» باگِ من
+نبود. درمان: `npm run build && npx next start -p 3100` — بدونِ HMR، هیدریشن سالم کار می‌کند و
+`page.route()` پلی‌رایت هم می‌تواند APIها را stub کند. برای پنلِ ادمین: کوکیِ `mj_session` را
+خودت با `jose` امضا کن (`JWT_SECRET` محلی تعریف نشده، پس کلیدِ پیش‌فرضِ session.ts کار می‌کند)
+و چون `?view=` در عمل روی `active` اثر نمی‌گذارد، مقدارِ اولیهٔ `useState<View>` را موقتاً عوض
+کن و بعد برگردان.
+
 ## Conventions
 - **Persistence = file-based JSON stores** in `process.cwd()`, all gitignored (`.*-data.json`).
   Mirror the style of `app/lib/scraper-store.ts` / `crm-store.ts` for any new store.

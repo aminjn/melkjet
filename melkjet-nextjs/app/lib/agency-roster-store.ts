@@ -10,6 +10,7 @@ import { parseFaNum, rentPartsOf } from './reos/features'
 import { getDivar, recordImport, clearImports } from './advisor-divar-store'
 import { getAdvisor, addListing, publishListingsBatch, deleteListing, setListingStatus, updateAdvisorProfile, type Listing , updateListing} from './advisor-store'
 import { createAccount, accountExists, adminUpdate } from './account-store'
+import { cityOfScrape } from './agency-roster-city'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
 // ── «هوش آژانس»: یک لینکِ آژانسِ دیوار → مشاورها + آژانس، هر کدام حسابِ جدا ──
@@ -49,6 +50,7 @@ export interface RosterScrape {
   createdAt: number
   lastRun?: number        // آخرین «تلاش» (موفق یا ناموفق) — برای زمان‌بندی
   lastOkAt?: number       // فاز ۲۹۷ض — آخرین سینکِ «موفقِ کامل» (گزارش این را نشان می‌دهد، نه تلاش)
+  city?: string           // ۸ اکتبر — شهرِ آژانس از پرتکرارترین شهرِ فایل‌هایش (برای فیلترِ پنل)
   lastError?: string
   lastTotal?: number
   lastUnnamed?: number
@@ -657,9 +659,13 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       return { ok: false, error: wasStopped ? 'متوقف شد' : 'بودجهٔ زمانی — ادامه خودکار', advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
     }
 
+    // ۸ اکتبر — شهر از فایل‌های همین آژانس. بیرونِ mutate محاسبه می‌شود تا قفلِ ردیف
+    // منتظرِ یک خواندنِ دیگر نماند، و شکستش سینک را نمی‌اندازد.
+    const cityNow = await cityOfScrape({ id, agencyOwner: scrape.agencyOwner, agencyPhone: scrape.agencyPhone, advisors: recs }).catch(() => '')
     await mutateScrape(id, s => {
       if (!s) return
       s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
+      if (cityNow) s.city = cityNow
       s.running = false; s.runRequested = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastOkAt = Date.now(); s.lastError = ''
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
