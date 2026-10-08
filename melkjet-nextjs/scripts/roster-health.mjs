@@ -72,6 +72,7 @@ row('دارای خطای آخر', errored.length)
 // این عدد را هیچ‌جا نگه نمی‌داشتیم، پس «۲-۳ روز» تا امروز فقط حس بود.
 console.log('')
 console.log('— توانِ واقعیِ هر شب (از lastOkAtِ خودِ آژانس‌ها) —')
+let slotEvery = 1          // «هر چند شب یک‌بار نوبتِ یک آژانس می‌شود» — در بخشِ کش هم لازم است
 {
   const nightOf = t => {                       // «شبِ» مالکِ یک زمان: روزی که پنجره‌اش در آن باز شد
     const d = new Date(t + IR)
@@ -83,13 +84,14 @@ console.log('— توانِ واقعیِ هر شب (از lastOkAtِ خودِ آ�
   const byNight = new Map()
   let ok = 0
   for (const s of all) { if (!s.lastOkAt) continue; ok++; const k = nightOf(s.lastOkAt); byNight.set(k, (byNight.get(k) || 0) + 1) }
-  if (!ok) console.log('  هیچ آژانسی سینکِ موفق ندارد — مشکل ظرفیت نیست، اجرا است.')
+  if (!ok) console.log('  هیچ آژانسی سینکِ موفق ندارد (lastOkAt خالی است — کدِ پیش از فاز ۲۹۷ض) — از lastRun استفاده کن.')
   else {
     const nights = [...byNight.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 7)
     for (const [k, v] of nights) console.log('  ' + k + '   ' + String(v).padStart(4) + ' آژانس')
     // «آخرین موفقیت» است، پس شب‌های قدیمی‌تر کم‌شمرده می‌شوند؛ تازه‌ترین شبِ کامل واقع‌بینانه‌ترین است.
     const best = Math.max(...nights.map(x => x[1]))
-    console.log('  بهترین شب: ' + best + ' آژانس   ⇒ دورهٔ تکرار ≈ ' + (best ? (all.length / best).toFixed(1) : '∞') + ' شب')
+    if (best) slotEvery = all.length / best
+    console.log('  بهترین شب: ' + best + ' آژانس   ⇒ دورهٔ تکرار ≈ ' + (best ? slotEvery.toFixed(1) : '∞') + ' شب')
   }
 }
 
@@ -154,13 +156,15 @@ for (const [k, v] of Object.entries(tb)) row(k, v)
 row('کلِ مشاوران', advTotal)
 row('آژانسِ بدونِ مشاور', noAdv, noAdv ? 'ران تمام شده ولی خروجی نداشته' : '')
 
-// چرا محتوا تکان نمی‌خورد حتی وقتی سینک هر شب اجرا می‌شود: دو سقف در agency-roster-store.
-//   REFRESH_AGE = ۱۴ روز  و  فقط ۳۰ ردیف در هر ران تازه می‌شود (خطِ ۴۲۴‌۴۲۵)
-// آژانسی که بیش از ۳۰×۱۴ = ۴۲۰ ردیف دارد، هرگز یک دورِ کامل را درونِ پنجرهٔ کهنگی تمام
-// نمی‌کند — عنوان و قیمتِ ردیف‌هایِ ته‌صف یخ می‌زند. این بخش عددِ واقعیِ هر آژانس را می‌دهد.
+// چرا محتوا تکان نمی‌خورد حتی وقتی سینک «هر شب» اجرا می‌شود — دو ضرب، نه یکی:
+//   (۱) هر پاس حداکثر `max(30, ردیف/۱۴)` ردیفِ کهنه را تازه می‌کند (agency-roster-store).
+//       این سقف با این فرض مشتق شده که آژانس «هر شب» یک اسلات می‌گیرد.
+//   (۲) ولی واقعاً هر K شب یک‌بار نوبتش می‌شود (K را از بخشِ توانِ شبانه می‌گیریم).
+// پس دورِ واقعیِ تازه‌سازی = ۱۴ × K شب، نه ۱۴. تا امروز این بخش CAP را ۳۰ِ ثابت
+// فرض می‌کرد (کدِ فعلی مشتق می‌کند) و K را هم در حساب نمی‌آورد — هر دو گمراه‌کننده.
 console.log('')
 console.log('— کشِ ردیفِ روستر: آیا دورِ تازه‌سازی به خودش می‌رسد؟ —')
-const CAP = 30, AGE_D = 14
+const AGE_D = 14
 try {
   const { pgEnabled, pgTx } = await import('../app/lib/db.ts')
   if (!pgEnabled()) console.log('  بدونِ DATABASE_URL — این بخش رد شد')
@@ -168,19 +172,20 @@ try {
     const r = await pgTx(c => c.query(
       "SELECT key, (SELECT count(*) FROM jsonb_object_keys(data)) AS rows FROM kv WHERE key LIKE 'agency_roster_cache:%'"))
     const sizes = r.rows.map(x => Number(x.rows)).sort((a, b) => b - a)
-    const need = n => Math.ceil(n / CAP)               // چند شب لازم است تا یک دور کامل شود
-    const behind = sizes.filter(n => need(n) > AGE_D)
+    const capOf = n => Math.max(30, Math.ceil(n / AGE_D))   // عیناً refreshCapِ agency-roster-store
+    const nightsIfEveryNight = n => Math.ceil(n / capOf(n))
+    const realNights = n => Math.round(nightsIfEveryNight(n) * slotEvery * 10) / 10
+    const behind = sizes.filter(n => realNights(n) > AGE_D)
     row('آژانسِ دارای کش', sizes.length)
     row('مجموعِ ردیف‌ها', sizes.reduce((a, b) => a + b, 0))
-    row('بزرگ‌ترین', sizes[0] || 0, sizes[0] ? need(sizes[0]) + ' شب برای یک دور' : '')
-    row('میانه', sizes.length ? sizes[Math.floor(sizes.length / 2)] : 0)
-    row('عقب‌مانده از چرخه', behind.length, '>' + AGE_D + ' شب لازم دارند — محتوایشان یخ می‌زند')
-    if (sizes.length) {
-      const worst = sizes.slice(0, 6).map(n => n + ' (' + need(n) + 'شب)').join('، ')
-      console.log('  بزرگ‌ترین‌ها: ' + worst)
-      const cycleCap = Math.ceil((sizes[0] || 0) / AGE_D)
-      console.log('  برای اینکه بزرگ‌ترین هم درونِ ' + AGE_D + ' شب یک دور شود، سقف باید حداقل ' + cycleCap + ' باشد (الان ' + CAP + ').')
-    }
+    row('نوبتِ هر آژانس', slotEvery.toFixed(1) + ' شب', 'از بخشِ توانِ شبانه')
+    row('بزرگ‌ترین', sizes[0] || 0, sizes[0] ? 'سقفِ پاس ' + capOf(sizes[0]) + ' ⇒ ' + nightsIfEveryNight(sizes[0]) + ' پاس = ' + realNights(sizes[0]) + ' شب' : '')
+    row('میانه', sizes.length ? sizes[Math.floor(sizes.length / 2)] : 0, sizes.length ? 'سقفِ پاس ' + capOf(sizes[Math.floor(sizes.length / 2)]) : '')
+    row('عقب‌مانده از چرخه', behind.length, '>' + AGE_D + ' شب تا یک دورِ کامل — محتوایشان یخ می‌زند')
+    // بارِ واقعیِ شبانه روی دیوار، که سقفِ عبوری را تعیین می‌کند
+    const perNightFetch = sizes.reduce((a, n) => a + capOf(n), 0) / Math.max(1, slotEvery)
+    console.log('  واکشیِ تازه‌سازی در هر شب ≈ ' + Math.round(perNightFetch) + ' توکن (فقط refresh، بی‌حسابِ آگهیِ تازه)')
+    console.log('  ⇒ همین بارِ دیوار است که طولِ پاس را می‌سازد؛ بخشِ «طولِ آخرین پاسِ موفق» بالا عددش را می‌دهد.')
   }
 } catch (e) { console.log('  خطا: ' + (e?.message || e)) }
 
