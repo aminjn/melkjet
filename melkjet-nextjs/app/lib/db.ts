@@ -17,11 +17,17 @@ function getPool(): Pool {
     // (سینکِ رُستر + صفِ حساب + t2t + غنی‌سازی + کرون) و با ۱۵ اتصال دو روز تمام همه‌چیز با
     // «timeout exceeded when trying to connect» می‌مرد — اتصال‌ها پشتِ قفل‌ها پارک بودند.
     // ۳۰ برای اینستنسِ ۰ + ۱۲×۳ سرویس‌ده = ۶۶ < سقفِ ۱۰۰ پستگرس.
-    const poolMax = process.env.NODE_APP_INSTANCE === '0' ? 30 : 12
-    // فاز ۲۹۷ف۲ — سقفِ کوئری به ۱۵s برگشت و connect سریع (۴s) شکست می‌خورد: سقفِ ۳۰s + acquire-retryِ
-    // فاز ظ، «درخواستِ کاربر» را هم زیرِ فشار تا ~۲۷s معطل می‌کرد و nginx ۵۰۲ می‌داد (قطعیِ زنده).
-    // درخواستِ کاربر باید «سریع» شکست بخورد، نه معطل بماند؛ بارِ سینک با سریال‌بودن (conc=1) کم است.
-    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: poolMax, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 4_000, statement_timeout: 15_000 })
+    const isBgWorker = process.env.NODE_APP_INSTANCE === '0'
+    const poolMax = isBgWorker ? 30 : 12
+    // فاز ۲۹۸ی۱۶ — ریشهٔ «سینک‌ها ابدی در صف با timeout exceeded when trying to connect»:
+    // connectionTimeoutMillis همان چیزی است که یک acquireِ در صفِ استخر را رد می‌کند. فاز ف۲ آن را
+    // سراسری ۴s کرد تا «درخواستِ کاربر» سریع شکست بخورد (۵۰۲ به‌جای معطلی) — درست، ولی اینستنسِ ۰
+    // کارگرِ پس‌زمینه است (nginx پورت ۳۰۰۰ را backup کرده؛ عملاً ترافیکِ کاربر نمی‌گیرد)، پس آن‌جا
+    // ۴s یعنی یک کارِ پس‌زمینه که اتصالِ آزاد پیدا نمی‌کند، سینک را با «connect timeout» می‌سوزاند و
+    // بعد از ۸ تلاش آژانس را روزها «گیرکرده» می‌گذارد. راهِ درست: اینستنسِ ۰ «صبور» باشد (تا ۳۰s در
+    // صفِ استخر منتظرِ آزادشدنِ اتصال بماند — یک kvMutate سنگین تا ۴۵s اتصال نگه می‌دارد) و اینستنس‌های
+    // سرویس‌ده همان ۴sِ سریع را نگه دارند تا هیچ درخواستِ کاربری پشتِ استخرِ پر معطل نماند (۵۰۲).
+    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: poolMax, idleTimeoutMillis: 30_000, connectionTimeoutMillis: isBgWorker ? 30_000 : 4_000, statement_timeout: 15_000 })
     pool.on('error', () => { /* خطای idle client، pool خودش بازیابی می‌کند */ })
   }
   return pool
