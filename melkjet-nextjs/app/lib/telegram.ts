@@ -8,16 +8,33 @@ const ctx = (): BotCtx => currentBot() || tgBotCtx()
 
 export const tgConfigured = () => !!tgBotCtx().token
 
+// فاز ۳۰۰ب — بله parse_mode:'HTML' را رندر نمی‌کند و تگِ <b>…</b> را خام نشان می‌دهد.
+// پس برای بله تگ‌ها را پاک می‌کنیم و parse_mode را برمی‌داریم (متنِ تمیزِ ساده).
+function stripHtml(s: string): string {
+  return s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?[^>]+>/g, '')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+}
+function sanitizeForBale(params: Record<string, unknown>): Record<string, unknown> {
+  const p = { ...params }
+  if ('parse_mode' in p) delete p.parse_mode
+  if (typeof p.text === 'string') p.text = stripHtml(p.text)
+  if (typeof p.caption === 'string') p.caption = stripHtml(p.caption)
+  return p
+}
+
 /** تماسِ خامِ Bot API از راهِ سکوی جاری. در خطا null برمی‌گرداند (نه throw). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function tgApi<T = any>(method: string, params: Record<string, unknown> = {}): Promise<T | null> {
   const c = ctx()
   if (!c.token) { console.warn(`[${c.platform}] توکنِ ربات تنظیم نشده`); return null }
+  const payload = c.platform === 'bale' ? sanitizeForBale(params) : params
   try {
     const r = await proxiedRequest(`${c.apiBase}/${method}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify(payload),
       proxyUrl: c.proxy || undefined,
       timeout: 20000,
     })
