@@ -47,20 +47,61 @@ async function mutate<R>(fn: (d: AiDb) => R): Promise<R> {
   return out
 }
 
-// ثبتِ یک فراخوانی — fire-and-forget از gapgpt (خطای ثبت هرگز خودِ فیچر را خراب نمی‌کند).
+// ── کوالسِ‌کنندهٔ درون‌حافظه‌ای (فاز ۲۹۸ی۱۷) ───────────────────────────────────
+// ریشهٔ «سینک‌ها ابدی در صف با timeout exceeded when trying to connect»: هر فراخوانِ AI
+// یک kvMutate کاملِ read-modify-write روی «یک» کلیدِ ai_usage می‌زد. وقتی چیزی (ممیزیِ
+// دسته‌ای/غنی‌سازی/ترافیک) ناگهان ~۲۷ فراخوان با هم می‌فرستد — که با مرگِ سهمیهٔ گپ سریع هم
+// شکست می‌خورند — ۲۷ نویسنده روی قفلِ همان ردیف سریال می‌شوند و استخرِ اتصال را می‌بلعند
+// (lockkey.sql: ai_usage | waiters=27). راهِ درست: افزایش‌ها در حافظه جمع و هر چند ثانیه
+// در «یک» نوشتن flush شوند → نوشتن روی ai_usage از ده‌ها در ثانیه به حداکثر ~یکی در ثانیه.
+let pendingDays: Record<string, Record<string, AiCell>> = {}
+let pendingRecent: AiRecent[] = []
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+let flushing = false
+const FLUSH_MS = 4000      // flushِ زمان‌دار
+const FLUSH_MAX = 100      // اگر بافر بزرگ شد زودتر flush کن
+
+function scheduleFlush() { if (!flushTimer) flushTimer = setTimeout(() => { flushTimer = null; void flushAiUsage() }, FLUSH_MS) }
+function addDelta(dst: Record<string, Record<string, AiCell>>, day: string, key: string, c: AiCell) {
+  dst[day] = dst[day] || {}
+  const t = dst[day][key] || { calls: 0, tokens: 0, errors: 0, ms: 0 }
+  t.calls += c.calls; t.tokens += c.tokens; t.errors += c.errors; t.ms += c.ms
+  dst[day][key] = t
+}
+
+// flushِ بافر در «یک» نوشتنِ اتمیک. افزایشی است (delta += موجود) پس نوشتنِ اینستنس‌های دیگر
+// گم نمی‌شود. شکست → بافر برمی‌گردد تا دورِ بعد دوباره تلاش شود (قانونِ شمارهٔ یک).
+export async function flushAiUsage(): Promise<void> {
+  if (flushing) return
+  if (!pendingRecent.length && !Object.keys(pendingDays).length) return
+  flushing = true
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null }
+  const days = pendingDays; const recent = pendingRecent
+  pendingDays = {}; pendingRecent = []   // بافرِ تازه برای فراخوان‌های حینِ flush
+  try {
+    await mutate(d => {
+      for (const [day, cells] of Object.entries(days)) for (const [key, c] of Object.entries(cells)) addDelta(d.days, day, key, c)
+      if (recent.length) d.recent = recent.concat(d.recent).slice(0, 200)
+    })
+  } catch {
+    for (const [day, cells] of Object.entries(days)) for (const [key, c] of Object.entries(cells)) addDelta(pendingDays, day, key, c)
+    pendingRecent = pendingRecent.concat(recent).slice(0, 300)
+  } finally {
+    flushing = false
+    if (pendingRecent.length || Object.keys(pendingDays).length) scheduleFlush()
+  }
+}
+
+// ثبتِ یک فراخوانی — فقط بافرِ درون‌حافظه را به‌روز می‌کند (بدونِ IO/قفل)؛ flush دسته‌ای می‌شود.
 export async function recordAiUse(e: { src?: string; model: string; kind: 'text' | 'vision' | 'image'; tokens: number; ok: boolean; ms: number; err?: string }): Promise<void> {
   const src = (e.src || 'ناشناخته').slice(0, 80)
-  await mutate(d => {
-    const day = dayOf()
-    d.days[day] = d.days[day] || {}
-    const key = `${src}|${e.model}|${e.kind}`
-    const c = d.days[day][key] || { calls: 0, tokens: 0, errors: 0, ms: 0 }
-    c.calls++; c.tokens += Math.max(0, Math.round(e.tokens) || 0); c.ms += Math.max(0, Math.round(e.ms) || 0)
-    if (!e.ok) c.errors++
-    d.days[day][key] = c
-    d.recent.unshift({ at: Date.now(), src, model: e.model, kind: e.kind, tokens: Math.max(0, Math.round(e.tokens) || 0), ok: e.ok, ms: Math.round(e.ms) || 0, err: e.ok ? undefined : String(e.err || '').slice(0, 160) || undefined })
-    d.recent = d.recent.slice(0, 200)
-  })
+  const tokens = Math.max(0, Math.round(e.tokens) || 0)
+  const ms = Math.max(0, Math.round(e.ms) || 0)
+  addDelta(pendingDays, dayOf(), `${src}|${e.model}|${e.kind}`, { calls: 1, tokens, errors: e.ok ? 0 : 1, ms })
+  pendingRecent.unshift({ at: Date.now(), src, model: e.model, kind: e.kind, tokens, ok: e.ok, ms, err: e.ok ? undefined : String(e.err || '').slice(0, 160) || undefined })
+  if (pendingRecent.length > 300) pendingRecent = pendingRecent.slice(0, 300)
+  if (pendingRecent.length >= FLUSH_MAX) void flushAiUsage()
+  else scheduleFlush()
 }
 
 // فاز ۷۸ — مدارشکنِ مدل: مدلی که N بارِ پیاپی شکست خورده تا مدتی «خراب» شمرده می‌شود و chatCompleteSafe
@@ -80,6 +121,7 @@ export function modelDown(model: string): boolean {
 
 // خلاصهٔ جزءبه‌جز برای پنلِ ادمین: به تفکیکِ منبع (کدام فیچر)، مدل، و روز — همه از دادهٔ ثبت‌شدهٔ واقعی.
 export async function aiUsageSummary(days = 30) {
+  await flushAiUsage().catch(() => {})   // بافرِ درون‌حافظه را پیش از خواندن خالی کن تا آمار کهنه نباشد
   const d = await loadAll()
   const cutoff = dayOf(Date.now() - Math.max(1, days) * 864e5)
   const bySrc: Record<string, AiCell> = {}
