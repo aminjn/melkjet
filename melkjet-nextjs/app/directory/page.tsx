@@ -312,6 +312,8 @@ const BLUEPRINT = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000
 const GOLD = '#f7e39a'        // طلاییِ روشنِ برند
 const GOLD_MID = '#d9ad3e'    // طلاییِ میانیِ برند
 const INK = '#241a06'         // متنِ تیره روی سطحِ طلایی
+// گرادیانِ سینماییِ «غروبِ» برند (هم‌خانوادهٔ هیروی صفحهٔ اصلی) — پس‌زمینهٔ تزئینیِ کارتِ بی‌عکس.
+const DUSK = 'radial-gradient(560px 320px at 70% 30%, rgba(236,151,56,.32), rgba(188,108,38,.12) 45%, transparent 72%), radial-gradient(380px 240px at 88% -16%, rgba(247,222,146,.2), transparent 64%), linear-gradient(180deg,#0a0e1a 0%,#0c0f18 34%,#15110a 72%,#0b0806 100%)'
 
 function Star({ size = 15 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={GOLD} aria-hidden style={{ flexShrink: 0, filter: 'drop-shadow(0 1px 3px rgba(0,0,0,.5))' }}><path d="M12 2.2l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.23l-5.9 3.1 1.13-6.56L2.45 9.14l6.6-.96z" /></svg>
@@ -354,7 +356,7 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
   // لایهٔ پس‌زمینه: عکسِ واقعی، وگرنه گرادیانِ گرمِ تیرهٔ برند (طلایی/برنز روی تیره — بدونِ سبز).
   const bgLayer = pro.image
     ? `${avatarPosFor(pro.category) === 'top' ? 'center top' : 'center'}/cover no-repeat url(${pro.image})`
-    : 'radial-gradient(135% 120% at 72% 4%, #3c3016 0%, #271d0f 40%, #140f09 72%, #0a0806 100%)'
+    : DUSK
 
   return (
     <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined}
@@ -371,9 +373,10 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
       }}>
       {/* عکس/گرادیانِ هیرو — با زومِ نرمِ هاور (حسِ سینمایی) */}
       <span aria-hidden style={{ position: 'absolute', inset: 0, background: bgLayer, transform: hovered ? 'scale(1.055)' : 'scale(1)', transition: 'transform .6s cubic-bezier(.22,1,.36,1)' }} />
-      {/* کارتِ بی‌عکس — موتیفِ معماریِ خط‌نقشه‌ای + واترمارکِ حروفِ اول، تا هیرو خالی نباشد */}
-      {!pro.image && <span aria-hidden style={{ position: 'absolute', top: 18, insetInline: 0, height: 150, backgroundImage: BLUEPRINT, backgroundRepeat: 'no-repeat', backgroundPosition: 'center', backgroundSize: '240px auto', opacity: .12, pointerEvents: 'none' }} />}
-      {!pro.image && <span aria-hidden style={{ position: 'absolute', top: '4%', insetInlineStart: '5%', fontSize: 120, fontWeight: 900, color: 'rgba(247,227,154,.06)', lineHeight: 1, letterSpacing: '-6px', pointerEvents: 'none' }}>{pro.initials}</span>}
+      {/* کارتِ بی‌عکس — هالهٔ گرمِ غروب + موتیفِ معماریِ خط‌نقشه‌ای + واترمارکِ حروفِ اول، تا هیرو سینمایی بماند */}
+      {!pro.image && <span aria-hidden style={{ position: 'absolute', top: '-16%', insetInlineEnd: '-12%', width: 210, height: 210, borderRadius: '50%', background: 'radial-gradient(circle, rgba(236,170,70,.3), transparent 68%)', filter: 'blur(26px)', pointerEvents: 'none' }} />}
+      {!pro.image && <span aria-hidden style={{ position: 'absolute', top: 20, insetInline: 0, height: 152, backgroundImage: BLUEPRINT, backgroundRepeat: 'no-repeat', backgroundPosition: 'center', backgroundSize: '240px auto', opacity: .14, pointerEvents: 'none' }} />}
+      {!pro.image && <span aria-hidden style={{ position: 'absolute', top: '4%', insetInlineStart: '5%', fontSize: 120, fontWeight: 900, color: 'rgba(247,227,154,.05)', lineHeight: 1, letterSpacing: '-6px', pointerEvents: 'none' }}>{pro.initials}</span>}
       {/* اسکریمِ تیره برای خوانایی (پایین پررنگ‌تر) */}
       <span aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(5,6,8,.95) 2%, rgba(5,6,8,.74) 24%, rgba(5,6,8,.34) 50%, rgba(5,6,8,.1) 70%, rgba(5,6,8,.5) 100%)' }} />
       {/* گرینِ فیلم (جنسِ مات) */}
