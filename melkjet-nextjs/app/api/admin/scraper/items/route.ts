@@ -113,9 +113,13 @@ export async function PATCH(req: NextRequest) {
   }
   if (b.status && ['pending', 'approved', 'duplicate', 'rejected'].includes(b.status)) {
     // مدلِ یادگیرنده از تصمیمِ دستیِ ادمین یاد بگیرد (قوی‌ترین سیگنال) — قبل از تغییرِ وضعیت آیتم را بگیر.
-    if (b.status === 'approved' || b.status === 'rejected') { const it = await getItemById(b.id); if (it && it.type === 'listing') teachFromAdmin(it, b.status as ItemStatus, it.status) }   // فاز ۷۷: حکمِ قبلی هم می‌رود تا برگشتِ تصمیم «یادگیریِ اصلاحی» شود
+    let prev: any = null
+    if (b.status === 'approved' || b.status === 'rejected') { prev = await getItemById(b.id); if (prev && prev.type === 'listing') teachFromAdmin(prev, b.status as ItemStatus, prev.status) }   // فاز ۷۷: حکمِ قبلی هم می‌رود تا برگشتِ تصمیم «یادگیریِ اصلاحی» شود
     await setItemStatus(b.id, b.status as ItemStatus)
     logAudit(await actor(), `تغییر وضعیت به ${b.status}`, b.id)
+    // فاز ۳۰۰ج — خبر به صاحبِ آگهیِ کاربرساخته (پیامک + رباتِ تلگرام/بله). پس‌زمینه، غیرِمسدودکننده.
+    if ((b.status === 'approved' || b.status === 'rejected') && prev)
+      import('@/app/lib/listing-approve-notify').then(m => m.notifyListingDecision(prev, b.status as 'approved' | 'rejected', prev.status)).catch(() => {})
     return NextResponse.json({ ok: true })
   }
   return NextResponse.json({ error: 'ورودی نامعتبر' }, { status: 400 })

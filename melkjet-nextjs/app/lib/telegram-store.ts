@@ -57,6 +57,12 @@ export async function allSubs(): Promise<Sub[]> { return (await load()).subs }
 export async function getLink(chatId: number): Promise<Link | undefined> { return (await load()).links[k(chatId)] }
 export async function setLink(l: Link) { const db = await load(); db.links[k(l.chatId)] = { ...l, platform: plat() }; await save(db) }
 export async function removeLink(chatId: number) { const db = await load(); delete db.links[k(chatId)]; await save(db) }
+// فاز ۳۰۰ج — همهٔ چت‌های وصل‌شده به یک شماره (در هر دو سکو) — برای خبرِ «آگهی‌ات تأیید شد».
+export async function linksByPhone(phone: string): Promise<Link[]> {
+  const digits = String(phone || '').replace(/\D/g, '')
+  if (!digits) return []
+  return Object.values((await load()).links).filter(l => String(l.phone || '').replace(/\D/g, '') === digits)
+}
 
 // ── فاز ۲۵۷: پیش‌نویسِ آگهی ──────────────────────────────────────────────────
 export async function getLDraft(chatId: number): Promise<LDraft | undefined> { return (await load()).ldrafts[k(chatId)] }
