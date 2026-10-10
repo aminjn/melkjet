@@ -304,12 +304,16 @@ export default function DirectoryPage() {
   )
 }
 
-function StatBox({ value, label, color }: { value: string; label: string; color?: string }) {
-  // فاز ۲۹۸ک — کاشیِ آمارِ گرادیانی (هماهنگ با پروفایل/سایت‌سازها)
+function StatRow({ boxes }: { boxes: { value: string; label: string; color?: string }[] }) {
+  // فاز ۲۹۸ی۱۹ — یک پنلِ شیشه‌ایِ واحد با جداکنندهٔ مویی (به‌جای سه جعبهٔ تفکیکیِ «کودکانه»)
   return (
-    <div style={{ flex: 1, textAlign: 'center', background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 8%, var(--bg2)), var(--bg2))', border: '1px solid var(--line)', borderRadius: 12, padding: '9px 6px' }}>
-      <div style={{ fontSize: 15, fontWeight: 900, color: color || 'var(--text)', marginBottom: 2 }}>{value}</div>
-      <div style={{ fontSize: 10, color: 'var(--muted)' }}>{label}</div>
+    <div style={{ display: 'flex', alignItems: 'stretch', margin: '14px 0 10px', borderRadius: 14, background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 7%, var(--bg2)), var(--bg2))', border: '1px solid var(--line2)', overflow: 'hidden', boxShadow: 'inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent)' }}>
+      {boxes.map((b, i) => (
+        <div key={b.label} style={{ flex: 1, textAlign: 'center', padding: '11px 6px', borderInlineStart: i ? '1px solid var(--line)' : 'none' }}>
+          <div style={{ fontSize: 16.5, fontWeight: 900, color: b.color || 'var(--text)', letterSpacing: '-.3px', lineHeight: 1.1 }}>{b.value}</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>{b.label}</div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -340,30 +344,31 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{
         display: 'block', textDecoration: 'none', color: 'inherit', position: 'relative', overflow: 'hidden',
-        background: 'var(--surface)',
-        border: `1px solid ${pro.promoted ? 'color-mix(in srgb, var(--gold) 55%, transparent)' : hovered ? 'var(--gold)' : 'var(--line)'}`,
-        borderRadius: 18,
-        transition: 'transform .2s, box-shadow .2s, border-color .2s',
-        transform: hovered ? 'translateY(-4px)' : 'none',
+        background: 'linear-gradient(168deg, color-mix(in srgb, var(--gold) 7%, var(--surface)) 0%, var(--surface) 46%)',
+        border: `1px solid ${pro.promoted ? 'color-mix(in srgb, var(--gold) 55%, transparent)' : hovered ? 'color-mix(in srgb, var(--gold) 60%, transparent)' : 'var(--line2)'}`,
+        borderRadius: 20,
+        transition: 'transform .22s, box-shadow .22s, border-color .22s',
+        transform: hovered ? 'translateY(-5px)' : 'none',
         boxShadow: pro.promoted
-          ? '0 0 0 1px color-mix(in srgb, var(--gold) 22%, transparent), 0 18px 42px -24px rgba(201,168,76,.3)'
-          : hovered ? '0 20px 44px -22px rgba(201,168,76,0.25)' : '0 2px 10px -6px rgba(0,0,0,0.25)',
+          ? '0 0 0 1px color-mix(in srgb, var(--gold) 24%, transparent), 0 24px 50px -26px rgba(201,168,76,.42)'
+          : hovered ? '0 28px 54px -26px rgba(201,168,76,0.4), 0 0 0 1px color-mix(in srgb, var(--gold) 20%, transparent)' : '0 12px 32px -24px rgba(0,0,0,0.55)',
       }}>
-      {/* کپِ گرادیانی + نشانِ ویژه و امتیاز */}
-      <div style={{ height: 62, position: 'relative', background: 'radial-gradient(200px 80px at 80% 0, color-mix(in srgb, var(--gold) 26%, transparent), transparent 70%), linear-gradient(135deg, color-mix(in srgb, var(--gold) 16%, var(--surface)), var(--surface))' }}>
+      {/* کاورِ سینماییِ تیره با هالهٔ طلایی — بنرِ پروفایلیِ لوکس (نه کپِ روشنِ قبلی) */}
+      <div style={{ height: 86, position: 'relative', overflow: 'hidden', background: 'radial-gradient(260px 130px at 80% -20%, rgba(247,222,146,.42), transparent 66%), radial-gradient(200px 130px at 10% 130%, rgba(201,168,76,.22), transparent 70%), linear-gradient(145deg, #15120b 0%, #0b0a07 100%)' }}>
+        <span aria-hidden style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(255,255,255,.016) 7px,rgba(255,255,255,.016) 8px)' }} />
+        <span aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, background: 'linear-gradient(90deg,transparent,color-mix(in srgb,var(--gold) 60%,transparent),transparent)' }} />
         {pro.promoted && <span style={{ position: 'absolute', top: 10, insetInlineStart: 12 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
-        {pro.rating > 0 && <span title={pro.registered ? `میانگینِ ${fa(s.reviews || 0)} نظرِ تأییدشده` : 'امتیاز از منبعِ آگهی'} style={{ position: 'absolute', top: 10, insetInlineEnd: 12, fontSize: 12.5, fontWeight: 800, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--bg) 55%, transparent)', backdropFilter: 'blur(6px)', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px' }}>{Number(pro.rating).toLocaleString('fa-IR')} <IconSvg name="star" size={12} color="var(--gold)" /></span>}
+        {pro.rating > 0 && <span title={pro.registered ? `میانگینِ ${fa(s.reviews || 0)} نظرِ تأییدشده` : 'امتیاز از منبعِ آگهی'} style={{ position: 'absolute', top: 10, insetInlineEnd: 12, fontSize: 12.5, fontWeight: 800, color: '#f6efdd', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,.1)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(247,222,146,.35)', borderRadius: 999, padding: '3px 10px' }}>{Number(pro.rating).toLocaleString('fa-IR')} <IconSvg name="star" size={12} color="var(--gold)" /></span>}
       </div>
 
-      {/* position:relative ضروری است: کپِ بالا position:relative دارد و بدونِ این، آواتارِ
-          سوار (marginTop منفی) زیرِ کپ می‌رود و از بالا «نصفه» بریده می‌شود (فاز ۲۹۸ط). */}
-      <div style={{ padding: '0 16px 16px', marginTop: -30, position: 'relative' }}>
+      {/* position:relative ضروری است تا آواتارِ سوار (marginTop منفی) روی کاور بیفتد. */}
+      <div style={{ padding: '0 16px 16px', marginTop: -36, position: 'relative' }}>
         {/* آواتارِ حلقه‌نورانیِ سوار */}
         <div style={{
-          width: 64, height: 64, borderRadius: '50%', margin: '0 auto 10px',
+          width: 72, height: 72, borderRadius: '50%', margin: '0 auto 10px',
           background: pro.image ? `${avatarPosFor(pro.category)}/cover no-repeat url(${pro.image})` : pro.avatarGradient,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 800, overflow: 'hidden',
-          boxShadow: '0 0 0 3px var(--surface), 0 0 0 5px color-mix(in srgb, var(--gold) 42%, transparent), 0 8px 20px -6px rgba(0,0,0,.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 22, fontWeight: 800, overflow: 'hidden',
+          boxShadow: '0 0 0 4px var(--surface), 0 0 0 6px color-mix(in srgb, var(--gold) 50%, transparent), 0 10px 26px -6px rgba(0,0,0,.6)',
         }}>{!pro.image && pro.initials}</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <span style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</span>
@@ -387,11 +392,7 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
           </div>
         )}
 
-        {boxes.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, margin: '13px 0 10px' }}>
-            {boxes.map(b => <StatBox key={b.label} value={b.value} label={b.label} color={b.color} />)}
-          </div>
-        )}
+        {boxes.length > 0 && <StatRow boxes={boxes} />}
         {(pro.badges?.filter(b => b.id !== 'verified').length ?? 0) > 0 && (
           <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}><RepBadges badges={pro.badges!.filter(b => b.id !== 'verified')} size="sm" /></div>
         )}
