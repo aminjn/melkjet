@@ -344,7 +344,6 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
   // فاز ۲۹۸ی۲۱ — کارتِ مدرنِ لوکس: حاشیهٔ کونیکِ شیمر + aurora meshِ چندرنگ + grainِ فیلم +
   // حلقهٔ امتیازِ کونیک دورِ آواتار (گیجِ دیتاویز) + پنلِ شیشه‌ای + CTAی گرادیانیِ براق.
   const CREAM = '#efe7d4'
-  const ringDeg = Math.round(Math.max(0, Math.min(100, score.score)) * 3.6)
   const tierChip = pct || (score.score > 0 ? score.tier : '')
   return (
     <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined}
@@ -354,15 +353,17 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
         background: pro.promoted
           ? 'conic-gradient(from 130deg,#f7e39a,#b07f26 25%,#f7e39a 50%,#b07f26 75%,#f7e39a)'
           : hovered
-            ? 'conic-gradient(from 130deg, rgba(247,222,146,.85), rgba(247,222,146,.12) 30%, rgba(247,222,146,.7) 55%, rgba(247,222,146,.12) 80%, rgba(247,222,146,.85))'
-            : 'linear-gradient(155deg, rgba(247,222,146,.42), rgba(247,222,146,.06) 55%, rgba(247,222,146,.24))',
+            ? 'conic-gradient(from 130deg, rgba(247,222,146,.9), rgba(247,222,146,.16) 30%, rgba(247,222,146,.75) 55%, rgba(247,222,146,.16) 80%, rgba(247,222,146,.9))'
+            : 'linear-gradient(155deg, rgba(247,222,146,.5), rgba(247,222,146,.1) 55%, rgba(247,222,146,.32))',
+        // گلوی طلاییِ بیرونی تا کارت روی «صفحهٔ تاریک» هم شناور بماند (نه فقط روی کرم).
         boxShadow: hovered
-          ? '0 40px 72px -32px rgba(0,0,0,.9), 0 0 62px -20px rgba(201,168,76,.5)'
-          : '0 20px 46px -30px rgba(0,0,0,.8)',
+          ? '0 40px 74px -32px rgba(0,0,0,.9), 0 0 66px -18px rgba(201,168,76,.55)'
+          : '0 22px 48px -30px rgba(0,0,0,.82), 0 0 36px -20px rgba(201,168,76,.34)',
         transform: hovered ? 'translateY(-6px) scale(1.012)' : 'none',
         transition: 'transform .28s cubic-bezier(.22,1,.36,1), box-shadow .28s, background .3s',
       }}>
-      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22.6, background: 'linear-gradient(158deg,#1b1711 0%,#100d09 55%,#15110b 100%)' }}>
+      {/* سطحِ «دودیِ گرمِ» روشن‌تر از مشکیِ مطلق → روی هر دو تمِ روشن/تاریک جدا و شناور می‌ماند. */}
+      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22.6, background: 'linear-gradient(158deg,#2b2417 0%,#18140d 56%,#241c12 100%)' }}>
         {/* aurora mesh — سه هالهٔ رنگیِ محو (عمق) */}
         <span aria-hidden style={{ position: 'absolute', top: -60, insetInlineEnd: -50, width: 220, height: 200, background: 'radial-gradient(circle at 60% 40%,#caa23a,transparent 62%)', opacity: .26, filter: 'blur(26px)', pointerEvents: 'none' }} />
         <span aria-hidden style={{ position: 'absolute', bottom: -70, insetInlineStart: -60, width: 220, height: 190, background: 'radial-gradient(circle at 50% 50%,#7a5513,transparent 66%)', opacity: .3, filter: 'blur(32px)', pointerEvents: 'none' }} />
@@ -373,33 +374,44 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
         {pro.promoted && <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, zIndex: 3 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
 
         <div style={{ position: 'relative', padding: '18px 16px 16px' }}>
-          {/* هویت — آواتارِ حلقه‌امتیازِ کونیک + نام/نقش/متا */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ position: 'relative', width: 78, height: 78, flexShrink: 0 }}>
-              <div style={{ width: 78, height: 78, borderRadius: '50%', background: `conic-gradient(#f4df94 ${ringDeg}deg, rgba(247,222,146,.13) ${ringDeg}deg)`, display: 'grid', placeItems: 'center', boxShadow: '0 0 20px -5px rgba(201,168,76,.55)' }}>
-                <div style={{ width: 64, height: 64, borderRadius: '50%', border: '3px solid #141009', overflow: 'hidden', background: pro.image ? `${avatarPosFor(pro.category)}/cover no-repeat url(${pro.image})` : pro.avatarGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 19, fontWeight: 800 }}>{!pro.image && pro.initials}</div>
-              </div>
-              {score.score > 0 && (
-                <span title="امتیازِ ملک‌جت از دادهٔ واقعی (معادلِ ۱۰)" style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(135deg,#f6e29a,#d7ad3e)', color: '#241c04', fontSize: 11, fontWeight: 900, padding: '2px 9px', borderRadius: 999, boxShadow: '0 0 0 2.5px #141009, 0 4px 10px -3px rgba(201,168,76,.8)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{scoreOutOf10(score.score)}</span>
-              )}
-            </div>
+          {/* هویت — آواتارِ مربعِ حلقه‌طلایی + نام/نقش + چیپِ رتبه */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+            <div style={{
+              width: 58, height: 58, borderRadius: 16, flexShrink: 0, overflow: 'hidden',
+              background: pro.image ? `${avatarPosFor(pro.category)}/cover no-repeat url(${pro.image})` : pro.avatarGradient,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800,
+              boxShadow: '0 0 0 2px rgba(247,222,146,.55), 0 0 16px -3px rgba(201,168,76,.5), 0 8px 18px -6px rgba(0,0,0,.6)',
+            }}>{!pro.image && pro.initials}</div>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 17, fontWeight: 800, color: CREAM, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-.3px' }}>{pro.name}</span>
                 {(pro.verified || pro.badges?.some(b => b.id === 'verified')) && <span title={pro.verified ? 'تاییدشدهٔ ملک‌جت' : 'پروفایلِ کامل'} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: pro.verified ? '#2f81f7' : 'rgba(95,217,138,.9)', color: '#fff', boxShadow: pro.verified ? '0 0 10px -2px rgba(47,129,247,.7)' : 'none' }}><IconSvg name="check" size={10} weight={2.6} /></span>}
               </div>
-              <div style={{ fontSize: 12, marginTop: 5, color: 'rgba(239,231,212,.58)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '.2px' }}>
-                <span style={{ color: '#e8cb6e', fontWeight: 700 }}>{pro.role}</span>{hasArea && <> · {pro.area}</>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 5, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: '#e8cb6e', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{pro.role}{hasArea && <span style={{ color: 'rgba(239,231,212,.5)', fontWeight: 400 }}> · {pro.area}</span>}</span>
               </div>
               {tierChip && (
-                <div style={{ marginTop: 10 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 42%, transparent)`, fontSize: 10.5, fontWeight: 800, color: scoreAccent }}>
+                <div style={{ marginTop: 8 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 42%, transparent)`, fontSize: 10, fontWeight: 800, color: scoreAccent }}>
                     <span style={{ width: 5, height: 5, borderRadius: '50%', background: scoreAccent, boxShadow: `0 0 7px ${scoreAccent}` }} />{tierChip}
                   </span>
                 </div>
               )}
             </div>
           </div>
+
+          {/* گیجِ امتیازِ افقی — دیتاویزِ خوانا که بدنه را پر می‌کند (مدرن‌تر از قوسِ ریز) */}
+          {score.score > 0 && (
+            <div style={{ marginTop: 15 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                <span style={{ fontSize: 10, color: 'rgba(239,231,212,.5)', letterSpacing: '.3px' }}>امتیازِ ملک‌جت</span>
+                <span style={{ fontSize: 13.5, fontWeight: 900, color: '#f6e29a', fontVariantNumeric: 'tabular-nums' }}>{scoreOutOf10(score.score)}<span style={{ fontSize: 9, color: 'rgba(239,231,212,.5)', fontWeight: 600 }}> از ۱۰</span></span>
+              </div>
+              <div style={{ position: 'relative', height: 7, borderRadius: 999, background: 'rgba(247,222,146,.1)', overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,.45)' }}>
+                <div style={{ position: 'absolute', top: 0, bottom: 0, insetInlineStart: 0, width: `${Math.max(5, Math.min(100, score.score))}%`, borderRadius: 999, background: 'linear-gradient(90deg,#b07f26,#f6e29a)', boxShadow: '0 0 10px -1px rgba(246,226,154,.75)' }} />
+              </div>
+            </div>
+          )}
 
           <StatRow boxes={boxes} />
 
