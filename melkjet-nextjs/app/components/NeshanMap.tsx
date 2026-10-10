@@ -82,6 +82,8 @@ export default function NeshanMap({
   const idsKeyRef = useRef('')          // مجموعهٔ idهای فعلی — تشخیصِ «دادهٔ اساساً جدید» (مثلاً محلهٔ دیگر در جستجو)
   const userMovedRef = useRef(false)    // بعد از زوم/جابه‌جاییِ کاربر، روی «همان داده» auto-fit نکن (زوم نپَرد)
   const programmaticRef = useRef(false) // حرکتِ برنامه‌ای (fitBounds/setView) با حرکتِ کاربر اشتباه نشود
+  const roRef = useRef<any>(null)       // ResizeObserverِ کانتینر — رفعِ «نقشهٔ نیمه‌لود/سفید» بعد از ری‌فلو
+  const onResizeRef = useRef<(() => void) | null>(null)
 
   // ساختِ یک‌بارهٔ نقشه (با تلاشِ مجددِ خودکار تا ۲ بار در صورتِ خطای گذرا)
   useEffect(() => {
@@ -106,8 +108,20 @@ export default function NeshanMap({
         })
         L.tileLayer(tiles, { maxZoom: 19 }).addTo(mapRef.current)
       } catch { failSoft('init'); return }
-      // اندازهٔ نقشه را بعد از چیدمان درست کن (کانتینرهایی که هنگام init هنوز اندازه نداشته‌اند).
-      setTimeout(() => { try { mapRef.current?.invalidateSize?.() } catch {} }, 250)
+      // اندازهٔ نقشه را بعد از چیدمان درست کن (کانتینرهایی که هنگام init هنوز اندازه نداشته‌اند) و
+      // «هر تغییرِ ابعاد» را بپا: لودِ عکس‌های بالاتر/فونت، ری‌فلوی ریسپانسیو، بازشدنِ بخش — وگرنه
+      // نقشه با اندازهٔ کهنه فقط بخشی از کاشی‌ها را می‌کشد و باقی سفید می‌ماند (باگِ «نقشهٔ نیمه‌لود»).
+      const inval = () => { try { mapRef.current?.invalidateSize?.({ pan: false }) } catch {} }
+      ;[0, 250, 600, 1200, 2500].forEach(ms => setTimeout(() => { if (!dead) inval() }, ms))
+      try {
+        if (typeof ResizeObserver !== 'undefined' && ref.current) {
+          let raf = 0
+          roRef.current = new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(inval) })
+          roRef.current.observe(ref.current)
+        }
+      } catch {}
+      onResizeRef.current = inval
+      try { window.addEventListener('resize', inval) } catch {}
       // حرکتِ خودِ کاربر (نه fit برنامه‌ای) → از این به بعد زوم/مرکزِ او محترم است و auto-fit خاموش می‌شود.
       try { mapRef.current.on('movestart zoomstart', () => { if (!programmaticRef.current) userMovedRef.current = true }) } catch {}
       // برچسبِ پیش‌فرضِ «Leaflet» حذف می‌شود.
@@ -141,7 +155,12 @@ export default function NeshanMap({
         } catch { /* بایندِ کلیک غیرِحیاتی است */ }
       }
     }).catch(() => failSoft('key'))
-    return () => { dead = true; try { mapRef.current?.remove() } catch {} ; mapRef.current = null }
+    return () => {
+      dead = true
+      try { roRef.current?.disconnect() } catch {} ; roRef.current = null
+      try { if (onResizeRef.current) window.removeEventListener('resize', onResizeRef.current) } catch {} ; onResizeRef.current = null
+      try { mapRef.current?.remove() } catch {} ; mapRef.current = null
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick])
 
