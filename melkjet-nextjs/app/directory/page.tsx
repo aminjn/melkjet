@@ -304,14 +304,15 @@ export default function DirectoryPage() {
   )
 }
 
-function StatRow({ boxes }: { boxes: { value: string; label: string; color?: string }[] }) {
-  // فاز ۲۹۸ی۱۹ — یک پنلِ شیشه‌ایِ واحد با جداکنندهٔ مویی (به‌جای سه جعبهٔ تفکیکیِ «کودکانه»)
+function StatRow({ boxes }: { boxes: { value: string; label: string }[] }) {
+  // فاز ۲۹۸ی۲۰ — پنلِ آمارِ تیره‌ی شیشه‌ای؛ فقط دادهٔ واقعیِ ناصفر (صفرها اصلاً ساخته نمی‌شوند).
+  if (!boxes.length) return null
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch', margin: '14px 0 10px', borderRadius: 14, background: 'linear-gradient(135deg, color-mix(in srgb, var(--gold) 7%, var(--bg2)), var(--bg2))', border: '1px solid var(--line2)', overflow: 'hidden', boxShadow: 'inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent)' }}>
+    <div style={{ display: 'flex', alignItems: 'stretch', marginTop: 15, borderRadius: 14, background: 'rgba(247,222,146,.045)', border: '1px solid rgba(247,222,146,.13)', overflow: 'hidden' }}>
       {boxes.map((b, i) => (
-        <div key={b.label} style={{ flex: 1, textAlign: 'center', padding: '11px 6px', borderInlineStart: i ? '1px solid var(--line)' : 'none' }}>
-          <div style={{ fontSize: 16.5, fontWeight: 900, color: b.color || 'var(--text)', letterSpacing: '-.3px', lineHeight: 1.1 }}>{b.value}</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>{b.label}</div>
+        <div key={b.label} style={{ flex: 1, textAlign: 'center', padding: '12px 6px', borderInlineStart: i ? '1px solid rgba(247,222,146,.11)' : 'none' }}>
+          <div style={{ fontSize: 17.5, fontWeight: 900, color: '#f2dc93', letterSpacing: '-.3px', lineHeight: 1.05 }}>{b.value}</div>
+          <div style={{ fontSize: 10, color: 'rgba(239,231,212,.5)', marginTop: 5 }}>{b.label}</div>
         </div>
       ))}
     </div>
@@ -327,87 +328,84 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
   // فاز ۲۹۸س — امتیازِ ملک‌جت (همان موتورِ پروفایل) از دادهٔ واقعیِ همین کارت + رتبهٔ درصدیِ درونِ دسته.
   const score = dirItemScore(pro)
   const pct = topPercentLabel(score.score, dist)
-  const scoreAccent = score.tierKey === 'active' ? '#5fd98a' : score.tierKey === 'new' ? 'var(--muted)' : 'var(--goldText)'
-  // جعبه‌های آمار فقط وقتی دادهٔ واقعی هست — برای ثبت‌شده‌ها (نظر/عضویت/معامله) و سازنده‌ها (پروژه)
-  const boxes: { value: string; label: string; color?: string }[] = []
-  if (pro.registered && s.memberYears !== undefined) {
-    boxes.push({ value: fa(s.reviews || 0), label: 'نظر', color: '#5fd98a' })
-    boxes.push({ value: s.memberYears! >= 1 ? fa(s.memberYears!) : '<۱', label: 'سال عضویت' })
-    boxes.push({ value: fa(s.deals || 0), label: 'معاملهٔ موفق', color: 'var(--goldText)' })
-  } else if (s.projects) {
-    boxes.push({ value: fa(s.projects), label: 'پروژهٔ ثبت‌شده', color: 'var(--goldText)' })
+  const scoreAccent = score.tierKey === 'active' ? '#5fd98a' : score.tierKey === 'new' ? 'rgba(239,231,212,.65)' : '#e8cb6e'
+  // فقط دادهٔ واقعیِ ناصفر — صفر/«<۱» اصلاً ساخته نمی‌شود (حسِ «خالی/مبتدی» را حذف می‌کند).
+  const boxes: { value: string; label: string }[] = []
+  if (pro.registered) {
+    if ((s.deals || 0) > 0) boxes.push({ value: fa(s.deals!), label: 'معاملهٔ موفق' })
+    if ((s.reviews || 0) > 0) boxes.push({ value: fa(s.reviews!), label: 'نظر' })
+    if ((s.memberYears || 0) >= 1) boxes.push({ value: fa(s.memberYears!), label: 'سال عضویت' })
   }
+  if ((s.projects || 0) > 0) boxes.push({ value: fa(s.projects!), label: 'پروژه' })
 
-  // فاز ۲۹۸ک — کارتِ «خفن»: کپِ گرادیانی + آواتارِ حلقه‌نورانیِ سوار + نشانِ ویژه/امتیاز روی کپ.
+  // فاز ۲۹۸ی۲۰ — کارتِ لوکسِ تیره (business-card افقی): سطحِ شیشه‌ایِ تیرهٔ ثابت + طلا،
+  // چیدمانِ افقیِ هویت، یک CTA، بدونِ صفرهای خالی و بدونِ تودهٔ قرص‌ها. (مثلِ هیرو عمداً تیره.)
+  const CREAM = '#efe7d4'
   return (
     <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{
-        display: 'block', textDecoration: 'none', color: 'inherit', position: 'relative', overflow: 'hidden',
-        background: 'linear-gradient(168deg, color-mix(in srgb, var(--gold) 7%, var(--surface)) 0%, var(--surface) 46%)',
-        border: `1px solid ${pro.promoted ? 'color-mix(in srgb, var(--gold) 55%, transparent)' : hovered ? 'color-mix(in srgb, var(--gold) 60%, transparent)' : 'var(--line2)'}`,
-        borderRadius: 20,
-        transition: 'transform .22s, box-shadow .22s, border-color .22s',
-        transform: hovered ? 'translateY(-5px)' : 'none',
-        boxShadow: pro.promoted
-          ? '0 0 0 1px color-mix(in srgb, var(--gold) 24%, transparent), 0 24px 50px -26px rgba(201,168,76,.42)'
-          : hovered ? '0 28px 54px -26px rgba(201,168,76,0.4), 0 0 0 1px color-mix(in srgb, var(--gold) 20%, transparent)' : '0 12px 32px -24px rgba(0,0,0,0.55)',
+        display: 'block', textDecoration: 'none', position: 'relative', overflow: 'hidden', color: CREAM, borderRadius: 22,
+        background: 'linear-gradient(158deg,#1a1610 0%,#0d0b08 60%,#120f0a 100%)',
+        border: `1px solid ${pro.promoted ? 'rgba(247,222,146,.5)' : hovered ? 'rgba(247,222,146,.42)' : 'rgba(247,222,146,.16)'}`,
+        boxShadow: hovered
+          ? '0 34px 64px -30px rgba(0,0,0,.85), 0 0 48px -18px rgba(201,168,76,.42), inset 0 1px 0 rgba(255,255,255,.05)'
+          : '0 18px 44px -30px rgba(0,0,0,.78), inset 0 1px 0 rgba(255,255,255,.04)',
+        transform: hovered ? 'translateY(-6px)' : 'none',
+        transition: 'transform .25s, box-shadow .25s, border-color .25s',
       }}>
-      {/* کاورِ سینماییِ تیره با هالهٔ طلایی — بنرِ پروفایلیِ لوکس (نه کپِ روشنِ قبلی) */}
-      <div style={{ height: 86, position: 'relative', overflow: 'hidden', background: 'radial-gradient(260px 130px at 80% -20%, rgba(247,222,146,.42), transparent 66%), radial-gradient(200px 130px at 10% 130%, rgba(201,168,76,.22), transparent 70%), linear-gradient(145deg, #15120b 0%, #0b0a07 100%)' }}>
-        <span aria-hidden style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(255,255,255,.016) 7px,rgba(255,255,255,.016) 8px)' }} />
-        <span aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, background: 'linear-gradient(90deg,transparent,color-mix(in srgb,var(--gold) 60%,transparent),transparent)' }} />
-        {pro.promoted && <span style={{ position: 'absolute', top: 10, insetInlineStart: 12 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
-        {pro.rating > 0 && <span title={pro.registered ? `میانگینِ ${fa(s.reviews || 0)} نظرِ تأییدشده` : 'امتیاز از منبعِ آگهی'} style={{ position: 'absolute', top: 10, insetInlineEnd: 12, fontSize: 12.5, fontWeight: 800, color: '#f6efdd', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,.1)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(247,222,146,.35)', borderRadius: 999, padding: '3px 10px' }}>{Number(pro.rating).toLocaleString('fa-IR')} <IconSvg name="star" size={12} color="var(--gold)" /></span>}
-      </div>
+      {/* هالهٔ طلاییِ گوشه */}
+      <span aria-hidden style={{ position: 'absolute', top: -46, insetInlineEnd: -34, width: 220, height: 180, background: 'radial-gradient(circle at 70% 30%, rgba(247,222,146,.2), transparent 60%)', pointerEvents: 'none' }} />
+      {pro.promoted && <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, zIndex: 2 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
 
-      {/* position:relative ضروری است تا آواتارِ سوار (marginTop منفی) روی کاور بیفتد. */}
-      <div style={{ padding: '0 16px 16px', marginTop: -36, position: 'relative' }}>
-        {/* آواتارِ حلقه‌نورانیِ سوار */}
-        <div style={{
-          width: 72, height: 72, borderRadius: '50%', margin: '0 auto 10px',
-          background: pro.image ? `${avatarPosFor(pro.category)}/cover no-repeat url(${pro.image})` : pro.avatarGradient,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 22, fontWeight: 800, overflow: 'hidden',
-          boxShadow: '0 0 0 4px var(--surface), 0 0 0 6px color-mix(in srgb, var(--gold) 50%, transparent), 0 10px 26px -6px rgba(0,0,0,.6)',
-        }}>{!pro.image && pro.initials}</div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <span style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</span>
-          {pro.verified && <span title="تاییدشدهٔ ملک‌جت" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: '#2f81f7', color: '#fff' }}><IconSvg name="check" size={10} weight={2.6} /></span>}
-          {!pro.verified && pro.badges?.some(b => b.id === 'verified') && <span title="پروفایلِ کامل و تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a' }}><IconSvg name="check" size={10} weight={2.6} /></span>}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, textAlign: 'center' }}>
-          <span style={{ color: 'var(--goldText)', fontWeight: 700 }}>{pro.role}</span>
-          {hasArea && <> · {pro.area}</>}
-        </div>
-
-        {/* فاز ۲۹۸ظ — امتیازِ ملک‌جت به سبکِ IMDb: نشانِ طلاییِ «★ X از ۱۰» + چیپِ رتبه/رده. */}
-        {score.score > 0 && score.tier && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
-            <span title="امتیازِ ملک‌جت از دادهٔ واقعی (معادلِ ۱۰)" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 11px', borderRadius: 999, background: 'linear-gradient(135deg, var(--gold2), var(--gold))', boxShadow: '0 2px 8px -3px rgba(201,168,76,.55)' }}>
-              <span style={{ color: '#3a2d07', display: 'flex' }}><IconSvg name="star" size={13} /></span>
-              <span style={{ fontSize: 13, fontWeight: 900, color: '#2a2105', lineHeight: 1 }}>{scoreOutOf10(score.score)}</span>
-              <span style={{ fontSize: 9.5, fontWeight: 800, color: '#5b4710', background: 'rgba(255,255,255,.45)', borderRadius: 999, padding: '2px 6px' }}>از ۱۰</span>
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 12px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 13%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 38%, transparent)`, fontSize: 11, fontWeight: 800, color: scoreAccent }}>{pct || score.tier}</span>
+      <div style={{ position: 'relative', padding: '18px 16px 16px' }}>
+        {/* ردیفِ هویت — افقی (آواتار + نام/نقش/متا) */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
+          <div style={{
+            width: 62, height: 62, borderRadius: 17, flexShrink: 0, overflow: 'hidden',
+            background: pro.image ? `${avatarPosFor(pro.category)}/cover no-repeat url(${pro.image})` : pro.avatarGradient,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 800,
+            boxShadow: '0 0 0 1px rgba(247,222,146,.55), 0 10px 22px -8px rgba(0,0,0,.65)',
+          }}>{!pro.image && pro.initials}</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 16.5, fontWeight: 800, color: CREAM, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-.2px' }}>{pro.name}</span>
+              {(pro.verified || pro.badges?.some(b => b.id === 'verified')) && <span title={pro.verified ? 'تاییدشدهٔ ملک‌جت' : 'پروفایلِ کامل'} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: pro.verified ? '#2f81f7' : 'rgba(95,217,138,.9)', color: '#fff' }}><IconSvg name="check" size={10} weight={2.6} /></span>}
+            </div>
+            <div style={{ fontSize: 12.5, marginTop: 4, color: 'rgba(239,231,212,.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ color: '#e8cb6e', fontWeight: 700 }}>{pro.role}</span>{hasArea && <> · {pro.area}</>}
+            </div>
+            {/* متا: امتیازِ طلایی + رتبه + پاسخگو */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
+              {score.score > 0 && score.tier && (
+                <span title="امتیازِ ملک‌جت از دادهٔ واقعی (معادلِ ۱۰)" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px 3px 7px', borderRadius: 999, background: 'linear-gradient(135deg,#f3dd93,#d7ad3e)', boxShadow: '0 3px 10px -4px rgba(201,168,76,.7)' }}>
+                  <span style={{ color: '#2a2105', display: 'flex' }}><IconSvg name="star" size={12} /></span>
+                  <span style={{ fontSize: 12.5, fontWeight: 900, color: '#241c04', lineHeight: 1 }}>{scoreOutOf10(score.score)}</span>
+                  <span style={{ fontSize: 9, fontWeight: 800, color: '#5b4710' }}>از ۱۰</span>
+                </span>
+              )}
+              {(pct || (score.score > 0 && score.tier)) && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 40%, transparent)`, fontSize: 10.5, fontWeight: 800, color: scoreAccent }}>{pct || score.tier}</span>
+              )}
+            </div>
           </div>
-        )}
+        </div>
 
-        {boxes.length > 0 && <StatRow boxes={boxes} />}
-        {(pro.badges?.filter(b => b.id !== 'verified').length ?? 0) > 0 && (
-          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}><RepBadges badges={pro.badges!.filter(b => b.id !== 'verified')} size="sm" /></div>
-        )}
+        <StatRow boxes={boxes} />
+
         {pro.tags.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 4, justifyContent: 'center' }}>
-            {pro.tags.slice(0, 3).map((tag) => (
-              <span key={tag} style={{ fontSize: 10.5, padding: '3px 10px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)', fontWeight: 600 }}>{tag}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 13 }}>
+            {pro.tags.slice(0, 2).map((tag) => (
+              <span key={tag} style={{ fontSize: 10.5, padding: '4px 11px', background: 'rgba(247,222,146,.06)', border: '1px solid rgba(247,222,146,.16)', borderRadius: 999, color: 'rgba(239,231,212,.8)', fontWeight: 600 }}>{tag}</span>
             ))}
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 15, paddingTop: 14, borderTop: '1px solid rgba(247,222,146,.13)' }}>
           {pro.hasPhone
             ? <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><RevealContact kind={pro.revealKind || 'item'} id={pro.revealId || String(pro.id)} compact label="نمایشِ شماره" /></div>
-            : <span style={{ fontSize: 12, color: 'var(--faint)' }}>پروفایل عمومی</span>}
-          <span style={{ fontSize: 12.5, color: 'var(--goldText)', fontWeight: 800, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>مشاهدهٔ خدمات <IconSvg name="arrowLeft" size={12} /></span>
+            : <span style={{ fontSize: 12, color: 'rgba(239,231,212,.45)' }}>پروفایل عمومی</span>}
+          <span style={{ fontSize: 12.5, color: '#e8cb6e', fontWeight: 800, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>مشاهدهٔ پروفایل <IconSvg name="arrowLeft" size={12} /></span>
         </div>
       </div>
     </a>
