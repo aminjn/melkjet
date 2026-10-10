@@ -125,6 +125,23 @@ The VPS egress is restricted. Each external service has a different path:
 - Test AI from server: `node -e 'fetch("https://api.gapgpt.app/v1/chat/completions",{...})'`
   should return STATUS 200.
 
+### فیلترشکنِ داخلیِ v2ray/Xray (فاز ۲۹۹) — پراکسیِ خروجیِ خارجی
+به‌جای عوض‌کردنِ دستیِ لینکِ پروکسیِ HTTP (که مدام قطع می‌شد)، سوپرادمین → اتصال‌ها →
+«v2ray (فیلترشکن داخلی)» یک لینکِ کانفیگ (vmess/vless/trojan/ss) یا لینکِ اشتراک می‌گیرد.
+- **`app/lib/v2ray.ts`**: لینک را به outboundهای Xray پارس می‌کند (`buildOutbounds`)، کانفیگ
+  با **inboundِ HTTP محلی (127.0.0.1:10809)** + **observatory + balancer(leastPing)** می‌سازد،
+  و Xray را **فقط روی اینستنسِ ۰** اجرا می‌کند. خودِ Xray سریع‌ترین سرورِ سالم را انتخاب و
+  failover می‌کند — نیازی به ping/swapِ دستی نیست.
+- چون Xray روی `127.0.0.1` همان میزبان است، همهٔ اینستنس‌ها به پروکسی دسترسی دارند؛ ولی
+  پروسه/وضعیت فقط روی کارگر است → `.v2ray/status.json` پلِ اشتراکیِ وضعیت است (کارگر هر ۴۵ث
+  در `queueTick` با `syncV2ray()` می‌نویسد؛ freshness < ۱۲۰ث).
+- مصرف: `outboundProxyUrl()` = v2ray → divar.proxyUrl → env. `telegram.ts` از همین اول v2ray
+  را امتحان می‌کند. برای هر مصرف‌کنندهٔ خارجیِ جدید هم از `outboundProxyUrl()` استفاده کن.
+- **نصبِ باینری (یک‌بار روی سرور):** `sudo bash scripts/install-xray.sh` → `bin/xray`. اگر نبود،
+  کارت وضعیتِ «نصب نیست» را با همین دستور نشان می‌دهد. کاملاً opt-in: تا روشن نشود، هیچ پروسه‌ای
+  بالا نمی‌آید و رفتارِ فعلی عوض نمی‌شود. `.v2ray/` و `bin/xray` در gitignore (شاملِ کلیدِ سرورها).
+- تست: `node --import ./scripts/reos-loader.mjs scripts/v2ray-parse-test.mjs` (۲۶ تستِ پارس/کانفیگ).
+
 ## Responsive System
 CSS variables are used in inline styles. To make elements responsive:
 1. Add `className="xyz"` to the JSX element

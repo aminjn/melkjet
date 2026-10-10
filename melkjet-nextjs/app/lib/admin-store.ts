@@ -49,6 +49,15 @@ export interface AdminData {
   divar?: {
     proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server
   }
+  // فاز ۲۹۹ — فیلترشکنِ داخلیِ v2ray/Xray: کاربر لینکِ کانفیگ/اشتراک می‌دهد، سیستم خودش Xray را
+  // اجرا و سریع‌ترین سرورِ سالم را انتخاب می‌کند و یک پراکسیِ محلی برای تلگرام/انتشار می‌دهد.
+  v2ray?: {
+    enabled?: boolean    // روشن/خاموش (پیش‌فرض خاموش — کاملاً opt-in)
+    link?: string        // share-linkها (vmess/vless/trojan/ss) یا لینکِ subscription (هر خط یکی)
+    httpPort?: number     // پورتِ inboundِ HTTPِ محلی (پیش‌فرض 10809)
+    socksPort?: number    // پورتِ inboundِ SOCKSِ محلی (پیش‌فرض 10808)
+    binPath?: string     // مسیرِ باینریِ Xray (اگر خالی، مسیرهای متداول امتحان می‌شوند)
+  }
   ga4Id?: string          // فاز ۱۴۱: شناسهٔ Google Analytics 4 (G-…) — تگ در <head> همهٔ صفحات
   gapgpt?: {              // ارائه‌دهندهٔ پیش‌فرض (گپ) — همهٔ ایجنت‌ها مگر آن‌ها که provider خاص دارند
     baseUrl: string      // e.g. https://api.gapgpt.app/v1

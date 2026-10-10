@@ -4591,12 +4591,112 @@ function PodiumConfig() {
 }
 
 // ─── Connections / integrations hub ────────────────────────────────────────
+// فاز ۲۹۹ — فیلترشکنِ داخلیِ v2ray/Xray: لینک را بده، خودش بهترین سرور را پیدا و وصل می‌شود.
+function V2rayConfig() {
+  const [link, setLink] = useState('')
+  const [enabled, setEnabled] = useState(false)
+  const [httpPort, setHttpPort] = useState(10809)
+  const [socksPort, setSocksPort] = useState(10808)
+  const [binPath, setBinPath] = useState('')
+  const [status, setStatus] = useState<any>(null)
+  const [open, setOpen] = useState(false)
+  const [adv, setAdv] = useState(false)
+  const [showLog, setShowLog] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<React.ReactNode>('')
+
+  const inpStyle: React.CSSProperties = { direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const refresh = () => fetch('/api/admin/v2ray', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
+    if (!d) return
+    setStatus(d.status); setLink(d.link || ''); setEnabled(!!d.enabled); setHttpPort(d.httpPort || 10809); setSocksPort(d.socksPort || 10808); setBinPath(d.binPath || '')
+  }).catch(() => {})
+  useEffect(() => { refresh() }, [])
+  // تا وقتی کارت باز است، هر ۵ ثانیه وضعیت را تازه کن (تعدادِ سرور/در حال اجرا).
+  useEffect(() => { if (!open) return; const t = setInterval(refresh, 5000); return () => clearInterval(t) }, [open])
+
+  const post = async (body: any) => {
+    setBusy(true); setMsg('')
+    try {
+      const r = await fetch('/api/admin/v2ray', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await r.json().catch(() => ({}))
+      if (d.status) setStatus(d.status)
+      return d
+    } finally { setBusy(false) }
+  }
+  const saveApply = async (en: boolean) => {
+    const d = await post({ link, enabled: en, httpPort, socksPort, binPath, action: 'apply' })
+    setEnabled(en)
+    if (d.applyError === 'not-worker') setMsg(<span style={{ color: '#5fd98a' }}>✓ ذخیره شد — روی کارگرِ کرون (اینستنس ۰) تا ۴۵ ثانیهٔ دیگر اجرا/ری‌لود می‌شود.</span>)
+    else if (d.applyError === 'xray-not-installed') setMsg(<span style={{ color: '#e7674a' }}>باینریِ Xray نصب نیست — روی سرور اجرا کن: <span dir="ltr">sudo bash scripts/install-xray.sh</span></span>)
+    else if (d.applyError === 'no-valid-servers') setMsg(<span style={{ color: '#e7674a' }}>هیچ سرورِ معتبری از لینک پیدا نشد — لینکِ کانفیگ/اشتراک را بررسی کن.</span>)
+    else if (d.ok) setMsg(<span style={{ color: '#5fd98a' }}>✓ اجرا شد — {Number(d.servers || 0).toLocaleString('fa-IR')} سرور.</span>)
+    else setMsg(<span style={{ color: '#e7674a' }}>ذخیره شد؛ وضعیت: {String(d.applyError || '')}</span>)
+    refresh()
+  }
+  const test = async () => {
+    setMsg('در حالِ تست…')
+    const d = await post({ action: 'test' })
+    if (d.ok) setMsg(<span style={{ color: '#5fd98a' }}>✓ اتصال سالم — پینگ {Number(d.ms || 0).toLocaleString('fa-IR')}ms</span>)
+    else setMsg(<span style={{ color: '#e7674a' }}>تست ناموفق: {d.error === 'not-running' ? 'هنوز در حال اجرا نیست' : String(d.error || '')}</span>)
+  }
+
+  const running = status?.running
+  const dot = running ? '#5fd98a' : (enabled ? '#e7a14a' : 'var(--faint)')
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>
+          v2ray (فیلترشکن داخلی)
+          <span style={{ color: dot, fontSize: 12, marginInlineStart: 8 }}>● {running ? `در حال اجرا — ${Number(status?.servers || 0).toLocaleString('fa-IR')} سرور` : (enabled ? 'روشن (در حالِ راه‌اندازی…)' : 'خاموش')}</span>
+        </div>
+        <span style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.9 }}>
+            لینکِ کانفیگِ v2ray خودت را اینجا بگذار؛ برنامه خودش Xray را اجرا می‌کند و برای تلگرام/انتشار و … از آن استفاده می‌شود. دیگر لازم نیست دستی لینکِ پروکسی را عوض کنی — <b style={{ color: 'var(--text)' }}>خودش هر چند ثانیه همهٔ سرورها را پینگ می‌زند و سریع‌ترین سرورِ سالم را انتخاب و در صورتِ قطع، failover می‌کند</b>.
+          </div>
+          {status && !status.binaryPresent && (
+            <div style={{ fontSize: 12, color: '#e7a14a', background: 'color-mix(in srgb,#e7a14a 10%,transparent)', border: '1px solid color-mix(in srgb,#e7a14a 30%,transparent)', borderRadius: 10, padding: '9px 12px', marginBottom: 10 }}>
+              ⚠ باینریِ Xray روی سرور پیدا نشد. یک‌بار اجرا کن: <span dir="ltr" style={{ fontWeight: 700 }}>sudo bash scripts/install-xray.sh</span> (یا مسیرِ باینری را در «تنظیماتِ پیشرفته» بگذار).
+            </div>
+          )}
+          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 6 }}>لینکِ کانفیگ (ss، trojan، vmess، vless) یا لینکِ اشتراک (https://…/sub/…) — هر خط یکی:</div>
+          <textarea value={link} onChange={e => setLink(e.target.value)} rows={4} spellCheck={false}
+            placeholder={'vless://…\nvmess://…\nhttps://example.com/sub/xxxx'}
+            style={{ ...inpStyle, width: '100%', resize: 'vertical', boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
+            <GoldButton onClick={() => saveApply(true)} disabled={busy}>{busy ? '…' : 'ذخیره و روشن'}</GoldButton>
+            <button onClick={() => saveApply(false)} disabled={busy} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>خاموش کردن</button>
+            <button onClick={test} disabled={busy || !running} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: running ? 'var(--text)' : 'var(--faint)', fontSize: 13, fontWeight: 700, cursor: running ? 'pointer' : 'not-allowed' }}>تستِ اتصال</button>
+            <button onClick={() => setAdv(!adv)} style={{ padding: '9px 12px', borderRadius: 10, border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>{adv ? 'بستنِ پیشرفته' : 'تنظیماتِ پیشرفته'}</button>
+          </div>
+          {msg && <div style={{ marginTop: 10, fontSize: 12.5 }}>{msg}</div>}
+          {adv && (
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+              <label style={{ fontSize: 12, color: 'var(--muted)' }}>پورتِ HTTP<br /><input type="number" value={httpPort} onChange={e => setHttpPort(Number(e.target.value) || 10809)} style={{ ...inpStyle, width: 110, marginTop: 4 }} /></label>
+              <label style={{ fontSize: 12, color: 'var(--muted)' }}>پورتِ SOCKS<br /><input type="number" value={socksPort} onChange={e => setSocksPort(Number(e.target.value) || 10808)} style={{ ...inpStyle, width: 110, marginTop: 4 }} /></label>
+              <label style={{ fontSize: 12, color: 'var(--muted)', flex: 1, minWidth: 220 }}>مسیرِ باینریِ Xray (اختیاری)<br /><input value={binPath} onChange={e => setBinPath(e.target.value)} placeholder="/usr/local/bin/xray" style={{ ...inpStyle, width: '100%', marginTop: 4, boxSizing: 'border-box' }} /></label>
+            </div>
+          )}
+          <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--faint)' }}>
+            <span onClick={() => setShowLog(!showLog)} style={{ cursor: 'pointer' }}>{showLog ? '▲' : '▼'} لاگِ Xray</span>
+            {showLog && (
+              <pre style={{ direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: 10, marginTop: 8, maxHeight: 220, overflow: 'auto', fontSize: 10.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{(status?.log || []).join('\n') || '—'}</pre>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function ConnectionsView() {
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>اتصال‌ها و سرویس‌ها</div>
-        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>سرویس‌های بیرونی: نقشه (نشان)، ایمیل (SMTP)، پرداخت، پروکسی دیوار و گوگل آنالیتیکس. تنظیماتِ <b>پیامک و الگوها</b> (IPPanel، هشدار، تکمیل پروفایل، مذاکره، دعوت) در منوی «پیامک و الگوها» و <b>ترکر</b> در منوی خودش است. کلید هوش مصنوعی در «API و مدل‌های AI».</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>سرویس‌های بیرونی: نقشه (نشان)، ایمیل (SMTP)، پرداخت، پروکسی دیوار، فیلترشکنِ داخلی (v2ray) و گوگل آنالیتیکس. تنظیماتِ <b>پیامک و الگوها</b> (IPPanel، هشدار، تکمیل پروفایل، مذاکره، دعوت) در منوی «پیامک و الگوها» و <b>ترکر</b> در منوی خودش است. کلید هوش مصنوعی در «API و مدل‌های AI».</div>
       </Card>
       <PodiumConfig />
       <NeshanConfig />
@@ -4605,6 +4705,7 @@ function ConnectionsView() {
       <ZarinpalConfig />
       <ImgbbConfig />
       <DivarProxyConfig />
+      <V2rayConfig />
       <Ga4Config />
     </div>
   )

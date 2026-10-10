@@ -208,6 +208,9 @@ async function queueTick(): Promise<void> {
     try { const { touchQueueHeartbeat } = await import('./advisor-divar-job'); touchQueueHeartbeat() } catch {}
     // فاز ۱۷۶ (پورت از خودروجت) — ضربانِ کرونِ قابلِ‌خواندن از بیرون: اثباتِ زنده‌بودنِ کرون + آخرین سینکِ رُستر
     try { const { touchCron } = await import('./cron-heartbeat'); await touchCron({ instance: process.env.NODE_APP_INSTANCE }) } catch {}
+    // فاز ۲۹۹ — فیلترشکنِ داخلیِ v2ray را با تنظیماتِ سوپرادمین هماهنگ نگه می‌دارد: اجرا/ری‌لود روی
+    // تغییرِ لینک، ری‌استارت اگر پروسه مرد، توقف اگر خاموش شد، و ضربانِ وضعیت (تا بقیهٔ اینستنس‌ها ببینند).
+    try { const { syncV2ray } = await import('./v2ray'); await syncV2ray() } catch (e) { console.error('[v2ray] sync failed:', String((e as Error)?.message || e).slice(0, 160)) }
     // ۱) درین‌کردنِ صف با سقفِ همزمانی: اول هولدشده‌ها (ادامه)، بعد صفِ جدید.
     let active = countActiveJobs()
     if (active < MAX_ACTIVE_SYNCS) {

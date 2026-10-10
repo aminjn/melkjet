@@ -3,14 +3,18 @@
 // دقیقاً همان مکانیزمی که divar/web-push استفاده می‌کنند. هیچ راهِ موازی‌ای ساخته نمی‌شود.
 import { proxiedRequest, proxiedGetBinary } from './proxy-fetch'
 import { getAdminData } from './admin-store'
+import { v2rayProxyUrl } from './v2ray'
 
 const TOKEN = () => process.env.TELEGRAM_BOT_TOKEN || ''
 // تلگرام از داخلِ ایران «همیشه» فیلتر است (DNS به 10.10.34.35 می‌رود) → همیشه پروکسی لازم دارد.
 // پروکسیِ اختصاصیِ خودش را دارد و دیگر از divar.proxyUrl قرض نمی‌گیرد: وقتی دیوار به اتصالِ
 // مستقیم سوییچ کرد آن فیلد خالی شد و تلگرام چند روز بی‌صدا مرد (ECONNREFUSED). پیش‌فرض =
 // پروکسیِ محلیِ سرور، چون مسیرِ مستقیم هرگز جواب نمی‌دهد.
+// فاز ۲۹۹ — اگر فیلترشکنِ داخلیِ v2ray روشن و در حالِ اجراست، اولویت با اوست (پراکسیِ محلیِ Xray)؛
+// وگرنه همان زنجیرهٔ قبلی. این‌طور دیگر لازم نیست کاربر دستی لینکِ پراکسی را عوض کند.
 const PROXY = () =>
   process.env.TELEGRAM_PROXY ||
+  v2rayProxyUrl() ||
   getAdminData().divar?.proxyUrl ||
   process.env.HTTPS_PROXY || process.env.https_proxy ||
   process.env.HTTP_PROXY || process.env.http_proxy ||
