@@ -127,6 +127,11 @@ export interface AdminData {
   }
   // تخصیصِ مدل به‌ازای هر ایجنت + (اختیاری) provider به‌ازای هر اسلات. provider خالی = پیش‌فرض (گپ).
   agentModels?: Record<string, { text?: string; image?: string; textProvider?: string; imageProvider?: string }>
+  // فاز ۲۹۸ی۱۸ — سوییچِ اتصال به AI (سوپرادمین). aiEnabled=false → هیچ فراخوانِ AI در هیچ جا
+  // (مستقل از وجودِ کلید)؛ همه مستقیم مسیرِ ML/قاعده‌ای می‌روند. aiAreas: روشن/خاموشِ هر «بخش»
+  // (غنی‌سازی/ممیزی/روستر/محتوا/تصویر/دستیار/تکراری/سایر) — نبودنِ کلید یا false = آن بخش خاموش.
+  aiEnabled?: boolean
+  aiAreas?: Record<string, boolean>
 }
 
 export function getAdminData(): AdminData {

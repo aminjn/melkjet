@@ -4912,6 +4912,11 @@ function APIView() {
   const [pBase, setPBase] = useState('https://api.avalai.ir/v1')
   const [pKey, setPKey] = useState('')
   const [pMsg, setPMsg] = useState('')
+  // فاز ۲۹۸ی۱۸ — سوییچِ اتصال به AI (ماستر + per-area)
+  const [aiEnabled, setAiEnabled] = useState(true)
+  const [aiAreas, setAiAreas] = useState<Record<string, boolean>>({})
+  const [areaList, setAreaList] = useState<{ key: string; label: string }[]>([])
+  const [aiMsg, setAiMsg] = useState('')
 
   const loadProviderModels = async (id: string) => {
     try { const r = await fetch(`/api/admin/ai/models?provider=${encodeURIComponent(id)}`); if (r.ok) { const d = await r.json(); setProvModels(m => ({ ...m, [id]: d.models || [] })) } } catch {}
@@ -4922,7 +4927,16 @@ function APIView() {
       const d = await r.json(); setBaseUrl(d.baseUrl); setMasked(d.masked)
       const provs = d.providers || {}; setProviders(provs)
       for (const id of Object.keys(provs)) if (provs[id].configured) loadProviderModels(id)
+      setAiEnabled(d.aiEnabled !== false); setAiAreas(d.aiAreas || {}); setAreaList(d.areaList || [])
     }
+  }
+  // ذخیرهٔ سوییچِ AI (ماستر یا per-area) + بازخوانی
+  const saveAiSwitch = async (patch: { aiEnabled?: boolean; aiAreas?: Record<string, boolean> }) => {
+    setAiMsg('در حال ذخیره…')
+    if (typeof patch.aiEnabled === 'boolean') setAiEnabled(patch.aiEnabled)
+    if (patch.aiAreas) setAiAreas(patch.aiAreas)
+    const r = await fetch('/api/admin/ai/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+    setAiMsg(r.ok ? '✓ ذخیره شد' : '⚠ خطا در ذخیره'); setTimeout(() => setAiMsg(''), 3000)
   }
   const loadAgents = async () => {
     const r = await fetch('/api/admin/ai/agents')
@@ -5090,6 +5104,33 @@ function APIView() {
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <SmtpConfig />
+      {/* فاز ۲۹۸ی۱۸ — سوییچِ اتصال به AI: ماستر + «کجاها وصل شود» */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>اتصال به هوش مصنوعی</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, lineHeight: 1.8 }}>وقتی خاموش باشد، هیچ بخشی به AI وصل نمی‌شود و همه‌چیز با ماشین‌لرنینگِ خودی کار می‌کند — بدونِ تماسِ سوخته و بدونِ نوفه در دفترِ مصرف. (اتصال و کلید را در کارتِ پایین تنظیم کن.)</div>
+          </div>
+          <button onClick={() => saveAiSwitch({ aiEnabled: !aiEnabled })} style={{ flexShrink: 0, padding: '10px 22px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 800, border: aiEnabled ? 'none' : '1px solid var(--line2)', background: aiEnabled ? 'linear-gradient(140deg,#5fd98a,#3fb56a)' : 'var(--bg2)', color: aiEnabled ? '#07210f' : 'var(--muted)' }}>{aiEnabled ? '● روشن' : '○ خاموش'}</button>
+        </div>
+        {aiEnabled && areaList.length > 0 && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>هوش مصنوعی کجاها وصل شود؟</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 8 }}>
+              {areaList.map(a => {
+                const on = aiAreas[a.key] !== false
+                return (
+                  <button key={a.key} onClick={() => saveAiSwitch({ aiAreas: { ...aiAreas, [a.key]: !on } })} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '10px 13px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, textAlign: 'right', border: on ? '1px solid var(--gold)' : '1px solid var(--line2)', background: on ? 'var(--goldDim)' : 'var(--bg2)', color: on ? 'var(--text)' : 'var(--muted)' }}>
+                    <span>{a.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: on ? '#5fd98a' : 'var(--faint)' }}>{on ? 'روشن' : 'خاموش'}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        {aiMsg && <div style={{ marginTop: 10, fontSize: 12.5, color: aiMsg.startsWith('✓') ? '#5fd98a' : 'var(--gold)' }}>{aiMsg}</div>}
+      </Card>
       {/* API config */}
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>اتصال به API گپ‌جی‌پی‌تی</div>

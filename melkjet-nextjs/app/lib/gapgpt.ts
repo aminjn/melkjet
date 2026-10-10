@@ -17,6 +17,41 @@ function providerCfg(providerId?: string) {
 }
 function cfg(provider?: string) { return providerCfg(provider) }
 
+// ── سوییچِ اتصال به AI (فاز ۲۹۸ی۱۸) ──────────────────────────────────────────
+// سوپرادمین می‌تواند کلِ اتصال به AI را خاموش کند، یا «کجاها» وصل شود را per-area تعیین کند.
+// وقتی خاموش است، ورودی‌های AI پیش از هر تلاش/ثبت کوتاه می‌بُرند و صدازننده مستقیم مسیرِ ML
+// (fallback موجود) می‌رود — نه تماسِ سوخته، نه نوفه در دفترِ ai_usage. «بخش» خودکار از منبعِ
+// صداگر (callerSrc) تشخیص داده می‌شود تا نیازی به تغییرِ تک‌تکِ صدازننده‌ها نباشد.
+export const AI_AREAS: { key: string; label: string }[] = [
+  { key: 'enrich', label: 'غنی‌سازی و تحلیلِ آگهی' },
+  { key: 'moderation', label: 'ممیزیِ آگهی' },
+  { key: 'roster', label: 'نام‌گذاریِ مشاور (روستر)' },
+  { key: 'content', label: 'تولیدِ محتوا و مقاله' },
+  { key: 'image', label: 'تولیدِ تصویر' },
+  { key: 'assistant', label: 'دستیار و چت' },
+  { key: 'duplicate', label: 'تشخیصِ تکراری' },
+  { key: 'other', label: 'سایرِ موارد' },
+]
+export function areaOf(src?: string, kind?: 'text' | 'vision' | 'image'): string {
+  if (kind === 'image') return 'image'
+  const s = (src || '').toLowerCase()
+  if (/enrich|analy|nearby/.test(s)) return 'enrich'
+  if (/moderat/.test(s)) return 'moderation'
+  if (/roster|agency/.test(s)) return 'roster'
+  if (/article|content|listing-copy|catalog|blog/.test(s)) return 'content'
+  if (/assistant|reos|negotiat|plan-ai|\bchat\b|studio/.test(s)) return 'assistant'
+  if (/duplicate/.test(s)) return 'duplicate'
+  return 'other'
+}
+function hasKey(provider?: string): boolean { try { providerCfg(provider); return true } catch { return false } }
+export function aiActive(src?: string, provider?: string, kind?: 'text' | 'vision' | 'image'): boolean {
+  const a = getAdminData()
+  if (a.aiEnabled === false) return false                        // ماستر خاموش
+  if (a.aiAreas && a.aiAreas[areaOf(src, kind)] === false) return false   // این بخش خاموش
+  return hasKey(provider)                                         // بدونِ کلید هم عملاً خاموش
+}
+class AiOffError extends Error { constructor() { super('AI off (اتصال به AI در پنلِ سوپرادمین خاموش است یا کلیدی تنظیم نشده)') ; this.name = 'AiOffError' } }
+
 export function agentModel(agentId: string, slot: 'text' | 'image' = 'text'): string | undefined {
   return getAdminData().agentModels?.[agentId]?.[slot]
 }
@@ -165,9 +200,10 @@ export async function fetchGapSitePricing(): Promise<{ list: ApiModelPrice[]; no
 }
 
 export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string; timeoutMs?: number } = {}, provider?: string): Promise<string> {
-  const { base, key } = cfg(provider)
   // فاز ۵۷: src صریح مقدم است — در بیلدِ پروداکشن stack مسیرِ app/ را ندارد و «ناشناخته» می‌شد
   const src54 = opts.src || callerSrcOf(new Error().stack), t54 = Date.now()
+  if (!aiActive(src54, provider, 'text')) throw new AiOffError()   // سوییچ خاموش/بی‌کلید → بدونِ تلاش و بدونِ ثبت در ai_usage
+  const { base, key } = cfg(provider)
   try {
     const res = await gapHttp(`${base}/chat/completions`, {
       method: 'POST',
@@ -209,6 +245,8 @@ export async function chatCompleteSafe(model: string, messages: { role: string; 
 async function chatCompleteRaw(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
   // فاز ۷۸: مسیرِ چت/اعتبارِ کاربر هم مدارشکن + ثبتِ خطا + fallback دارد — مدلِ خراب تجربهٔ کاربر را نمی‌کُشد
   if (model !== 'gpt-4o-mini' && modelDown(model)) model = 'gpt-4o-mini'
+  const src54r = opts.src || callerSrcOf(new Error().stack)
+  if (!aiActive(src54r, provider, 'text')) throw new AiOffError()
   const { base, key } = cfg(provider)
   const attempt = async (m: string) => {
     const res = await gapHttp(`${base}/chat/completions`, {
@@ -237,6 +275,7 @@ export async function chatCompleteUsage(model: string, messages: { role: string;
 }
 
 export async function generateImage(model: string, prompt: string, size = '1024x1024', provider?: string, src?: string): Promise<string> {
+  if (!aiActive(src || callerSrcOf(new Error().stack), provider, 'image')) throw new AiOffError()
   const { base, key } = cfg(provider)
   const res = await gapHttp(`${base}/images/generations`, {
     method: 'POST',
@@ -256,6 +295,7 @@ export async function generateImage(model: string, prompt: string, size = '1024x
 // تحلیل تصویر (چندوجهی): تصاویر را همراه یک پرامپت متنی به مدل بینایی می‌دهد.
 // images آرایه‌ای از data URL یا URL تصویر است (فرمت OpenAI vision).
 export async function chatVision(model: string, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number; src?: string } = {}, provider?: string): Promise<string> {
+  if (!aiActive(opts.src || callerSrcOf(new Error().stack), provider, 'vision')) throw new AiOffError()
   const { base, key } = cfg(provider)
   const content: any[] = [{ type: 'text', text: prompt }]
   for (const img of images.slice(0, 8)) if (img) content.push({ type: 'image_url', image_url: { url: img } })

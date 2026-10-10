@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
 import { DEFAULT_GAP_BASE } from '@/app/lib/ai-agents'
+import { AI_AREAS } from '@/app/lib/gapgpt'
 
 async function guard() {
   const s = await getSession()
@@ -23,6 +24,9 @@ export async function GET() {
     configured: !!g?.apiKey,
     masked: mask(g?.apiKey),
     providers,
+    aiEnabled: d.aiEnabled !== false,          // پیش‌فرض روشن
+    aiAreas: d.aiAreas || {},                  // نبودِ کلید = روشن (مگر صریح false)
+    areaList: AI_AREAS,
   })
 }
 
@@ -33,6 +37,18 @@ export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({} as any))
   const data = getAdminData()
+
+  // سوییچِ اتصال به AI (ماستر + per-area). فقط وقتی در بدنه آمده تغییر می‌دهد.
+  if (typeof b.aiEnabled === 'boolean' || (b.aiAreas && typeof b.aiAreas === 'object')) {
+    if (typeof b.aiEnabled === 'boolean') data.aiEnabled = b.aiEnabled
+    if (b.aiAreas && typeof b.aiAreas === 'object') {
+      const clean: Record<string, boolean> = {}
+      for (const [k, v] of Object.entries(b.aiAreas)) clean[String(k).slice(0, 40)] = v !== false
+      data.aiAreas = clean
+    }
+    saveAdminData(data)
+    return NextResponse.json({ ok: true, aiEnabled: data.aiEnabled !== false, aiAreas: data.aiAreas || {} })
+  }
 
   if (b.removeProvider) {
     if (data.providers) { delete data.providers[String(b.removeProvider)]; saveAdminData(data) }
