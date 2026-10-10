@@ -14,6 +14,7 @@ import { saveMedia } from '@/app/lib/media-store'
 import { getAccount } from '@/app/lib/account-store'
 import { generateListingCopy, type ListingFields } from '@/app/lib/listing-copy'
 import { FA_DIGITS, faDigit } from '@/app/lib/digits'
+import { botALS, tgBotCtx } from '@/app/lib/bot-ctx'
 
 export const dynamic = 'force-dynamic'
 
@@ -303,9 +304,10 @@ async function handleListingText(chatId: number, ld: import('@/app/lib/telegram-
   else await tgSend(chatId, 'برای شروع «🏠 ثبتِ آگهی» را بزن.', { reply_markup: menu })
 }
 
-// ── هستهٔ پردازش ─────────────────────────────────────────────────────────────
+// ── هستهٔ پردازشِ مشترک (تلگرام + بله) ────────────────────────────────────────
+// سکوی جاری با botALS تعیین می‌شود؛ منطقِ زیر بی‌تغییر برای هر دو کار می‌کند.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handle(u: any) {
+export async function handleBotUpdate(u: any) {
   const cq = u?.callback_query
   if (cq) {
     const chatId = cq.message?.chat?.id; const mid = cq.message?.message_id; const data = String(cq.data || '')
@@ -438,7 +440,7 @@ export async function POST(req: NextRequest) {
   if (secret && req.headers.get('x-telegram-bot-api-secret-token') !== secret) return NextResponse.json({ ok: false }, { status: 401 })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const u = (await req.json().catch(() => null)) as any
-  if (u) handle(u).catch(e => console.warn('[tg] handle:', (e as Error).message))   // پس‌زمینه
+  if (u) botALS.run(tgBotCtx(), () => handleBotUpdate(u)).catch(e => console.warn('[tg] handle:', (e as Error).message))   // پس‌زمینه، سکوی تلگرام
   return NextResponse.json({ ok: true })                                            // پاسخِ فوری
 }
 export async function GET() { return NextResponse.json({ ok: true, service: 'telegram-webhook' }) }

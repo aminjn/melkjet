@@ -4691,6 +4691,58 @@ function V2rayConfig() {
   )
 }
 
+// فاز ۳۰۰ — رباتِ بله (داخلی، سازگار با تلگرام): توکن را بگذار، وب‌هوک خودکار ست می‌شود.
+function BaleConfig() {
+  const [token, setToken] = useState('')
+  const [enabled, setEnabled] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [info, setInfo] = useState<any>(null)
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<React.ReactNode>('')
+  const inpStyle: React.CSSProperties = { direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const refresh = () => fetch('/api/admin/bale', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (!d) return; setInfo(d); setEnabled(!!d.enabled) }).catch(() => {})
+  useEffect(() => { refresh() }, [])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const post = async (b: any) => { setBusy(true); setMsg(''); try { const r = await fetch('/api/admin/bale', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); return await r.json().catch(() => ({})) } finally { setBusy(false) } }
+  const saveApply = async (en: boolean) => {
+    const d = await post({ token: token || undefined, enabled: en, action: 'apply' }); setEnabled(en); setToken('')
+    if (d.error === 'no-token') setMsg(<span style={{ color: '#e7674a' }}>اول توکنِ ربات را بگذار.</span>)
+    else if (en && d.webhookSet) setMsg(<span style={{ color: '#5fd98a' }}>✓ وب‌هوک ست شد{d.bot?.username ? ` — @${d.bot.username}` : ''}. رباتِ بله آماده است.</span>)
+    else if (!en && d.disabled) setMsg(<span style={{ color: '#5fd98a' }}>✓ خاموش شد (وب‌هوک حذف شد).</span>)
+    else setMsg(<span style={{ color: '#e7674a' }}>ثبتِ وب‌هوک ناموفق بود — توکن را بررسی کن.</span>)
+    refresh()
+  }
+  const test = async () => { setMsg('در حالِ تست…'); const d = await post({ action: 'test' }); setMsg(d.ok && d.bot ? <span style={{ color: '#5fd98a' }}>✓ ربات: @{d.bot.username} ({d.bot.first_name})</span> : <span style={{ color: '#e7674a' }}>اتصال ناموفق — توکن درست است؟</span>) }
+  const running = enabled && info?.bot
+  const dot = running ? '#5fd98a' : (enabled ? '#e7a14a' : 'var(--faint)')
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>بله (ربات پیام‌رسان) <span style={{ color: dot, fontSize: 12, marginInlineStart: 8 }}>● {running ? `فعال${info?.bot?.username ? ' — @' + info.bot.username : ''}` : (enabled ? 'روشن (توکن/وب‌هوک را بررسی کن)' : 'خاموش')}</span></div>
+        <span style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.9 }}>
+            رباتِ بله همان امکاناتِ رباتِ تلگرام را دارد: <b style={{ color: 'var(--text)' }}>🔎 جستجوی آگهی، 🔔 آلارم/نوتیف، 🏠 ثبتِ آگهی</b>. در بله با <b>@botfather</b> یک ربات بساز، توکنش را اینجا بگذار و «ذخیره و روشن» را بزن — وب‌هوک خودکار ست می‌شود. بله داخلی است و نیازی به فیلترشکن ندارد.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input value={token} onChange={e => setToken(e.target.value)} placeholder={info?.masked || 'توکنِ رباتِ بله'} style={{ ...inpStyle, flex: 1, minWidth: 240 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
+            <GoldButton onClick={() => saveApply(true)} disabled={busy}>{busy ? '…' : 'ذخیره و روشن'}</GoldButton>
+            <button onClick={() => saveApply(false)} disabled={busy} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>خاموش کردن</button>
+            <button onClick={test} disabled={busy} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>تستِ توکن</button>
+          </div>
+          {msg && <div style={{ marginTop: 10, fontSize: 12.5 }}>{msg}</div>}
+          {info?.webhook && <div style={{ marginTop: 10, fontSize: 11, color: 'var(--faint)', direction: 'ltr', textAlign: 'left' }}>webhook: {info.webhook}</div>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function ConnectionsView() {
   return (
     <div style={{ animation: 'fade .35s ease' }}>
@@ -4706,6 +4758,7 @@ function ConnectionsView() {
       <ImgbbConfig />
       <DivarProxyConfig />
       <V2rayConfig />
+      <BaleConfig />
       <Ga4Config />
     </div>
   )

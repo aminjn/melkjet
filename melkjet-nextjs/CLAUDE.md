@@ -142,6 +142,22 @@ The VPS egress is restricted. Each external service has a different path:
   بالا نمی‌آید و رفتارِ فعلی عوض نمی‌شود. `.v2ray/` و `bin/xray` در gitignore (شاملِ کلیدِ سرورها).
 - تست: `node --import ./scripts/reos-loader.mjs scripts/v2ray-parse-test.mjs` (۲۶ تستِ پارس/کانفیگ).
 
+### رباتِ چندسکویی تلگرام + بله (فاز ۳۰۰)
+Bot APIِ بله (`tapi.bale.ai`) سازگار با تلگرام است، پس همان هستهٔ ۴۴۴خطیِ ربات (جستجو/آلارم/
+ثبتِ آگهی) برای هر دو کار می‌کند — بدونِ کپیِ منطق.
+- **`app/lib/bot-ctx.ts`**: `AsyncLocalStorage` «سکوی جاری» را نگه می‌دارد. `tgBotCtx()` (تلگرام،
+  با پروکسی/v2ray) و `baleBotCtx()` (بله، **مستقیم — داخلی، بدونِ تونل**). پیش‌فرضِ بدونِ ctx = تلگرام
+  → همهٔ مصرف‌کننده‌های قبلی بی‌تغییر.
+- `telegram.ts` (ترنسپورت) و `telegram-store.ts` (انبار) از سکوی جاری می‌خوانند: کلیدها با
+  پیشوندِ `bale:` جدا می‌شوند تا chatIdهای دو پلتفرم قاطی نشوند (tg بدونِ پیشوند = سازگاریِ عقب‌رو).
+  Sub/Link فیلدِ `platform` دارند؛ `notifyNewListings` هر آلارم را از ترنسپورتِ سکوی خودش می‌فرستد.
+- هسته: `handleBotUpdate` از `app/api/telegram/webhook/route.ts` export می‌شود؛ `app/api/bale/webhook`
+  همان را در `botALS.run(baleBotCtx(), …)` اجرا می‌کند. رمزِ وب‌هوکِ بله در query (`?s=…`) است
+  (پشتیبانیِ بله از هدرِ secret قطعی نیست).
+- راه‌اندازی: سوپرادمین → اتصال‌ها → «بله (ربات پیام‌رسان)» → توکن از @botfatherِ بله → «ذخیره و روشن»
+  (setWebhook خودکار به `PUBLIC_BASE_URL||melkjet.com/api/bale/webhook`). کاملاً opt-in.
+- تست: `node --import ./scripts/reos-loader.mjs scripts/bot-multiplatform-test.mjs` (۱۱ تستِ جداسازی).
+
 ## Responsive System
 CSS variables are used in inline styles. To make elements responsive:
 1. Add `className="xyz"` to the JSX element

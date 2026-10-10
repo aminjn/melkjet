@@ -49,6 +49,12 @@ export interface AdminData {
   divar?: {
     proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server
   }
+  // فاز ۳۰۰ — رباتِ پیام‌رسانِ بله (داخلی، سازگار با تلگرام). توکن از @botfatherِ بله.
+  bale?: {
+    enabled?: boolean   // روشن/خاموش
+    token?: string      // توکنِ ربات
+    secret?: string     // رمزِ وب‌هوک (در query می‌آید) — خودکار ساخته می‌شود
+  }
   // فاز ۲۹۹ — فیلترشکنِ داخلیِ v2ray/Xray: کاربر لینکِ کانفیگ/اشتراک می‌دهد، سیستم خودش Xray را
   // اجرا و سریع‌ترین سرورِ سالم را انتخاب می‌کند و یک پراکسیِ محلی برای تلگرام/انتشار می‌دهد.
   v2ray?: {

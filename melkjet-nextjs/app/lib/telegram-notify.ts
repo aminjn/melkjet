@@ -1,6 +1,7 @@
 // فاز ۲۵۳ب — تطبیقِ آگهیِ نو با آلارم‌ها و ارسالِ کارت. از هوکِ تأییدِ ممیزی صدا زده می‌شود.
 import { tgApi } from './telegram'
 import { allSubs, type Sub } from './telegram-store'
+import { botALS, botCtxFor, currentBot, type BotPlatform } from './bot-ctx'
 import { listItems, type Item } from './scraper-store'
 
 // نرمال‌سازیِ بخشندهٔ فارسی: الف/ی/ک یکی، نیم‌فاصله/فاصله/علائم حذف.
@@ -114,7 +115,8 @@ export async function notifyNewListings(items: Item[]) {
   for (const it of fresh) {
     for (const sub of subs) {
       if (!matchSub(sub, it)) continue
-      await sendCard(sub.chatId, it)
+      // فاز ۳۰۰ — هر آلارم از ترنسپورتِ سکوی خودش می‌رود (تلگرام یا بله).
+      await botALS.run(botCtxFor((sub.platform || 'tg') as BotPlatform), () => sendCard(sub.chatId, it))
       sent++
       await new Promise(r => setTimeout(r, 45))
       if (sent >= 300) return
@@ -123,7 +125,8 @@ export async function notifyNewListings(items: Item[]) {
 }
 
 export async function sendTest(chatId: number): Promise<boolean> {
-  const mine = (await allSubs()).filter(s => s.chatId === chatId)
+  const plat = currentBot()?.platform || 'tg'
+  const mine = (await allSubs()).filter(s => s.chatId === chatId && (s.platform || 'tg') === plat)
   if (!mine.length) return false
   const items = await listItems('listing', { publicOnly: true })
   const hit = items.find(it => mine.some(s => matchSub(s, it)))
