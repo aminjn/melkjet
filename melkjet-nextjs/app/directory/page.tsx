@@ -304,15 +304,18 @@ export default function DirectoryPage() {
   )
 }
 
+// تکسچرِ grainِ فیلم (SVG feTurbulence، data-URI) — حسِ «جنسِ» مات به سطحِ تیره می‌دهد (تکنیکِ Stripe/Linear).
+const NOISE = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
+
 function StatRow({ boxes }: { boxes: { value: string; label: string }[] }) {
-  // فاز ۲۹۸ی۲۰ — پنلِ آمارِ تیره‌ی شیشه‌ای؛ فقط دادهٔ واقعیِ ناصفر (صفرها اصلاً ساخته نمی‌شوند).
+  // فاز ۲۹۸ی۲۱ — پنلِ شیشه‌ایِ واقعی با هایلایتِ بالا + اعدادِ tabular (مدرن، نه جعبهٔ ساده).
   if (!boxes.length) return null
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch', marginTop: 15, borderRadius: 14, background: 'rgba(247,222,146,.045)', border: '1px solid rgba(247,222,146,.13)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', alignItems: 'stretch', marginTop: 15, borderRadius: 15, overflow: 'hidden', position: 'relative', background: 'linear-gradient(180deg, rgba(247,222,146,.1), rgba(247,222,146,.025))', border: '1px solid rgba(247,222,146,.16)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' }}>
       {boxes.map((b, i) => (
-        <div key={b.label} style={{ flex: 1, textAlign: 'center', padding: '12px 6px', borderInlineStart: i ? '1px solid rgba(247,222,146,.11)' : 'none' }}>
-          <div style={{ fontSize: 17.5, fontWeight: 900, color: '#f2dc93', letterSpacing: '-.3px', lineHeight: 1.05 }}>{b.value}</div>
-          <div style={{ fontSize: 10, color: 'rgba(239,231,212,.5)', marginTop: 5 }}>{b.label}</div>
+        <div key={b.label} style={{ flex: 1, textAlign: 'center', padding: '12px 6px', borderInlineStart: i ? '1px solid rgba(247,222,146,.1)' : 'none' }}>
+          <div style={{ fontSize: 18.5, fontWeight: 900, color: '#f6e29a', letterSpacing: '-.5px', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{b.value}</div>
+          <div style={{ fontSize: 9.5, color: 'rgba(239,231,212,.5)', marginTop: 6, letterSpacing: '.2px' }}>{b.label}</div>
         </div>
       ))}
     </div>
@@ -338,74 +341,82 @@ function ProfessionalCard({ pro, dist }: { pro: Professional; dist?: ScoreDist |
   }
   if ((s.projects || 0) > 0) boxes.push({ value: fa(s.projects!), label: 'پروژه' })
 
-  // فاز ۲۹۸ی۲۰ — کارتِ لوکسِ تیره (business-card افقی): سطحِ شیشه‌ایِ تیرهٔ ثابت + طلا،
-  // چیدمانِ افقیِ هویت، یک CTA، بدونِ صفرهای خالی و بدونِ تودهٔ قرص‌ها. (مثلِ هیرو عمداً تیره.)
+  // فاز ۲۹۸ی۲۱ — کارتِ مدرنِ لوکس: حاشیهٔ کونیکِ شیمر + aurora meshِ چندرنگ + grainِ فیلم +
+  // حلقهٔ امتیازِ کونیک دورِ آواتار (گیجِ دیتاویز) + پنلِ شیشه‌ای + CTAی گرادیانیِ براق.
   const CREAM = '#efe7d4'
+  const ringDeg = Math.round(Math.max(0, Math.min(100, score.score)) * 3.6)
+  const tierChip = pct || (score.score > 0 ? score.tier : '')
   return (
     <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{
-        display: 'block', textDecoration: 'none', position: 'relative', overflow: 'hidden', color: CREAM, borderRadius: 22,
-        background: 'linear-gradient(158deg,#1a1610 0%,#0d0b08 60%,#120f0a 100%)',
-        border: `1px solid ${pro.promoted ? 'rgba(247,222,146,.5)' : hovered ? 'rgba(247,222,146,.42)' : 'rgba(247,222,146,.16)'}`,
+        display: 'block', textDecoration: 'none', position: 'relative', color: CREAM, borderRadius: 24, padding: 1.4,
+        background: pro.promoted
+          ? 'conic-gradient(from 130deg,#f7e39a,#b07f26 25%,#f7e39a 50%,#b07f26 75%,#f7e39a)'
+          : hovered
+            ? 'conic-gradient(from 130deg, rgba(247,222,146,.85), rgba(247,222,146,.12) 30%, rgba(247,222,146,.7) 55%, rgba(247,222,146,.12) 80%, rgba(247,222,146,.85))'
+            : 'linear-gradient(155deg, rgba(247,222,146,.42), rgba(247,222,146,.06) 55%, rgba(247,222,146,.24))',
         boxShadow: hovered
-          ? '0 34px 64px -30px rgba(0,0,0,.85), 0 0 48px -18px rgba(201,168,76,.42), inset 0 1px 0 rgba(255,255,255,.05)'
-          : '0 18px 44px -30px rgba(0,0,0,.78), inset 0 1px 0 rgba(255,255,255,.04)',
-        transform: hovered ? 'translateY(-6px)' : 'none',
-        transition: 'transform .25s, box-shadow .25s, border-color .25s',
+          ? '0 40px 72px -32px rgba(0,0,0,.9), 0 0 62px -20px rgba(201,168,76,.5)'
+          : '0 20px 46px -30px rgba(0,0,0,.8)',
+        transform: hovered ? 'translateY(-6px) scale(1.012)' : 'none',
+        transition: 'transform .28s cubic-bezier(.22,1,.36,1), box-shadow .28s, background .3s',
       }}>
-      {/* هالهٔ طلاییِ گوشه */}
-      <span aria-hidden style={{ position: 'absolute', top: -46, insetInlineEnd: -34, width: 220, height: 180, background: 'radial-gradient(circle at 70% 30%, rgba(247,222,146,.2), transparent 60%)', pointerEvents: 'none' }} />
-      {pro.promoted && <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, zIndex: 2 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
+      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22.6, background: 'linear-gradient(158deg,#1b1711 0%,#100d09 55%,#15110b 100%)' }}>
+        {/* aurora mesh — سه هالهٔ رنگیِ محو (عمق) */}
+        <span aria-hidden style={{ position: 'absolute', top: -60, insetInlineEnd: -50, width: 220, height: 200, background: 'radial-gradient(circle at 60% 40%,#caa23a,transparent 62%)', opacity: .26, filter: 'blur(26px)', pointerEvents: 'none' }} />
+        <span aria-hidden style={{ position: 'absolute', bottom: -70, insetInlineStart: -60, width: 220, height: 190, background: 'radial-gradient(circle at 50% 50%,#7a5513,transparent 66%)', opacity: .3, filter: 'blur(32px)', pointerEvents: 'none' }} />
+        <span aria-hidden style={{ position: 'absolute', top: '42%', insetInlineStart: '28%', width: 130, height: 130, background: 'radial-gradient(circle,#2f6d5a,transparent 68%)', opacity: .1, filter: 'blur(30px)', pointerEvents: 'none' }} />
+        {/* grain + هایلایتِ لبهٔ بالا */}
+        <span aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: NOISE, backgroundSize: '140px 140px', opacity: .05, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
+        <span aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.16),transparent)', pointerEvents: 'none' }} />
+        {pro.promoted && <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, zIndex: 3 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
 
-      <div style={{ position: 'relative', padding: '18px 16px 16px' }}>
-        {/* ردیفِ هویت — افقی (آواتار + نام/نقش/متا) */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
-          <div style={{
-            width: 62, height: 62, borderRadius: 17, flexShrink: 0, overflow: 'hidden',
-            background: pro.image ? `${avatarPosFor(pro.category)}/cover no-repeat url(${pro.image})` : pro.avatarGradient,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 800,
-            boxShadow: '0 0 0 1px rgba(247,222,146,.55), 0 10px 22px -8px rgba(0,0,0,.65)',
-          }}>{!pro.image && pro.initials}</div>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 16.5, fontWeight: 800, color: CREAM, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-.2px' }}>{pro.name}</span>
-              {(pro.verified || pro.badges?.some(b => b.id === 'verified')) && <span title={pro.verified ? 'تاییدشدهٔ ملک‌جت' : 'پروفایلِ کامل'} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: pro.verified ? '#2f81f7' : 'rgba(95,217,138,.9)', color: '#fff' }}><IconSvg name="check" size={10} weight={2.6} /></span>}
-            </div>
-            <div style={{ fontSize: 12.5, marginTop: 4, color: 'rgba(239,231,212,.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <span style={{ color: '#e8cb6e', fontWeight: 700 }}>{pro.role}</span>{hasArea && <> · {pro.area}</>}
-            </div>
-            {/* متا: امتیازِ طلایی + رتبه + پاسخگو */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
-              {score.score > 0 && score.tier && (
-                <span title="امتیازِ ملک‌جت از دادهٔ واقعی (معادلِ ۱۰)" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px 3px 7px', borderRadius: 999, background: 'linear-gradient(135deg,#f3dd93,#d7ad3e)', boxShadow: '0 3px 10px -4px rgba(201,168,76,.7)' }}>
-                  <span style={{ color: '#2a2105', display: 'flex' }}><IconSvg name="star" size={12} /></span>
-                  <span style={{ fontSize: 12.5, fontWeight: 900, color: '#241c04', lineHeight: 1 }}>{scoreOutOf10(score.score)}</span>
-                  <span style={{ fontSize: 9, fontWeight: 800, color: '#5b4710' }}>از ۱۰</span>
-                </span>
+        <div style={{ position: 'relative', padding: '18px 16px 16px' }}>
+          {/* هویت — آواتارِ حلقه‌امتیازِ کونیک + نام/نقش/متا */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ position: 'relative', width: 78, height: 78, flexShrink: 0 }}>
+              <div style={{ width: 78, height: 78, borderRadius: '50%', background: `conic-gradient(#f4df94 ${ringDeg}deg, rgba(247,222,146,.13) ${ringDeg}deg)`, display: 'grid', placeItems: 'center', boxShadow: '0 0 20px -5px rgba(201,168,76,.55)' }}>
+                <div style={{ width: 64, height: 64, borderRadius: '50%', border: '3px solid #141009', overflow: 'hidden', background: pro.image ? `${avatarPosFor(pro.category)}/cover no-repeat url(${pro.image})` : pro.avatarGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 19, fontWeight: 800 }}>{!pro.image && pro.initials}</div>
+              </div>
+              {score.score > 0 && (
+                <span title="امتیازِ ملک‌جت از دادهٔ واقعی (معادلِ ۱۰)" style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(135deg,#f6e29a,#d7ad3e)', color: '#241c04', fontSize: 11, fontWeight: 900, padding: '2px 9px', borderRadius: 999, boxShadow: '0 0 0 2.5px #141009, 0 4px 10px -3px rgba(201,168,76,.8)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{scoreOutOf10(score.score)}</span>
               )}
-              {(pct || (score.score > 0 && score.tier)) && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 40%, transparent)`, fontSize: 10.5, fontWeight: 800, color: scoreAccent }}>{pct || score.tier}</span>
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 17, fontWeight: 800, color: CREAM, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-.3px' }}>{pro.name}</span>
+                {(pro.verified || pro.badges?.some(b => b.id === 'verified')) && <span title={pro.verified ? 'تاییدشدهٔ ملک‌جت' : 'پروفایلِ کامل'} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: pro.verified ? '#2f81f7' : 'rgba(95,217,138,.9)', color: '#fff', boxShadow: pro.verified ? '0 0 10px -2px rgba(47,129,247,.7)' : 'none' }}><IconSvg name="check" size={10} weight={2.6} /></span>}
+              </div>
+              <div style={{ fontSize: 12, marginTop: 5, color: 'rgba(239,231,212,.58)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '.2px' }}>
+                <span style={{ color: '#e8cb6e', fontWeight: 700 }}>{pro.role}</span>{hasArea && <> · {pro.area}</>}
+              </div>
+              {tierChip && (
+                <div style={{ marginTop: 10 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', borderRadius: 999, background: `color-mix(in srgb, ${scoreAccent} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${scoreAccent} 42%, transparent)`, fontSize: 10.5, fontWeight: 800, color: scoreAccent }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: scoreAccent, boxShadow: `0 0 7px ${scoreAccent}` }} />{tierChip}
+                  </span>
+                </div>
               )}
             </div>
           </div>
-        </div>
 
-        <StatRow boxes={boxes} />
+          <StatRow boxes={boxes} />
 
-        {pro.tags.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 13 }}>
-            {pro.tags.slice(0, 2).map((tag) => (
-              <span key={tag} style={{ fontSize: 10.5, padding: '4px 11px', background: 'rgba(247,222,146,.06)', border: '1px solid rgba(247,222,146,.16)', borderRadius: 999, color: 'rgba(239,231,212,.8)', fontWeight: 600 }}>{tag}</span>
-            ))}
+          {pro.tags.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 13 }}>
+              {pro.tags.slice(0, 2).map((tag) => (
+                <span key={tag} style={{ fontSize: 10.5, padding: '4px 11px', background: 'rgba(247,222,146,.06)', border: '1px solid rgba(247,222,146,.16)', borderRadius: 999, color: 'rgba(239,231,212,.8)', fontWeight: 600 }}>{tag}</span>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 15, paddingTop: 14, borderTop: '1px solid rgba(247,222,146,.12)' }}>
+            {pro.hasPhone
+              ? <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><RevealContact kind={pro.revealKind || 'item'} id={pro.revealId || String(pro.id)} compact label="نمایشِ شماره" /></div>
+              : <span style={{ fontSize: 12, color: 'rgba(239,231,212,.45)' }}>پروفایل عمومی</span>}
+            <span style={{ fontSize: 12.5, color: '#e8cb6e', fontWeight: 800, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>مشاهدهٔ پروفایل <IconSvg name="arrowLeft" size={12} /></span>
           </div>
-        )}
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 15, paddingTop: 14, borderTop: '1px solid rgba(247,222,146,.13)' }}>
-          {pro.hasPhone
-            ? <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><RevealContact kind={pro.revealKind || 'item'} id={pro.revealId || String(pro.id)} compact label="نمایشِ شماره" /></div>
-            : <span style={{ fontSize: 12, color: 'rgba(239,231,212,.45)' }}>پروفایل عمومی</span>}
-          <span style={{ fontSize: 12.5, color: '#e8cb6e', fontWeight: 800, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>مشاهدهٔ پروفایل <IconSvg name="arrowLeft" size={12} /></span>
         </div>
       </div>
     </a>
