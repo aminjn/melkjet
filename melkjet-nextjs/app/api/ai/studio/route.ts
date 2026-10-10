@@ -4,6 +4,7 @@ const { chatCompleteSafe, chatVisionSafe, generateImageSafe } = aiFor('استو�
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout, type PlanRoom } from '@/app/lib/floorplan-svg'
 import { uploadToImgbb } from '@/app/lib/img-host'
 import { getAdminData } from '@/app/lib/admin-store'
+import { outboundProxyUrl } from '@/app/lib/v2ray'
 import { getSession } from '@/app/lib/session'
 import { requireModule } from '@/app/lib/plan-gate'
 
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
     // پشتیبان عکس‌ها را به https تبدیل می‌کنیم (برای سرویس‌هایی که data-url نمی‌پذیرند).
     const admin = getAdminData()
     const imgbbKey = admin.imgbb?.apiKey
-    const proxyUrl = admin.divar?.proxyUrl
+    const proxyUrl = outboundProxyUrl()   // فاز ۲۹۹ — imgbb خارجی است: اول v2ray، بعد پراکسیِ قبلی
     // پیش‌فرض: همان data-urlهای آپلودیِ کاربر (تا ۴ عکس).
     let imgs: string[] = photos.slice(0, 4).map(p => p.image).filter(s => s.startsWith('data:'))
     let uploadErr = ''

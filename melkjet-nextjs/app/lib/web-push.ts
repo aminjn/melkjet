@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import { getAdminData, saveAdminData } from './admin-store'
 import { proxiedRequest } from './proxy-fetch'
+import { outboundProxyUrl } from './v2ray'
 
 // Web Push بدونِ هیچ وابستگیِ npm — VAPID (ES256) + رمزنگاریِ aes128gcm (RFC 8291/8188).
 // ارسال به سرویس‌های پوش (FCM/Mozilla/Apple) از طریقِ همان پروکسیِ دیوار (دسترسیِ خارجی).
@@ -71,7 +72,7 @@ export async function sendPush(sub: PushSubscription, payloadObj: any): Promise<
     'Content-Type': 'application/octet-stream',
     TTL: '2419200',
   }
-  const proxyUrl = getAdminData().divar?.proxyUrl || 'http://127.0.0.1:1080'
+  const proxyUrl = outboundProxyUrl() || 'http://127.0.0.1:1080'   // فاز ۲۹۹ — اول v2ray، بعد پراکسیِ قبلی
   try {
     const res = await proxiedRequest(sub.endpoint, { method: 'POST', headers, body, proxyUrl, timeout: 15000 })
     return res.status

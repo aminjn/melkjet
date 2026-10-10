@@ -1,6 +1,7 @@
 import { createSign, randomBytes } from 'crypto'
 import { proxiedRequest } from './proxy-fetch'
 import { getAdminData, saveAdminData } from './admin-store'
+import { v2rayProxyUrl } from './v2ray'
 
 // ── مسیرِ «GitHub Action» (چون سرورِ آروان به Google API نمی‌رسد) ──
 // GitHub (بین‌الملل دارد) داده را می‌گیرد و با این توکن به /api/admin/seo/gsc-ingest می‌فرستد.
@@ -35,7 +36,8 @@ export function scConfigured(): boolean {
 }
 function proxy(): string | undefined {
   const c = scConfig()
-  return c.proxyUrl || (getAdminData() as Record<string, any>).divar?.proxyUrl || undefined
+  // فاز ۲۹۹ — Google API خارجی است: پروکسیِ صریحِ خودش، بعد v2ray، بعد پراکسیِ قبلی.
+  return c.proxyUrl || v2rayProxyUrl() || (getAdminData() as Record<string, any>).divar?.proxyUrl || undefined
 }
 
 function b64url(buf: Buffer | string): string {
