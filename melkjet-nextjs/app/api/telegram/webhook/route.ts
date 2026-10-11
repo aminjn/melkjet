@@ -206,7 +206,21 @@ async function askParking(chatId: number) { await upd(chatId, { step: 'parking' 
 async function askElevator(chatId: number) { await upd(chatId, { step: 'elevator' }); await tgSend(chatId, '۱۰) آسانسور؟', { reply_markup: ynBtns('lev:1', 'lev:0') }) }
 async function askStorage(chatId: number) { await upd(chatId, { step: 'storage' }); await tgSend(chatId, '۱۱) انباری؟', { reply_markup: ynBtns('lstg:1', 'lstg:0') }) }
 // فروش: قیمتِ کلِ عددی. اجاره: ودیعه و اجاره را جدا و عددی می‌پرسیم.
-async function askPriceL(chatId: number) { await upd(chatId, { step: 'price' }); await tgSend(chatId, '۱۲) قیمتِ کل چند تومان؟ (فقط عدد، مثلاً ۵۲۰۰۰۰۰۰۰۰)') }
+async function askPriceL(chatId: number) {
+  await upd(chatId, { step: 'price' })
+  // فاز ۳۰۲ — پیشنهادِ قیمتِ منصفانه از آگهی‌های مشابهِ واقعی (اگر دادهٔ کافی بود).
+  let hint = ''
+  try {
+    const ld = await getLDraft(chatId)
+    const area = parseInt(String(ld?.area || '').replace(/[^\d۰-۹]/g, '').replace(FA_DIGITS, faDigit), 10)
+    if (ld && area >= 15) {
+      const { suggestSalePrice, formatSuggestion } = await import('@/app/lib/price-suggest')
+      const s = await suggestSalePrice({ city: ld.city, district: ld.hood, area })
+      if (s) hint = formatSuggestion(s) + '\n\n'
+    }
+  } catch { /* پیشنهاد اختیاری است */ }
+  await tgSend(chatId, hint ? hint + '۱۲) قیمتِ کل چند تومان؟ (فقط عدد)' : '۱۲) قیمتِ کل چند تومان؟ (فقط عدد، مثلاً ۵۲۰۰۰۰۰۰۰۰)')
+}
 async function askDeposit(chatId: number) { await upd(chatId, { step: 'deposit' }); await tgSend(chatId, '۱۲) ودیعه چند تومان؟ (فقط عدد، مثلاً ۵۰۰۰۰۰۰۰۰)') }
 async function askRent(chatId: number) { await upd(chatId, { step: 'rent' }); await tgSend(chatId, '۱۳) اجارهٔ ماهانه چند تومان؟ (فقط عدد، مثلاً ۱۰۰۰۰۰۰۰)') }
 async function askPhoto(chatId: number) {
