@@ -1,140 +1,122 @@
-// فاز ۳۰۱ — «نویسندهٔ آگهیِ یادگیرنده» (خودآموز از دادهٔ واقعی، بدونِ هوشِ مصنوعی).
-// کاربر: «با این همه دیتا باید حرفه‌ای‌تر از هوش شود». منبعِ یادگیری: متنِ کاملِ توضیحاتِ واقعیِ
-// آگهی‌های دیوار که در کشِ غنی‌سازی (enrich-store) ذخیره شده. از آن‌ها «جمله‌های تبلیغاتیِ نرمِ
-// واقعیِ مشاورها» را استخراج و پاک‌سازی می‌کنیم (بدونِ شماره/نام/آدرس) و برای هر آگهیِ تازه،
-// متنی «گراندشده روی واقعیت‌های همان ملک» با بافتِ واقعیِ آگهی‌های دیوار می‌نویسیم.
+// فاز ۳۰۱ (بازنویسیِ ۳۰۱ب) — «نویسندهٔ آگهیِ یادگیرنده»: متنِ منسجم و روان، گراندشده روی فکت‌های
+// واقعیِ خودِ آگهی، با «واژگانِ واقعیِ مشاورها» که از دادهٔ واقعی (کشِ غنی‌سازیِ دیوار) رتبه‌بندی شده‌اند.
 //
-// قانونِ آهنین (ضدِ جعل): هیچ ادعای «قابلِ‌راستی‌آزماییِ» نامطمئن تزریق نمی‌شود — جمله‌هایی که
-// ادعای سخت دارند (نوساز/بازسازی/سند/ویو/فول‌امکانات/نامِ مکانِ خاص مثل مترو) کنار گذاشته می‌شوند؛
-// فقط واقعیت‌های دادهٔ خودِ کاربر (متراژ/خواب/طبقه/سن/امکانات/معامله/موقعیت) + نثرِ نرمِ عمومی می‌آید.
+// درسِ نسخهٔ قبل: «چسباندنِ جمله‌های تصادفیِ آگهی‌های مختلف» متنِ بی‌ربط و ادعاییِ تأییدنشده می‌ساخت
+// («تک واحدی پاسیو اختصاصی»). حالا فقط صفت‌های «نرمِ امنِ» واقعی (دلباز/نورگیر/…) استفاده می‌شوند و
+// بقیهٔ متن از فکت‌های دادهٔ خودِ کاربر ساخته می‌شود — روان، یکتا، و بدونِ جعل.
 
 import { listItems, type Item } from './scraper-store'
 import { getEnrichment } from './enrich-store'
-import { FA_DIGITS, faDigit } from './digits'
 import type { ListingFields } from './listing-copy'
 
-const faToEn = (s: string) => String(s || '').replace(FA_DIGITS, faDigit)
+// ارقامِ لاتینِ متن را برای نمایش به فارسی برمی‌گرداند («۹۵متری» نه «95متری») — قاعدهٔ RTLِ پروژه.
+const FA = '۰۱۲۳۴۵۶۷۸۹'
+const faShow = (s: string) => String(s || '').replace(/[0-9]/g, d => FA[+d])
 const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
+const maybe = (p = 0.5) => Math.random() < p
 function take<T>(a: T[], n: number): T[] {
   const b = [...a]
   for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[b[i], b[j]] = [b[j], b[i]] }
   return b.slice(0, Math.min(n, b.length))
 }
 
-// نشانه‌های «تماس/واسطه/هویت» → کلِ جمله دور ریخته می‌شود (نه متنِ تبلیغاتی).
-const BAD = /https?:|www\.|@\w|تلگرام|واتس|اینستا|۰۹\d|0?9\d{8}|\d{7,}|شماره|تماس|هماهنگ|آدرس|پلاک|کوچه|خیابان|بلوار|نبش|میدان|واسطه|کمیسیون|املاک |مشاور |آژانس|دفتر املاک/
-// ادعای «سختِ» قابلِ‌راستی‌آزمایی که برای ملکِ دیگری ممکن است دروغ باشد → حذف (ضدِ جعل).
-const HARD_CLAIM = /نوساز|بازساز|کلنگ|سند|فول|لوکس|ویو|دوبلکس|پنت|مستر|شوفاژ|پکیج|چیلر|اسپیلت|کولر|تراس|بالکن|روف|استخر|سونا|جکوزی|لابی|کابینت|گلاس|سرامیک|پارکت|متریال|متر|خواب|طبقه|سال ساخت|قیمت|رهن|اجاره|ودیعه|تومان|میلیون|میلیارد/
-// ادعای «مکانِ خاصِ نزدیک» (ممکن است برای این ملک نادرست باشد) → حذف.
-const PLACE_CLAIM = /مترو|ایستگاه|بی.?آر.?تی|پاساژ|مرکز خرید|بیمارستان|دانشگاه|مدرسه|پارک |فرودگاه|ترمینال/
+// صفت‌های «نرمِ امن» (توصیفِ عمومیِ استانداردِ تبلیغاتی — نه ادعای سختِ راستی‌آزمایی‌پذیر).
+// همهٔ این‌ها واژگانِ واقعیِ مشاورهاست؛ از دیتا «رتبه‌بندی» می‌شوند (کدام پرکاربردترند) ولی خودِ فهرست
+// امن است تا هیچ ادعای نادرستی (نوساز/سند/ویو/پاسیو…) تزریق نشود.
+const SAFE_DESC = ['دلباز', 'نورگیر', 'آفتاب‌گیر', 'دنج', 'خوش‌نقشه', 'کاربردی', 'تمیز', 'شیک', 'جمع‌وجور', 'باصفا', 'آرام', 'روشن', 'صمیمی', 'مرتب', 'نقلی', 'دلنشین']
+// خطِ «نرمِ» پایانی/کیفی (بدونِ ادعای مکان/عددِ خاص).
+const SOFT_LINE = ['فضایی مناسب برای سکونتِ راحت', 'انتخابی مطمئن برای زندگی', 'با چیدمانی اصولی و بدونِ پرتِ فضا', 'محیطی آرام و بی‌دغدغه', 'مناسبِ سلیقه‌های گوناگون', 'گزینه‌ای ارزشمند برای سکونت یا سرمایه‌گذاری']
 
-function splitSentences(text: string): string[] {
-  return faToEn(text).split(/[.!?؟\n•]+|[،؛]\s|·|\|/).map(s => s.trim()).filter(Boolean)
-}
-function cleanSent(s0: string): string | null {
-  let s = s0.replace(/\s+/g, ' ').trim().replace(/^[\-–—*✅✨🏠🔑📍🚗🌿👌•\s]+/, '').trim()
-  if (!s) return null
-  if (BAD.test(s) || PLACE_CLAIM.test(s) || HARD_CLAIM.test(s)) return null
-  const words = s.split(' ').filter(Boolean)
-  if (words.length < 3 || words.length > 20) return null
-  if ((s.match(/\d/g) || []).length > 3) return null         // جملهٔ عددمحور = فکت/قیمت
-  if (!/[؀-ۿ]{3,}/.test(s)) return null             // باید فارسی باشد
-  return s
-}
-
-export interface WriterCorpus { builtAt: number; n: number; byType: Record<string, string[]> }
-const CAP_PER_BANK = 600
-const MIN_POOL = 40          // کف‌ِ جمله‌های واقعی تا مسیرِ یادگیرنده فعال شود
+export interface WriterCorpus { builtAt: number; n: number; descCount: Record<string, number> }
 const TTL = 6 * 3600_000
 let CORPUS: WriterCorpus | null = null
 let buildingAt = 0
 
-function addSent(bank: Record<string, string[]>, key: string, s: string) {
-  const arr = bank[key] || (bank[key] = [])
-  if (arr.length < CAP_PER_BANK && !arr.includes(s)) arr.push(s)
-}
-
-/** ساختِ پیکره از نمونه‌ها (قابلِ تزریق برای تست). */
-export function buildWriterCorpusFrom(samples: { type?: string; text?: string }[]): WriterCorpus {
-  const byType: Record<string, string[]> = {}
+/** پیکره را فقط برای «رتبه‌بندیِ واژگان» می‌سازد: کدام صفت‌های امن در آگهی‌های واقعی پرتکرارترند. سبک و امن. */
+export function buildWriterCorpusFrom(samples: { text?: string }[]): WriterCorpus {
+  const descCount: Record<string, number> = {}
   let n = 0
   for (const s of samples) {
-    const text = s.text || ''
-    if (text.length < 40) continue
-    const type = (s.type || '').trim() || '*'
-    for (const raw of splitSentences(text)) {
-      const c = cleanSent(raw)
-      if (!c) continue
-      addSent(byType, type, c)
-      if (type !== '*') addSent(byType, '*', c)
-      n++
-    }
+    const t = s.text || ''
+    if (t.length < 20) continue
+    n++
+    for (const d of SAFE_DESC) if (t.includes(d)) descCount[d] = (descCount[d] || 0) + 1
   }
-  return { builtAt: Date.now(), n, byType }
+  return { builtAt: Date.now(), n, descCount }
 }
 
-/** پیکره را از آگهی‌های واقعی (توضیحاتِ کشِ غنی‌سازی) می‌سازد — با کش و TTL. */
 export async function ensureWriterCorpus(): Promise<WriterCorpus | null> {
   if (CORPUS && Date.now() - CORPUS.builtAt < TTL) return CORPUS
-  if (Date.now() - buildingAt < 30_000 && CORPUS) return CORPUS   // دیباونس
+  if (Date.now() - buildingAt < 30_000 && CORPUS) return CORPUS
   buildingAt = Date.now()
   try {
     const items = (await listItems('listing')) as Item[]
-    const samples: { type?: string; text?: string }[] = []
+    const samples: { text?: string }[] = []
     for (const it of items) {
       const e = getEnrichment(it.id)
       const text = (e?.description && e.description.length > (it.excerpt?.length || 0)) ? e.description : (it.excerpt || '')
-      if (text && text.length >= 40) samples.push({ type: it.meta?.['نوع ملک'], text })
+      if (text) samples.push({ text })
     }
-    const built = buildWriterCorpusFrom(samples)
-    if (built.n >= MIN_POOL) CORPUS = built
+    CORPUS = buildWriterCorpusFrom(samples)
   } catch { /* پیکرهٔ قبلی را نگه دار */ }
   return CORPUS
 }
 
-/** توضیحاتِ گراندشده با بافتِ واقعی — فقط فکت‌های کاربر + نثرِ نرمِ واقعی. null = پیکره کافی نیست. */
+// صفت‌ها را بر اساسِ تکرار در دادهٔ واقعی مرتب می‌کند؛ اگر پیکره نبود، خودِ فهرستِ امن.
+function descriptorPool(c: WriterCorpus | null): string[] {
+  if (!c || !c.n) return [...SAFE_DESC]
+  const seen = SAFE_DESC.filter(d => (c.descCount[d] || 0) > 0)
+  return seen.length >= 4 ? seen : [...SAFE_DESC]
+}
+
+const floorText = (floor?: string, total?: string): string => {
+  if (!floor) return ''
+  if (floor === 'همکف') return 'همکف'
+  if (/\+/.test(floor)) return `طبقهٔ ${floor.replace(/\+/g, '')} به بالا`
+  return `طبقهٔ ${floor}${total ? ` از ${total}` : ''}`
+}
+
+/** توضیحاتِ منسجم و روانِ گراندشده. همیشه متن برمی‌گرداند (نیازی به پیکرهٔ بزرگ ندارد). */
 export async function writeDescriptionFromData(f: ListingFields): Promise<string | null> {
-  const c = await ensureWriterCorpus()
-  if (!c) return null
-  const type = (f.propertyType || '').trim()
-  const pool = [...new Set([...(c.byType[type] || []), ...(c.byType['*'] || [])])]
-  if (pool.length < MIN_POOL) return null
-
+  const c = await ensureWriterCorpus().catch(() => null)
+  const pool = descriptorPool(c)
+  const type = f.propertyType || 'ملک'
   const isRent = f.deal === 'اجاره'
+  const dealWord = isRent ? pick(['آمادهٔ اجاره', 'برای اجاره']) : pick(['آمادهٔ فروش', 'برای فروش'])
   const loc = f.hood || f.city || ''
-  const open = pick([
-    `${f.propertyType || 'ملک'}${f.area ? ` ${f.area} متری` : ''}${loc ? ` در ${loc}` : ''} ${isRent ? 'برای اجاره' : 'برای فروش'}.`,
-    `${loc ? loc + '؛ ' : ''}${f.propertyType || 'ملک'}${f.area ? ` ${f.area} متری` : ''} ${isRent ? 'آمادهٔ اجاره' : 'آمادهٔ فروش'}.`,
-    `فرصتی برای ${isRent ? 'اجاره' : 'خرید'}؛ ${f.propertyType || 'ملک'}${f.area ? ` ${f.area} متری` : ''}${loc ? ` واقع در ${loc}` : ''}.`,
-  ]) + ' ' + pick(['🏠', '✨', '📍', ''])
+  const adjs = take(pool, maybe(0.6) ? 2 : 1).join(' و ')
 
-  // فکت‌های واقعیِ کاربر (گراندشده)
-  const factBits: string[] = []
-  if (f.rooms != null && f.rooms !== '' && Number(f.rooms) > 0) factBits.push(`${f.rooms} خوابه`)
-  if (f.floor) factBits.push(`طبقهٔ ${f.floor}${f.totalFloors ? ` از ${f.totalFloors}` : ''}`)
-  const factSent = factBits.length ? pick([`این واحد ${factBits.join('، ')} است.`, `${factBits.join(' و ')}.`]) : ''
-  const ageSent = f.age ? pick([`سنِ بنا ${f.age}.`, `ساختِ ${f.age}.`]) : ''
+  // بندِ ۱ — معرفیِ روان (نوع + صفت‌های امن + متراژ + موقعیت + معامله)
+  const p1 = `${type}${adjs ? `ِ ${adjs}` : ''}${f.area ? ` ${f.area}متری` : ''}${loc ? ` در ${loc}` : ''}، ${dealWord}.`
+
+  // بندِ ۲ — مشخصات و امکاناتِ واقعی، در یک جملهٔ روان
+  const specBits: string[] = []
+  if (f.rooms != null && f.rooms !== '' && Number(f.rooms) > 0) specBits.push(`${f.rooms} خوابه`)
+  const ft = floorText(f.floor, f.totalFloors); if (ft) specBits.push(ft)
   const feats = [f.parking && 'پارکینگ', f.elevator && 'آسانسور', f.storage && 'انباری'].filter(Boolean) as string[]
-  const featSent = feats.length ? pick([`از امکانات: ${feats.join('، ')}.`, `مجهز به ${feats.join(' و ')}.`]) : ''
+  const subject = type.includes('آپارتمان') ? pick(['این واحد', 'این آپارتمان']) : pick(['این ملک', 'این واحد'])
+  let p2 = ''
+  if (specBits.length && feats.length) p2 = `${subject} ${specBits.join(' و ')} و ${pick(['مجهز به', 'دارای', 'بهره‌مند از'])} ${feats.join('، ')} است.`
+  else if (specBits.length) p2 = `${subject} ${specBits.join(' و ')} است.`
+  else if (feats.length) p2 = `${subject} ${pick(['مجهز به', 'دارای'])} ${feats.join('، ')} است.`
 
-  // ۲ تا ۳ جملهٔ «واقعیِ» مشاورها از پیکره (نثرِ نرم) — همین بخش هر بار متفاوت و «یادگرفته‌شده» است
-  const real = take(pool, Math.random() < 0.5 ? 3 : 2).map(s => s.endsWith('.') ? s : s + '.')
-
+  const ageTxt = f.age ? pick([`سنِ بنا ${f.age}.`, `ساختِ ${f.age}.`]) : ''
+  const soft = maybe(0.65) ? pick(SOFT_LINE) + '.' : ''
   const cta = (f.advisorName
     ? pick([`برای هماهنگیِ بازدید با ${f.advisorName} تماس بگیرید.`, `${f.advisorName} آمادهٔ پاسخ‌گویی و هماهنگیِ بازدید است.`])
-    : pick([`برای بازدید و جزئیاتِ بیشتر تماس بگیرید.`, `همین حالا برای هماهنگیِ بازدید در تماس باشید.`])) + ' ' + pick(['🔑', '📞', ''])
+    : pick([`برای بازدید و اطلاعاتِ بیشتر تماس بگیرید.`, `برای هماهنگیِ بازدید در تماس باشید.`])) + ' ' + pick(['🔑', '🏠', ''])
 
-  // چیدمان: آغاز، چند جملهٔ واقعی، فکت‌ها/امکانات، دعوت
-  const blocks = [open, real[0] || '', factSent, featSent, real[1] || '', ageSent, real[2] || '', cta].filter(Boolean)
-  const out = blocks.join('\n\n').replace(/[ \t]+/g, ' ').trim()
-  return out.length > 60 ? out : null
+  // چیدمان: بندِ معرفی، بندِ مشخصات/کیفیت (روان، نه تکه‌تکه)، دعوت
+  const midParts = [p2, ageTxt, soft].filter(Boolean)
+  const blocks = [p1 + ' ' + pick(['🏠', '✨', '📍', '']), midParts.join(' '), cta].filter(s => s && s.trim())
+  const out = faShow(blocks.join('\n\n').replace(/[ \t]+/g, ' ').trim())
+  return out.length > 40 ? out : null
 }
 
 /** فقط برای تست: تزریقِ پیکره بدونِ خواندن از دیتابیس. */
 export function __setWriterCorpus(c: WriterCorpus | null) { CORPUS = c; buildingAt = Date.now() }
 
-/** برای پنل/تشخیص: وضعیتِ پیکرهٔ یادگیری. */
-export async function writerCorpusStats(): Promise<{ ready: boolean; sentences: number; types: number }> {
+export async function writerCorpusStats(): Promise<{ ready: boolean; samples: number; vocab: number }> {
   const c = await ensureWriterCorpus()
-  return { ready: !!c && c.n >= MIN_POOL, sentences: c?.n || 0, types: c ? Object.keys(c.byType).filter(k => k !== '*').length : 0 }
+  return { ready: !!c, samples: c?.n || 0, vocab: c ? Object.keys(c.descCount).length : 0 }
 }
