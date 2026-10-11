@@ -17,12 +17,15 @@ const pendingCount = async () => (await listItems('listing')).filter(i => i.stat
 let start = await pendingCount()
 console.log(`شروع — منتظر: ${start}`)
 let total = 0
-for (let i = 1; i <= 60; i++) {
-  const r = await moderatePending(500)
+for (let i = 1; i <= 120; i++) {
+  let r
+  try { r = await moderatePending(250) }
+  catch (e) { console.log(`دور ${i}: خطای گذرا (${String(e.message || e).slice(0, 60)}) — کمی صبر و ادامه`); await new Promise(res => setTimeout(res, 2000)); continue }
   total += r.moderated
   const left = await pendingCount()
   console.log(`دور ${i}: حکم‌شده ${r.moderated} | باقی‌مانده منتظر: ${left}${r.error ? ' · ' + r.error : ''}`)
   if (left <= 20 || r.moderated === 0) break
+  await new Promise(res => setTimeout(res, 400))   // نفس به کرون/اسکرپرِ زنده بده (کاهشِ رقابتِ قفل)
 }
 const end = await pendingCount()
 console.log(`\n✅ تمام. منتظر: ${start} → ${end} (جمعاً ${total} حکم).`)

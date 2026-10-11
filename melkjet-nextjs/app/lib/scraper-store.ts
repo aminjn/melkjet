@@ -718,24 +718,31 @@ export async function setModeration(itemId: string, status: ItemStatus, reason: 
 export async function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[], opts?: { onlyPending?: boolean; notifyNew?: boolean }) {
   if (!verdicts.length) return
   const _tgNew: Item[] = []
-  const _r = await mutateSome(verdicts.map(v => v.id), ({ items }) => {
-    const now = Date.now()
-    const map = new Map(verdicts.map(v => [v.id, v]))
-    for (const it of items) {
-      const v = map.get(it.id)
-      if (!v) continue
-      // فاز ۱۵۶ (B2): حکمِ «خودکار» فقط روی آیتمی می‌نشیند که هنوز pending است — اگر ادمین
-      // بینِ خواندنِ صف و نوشتنِ دسته‌ای، خودش حکم داده باشد، حکمِ انسانی دست‌نخورده می‌ماند.
-      if (opts?.onlyPending && it.status !== 'pending') continue
-      const _wasA = it.status === 'approved'
-      it.status = v.status; it.aiReason = v.reason; it.aiScore = v.score; it.moderatedAt = now
-      if (!_wasA && v.status === 'approved' && it.type === 'listing') _tgNew.push(it)
-    }
-  })
+  // فاز ۳۰۳ح — نوشتنِ تکه‌تکه (۸۰تایی): قبلاً کلِ دسته (صدها آگهی) در «یک» mutateSome بود که قفلِ
+  // ردیفِ scraper_meta را طولانی نگه می‌داشت؛ زیرِ بارِ اسکرپرِ زنده این از statement_timeout رد می‌شد
+  // («canceling statement … while locking tuple in relation kv») → کلِ دسته rollback و هیچ حکمی
+  // نوشته نمی‌شد (علتِ گیرکردنِ صف روی ~۷۱۲۷). تراکنش‌های کوچک قفل را کوتاه می‌گیرند و زیرِ رقابت رد نمی‌شوند.
+  const CHUNK = 80
+  for (let c = 0; c < verdicts.length; c += CHUNK) {
+    const slice = verdicts.slice(c, c + CHUNK)
+    const map = new Map(slice.map(v => [v.id, v]))
+    await mutateSome(slice.map(v => v.id), ({ items }) => {
+      const now = Date.now()
+      for (const it of items) {
+        const v = map.get(it.id)
+        if (!v) continue
+        // فاز ۱۵۶ (B2): حکمِ «خودکار» فقط روی آیتمی می‌نشیند که هنوز pending است — اگر ادمین
+        // بینِ خواندنِ صف و نوشتنِ دسته‌ای، خودش حکم داده باشد، حکمِ انسانی دست‌نخورده می‌ماند.
+        if (opts?.onlyPending && it.status !== 'pending') continue
+        const _wasA = it.status === 'approved'
+        it.status = v.status; it.aiReason = v.reason; it.aiScore = v.score; it.moderatedAt = now
+        if (!_wasA && v.status === 'approved' && it.type === 'listing') _tgNew.push(it)
+      }
+    })
+  }
   // notifyNew=false برای تخلیهٔ انباشتِ قدیمی: آگهیِ هفته‌ها پیش «تازه» نیست و نباید آلارمِ
   // مشترکان را سیل کند (۸٬۲۵۷ آگهی × هر مشترکِ منطبق = اسپم).
   if (_tgNew.length && opts?.notifyNew !== false) import('./telegram-notify').then(m => m.notifyNewListings(_tgNew)).catch(() => {})
-  return _r
 }
 
 // فاز ۱۳۸ — بازممیزیِ ردشده‌های «خودکار»: آگهی‌هایی که ماشین/قاعدهٔ قدیمی رد کرده (نه ادمینِ انسانی)
