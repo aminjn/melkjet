@@ -93,7 +93,7 @@ export async function writeDescriptionFromData(f: ListingFields): Promise<string
   const specBits: string[] = []
   if (f.rooms != null && f.rooms !== '' && Number(f.rooms) > 0) specBits.push(`${f.rooms} خوابه`)
   const ft = floorText(f.floor, f.totalFloors); if (ft) specBits.push(ft)
-  const feats = [f.parking && 'پارکینگ', f.elevator && 'آسانسور', f.storage && 'انباری'].filter(Boolean) as string[]
+  const feats = [f.parking && 'پارکینگ', f.elevator && 'آسانسور', f.storage && 'انباری', f.patio && 'پاسیو'].filter(Boolean) as string[]
   const subject = type.includes('آپارتمان') ? pick(['این واحد', 'این آپارتمان']) : pick(['این ملک', 'این واحد'])
   let p2 = ''
   if (specBits.length && feats.length) p2 = `${subject} ${specBits.join(' و ')} و ${pick(['مجهز به', 'دارای', 'بهره‌مند از'])} ${feats.join('، ')} است.`

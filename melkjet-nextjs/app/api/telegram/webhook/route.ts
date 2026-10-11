@@ -205,6 +205,7 @@ async function askAge(chatId: number) { await upd(chatId, { step: 'age' }); awai
 async function askParking(chatId: number) { await upd(chatId, { step: 'parking' }); await tgSend(chatId, '۹) پارکینگ؟', { reply_markup: ynBtns('lpk:1', 'lpk:0') }) }
 async function askElevator(chatId: number) { await upd(chatId, { step: 'elevator' }); await tgSend(chatId, '۱۰) آسانسور؟', { reply_markup: ynBtns('lev:1', 'lev:0') }) }
 async function askStorage(chatId: number) { await upd(chatId, { step: 'storage' }); await tgSend(chatId, '۱۱) انباری؟', { reply_markup: ynBtns('lstg:1', 'lstg:0') }) }
+async function askPatio(chatId: number) { await upd(chatId, { step: 'patio' }); await tgSend(chatId, '۱۲) پاسیو؟', { reply_markup: ynBtns('lpt:1', 'lpt:0') }) }
 // فروش: قیمتِ کلِ عددی. اجاره: ودیعه و اجاره را جدا و عددی می‌پرسیم.
 async function askPriceL(chatId: number) {
   await upd(chatId, { step: 'price' })
@@ -231,7 +232,7 @@ function ldFields(ld: import('@/app/lib/telegram-store').LDraft, link: { name?: 
   return {
     deal: ld.deal, propertyType: ld.ptype, city: ld.city, hood: ld.hood, area: ld.area,
     rooms: ld.rooms, floor: ld.floor, age: ld.age, parking: ld.parking, elevator: ld.elevator,
-    storage: ld.storage, price: ld.price, advisorName: link?.name,
+    storage: ld.storage, patio: ld.patio, price: ld.price, advisorName: link?.name,
   }
 }
 // تولیدِ عنوان+توضیحاتِ حرفه‌ای، بعد صفحهٔ تأیید
@@ -252,7 +253,7 @@ async function confirmListing(chatId: number) {
     ld.rooms != null && ld.rooms !== '' ? `🛏 ${ld.rooms === '0' ? 'بدونِ خواب' : ld.rooms + ' خواب'}` : '',
     ld.floor ? `🏢 طبقهٔ ${ld.floor}` : '',
     ld.age ? `🗓 سالِ ساخت: ${ld.age}` : '',
-    [ld.parking ? 'پارکینگ' : '', ld.elevator ? 'آسانسور' : '', ld.storage ? 'انباری' : ''].filter(Boolean).join(' · '),
+    [ld.parking ? 'پارکینگ' : '', ld.elevator ? 'آسانسور' : '', ld.storage ? 'انباری' : '', ld.patio ? 'پاسیو' : ''].filter(Boolean).join(' · '),
     ld.image ? '🖼 عکس ✓' : '',
   ].filter(Boolean).join('\n')
   const body = `این آگهی ثبت شود؟\n\n🏠 <b>${ld.title || ''}</b>\n\n${ld.description || ''}\n\n────────\n${facts}`
@@ -278,6 +279,7 @@ async function submitListing(chatId: number) {
   if (ld.parking != null) meta['پارکینگ'] = ld.parking ? 'دارد' : 'ندارد'
   if (ld.elevator != null) meta['آسانسور'] = ld.elevator ? 'دارد' : 'ندارد'
   if (ld.storage != null) meta['انباری'] = ld.storage ? 'دارد' : 'ندارد'
+  if (ld.patio != null) meta['پاسیو'] = ld.patio ? 'دارد' : 'ندارد'
   const location = [ld.city, ld.hood].filter(Boolean).join('، ') || undefined
   const item = await addUserListing({ title: ld.title, price: ld.price, location, excerpt: ld.description, image: ld.image, phone: link?.phone, owner: link?.name, meta })
   await clearLDraft(chatId)
@@ -377,7 +379,8 @@ export async function handleBotUpdate(u: any) {
     else if (data.startsWith('lf:')) { const v = data.slice(3); await upd(chatId, { floor: v === '__skip' ? undefined : v }); await askAge(chatId) }
     else if (data.startsWith('lpk:')) { await upd(chatId, { parking: data.slice(4) === '1' }); await askElevator(chatId) }
     else if (data.startsWith('lev:')) { await upd(chatId, { elevator: data.slice(4) === '1' }); await askStorage(chatId) }
-    else if (data.startsWith('lstg:')) { const d = await upd(chatId, { storage: data.slice(5) === '1' }); if (d.deal === 'اجاره') await askDeposit(chatId); else await askPriceL(chatId) }
+    else if (data.startsWith('lstg:')) { await upd(chatId, { storage: data.slice(5) === '1' }); await askPatio(chatId) }
+    else if (data.startsWith('lpt:')) { const d = await upd(chatId, { patio: data.slice(4) === '1' }); if (d.deal === 'اجاره') await askDeposit(chatId); else await askPriceL(chatId) }
     else if (data === 'lnophoto') { const ld = await getLDraft(chatId); if (ld?.title) await confirmListing(chatId); else await runGenerate(chatId) }
     else if (data === 'lphoto') { await askPhoto(chatId) }
     else if (data === 'lrestart') { await askListingDeal(chatId) }

@@ -49,6 +49,15 @@ ok(rawFloor === 0, `no raw "+" floor artifact (got ${rawFloor})`)
 ok(hasLoc >= 95, `grounded on location (${hasLoc}/100)`)
 ok(hasAmenity >= 95, `grounded on amenities (${hasAmenity}/100)`)
 
+// پاسیو فقط وقتی هست که ملک واقعاً دارد (گراندشده، نه جعل)
+let patioWhenTrue = 0, patioWhenFalse = 0
+for (let i = 0; i < 40; i++) {
+  if (/پاسیو/.test(await writeDescriptionFromData({ ...f, patio: true }))) patioWhenTrue++
+  if (/پاسیو/.test(await writeDescriptionFromData({ ...f, patio: false }))) patioWhenFalse++
+}
+ok(patioWhenTrue === 40, `patio shown when true (${patioWhenTrue}/40)`)
+ok(patioWhenFalse === 0, `patio never fabricated when false (${patioWhenFalse}/40)`)
+
 // نمایشِ درستِ «۶+» (طبقهٔ ۶ به بالا) و «همکف»
 const plus = await writeDescriptionFromData({ ...f, floor: '6+', totalFloors: '' })
 ok(/به بالا/.test(plus) && !/\+/.test(plus), 'floor "6+" → "طبقهٔ ۶ به بالا"')

@@ -20,11 +20,11 @@ export interface Link { chatId: number; phone: string; name?: string; role?: str
 // فاز ۲۵۷/۲۵۹ — پیش‌نویسِ ثبتِ آگهیِ هوشمند (پرسشِ گام‌به‌گامِ همه‌چیز با دکمه).
 export interface LDraft {
   step: 'deal' | 'ptype' | 'city' | 'cityText' | 'hood' | 'hoodText' | 'area'
-    | 'rooms' | 'floor' | 'age' | 'parking' | 'elevator' | 'storage'
+    | 'rooms' | 'floor' | 'age' | 'parking' | 'elevator' | 'storage' | 'patio'
     | 'price' | 'deposit' | 'rent' | 'photo' | 'gen' | 'editdesc' | 'confirm'
   deal?: string; ptype?: string; city?: string; hood?: string; hoods?: string[]
   area?: string; rooms?: string; floor?: string; age?: string
-  parking?: boolean; elevator?: boolean; storage?: boolean
+  parking?: boolean; elevator?: boolean; storage?: boolean; patio?: boolean
   price?: string; deposit?: string; rent?: string; image?: string; title?: string; description?: string
 }
 // فاز ۲۶۴ — پیش‌نویسِ جستجوی درون‌ربات (معامله→شهر→محله → نمایشِ آگهی‌های منطبق).

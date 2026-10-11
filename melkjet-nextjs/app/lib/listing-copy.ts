@@ -17,6 +17,7 @@ export interface ListingFields {
   parking?: boolean
   elevator?: boolean
   storage?: boolean
+  patio?: boolean
   price?: string
   advisorName?: string
 }
@@ -45,6 +46,7 @@ export function specLines(f: ListingFields): string[] {
     f.parking != null && `پارکینگ: ${yn(f.parking)}`,
     f.elevator != null && `آسانسور: ${yn(f.elevator)}`,
     f.storage != null && `انباری: ${yn(f.storage)}`,
+    f.patio != null && `پاسیو: ${yn(f.patio)}`,
     f.price && `قیمت: ${f.price}`,
   ].filter(Boolean) as string[]
 }
