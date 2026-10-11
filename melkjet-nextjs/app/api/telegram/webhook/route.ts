@@ -8,7 +8,7 @@ import {
   getSDraft, setSDraft, clearSDraft, type SDraft,
 } from '@/app/lib/telegram-store'
 import { sendTest, regionsForCity, hoodsForRegion, seedChannel, matchSub } from '@/app/lib/telegram-notify'
-import { addUserListing, listItems, type Item } from '@/app/lib/scraper-store'
+import { addUserListing, updateUserListing, getItemById, listItems, type Item } from '@/app/lib/scraper-store'
 import { moderateOne, userSubmitModel } from '@/app/lib/moderation'
 import { saveMedia } from '@/app/lib/media-store'
 import { getAccount } from '@/app/lib/account-store'
@@ -256,13 +256,14 @@ async function confirmListing(chatId: number) {
     [ld.parking ? 'پارکینگ' : '', ld.elevator ? 'آسانسور' : '', ld.storage ? 'انباری' : '', ld.patio ? 'پاسیو' : ''].filter(Boolean).join(' · '),
     ld.image ? '🖼 عکس ✓' : '',
   ].filter(Boolean).join('\n')
-  const body = `این آگهی ثبت شود؟\n\n🏠 <b>${ld.title || ''}</b>\n\n${ld.description || ''}\n\n────────\n${facts}`
-  await tgSend(chatId, body.slice(0, 3900), { reply_markup: kb([
-    [{ t: '✅ ثبت و انتشار', d: 'lok' }],
-    [{ t: ld.image ? '📷 تغییرِ عکس' : '📷 افزودنِ عکس', d: 'lphoto' }, { t: '🔄 بازتولیدِ متن', d: 'lregen' }],
-    [{ t: '✏️ ویرایشِ توضیحات', d: 'ledit' }, { t: '♻️ شروعِ دوباره', d: 'lrestart' }],
-    [{ t: '✖️ لغو', d: 'lcancel' }],
-  ]) })
+  const head = ld.editing ? 'آگهی را اصلاح کن و ثبتِ دوباره بزن:' : 'این آگهی ثبت شود؟'
+  const body = `${head}\n\n🏠 <b>${ld.title || ''}</b>\n\n${ld.description || ''}\n\n────────\n${facts}`
+  const rows: Btn[][] = [[{ t: ld.editing ? '✅ ثبتِ دوباره' : '✅ ثبت و انتشار', d: 'lok' }]]
+  if (ld.editing) rows.push([{ t: '📐 اصلاحِ متراژ', d: 'lfa' }, { t: '💰 اصلاحِ قیمت', d: 'lfp' }])
+  rows.push([{ t: ld.image ? '📷 تغییرِ عکس' : '📷 افزودنِ عکس', d: 'lphoto' }, { t: '🔄 بازتولیدِ متن', d: 'lregen' }])
+  rows.push([{ t: '✏️ ویرایشِ توضیحات', d: 'ledit' }, { t: '♻️ شروعِ دوباره', d: 'lrestart' }])
+  rows.push([{ t: '✖️ لغو', d: 'lcancel' }])
+  await tgSend(chatId, body.slice(0, 3900), { reply_markup: kb(rows) })
 }
 async function submitListing(chatId: number) {
   const ld = await getLDraft(chatId); const link = await getLink(chatId)
@@ -281,15 +282,20 @@ async function submitListing(chatId: number) {
   if (ld.storage != null) meta['انباری'] = ld.storage ? 'دارد' : 'ندارد'
   if (ld.patio != null) meta['پاسیو'] = ld.patio ? 'دارد' : 'ندارد'
   const location = [ld.city, ld.hood].filter(Boolean).join('، ') || undefined
-  const item = await addUserListing({ title: ld.title, price: ld.price, location, excerpt: ld.description, image: ld.image, phone: link?.phone, owner: link?.name, meta })
+  const raw = { title: ld.title, price: ld.price, location, excerpt: ld.description, image: ld.image, phone: link?.phone, owner: link?.name, meta }
+  // فاز ۳۰۳ب — ویرایش: همان آیتم به‌روز و دوباره ممیزی می‌شود (بدونِ آگهیِ تکراری). وگرنه ثبتِ نو.
+  const editing = ld.editing && ld.editId
+  const item = editing ? await updateUserListing(ld.editId!, raw, { remoderate: true }) : await addUserListing(raw)
   await clearLDraft(chatId)
+  if (!item) { await tgSend(chatId, 'اصلاح انجام نشد — دوباره از «📋 آگهی‌های من» امتحان کن.', { reply_markup: menu }); return }
   if (item.status === 'duplicate') { await tgSend(chatId, '⚠️ این آگهی قبلاً در ملک‌جت ثبت شده (ملکِ مشابه).', { reply_markup: menu }); return }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let verdict: any = { status: 'pending', reason: 'در صفِ بررسی' }
   try { verdict = await moderateOne(item, userSubmitModel()) } catch { /* بماند در صف */ }
-  if (verdict.status === 'approved') await tgSend(chatId, `✅ آگهی ثبت و تأیید شد و در سایت منتشر شد!\nhttps://melkjet.com/property/${item.id}`, { reply_markup: menu })
-  else if (verdict.status === 'rejected') await tgSend(chatId, `❌ آگهی تأیید نشد: ${verdict.reason || 'مغایر با قوانین'}\nمی‌تونی اصلاحش کنی و دوباره ثبت کنی.`, { reply_markup: menu })
-  else await tgSend(chatId, '🕒 آگهی ثبت شد و در صفِ بررسی است؛ پس از تأیید در سایت منتشر می‌شود.', { reply_markup: menu })
+  const okMsg = editing ? '✅ آگهیِ اصلاح‌شده تأیید و منتشر شد!' : '✅ آگهی ثبت و تأیید شد و در سایت منتشر شد!'
+  if (verdict.status === 'approved') await tgSend(chatId, `${okMsg}\nhttps://melkjet.com/property/${item.id}`, { reply_markup: menu })
+  else if (verdict.status === 'rejected') await tgSend(chatId, `❌ آگهی تأیید نشد: ${verdict.reason || 'مغایر با قوانین'}\nمی‌تونی دوباره از «📋 آگهی‌های من» اصلاحش کنی.`, { reply_markup: menu })
+  else await tgSend(chatId, '🕒 آگهی در صفِ بررسی است؛ پس از تأیید در سایت منتشر می‌شود.', { reply_markup: menu })
 }
 async function showMyAds(chatId: number) {
   const link = await getLink(chatId)
@@ -300,16 +306,41 @@ async function showMyAds(chatId: number) {
   for (const it of mine) {
     const st = it.status === 'approved' ? '✅ منتشرشده' : it.status === 'rejected' ? '❌ ردشده' : it.status === 'duplicate' ? '♻️ تکراری' : '🕒 در بررسی'
     const link2 = it.status === 'approved' ? `\nhttps://melkjet.com/property/${it.id}` : ''
-    await tgSend(chatId, `${st} — ${it.title}${link2}`)
+    const why = it.status === 'rejected' && it.aiReason ? `\n${it.aiReason}` : ''
+    // آگهیِ ردشده/در-انتظار قابلِ اصلاح و ثبتِ دوباره است (ویرایشِ درجا، نه آگهیِ تازه).
+    const canEdit = it.status === 'rejected' || it.status === 'pending'
+    await tgSend(chatId, `${st} — ${it.title}${why}${link2}`, canEdit ? { reply_markup: kb([[{ t: '✏️ اصلاح و ثبتِ دوباره', d: 'led:' + it.id }]]) } : undefined)
   }
 }
+// فاز ۳۰۳ب — بارگذاریِ آگهیِ موجود در پیش‌نویس برای «اصلاح و ثبتِ دوباره» (ردشده/در انتظار).
+async function startEditListing(chatId: number, itemId: string) {
+  const link = await getLink(chatId)
+  const it = await getItemById(itemId)
+  if (!it || it.type !== 'listing' || !link || !it.phone || normPhone(it.phone) !== link.phone) {
+    await tgSend(chatId, 'این آگهی پیدا نشد یا دسترسی نداری.', { reply_markup: menu }); return
+  }
+  const m = (it.meta || {}) as Record<string, string>
+  await setLDraft(chatId, {
+    step: 'confirm', editing: true, editId: it.id,
+    deal: m['نوع معامله'], ptype: m['نوع ملک'], city: m['شهر'], hood: m['محله'],
+    area: m['متراژ'], rooms: m['اتاق'], floor: m['طبقه'], age: m['سن بنا'],
+    parking: m['پارکینگ'] ? m['پارکینگ'] === 'دارد' : undefined,
+    elevator: m['آسانسور'] ? m['آسانسور'] === 'دارد' : undefined,
+    storage: m['انباری'] ? m['انباری'] === 'دارد' : undefined,
+    patio: m['پاسیو'] ? m['پاسیو'] === 'دارد' : undefined,
+    price: it.price, title: it.title, description: it.excerpt, image: it.image,
+  })
+  await tgSend(chatId, '✏️ آگهی برای اصلاح باز شد. متراژ/قیمت/متن را عوض کن و «ثبتِ دوباره» را بزن 👇')
+  await confirmListing(chatId)
+}
+
 // متنِ کاربر در جریانِ ثبتِ آگهی (فقط جایی که تایپ لازم است: شهر/محلهٔ دلخواه، متراژ، قیمت، ویرایشِ متن)
 async function handleListingText(chatId: number, ld: import('@/app/lib/telegram-store').LDraft, text: string) {
   if (ld.step === 'cityText' || ld.step === 'city') { const d = await upd(chatId, { city: text.trim() }); await tgSend(chatId, `شهر: ${text.trim()} ✅`); await askHoodL(chatId, d.city!) }
   else if (ld.step === 'hood' || ld.step === 'hoodText') { await upd(chatId, { hood: text.trim() }); await askArea(chatId) }
-  else if (ld.step === 'area') { const a = text.replace(/[^\d۰-۹]/g, '') || text.trim(); await upd(chatId, { area: a }); await askRooms(chatId) }
+  else if (ld.step === 'area') { const a = text.replace(/[^\d۰-۹]/g, '') || text.trim(); await upd(chatId, { area: a }); if (ld.editing) await confirmListing(chatId); else await askRooms(chatId) }
   else if (ld.step === 'age') { await upd(chatId, { age: text.trim() }); await askParking(chatId) }
-  else if (ld.step === 'price') { await upd(chatId, { price: faMoney(text) }); await askPhoto(chatId) }
+  else if (ld.step === 'price') { await upd(chatId, { price: faMoney(text) }); if (ld.editing) await confirmListing(chatId); else await askPhoto(chatId) }
   else if (ld.step === 'deposit') { await upd(chatId, { deposit: faMoney(text) }); await askRent(chatId) }
   else if (ld.step === 'rent') { const rent = faMoney(text); await upd(chatId, { rent, price: `ودیعه ${ld.deposit || '—'} · اجاره ${rent}` }); await askPhoto(chatId) }
   else if (ld.step === 'editdesc') { await upd(chatId, { description: text.trim(), step: 'confirm' }); await confirmListing(chatId) }
@@ -364,6 +395,9 @@ export async function handleBotUpdate(u: any) {
     // ثبتِ آگهیِ هوشمند (فاز ۲۵۹)
     else if (data === 'nl') await startListing(chatId)
     else if (data === 'myads') await showMyAds(chatId)
+    else if (data.startsWith('led:')) await startEditListing(chatId, data.slice(4))
+    else if (data === 'lfa') { await upd(chatId, { step: 'area' }); await tgSend(chatId, '📐 متراژِ جدید را بفرست (فقط عدد):') }
+    else if (data === 'lfp') { await upd(chatId, { step: 'price' }); await tgSend(chatId, '💰 قیمتِ جدید را بفرست (فقط عدد، تومان):') }
     else if (data.startsWith('ld:')) { await upd(chatId, { deal: data.slice(3) }); await askPtype(chatId) }
     else if (data.startsWith('lp:')) { const i = parseInt(data.slice(3), 10); await upd(chatId, { ptype: PTYPES[i] }); await askCityL(chatId) }
     else if (data.startsWith('lc:')) {

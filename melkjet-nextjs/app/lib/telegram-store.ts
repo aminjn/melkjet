@@ -26,6 +26,8 @@ export interface LDraft {
   area?: string; rooms?: string; floor?: string; age?: string
   parking?: boolean; elevator?: boolean; storage?: boolean; patio?: boolean
   price?: string; deposit?: string; rent?: string; image?: string; title?: string; description?: string
+  // فاز ۳۰۳ب — ویرایشِ آگهیِ موجود (ردشده/در انتظار): به‌جای ثبتِ نو، همان آیتم به‌روز و دوباره ممیزی می‌شود.
+  editing?: boolean; editId?: string
 }
 // فاز ۲۶۴ — پیش‌نویسِ جستجوی درون‌ربات (معامله→شهر→محله → نمایشِ آگهی‌های منطبق).
 export interface SDraft { step: 'deal' | 'city' | 'cityText' | 'hood' | 'hoodText'; deal?: string; city?: string; hoods?: string[]; hood?: string }
