@@ -18,6 +18,7 @@ export interface ListingFields {
   elevator?: boolean
   storage?: boolean
   patio?: boolean
+  nearby?: string[]   // دسترسی‌های واقعیِ نقشه (مترو/پارک/…)، گراندشده — نه ادعای جعلی
   price?: string
   advisorName?: string
 }

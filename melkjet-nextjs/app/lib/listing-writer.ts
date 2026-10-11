@@ -148,12 +148,16 @@ export async function writeDescriptionFromData(f: ListingFields): Promise<string
   const soft = maybe(0.55) ? pick(SOFT_LINE) + '.' : ''
   const p4 = [locLine, soft].filter(Boolean).join(' ')
 
+  // بندِ دسترسی‌ها — فقط دادهٔ واقعیِ نقشه (NexaMap)؛ گراندشده، با قیدِ «طبقِ نقشه» تا ادعا به‌نظر نرسد.
+  const near = (f.nearby || []).filter(Boolean).slice(0, 4)
+  const pNear = near.length ? `${pick(['دسترسی‌های نزدیک (طبقِ نقشه): ', 'از نظرِ دسترسی و طبقِ نقشه، نزدیک به ', 'در همسایگیِ این ملک (طبقِ نقشه): '])}${joinFa(near)}.` : ''
+
   // CTA
   const cta = (f.advisorName
     ? pick([`برای هماهنگیِ بازدید با ${f.advisorName} تماس بگیرید.`, `${f.advisorName} آمادهٔ پاسخ‌گویی و هماهنگیِ بازدید است.`, `جهتِ بازدید و اطلاعاتِ بیشتر با ${f.advisorName} در تماس باشید.`])
     : pick([`برای بازدید و اطلاعاتِ بیشتر تماس بگیرید.`, `برای هماهنگیِ بازدید در تماس باشید.`])) + ' ' + pick(['🔑', '🏠', '📞', ''])
 
-  const blocks = [p1, p2, p3, p4, cta].filter(s => s && s.trim())
+  const blocks = [p1, p2, p3, pNear, p4, cta].filter(s => s && s.trim())
   const out = faShow(blocks.join('\n\n').replace(/[ \t]+/g, ' ').trim())
   return out.length > 40 ? out : null
 }

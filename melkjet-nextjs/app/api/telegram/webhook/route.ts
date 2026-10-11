@@ -14,6 +14,7 @@ import { saveMedia } from '@/app/lib/media-store'
 import { getAccount } from '@/app/lib/account-store'
 import { generateListingCopy, type ListingFields } from '@/app/lib/listing-copy'
 import { FA_DIGITS, faDigit } from '@/app/lib/digits'
+import { reverseGeocode, computeNearby } from '@/app/lib/nearby'
 import { botALS, tgBotCtx } from '@/app/lib/bot-ctx'
 
 export const dynamic = 'force-dynamic'
@@ -206,6 +207,34 @@ async function askParking(chatId: number) { await upd(chatId, { step: 'parking' 
 async function askElevator(chatId: number) { await upd(chatId, { step: 'elevator' }); await tgSend(chatId, '۱۰) آسانسور؟', { reply_markup: ynBtns('lev:1', 'lev:0') }) }
 async function askStorage(chatId: number) { await upd(chatId, { step: 'storage' }); await tgSend(chatId, '۱۱) انباری؟', { reply_markup: ynBtns('lstg:1', 'lstg:0') }) }
 async function askPatio(chatId: number) { await upd(chatId, { step: 'patio' }); await tgSend(chatId, '۱۲) پاسیو؟', { reply_markup: ynBtns('lpt:1', 'lpt:0') }) }
+// فاز ۳۰۳د — لوکیشنِ دقیق (اختیاری): «ارسالِ موقعیت» در بله/تلگرام → مختصاتِ واقعی + دسترسی‌های نقشه.
+async function askLocation(chatId: number) {
+  await upd(chatId, { step: 'location' })
+  await tgSend(chatId, '۱۳) 📍 لوکیشنِ دقیقِ ملک را بفرست تا روی نقشهٔ آگهی و دسترسی‌های اطراف (مترو/پارک/…) دقیق باشد.\n(اختیاری — می‌توانی رد کنی)', {
+    reply_markup: { keyboard: [[{ text: '📍 ارسالِ موقعیتِ ملک', request_location: true }], [{ text: '➖ بدونِ لوکیشن' }]], resize_keyboard: true, one_time_keyboard: true },
+  })
+}
+// بعد از لوکیشن: به مرحلهٔ قیمت/ودیعه برو (برحسبِ نوعِ معامله).
+async function afterLocation(chatId: number) {
+  const ld = await getLDraft(chatId)
+  if (ld?.deal === 'اجاره') await askDeposit(chatId); else await askPriceL(chatId)
+}
+const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
+  Promise.race([p.catch(() => null), new Promise<null>(r => setTimeout(() => r(null), ms))])
+// برچسب‌های دسترسیِ نزدیک از نتیجهٔ واقعیِ NexaMap (نزدیک‌ترین‌های متمایز، زیرِ ~۱.۵ کیلومتر).
+function nearbyLabels(res: { nearby?: { type?: string; name?: string; time?: string; meters?: number }[] } | null): string[] {
+  if (!res?.nearby?.length) return []
+  const sorted = [...res.nearby].filter(p => (p.type || '').trim() && (p.meters == null || p.meters <= 1500))
+    .sort((a, b) => (a.meters ?? 9e9) - (b.meters ?? 9e9))
+  const seen = new Set<string>(); const out: string[] = []
+  for (const p of sorted) {
+    const t = (p.type || '').trim()
+    if (seen.has(t)) continue
+    seen.add(t); out.push(p.time ? `${t} (${p.time})` : t)
+    if (out.length >= 4) break
+  }
+  return out
+}
 // فروش: قیمتِ کلِ عددی. اجاره: ودیعه و اجاره را جدا و عددی می‌پرسیم.
 async function askPriceL(chatId: number) {
   await upd(chatId, { step: 'price' })
@@ -232,7 +261,7 @@ function ldFields(ld: import('@/app/lib/telegram-store').LDraft, link: { name?: 
   return {
     deal: ld.deal, propertyType: ld.ptype, city: ld.city, hood: ld.hood, area: ld.area,
     rooms: ld.rooms, floor: ld.floor, age: ld.age, parking: ld.parking, elevator: ld.elevator,
-    storage: ld.storage, patio: ld.patio, price: ld.price, advisorName: link?.name,
+    storage: ld.storage, patio: ld.patio, nearby: ld.nearby, price: ld.price, advisorName: link?.name,
   }
 }
 // تولیدِ عنوان+توضیحاتِ حرفه‌ای، بعد صفحهٔ تأیید
@@ -281,6 +310,8 @@ async function submitListing(chatId: number) {
   if (ld.elevator != null) meta['آسانسور'] = ld.elevator ? 'دارد' : 'ندارد'
   if (ld.storage != null) meta['انباری'] = ld.storage ? 'دارد' : 'ندارد'
   if (ld.patio != null) meta['پاسیو'] = ld.patio ? 'دارد' : 'ندارد'
+  // مختصاتِ دقیق برای نقشهٔ صفحهٔ آگهی (کلیدهای __lat/__lng — همان که سایت می‌خواند).
+  if (ld.lat && ld.lng) { meta['__lat'] = String(ld.lat); meta['__lng'] = String(ld.lng) }
   const location = [ld.city, ld.hood].filter(Boolean).join('، ') || undefined
   const raw = { title: ld.title, price: ld.price, location, excerpt: ld.description, image: ld.image, phone: link?.phone, owner: link?.name, meta }
   // فاز ۳۰۳ب — ویرایش: همان آیتم به‌روز و دوباره ممیزی می‌شود (بدونِ آگهیِ تکراری). وگرنه ثبتِ نو.
@@ -328,6 +359,7 @@ async function startEditListing(chatId: number, itemId: string) {
     elevator: m['آسانسور'] ? m['آسانسور'] === 'دارد' : undefined,
     storage: m['انباری'] ? m['انباری'] === 'دارد' : undefined,
     patio: m['پاسیو'] ? m['پاسیو'] === 'دارد' : undefined,
+    lat: Number(m['__lat']) || undefined, lng: Number(m['__lng']) || undefined,
     price: it.price, title: it.title, description: it.excerpt, image: it.image,
   })
   await tgSend(chatId, '✏️ آگهی برای اصلاح باز شد. متراژ/قیمت/متن را عوض کن و «ثبتِ دوباره» را بزن 👇')
@@ -336,7 +368,8 @@ async function startEditListing(chatId: number, itemId: string) {
 
 // متنِ کاربر در جریانِ ثبتِ آگهی (فقط جایی که تایپ لازم است: شهر/محلهٔ دلخواه، متراژ، قیمت، ویرایشِ متن)
 async function handleListingText(chatId: number, ld: import('@/app/lib/telegram-store').LDraft, text: string) {
-  if (ld.step === 'cityText' || ld.step === 'city') { const d = await upd(chatId, { city: text.trim() }); await tgSend(chatId, `شهر: ${text.trim()} ✅`); await askHoodL(chatId, d.city!) }
+  if (ld.step === 'location') { await tgSend(chatId, 'بدونِ لوکیشن ادامه می‌دهیم.', { reply_markup: { remove_keyboard: true } }); await afterLocation(chatId) }
+  else if (ld.step === 'cityText' || ld.step === 'city') { const d = await upd(chatId, { city: text.trim() }); await tgSend(chatId, `شهر: ${text.trim()} ✅`); await askHoodL(chatId, d.city!) }
   else if (ld.step === 'hood' || ld.step === 'hoodText') { await upd(chatId, { hood: text.trim() }); await askArea(chatId) }
   else if (ld.step === 'area') { const a = text.replace(/[^\d۰-۹]/g, '') || text.trim(); await upd(chatId, { area: a }); if (ld.editing) await confirmListing(chatId); else await askRooms(chatId) }
   else if (ld.step === 'age') { await upd(chatId, { age: text.trim() }); await askParking(chatId) }
@@ -414,7 +447,7 @@ export async function handleBotUpdate(u: any) {
     else if (data.startsWith('lpk:')) { await upd(chatId, { parking: data.slice(4) === '1' }); await askElevator(chatId) }
     else if (data.startsWith('lev:')) { await upd(chatId, { elevator: data.slice(4) === '1' }); await askStorage(chatId) }
     else if (data.startsWith('lstg:')) { await upd(chatId, { storage: data.slice(5) === '1' }); await askPatio(chatId) }
-    else if (data.startsWith('lpt:')) { const d = await upd(chatId, { patio: data.slice(4) === '1' }); if (d.deal === 'اجاره') await askDeposit(chatId); else await askPriceL(chatId) }
+    else if (data.startsWith('lpt:')) { await upd(chatId, { patio: data.slice(4) === '1' }); await askLocation(chatId) }
     else if (data === 'lnophoto') { const ld = await getLDraft(chatId); if (ld?.title) await confirmListing(chatId); else await runGenerate(chatId) }
     else if (data === 'lphoto') { await askPhoto(chatId) }
     else if (data === 'lrestart') { await askListingDeal(chatId) }
@@ -438,6 +471,29 @@ export async function handleBotUpdate(u: any) {
     await tgSend(chatId, `✅ شماره تأیید شد: <code>${phone}</code>`, { reply_markup: { remove_keyboard: true } })
     if (await getLDraft(chatId)) await askListingDeal(chatId)
     else await tgSend(chatId, 'حالا می‌تونی از «🏠 ثبتِ آگهی» استفاده کنی.', { reply_markup: menu })
+    return
+  }
+
+  // لوکیشنِ دقیق (در جریانِ ثبتِ آگهی) — فاز ۳۰۳د
+  if (msg.location && typeof msg.location.latitude === 'number') {
+    const ld = await getLDraft(chatId)
+    if (ld && ld.step === 'location') {
+      const lat = msg.location.latitude, lng = msg.location.longitude
+      await tgSend(chatId, '📍 موقعیت ثبت شد — در حالِ بررسیِ اطرافِ ملک از روی نقشه…', { reply_markup: { remove_keyboard: true } })
+      // آدرس و محله از نقشه (سریع) + دسترسی‌های واقعی (با سقفِ زمان تا وب‌هوک معطل نماند).
+      const rev = await withTimeout(reverseGeocode(lat, lng), 5000)
+      const near = await withTimeout(computeNearby(lat, lng), 9000)
+      const labels = nearbyLabels(near)
+      const patch: Partial<import('@/app/lib/telegram-store').LDraft> = { lat, lng, nearby: labels }
+      if (!ld.hood && rev?.neighborhood) patch.hood = rev.neighborhood
+      if (!ld.city && rev?.city) patch.city = rev.city
+      await upd(chatId, patch)
+      const bits = [rev?.address ? `آدرس: ${rev.address}` : '', labels.length ? `دسترسی‌ها: ${labels.join('، ')}` : ''].filter(Boolean).join('\n')
+      if (bits) await tgSend(chatId, `✅ ${bits}`)
+      await afterLocation(chatId)
+    } else {
+      await tgSend(chatId, 'برای ثبتِ لوکیشن اول «🏠 ثبتِ آگهی» را شروع کن.', { reply_markup: menu })
+    }
     return
   }
 

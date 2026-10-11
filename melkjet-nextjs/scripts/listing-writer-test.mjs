@@ -58,6 +58,11 @@ for (let i = 0; i < 40; i++) {
 ok(patioWhenTrue === 40, `patio shown when true (${patioWhenTrue}/40)`)
 ok(patioWhenFalse === 0, `patio never fabricated when false (${patioWhenFalse}/40)`)
 
+// دسترسی‌های نقشه (گراندشده): فقط وقتی داده‌شده بیاید، با قیدِ «طبقِ نقشه»
+const withNear = await writeDescriptionFromData({ ...f, nearby: ['مترو (۵ دقیقه)', 'پارک (۳ دقیقه)'] })
+ok(/مترو \(۵ دقیقه\)/.test(withNear) && /نقشه/.test(withNear), 'grounded nearby line shown when provided')
+ok(!/مترو/.test(await writeDescriptionFromData(f)), 'no fabricated metro when not provided')
+
 // نمایشِ درستِ «۶+» (طبقهٔ ۶ به بالا) و «همکف»
 const plus = await writeDescriptionFromData({ ...f, floor: '6+', totalFloors: '' })
 ok(/به بالا/.test(plus) && !/\+/.test(plus), 'floor "6+" → "طبقهٔ ۶ به بالا"')
