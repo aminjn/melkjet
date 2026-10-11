@@ -62,6 +62,13 @@ export function featuresOf(it: Partial<Item>): string[] {
   const nums = (priceTxt.match(/\d[\d,]*/g) || []).map(n => parseInt(n.replace(/,/g, ''), 10)).filter(n => n > 0)
   const price = nums.length ? Math.max(...nums) : 0
   f.push('#pb' + (price <= 0 ? 'x' : price < 1e8 ? 'lo' : price < 1e9 ? '0' : price < 1e10 ? '1' : price < 5e10 ? '2' : '3'))
+  // فاز ۳۰۰و — ویژگی‌های عددیِ صریح تا مدل «مقدارِ نامعقول» را هم یاد بگیرد، نه فقط الگوی متن.
+  // (ریشهٔ «آگهیِ چرت با ۸۸٪ تأیید شد»: ویژگی‌ها فقط متنی بودند و متراژ/سال/قیمتِ نجومی را نمی‌دیدند.)
+  const areaN = parseInt(faToEn(String(it.meta?.['متراژ'] || '')).replace(/\D/g, ''), 10)
+  if (Number.isFinite(areaN) && areaN > 0) f.push(areaN < 12 ? '#area_tiny' : areaN < 40 ? '#area_sm' : areaN < 120 ? '#area_md' : areaN < 400 ? '#area_lg' : areaN > 100000 ? '#area_absurd' : '#area_xl')
+  if (price >= 1e12) f.push('#price_absurd')
+  const yr = parseInt(faToEn(String(it.meta?.['سن بنا'] || it.meta?.['سال ساخت'] || '')).replace(/\D/g, ''), 10)
+  if (Number.isFinite(yr) && yr >= 1300 && yr <= 1600 && yr > (new Date().getFullYear() - 621)) f.push('#year_future')
   return f
 }
 
@@ -142,6 +149,10 @@ const FEATURE_FA: Record<string, string> = {
   '#thin_desc': 'توضیحاتِ خیلی کوتاه و ناقص',
   '#pbx': 'قیمتِ نامشخص یا نامعتبر',
   '#pblo': 'قیمتِ غیرعادی پایین',
+  '#area_tiny': 'متراژِ خیلی کوچک و غیرواقعی',
+  '#area_absurd': 'متراژِ نامعقول (خیلی بزرگ)',
+  '#price_absurd': 'قیمتِ نجومی و غیرواقعی',
+  '#year_future': 'سالِ ساختِ آینده (غیرممکن)',
 }
 export function explainPrediction(it: Partial<Item>, top = 3): { label: MLabel; prob: number; reasons: string[] } {
   const d = load()
