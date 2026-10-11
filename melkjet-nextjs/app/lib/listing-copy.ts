@@ -159,6 +159,14 @@ function parseCopy(raw: string): { title?: string; description?: string } {
 
 /** عنوان + توضیحاتِ حرفه‌ای برای یک ملک. هرگز throw نمی‌کند — در نبودِ AI، قالبِ محلی. */
 export async function generateListingCopy(f: ListingFields): Promise<{ title: string; description: string; ai: boolean }> {
+  // ۱) مسیرِ اصلی (فاز ۳۰۱): نویسندهٔ یادگیرنده از دادهٔ واقعی (بدونِ هوشِ مصنوعی). اگر پیکره
+  //    کافی بود، متنِ گراندشده با بافتِ واقعیِ آگهی‌های دیوار برمی‌گرداند — یکتا و حرفه‌ای.
+  try {
+    const { writeDescriptionFromData } = await import('./listing-writer')
+    const learned = await writeDescriptionFromData(f)
+    if (learned && learned.length > 60) return { title: fallbackTitle(f), description: learned, ai: false }
+  } catch { /* می‌افتد روی AI/قالب */ }
+
   const specs = specLines(f).join('\n')
   const { model, provider } = resolveAgent([['content', 'text'], ['chat', 'text'], ['moderation', 'text']])
   const use = model || moderationModel() || 'gpt-4o-mini'
