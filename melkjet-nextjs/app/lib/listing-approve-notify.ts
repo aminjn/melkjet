@@ -16,21 +16,26 @@ async function pingBots(phone: string, text: string) {
   }
 }
 
-/** پس از تأیید/ردِ آگهیِ کاربر توسطِ ادمین صدا زده می‌شود. prevStatus برای جلوگیری از خبرِ تکراری. */
-export async function notifyListingDecision(item: Item | null | undefined, status: 'approved' | 'rejected', prevStatus?: string) {
+/** پس از تأیید/ردِ آگهیِ کاربر صدا زده می‌شود. prevStatus از خبرِ تکراری جلوگیری می‌کند.
+ *  opts.sms/opts.bot: برای تأییدِ خودکار (در خودِ ربات) فقط پیامک می‌رود چون ربات پیامِ درون‌خطی می‌دهد. */
+export async function notifyListingDecision(
+  item: Item | null | undefined,
+  status: 'approved' | 'rejected',
+  prevStatus?: string,
+  opts?: { sms?: boolean; bot?: boolean },
+) {
   try {
     if (!item || item.type !== 'listing' || item.sourceId !== 'user') return   // فقط آگهیِ کاربرساخته
     if (prevStatus === status) return                                           // تغییرِ واقعیِ وضعیت
+    const sms = opts?.sms !== false, bot = opts?.bot !== false
     const phone = norm(item.phone)
     const url = `https://melkjet.com/property/${item.id}`
     const title = (item.title || 'آگهیِ شما').slice(0, 80)
     if (status === 'approved') {
-      const msg = `✅ آگهیِ شما در ملک‌جت تأیید و منتشر شد:\n${title}\n${url}`
-      if (/^09\d{9}$/.test(phone)) sendServiceSms(phone, `آگهیِ شما در ملک‌جت تأیید و منتشر شد: ${url}`, 'تأیید آگهی', title, 'other').catch(() => {})
-      await pingBots(phone, msg)
+      if (sms && /^09\d{9}$/.test(phone)) sendServiceSms(phone, `آگهیِ شما در ملک‌جت تأیید و منتشر شد: ${url}`, 'تأیید آگهی', title, 'other').catch(() => {})
+      if (bot) await pingBots(phone, `✅ آگهیِ شما در ملک‌جت تأیید و منتشر شد:\n${title}\n${url}`)
     } else {
-      const msg = `❌ متأسفانه آگهیِ شما تأیید نشد:\n${title}\nمی‌توانی اصلاحش کنی و دوباره ثبت کنی.`
-      await pingBots(phone, msg)
+      if (bot) await pingBots(phone, `❌ متأسفانه آگهیِ شما تأیید نشد:\n${title}\nمی‌توانی اصلاحش کنی و دوباره ثبت کنی.`)
     }
   } catch (e) { console.warn('[notify] listing decision:', (e as Error).message) }
 }

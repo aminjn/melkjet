@@ -4,10 +4,32 @@ const { chatCompleteSafe } = aiFor('بازبینیِ خودکارِ آگهی')  
 import { predict, learn, learnBatch, noteDecision, explainPrediction, rejectEvidenceOf, contactEvidenceOf, correctFromAdmin, recentAccuracy, type MLabel } from './moderation-ml'
 import { getAdminData } from './admin-store'
 import { buildDupIndex, dupMasterInIndex, type DupIndex } from './listing-dedupe'
+import { FA_DIGITS, faDigit } from './digits'
 
 export type ModVia = 'ml' | 'ai' | 'dup' | 'rule' | 'none'
 
 const DUP_REASON = 'آگهیِ تکراری — مشابهِ یک آگهیِ منتشرشدهٔ دیگر (تشخیصِ خودکار)'
+
+// فاز ۳۰۰د — چکِ منطقیِ مقدار (قطعی، پیش از ML/AI): آگهیِ با مقادیرِ نامعقول هرگز نباید خودکار
+// تأیید شود (متراژِ ۵متری، ودیعهٔ نجومی، سالِ ساختِ آینده). خروجی = فهرستِ ایرادها (خالی = سالم).
+export function listingSanityIssues(it: Item): string[] {
+  if (it.type !== 'listing') return []
+  const issues: string[] = []
+  const m = (it.meta || {}) as Record<string, string>
+  const toEn = (s?: string) => String(s || '').replace(FA_DIGITS, faDigit)
+  const deal = String(m['نوع معامله'] || '')
+  if (m['متراژ']) { const area = parseInt(toEn(m['متراژ']).replace(/\D/g, ''), 10); if (Number.isFinite(area) && (area < 8 || area > 100000)) issues.push(`متراژِ نامعقول (${m['متراژ']})`) }
+  if (!/پیش/.test(deal)) {   // پیش‌فروش می‌تواند سالِ تحویلِ آینده داشته باشد
+    const yr = parseInt(toEn(m['سن بنا'] || m['سال ساخت'] || '').replace(/\D/g, ''), 10)
+    const curY = new Date().getFullYear() - 621   // تقریبِ سالِ شمسی
+    if (Number.isFinite(yr) && yr >= 1300 && yr <= 1600 && yr > curY) issues.push(`سالِ ساختِ آینده (${m['سن بنا'] || m['سال ساخت']})`)
+  }
+  // هر عددِ ≥ ۱۰۰۰ میلیارد تومان در قیمت/ودیعه/اجاره تقریباً همیشه غلط/اسپم است.
+  // جداکننده‌های هزارگان (، ٬ ,) اول پاک می‌شوند وگرنه هر گروهِ ۳رقمی جدا دیده می‌شد.
+  const nums = (toEn(String(it.price || '')).replace(/[,٬،]/g, '').match(/\d{4,}/g) || []).map(n => Number(n))
+  if (nums.some(n => Number.isFinite(n) && n >= 1e12)) issues.push('قیمتِ نجومی/غیرواقعی')
+  return issues
+}
 
 // معیارهای پیش‌فرض (اگر ادمین چیزی تعریف نکرده باشد).
 export const DEFAULT_CRITERIA = `- آگهیِ معتبر: عنوانِ روشن، قیمتِ مشخص و واقعی، موقعیت و توضیحاتِ کافی → امتیازِ بالا.
@@ -111,6 +133,9 @@ async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex)
         reason: `ردِ خودکار (قاعدهٔ تماس در متن): ${contact.join(' · ')} — تماس باید از طریقِ خودِ سایت انجام شود` }
     }
   }
+  // فاز ۳۰۰د — گِیتِ منطقِ مقدار: مقادیرِ نامعقول هرگز خودکار تأیید نمی‌شوند → صفِ بازبینیِ انسانی.
+  const sane = listingSanityIssues(it)
+  if (sane.length) return { id: it.id, title: it.title, status: 'pending', score: 0, via: 'rule', settled: true, reason: `در صفِ بازبینیِ انسانی — مقادیرِ نامعقول: ${sane.join('، ')}` }
   const p = predict(it)
   if (p.confident && cfg.autoMl) {
     // فاز ۱۴۹ (فیدبک: «می‌خواهم ML خودش تأیید و رد کند») — «اختیارِ اکتسابیِ رد»: مدل وقتی حقِ ردِ
@@ -154,8 +179,12 @@ async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex)
 
 // Moderate a single item now (persists immediately). Used for one-off (user submit / single id).
 export async function moderateOne(it: Item, model: string | null) {
+  const prevStatus = it.status
   const v = await smartVerdict(it, model)
   await setModeration(it.id, v.status, v.reason, v.score)
+  // فاز ۳۰۰ج — تأیید/ردِ خودکارِ آگهیِ کاربرساخته → پیامکِ خبر (ربات خودش پیامِ درون‌خطی می‌دهد، پس bot:false).
+  if ((v.status === 'approved' || v.status === 'rejected') && it.sourceId === 'user')
+    import('./listing-approve-notify').then(m => m.notifyListingDecision({ ...it, status: v.status }, v.status as 'approved' | 'rejected', prevStatus, { sms: true, bot: false })).catch(() => {})
   return v
 }
 
