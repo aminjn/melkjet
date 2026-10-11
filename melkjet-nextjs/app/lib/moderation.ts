@@ -43,6 +43,10 @@ export interface ModConfig {
   mlRejectMin: number          // حداقلِ اطمینانِ مدل برای ردِ خودکار (٪)
   mlRejectAgreeMin: number     // حداقلِ دقتِ اخیرِ اندازه‌گیری‌شده روی داوریِ ادمین (٪)
   mlRejectReviewedMin: number  // حداقل تعدادِ بازبینیِ انسانی که دقت رویش سنجیده شده
+  // فاز ۳۰۳هـ — سرنوشتِ «آگهیِ نامطمئن» (از گِیت‌های سلامت/تکرار/تماس گذشت، ولی مدل به تصمیمِ
+  // قطعی نرسید): 'approve' = تأییدِ خودکار (پیش‌فرض — دیگر هیچ «منتظرِ» ابدی نمی‌ماند؛ آشغال را
+  // جداگانه گِیتِ سلامت رد می‌کند)، 'review' = صفِ بازبینیِ انسانی (رفتارِ قبلی).
+  pendingPolicy: 'approve' | 'review'
 }
 
 // خواندنِ معیارها از تنظیماتِ ادمین (با پیش‌فرض‌های امن).
@@ -62,6 +66,7 @@ export function modConfig(): ModConfig {
     mlRejectMin: typeof (m as any).mlRejectMin === 'number' ? (m as any).mlRejectMin : 97,
     mlRejectAgreeMin: typeof (m as any).mlRejectAgreeMin === 'number' ? (m as any).mlRejectAgreeMin : 85,
     mlRejectReviewedMin: typeof (m as any).mlRejectReviewedMin === 'number' ? (m as any).mlRejectReviewedMin : 20,
+    pendingPolicy: (m as any).pendingPolicy === 'review' ? 'review' : 'approve',
   }
 }
 
@@ -88,8 +93,12 @@ function judge(text: string, cfg: ModConfig, hasPrice: boolean): { status: ItemS
     if (cfg.requirePrice && !hasPrice) {
       return { status: cfg.priceMissing === 'review' ? 'pending' : 'rejected', reason: reason || 'قیمت مشخص نیست', score, settled: true }
     }
-    // آستانه: امتیاز ≥ approveMin → تأیید، ≤ rejectMax → رد، بین این‌دو → بازبینیِ دستی
-    const status: ItemStatus = score >= cfg.approveMin ? 'approved' : score <= cfg.rejectMax ? 'rejected' : 'pending'
+    // آستانه: امتیاز ≥ approveMin → تأیید، ≤ rejectMax → رد، بین این‌دو → بسته به سیاستِ «نامطمئن».
+    let status: ItemStatus = score >= cfg.approveMin ? 'approved' : score <= cfg.rejectMax ? 'rejected' : 'pending'
+    // فاز ۳۰۳هـ — «نامطمئنِ» بینِ دو آستانه هم با سیاستِ approve تأیید می‌شود (نه pendingِ ابدی).
+    if (status === 'pending' && cfg.pendingPolicy === 'approve') {
+      return { status: 'approved', reason: `تأییدِ خودکار — امتیازِ AI بینِ دو آستانه (${score})${reason ? `: ${reason}` : ''}`, score, settled: true }
+    }
     return { status, reason: status === 'pending' ? `در صفِ بازبینیِ انسانی — امتیازِ AI بینِ دو آستانه (${score})${reason ? `: ${reason}` : ''}` : reason, score, settled: true }
   } catch { return { status: 'pending', reason: 'پاسخ نامعتبر مدل', score: 0, settled: false } }
 }
@@ -163,6 +172,13 @@ async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex)
         : acc.pct < cfg.mlRejectAgreeMin ? `دقتِ اخیرِ مدل (${acc.pct.toLocaleString('fa-IR')}٪) زیرِ آستانهٔ ${cfg.mlRejectAgreeMin.toLocaleString('fa-IR')}٪ است`
         : Math.round(p.prob * 100) < cfg.mlRejectMin ? 'اطمینانِ مدل زیرِ آستانهٔ رد است'
         : 'در حالتِ محتاط، نشانهٔ ساختاری (نه صرفاً واژه‌ای) لازم است'
+      // فاز ۳۰۳هـ — سیاستِ «نامطمئن»: پیش‌فرض تأییدِ خودکار (نه pendingِ ابدی). آگهی از گِیت‌های
+      // سلامت/تکرار/تماس گذشته و مدل به ردِ قطعی نرسیده؛ انباشتِ «منتظرِ» بی‌پایان بدتر از تأیید است.
+      if (cfg.pendingPolicy === 'approve') {
+        noteDecision('ml')
+        return { id: it.id, title: it.title, status: 'approved', score: Math.round(p.prob * 100), via: 'ml', settled: true,
+          reason: `تأییدِ خودکار — مدل به ردِ قطعی نرسید و آگهی از گِیت‌های سلامت/تکرار/تماس گذشت (${ev.wordsOnly ? 'شواهدِ ردِ مدل فقط واژه‌ای بود' : ev.hardFa.join('، ')})` }
+      }
       return { id: it.id, title: it.title, status: 'pending', score: Math.round(p.prob * 100), via: 'ml', settled: true, reason: ev.wordsOnly
         ? `در صفِ بازبینیِ انسانی — مدل به رد مشکوک است ولی ${why}؛ شواهدش هم فقط واژه‌ای است`
         : `در صفِ بازبینیِ انسانی — نشانهٔ کیفیت/قیمت (${ev.hardFa.join('، ')})؛ ${why}` }
