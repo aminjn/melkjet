@@ -272,7 +272,7 @@ function OverviewView() {
         <KPI label="کل آگهی" value={fa(p?.listings.total)} trend={p ? `فروش ${fa(p.listings.sale)} · اجاره ${fa(p.listings.rent)}` : '—'} icon="🏠" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
         <KPI label="پروفایل/دفتر" value={fa(p?.directory.total)} trend={p ? `${fa(p.directory.byCategory.length)} دسته` : '—'} icon="◍" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
         <KPI label="آگهی‌دهنده" value={fa(p?.owners)} trend="کاربران واکشی‌شده" icon="👤" iconBg="var(--goldDim)" iconColor="var(--gold)" />
-        <KPI label="دیتاست دانش" value={fa(p?.dataset)} trend="دادهٔ بازار" icon="🧠" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
+        <KPI label="مغزِ یادگیرنده" value={fa(p?.learning?.textSamples)} trend={p ? `${fa(p.learning?.priceSamples)} نمونهٔ قیمت · ${fa(p.learning?.priceAreas)} محله` : 'آگهیِ یادگیری'} icon="🧠" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
       </div>
 
       <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -3454,7 +3454,7 @@ function ReportsView() {
         <KPI label="آگهی‌دهنده" value={fa(p?.owners)} icon="👤" iconBg="var(--goldDim)" iconColor="var(--gold)" />
         <KPI label="محصول فروشگاه" value={fa(p?.products)} icon="▣" iconBg="rgba(78,196,232,.15)" iconColor="#4ec4e8" />
         <KPI label="مقاله" value={fa(p?.articles)} icon="✦" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
-        <KPI label="دیتاست دانش" value={fa(p?.dataset)} icon="🧠" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" />
+        <KPI label="گزارش‌های بازارِ دستی" value={fa(p?.dataset)} icon="📄" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" />
       </div>
 
       <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14, marginBottom: 14 }}>

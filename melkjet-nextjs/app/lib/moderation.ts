@@ -133,9 +133,12 @@ async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex)
         reason: `ردِ خودکار (قاعدهٔ تماس در متن): ${contact.join(' · ')} — تماس باید از طریقِ خودِ سایت انجام شود` }
     }
   }
-  // فاز ۳۰۰د — گِیتِ منطقِ مقدار: مقادیرِ نامعقول هرگز خودکار تأیید نمی‌شوند → صفِ بازبینیِ انسانی.
+  // فاز ۳۰۳ — گِیتِ منطقِ مقدار: مقادیرِ به‌وضوح نامعقول (متراژِ ۵متری، قیمتِ نجومی، سالِ آینده)
+  // «ردِ قطعیِ آنی» می‌گیرند، نه «pendingِ بی‌پایان». درسِ باگ: pending یعنی «منتظرِ انسان»، و
+  // چون moderatedAt مهر می‌خورد دیگر از صفِ دسته‌ای هم برنمی‌گردد → ۲ ساعت بی‌حکم می‌ماند. آگهیِ
+  // آشغال باید زیرِ ۱ دقیقه حکمِ قطعی بگیرد و صاحبش خبر شود (moderateOne → notifyListingDecision).
   const sane = listingSanityIssues(it)
-  if (sane.length) return { id: it.id, title: it.title, status: 'pending', score: 0, via: 'rule', settled: true, reason: `در صفِ بازبینیِ انسانی — مقادیرِ نامعقول: ${sane.join('، ')}` }
+  if (sane.length) return { id: it.id, title: it.title, status: 'rejected', score: 0, via: 'rule', settled: true, reason: `ردِ خودکار — مقادیرِ نامعقول: ${sane.join('، ')}. اصلاحش کن و دوباره ثبت کن.` }
   const p = predict(it)
   if (p.confident && cfg.autoMl) {
     // فاز ۱۴۹ (فیدبک: «می‌خواهم ML خودش تأیید و رد کند») — «اختیارِ اکتسابیِ رد»: مدل وقتی حقِ ردِ
@@ -269,11 +272,20 @@ export async function moderatePending(max = 300): Promise<{ moderated: number; r
   const model = moderationModel()   // ممکن است null باشد — مدلِ یادگیرنده می‌تواند بدونِ AI تصمیم بگیرد
 
   const queue = await pendingForModeration(max)
-  if (!queue.length) return { moderated: 0, results: [] }
+  // فاز ۳۰۳ — خود-ترمیم: آگهی‌هایی که قبلاً «pending» مهر خورده‌اند (moderatedAt دارند، پس
+  // pendingForModeration نادیده‌شان می‌گیرد) ولی مقادیرشان به‌وضوح نامعقول است، هرگز نباید بی‌حکم
+  // بمانند — دوباره حکمِ قطعی می‌گیرند (ردِ بدونِ AI). این آگهیِ «۲ ساعت گیرکردهٔ» کاربر را آزاد می‌کند.
+  let stuck: Item[] = []
+  try {
+    const seen = new Set(queue.map(q => q.id))
+    stuck = (await listItems('listing')).filter(i => i.status === 'pending' && !seen.has(i.id) && listingSanityIssues(i).length > 0).slice(0, max)
+  } catch { /* اختیاری */ }
+  const work = [...queue, ...stuck]
+  if (!work.length) return { moderated: 0, results: [] }
 
   // ایندکسِ تکرار یک‌بار ساخته می‌شود (نه در هر آیتم) — گِیتِ خودکارِ تکرار برای کلِ صف.
   const dupIndex = await buildDupIndex()
-  const results = await pool(queue, 5, (it) => smartVerdict(it, model, dupIndex))
+  const results = await pool(work, 5, (it) => smartVerdict(it, model, dupIndex))
   // فاز ۱۳۸: علاوه بر تصمیم‌ها (تأیید/رد/تکراری)، «ارجاعِ آگاهانه به بازبینیِ انسانی» (settled pending)
   // هم با دلیلش ذخیره می‌شود — تا (۱) ادمین بداند چرا در صف است و (۲) هر تیکِ کرون دوباره AI خرجش نکند.
   // pendingِ گذرا (خطای مدل/مدلِ تنظیم‌نشده) ذخیره نمی‌شود تا تیکِ بعدی دوباره امتحان شود.
@@ -285,6 +297,18 @@ export async function moderatePending(max = 300): Promise<{ moderated: number; r
   // ممکن است با دیپلوی مرده باشد.
   const approvedIds = decided.filter(r => r.status === 'approved').map(r => r.id)
   if (approvedIds.length) import('./enrich-warm').then(m => m.warmMany(approvedIds)).catch(() => {})
+  // فاز ۳۰۳ — خبرِ تصمیم به صاحبِ آگهیِ کاربرساخته در مسیرِ دسته‌ای هم (نه فقط moderateOne): قبلاً
+  // تأیید/ردِ دسته‌ای هیچ پیامک/پیامی به مالک نمی‌فرستاد (فیدبک: «نه پیامک اومد نه ربات گفت»).
+  const ownerDecisions = decided.filter(r => r.status === 'approved' || r.status === 'rejected')
+  if (ownerDecisions.length) {
+    const byId = new Map(work.map(w => [w.id, w]))
+    import('./listing-approve-notify').then(m => {
+      for (const r of ownerDecisions) {
+        const it = byId.get(r.id)
+        if (it && it.sourceId === 'user') m.notifyListingDecision({ ...it, status: r.status }, r.status as 'approved' | 'rejected', 'pending', { sms: true, bot: true })
+      }
+    }).catch(() => {})
+  }
   const err = (!model && decided.length === 0) ? 'مدلِ AI تنظیم نشده و دادهٔ یادگیری هنوز کافی نیست' : undefined
   return { moderated: decided.length, results, error: err }
 }

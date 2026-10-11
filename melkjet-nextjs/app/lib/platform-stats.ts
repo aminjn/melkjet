@@ -17,12 +17,17 @@ export async function platformStats() {
   const prices = await listItems('price')
 
   let sale = 0, rent = 0
+  // فاز ۳۰۳ — «مغزِ یادگیرنده»: نمونه‌هایی که مدل‌های خودیِ ما واقعاً از آن‌ها یاد می‌گیرند
+  // (نه «۲۶ گزارشِ بازارِ دستی»). textSamples = آگهی‌های دارای توضیحات (پایهٔ نویسندهٔ متن)،
+  // priceSamples = آگهی‌های فروشِ دارای قیمت/متراژِ معتبر (پایهٔ مدلِ قیمت).
+  let textSamples = 0, priceSamples = 0
   const byCity: Record<string, number> = {}
   const byDistrict: Record<string, { district: string; city: string; count: number; sale: number; rent: number; ppmSum: number; ppmN: number; depSum: number; depN: number }> = {}
 
   for (const it of listings) {
     const r = isRent(it)
     r ? rent++ : sale++
+    if ((it.excerpt || '').trim().length >= 20) textSamples++
     const city = cityOf(it), district = districtOf(it)
     byCity[city] = (byCity[city] || 0) + 1
     const k = `${district}|${city}`
@@ -35,7 +40,7 @@ export async function platformStats() {
     } else {
       row.sale++
       const area = parseArea(it.title) || parseArea(it.excerpt || '')
-      if (area > 15 && price > 1e8) { const ppm = price / area; if (ppm > 1e6 && ppm < 5e9) { row.ppmSum += ppm; row.ppmN++ } }
+      if (area > 15 && price > 1e8) { const ppm = price / area; if (ppm > 1e6 && ppm < 5e9) { row.ppmSum += ppm; row.ppmN++; priceSamples++ } }
     }
   }
 
@@ -63,5 +68,6 @@ export async function platformStats() {
     prices: prices.length,
     owners: (await listOwners()).length,
     dataset: listPoints().length,
+    learning: { textSamples, priceSamples, priceAreas: districts.filter(d => d.avgSalePpm > 0).length },
   }
 }
