@@ -288,13 +288,15 @@ export async function moderatePending(max = 300): Promise<{ moderated: number; r
   const model = moderationModel()   // ممکن است null باشد — مدلِ یادگیرنده می‌تواند بدونِ AI تصمیم بگیرد
 
   const queue = await pendingForModeration(max)
-  // فاز ۳۰۳ — خود-ترمیم: آگهی‌هایی که قبلاً «pending» مهر خورده‌اند (moderatedAt دارند، پس
-  // pendingForModeration نادیده‌شان می‌گیرد) ولی مقادیرشان به‌وضوح نامعقول است، هرگز نباید بی‌حکم
-  // بمانند — دوباره حکمِ قطعی می‌گیرند (ردِ بدونِ AI). این آگهیِ «۲ ساعت گیرکردهٔ» کاربر را آزاد می‌کند.
+  // فاز ۳۰۳ز — خود-ترمیمِ انباشتِ «منتظر»: آگهی‌هایی که قبلاً «pending» مهر خورده‌اند (moderatedAt
+  // دارند، پس pendingForModeration نادیده‌شان می‌گیرد) هرگز نباید بی‌حکم بمانند. هر تیک تا `max` تا
+  // از آن‌ها دوباره حکم می‌گیرند — با سیاستِ جاری (pendingPolicy=approve → نامطمئن تأیید، آشغال رد).
+  // این انباشتِ ۸٬۲۵۷تایی را طیِ چند تیک به‌طورِ خودکار و امن تخلیه می‌کند (گِیتِ سلامت همچنان فعال).
+  // خود-محدودکننده: پس از تخلیه، آگهیِ pendingِ باقی‌مانده تقریباً صفر است (سیاست فوری تصمیم می‌گیرد).
   let stuck: Item[] = []
   try {
     const seen = new Set(queue.map(q => q.id))
-    stuck = (await listItems('listing')).filter(i => i.status === 'pending' && !seen.has(i.id) && listingSanityIssues(i).length > 0).slice(0, max)
+    stuck = (await listItems('listing')).filter(i => i.type === 'listing' && i.status === 'pending' && !seen.has(i.id)).slice(0, max)
   } catch { /* اختیاری */ }
   const work = [...queue, ...stuck]
   if (!work.length) return { moderated: 0, results: [] }
@@ -306,18 +308,27 @@ export async function moderatePending(max = 300): Promise<{ moderated: number; r
   // هم با دلیلش ذخیره می‌شود — تا (۱) ادمین بداند چرا در صف است و (۲) هر تیکِ کرون دوباره AI خرجش نکند.
   // pendingِ گذرا (خطای مدل/مدلِ تنظیم‌نشده) ذخیره نمی‌شود تا تیکِ بعدی دوباره امتحان شود.
   const decided = results.filter(r => r.status === 'approved' || r.status === 'rejected' || r.status === 'duplicate' || (r.status === 'pending' && r.settled))
-  // فاز ۱۵۶ (B2): ممیزیِ خودکار هرگز حکمِ تازهٔ ادمین را بازنویسی نمی‌کند (فقط pendingها)
-  await setModerationBatch(decided.map(r => ({ id: r.id, status: r.status, reason: r.reason, score: r.score })), { onlyPending: true })
+  // فاز ۱۵۶ (B2): ممیزیِ خودکار هرگز حکمِ تازهٔ ادمین را بازنویسی نمی‌کند (فقط pendingها).
+  // فاز ۳۰۳ز: آلارمِ «آگهیِ تازه» فقط برای صفِ fresh؛ تخلیهٔ انباشتِ قدیمی بی‌صدا (ضدِ سیلِ آلارم).
+  const freshSet = new Set(queue.map(q => q.id))
+  const v = decided.map(r => ({ id: r.id, status: r.status, reason: r.reason, score: r.score }))
+  const freshV = v.filter(x => freshSet.has(x.id)), stuckV = v.filter(x => !freshSet.has(x.id))
+  if (freshV.length) await setModerationBatch(freshV, { onlyPending: true })
+  if (stuckV.length) await setModerationBatch(stuckV, { onlyPending: true, notifyNew: false })
   // فاز ۲۱۱ (فیدبک: «کاربر نباید آگهیِ بدونِ تحلیل ببیند»): لحظهٔ عمومی‌شدنِ آگهی همین تأیید است —
   // همان لحظه گرم می‌شود (روی اینستنسِ کرون) تا تا اولین بازدید، تحلیل حاضر باشد؛ گرمِ لحظهٔ ثبت
   // ممکن است با دیپلوی مرده باشد.
-  const approvedIds = decided.filter(r => r.status === 'approved').map(r => r.id)
+  // گرم‌کردن فقط برای تأییدِ تازه؛ تخلیهٔ انباشت را گرم نمی‌کنیم تا صفِ غنی‌سازی (و دیوار) سیل نشود —
+  // آن‌ها در اولین بازدید تنبل‌وار گرم می‌شوند.
+  const approvedIds = decided.filter(r => r.status === 'approved' && freshSet.has(r.id)).map(r => r.id)
   if (approvedIds.length) import('./enrich-warm').then(m => m.warmMany(approvedIds)).catch(() => {})
   // فاز ۳۰۳ — خبرِ تصمیم به صاحبِ آگهیِ کاربرساخته در مسیرِ دسته‌ای هم (نه فقط moderateOne): قبلاً
   // تأیید/ردِ دسته‌ای هیچ پیامک/پیامی به مالک نمی‌فرستاد (فیدبک: «نه پیامک اومد نه ربات گفت»).
-  const ownerDecisions = decided.filter(r => r.status === 'approved' || r.status === 'rejected')
+  // فاز ۳۰۳ز — خبر فقط برای «ثبتِ تازه» (صفِ fresh)؛ نه برای تخلیهٔ انباشتِ قدیمی. وگرنه درینِ
+  // ۸٬۲۵۷تایی که همه از یک شماره‌اند، ۸هزار پیامک/پیام به همان یک شماره می‌فرستد (اسپم + هزینه).
+  const ownerDecisions = decided.filter(r => (r.status === 'approved' || r.status === 'rejected') && freshSet.has(r.id))
   if (ownerDecisions.length) {
-    const byId = new Map(work.map(w => [w.id, w]))
+    const byId = new Map(queue.map(w => [w.id, w]))
     import('./listing-approve-notify').then(m => {
       for (const r of ownerDecisions) {
         const it = byId.get(r.id)

@@ -3,7 +3,23 @@
 //   node --import ./scripts/reos-loader.mjs scripts/submitter-report.mjs [شمارهٔ تلفن]
 // بدونِ آرگومان: ۲۰ ثبت‌کنندهٔ پرتعداد را با تفکیکِ وضعیت نشان می‌دهد.
 // با آرگومانِ شماره: جزئیاتِ همان شماره (وضعیت‌ها + نمونه‌ها + دلیلِ ممیزی + «واقعی به‌نظر می‌رسد؟»).
-import { listItems } from '../app/lib/scraper-store.ts'
+//
+// نکتهٔ مهم: Next خودش .env.production.local را می‌خواند، ولی اسکریپتِ مستقیمِ node نه — پس
+// بدونِ این بارگذاری، DATABASE_URL ست نمی‌شود و استور به «فایلِ منجمدِ قدیمی» می‌افتد (نه پایگاهِ
+// زنده). این بلوک env را از .env.production.local می‌خواند تا داده واقعاً از PostgreSQL بیاید.
+import { readFileSync } from 'fs'
+if (!process.env.DATABASE_URL) {
+  for (const f of ['.env.production.local', '.env.local', '.env']) {
+    try {
+      for (const line of readFileSync(f, 'utf8').split('\n')) {
+        const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/)
+        if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '')
+      }
+    } catch { /* فایل نبود */ }
+  }
+}
+const { listItems } = await import('../app/lib/scraper-store.ts')
+console.log(process.env.DATABASE_URL ? '🗄  منبع: PostgreSQL (زنده)\n' : '⚠️  DATABASE_URL پیدا نشد — دادهٔ فایلِ قدیمی (ممکن است ناقص باشد)\n')
 
 const FA = /[۰-۹]/g
 const faMap = d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString()

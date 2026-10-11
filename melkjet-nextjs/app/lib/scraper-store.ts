@@ -715,7 +715,7 @@ export async function setModeration(itemId: string, status: ItemStatus, reason: 
 }
 
 // Persist many moderation verdicts in a single atomic write (avoids file races under concurrency).
-export async function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[], opts?: { onlyPending?: boolean }) {
+export async function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[], opts?: { onlyPending?: boolean; notifyNew?: boolean }) {
   if (!verdicts.length) return
   const _tgNew: Item[] = []
   const _r = await mutateSome(verdicts.map(v => v.id), ({ items }) => {
@@ -732,7 +732,9 @@ export async function setModerationBatch(verdicts: { id: string; status: ItemSta
       if (!_wasA && v.status === 'approved' && it.type === 'listing') _tgNew.push(it)
     }
   })
-  if (_tgNew.length) import('./telegram-notify').then(m => m.notifyNewListings(_tgNew)).catch(() => {})
+  // notifyNew=false برای تخلیهٔ انباشتِ قدیمی: آگهیِ هفته‌ها پیش «تازه» نیست و نباید آلارمِ
+  // مشترکان را سیل کند (۸٬۲۵۷ آگهی × هر مشترکِ منطبق = اسپم).
+  if (_tgNew.length && opts?.notifyNew !== false) import('./telegram-notify').then(m => m.notifyNewListings(_tgNew)).catch(() => {})
   return _r
 }
 
