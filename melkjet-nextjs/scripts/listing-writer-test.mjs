@@ -64,6 +64,14 @@ ok(/به بالا/.test(plus) && !/\+/.test(plus), 'floor "6+" → "طبقهٔ �
 const ground = await writeDescriptionFromData({ ...f, floor: 'همکف' })
 ok(/همکف/.test(ground), 'floor "همکف" rendered')
 
+// ارقامِ فارسیِ اتاق باید «خوابه» بسازند (رگرسیونِ Number('۳')=NaN)
+const faRooms = await writeDescriptionFromData({ ...f, rooms: '۳' })
+ok(/۳ خوابه/.test(faRooms), 'persian-digit rooms → "۳ خوابه": ' + (/۳ خوابه/.test(faRooms) ? 'ok' : faRooms.slice(0, 60)))
+
+// متنِ «پر»: دستِ‌کم ۴ بند (معرفی/فضا/امکانات/موقعیت/دعوت) — نه اسکلتِ تک‌جمله‌ای
+const rich = await writeDescriptionFromData(f)
+ok(rich.split('\n\n').filter(s => s.trim()).length >= 4, 'rich multi-paragraph body: ' + rich.split('\n\n').length + ' blocks')
+
 // صفت‌های امن حاضر باشند
 const sample = await writeDescriptionFromData(f)
 ok(/دلباز|نورگیر|آفتاب‌گیر|دنج|خوش‌نقشه|کاربردی|تمیز|شیک|جمع‌وجور|باصفا|آرام|روشن|صمیمی|مرتب|نقلی|دلنشین/.test(sample), 'uses a safe descriptor')

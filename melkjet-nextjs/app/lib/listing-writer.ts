@@ -76,39 +76,84 @@ const floorText = (floor?: string, total?: string): string => {
   return `طبقهٔ ${floor}${total ? ` از ${total}` : ''}`
 }
 
-/** توضیحاتِ منسجم و روانِ گراندشده. همیشه متن برمی‌گرداند (نیازی به پیکرهٔ بزرگ ندارد). */
+// فهرست را فارسی‌وار می‌چسباند: «الف، ب و ج».
+const joinFa = (a: string[]): string => a.length <= 1 ? (a[0] || '') : `${a.slice(0, -1).join('، ')} و ${a[a.length - 1]}`
+const toEnNum = (s: string) => String(s || '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+
+// جملهٔ «سن/سالِ ساخت» — گراندشده روی خودِ سال. «کم‌سن» واقعیتِ محاسبه‌شده از سال است، نه ادعا.
+function ageLine(age?: string): string {
+  if (!age) return ''
+  const a = String(age).trim()
+  if (/نوساز|کلید.?نخورد|صفر|تازه.?ساز/.test(a)) return pick([`بنایی ${a} و تمیز.`, `ساختمانی ${a}.`, `${a}.`])
+  const yr = parseInt(toEnNum(a).replace(/\D/g, ''), 10)
+  const cur = new Date().getFullYear() - 621
+  if (Number.isFinite(yr) && yr >= 1300 && yr <= cur) {
+    const diff = cur - yr
+    if (diff <= 6) return pick([`ساختِ ${a} و بنایی کم‌سن با استهلاکِ پایین.`, `سالِ ساختِ ${a}؛ ساختمانی به‌نسبت تازه و کم‌استهلاک.`])
+    if (diff <= 15) return pick([`سالِ ساختِ ${a}.`, `ساختِ ${a}.`])
+    return pick([`سالِ ساختِ ${a}.`, `بنایی جاافتاده با ساختِ ${a}.`])
+  }
+  return pick([`سنِ بنا ${a}.`, `ساختِ ${a}.`])
+}
+
+/** توضیحاتِ حرفه‌ای، روان و «پر»: چند بندِ تعریف‌کننده که فقط از فکت‌های واقعیِ همین آگهی ساخته
+ *  می‌شوند (بدونِ جعلِ هیچ ادعای راستی‌آزمایی‌پذیر). هر بار چینش/واژگان فرق می‌کند تا یکتا بماند. */
 export async function writeDescriptionFromData(f: ListingFields): Promise<string | null> {
   const c = await ensureWriterCorpus().catch(() => null)
   const pool = descriptorPool(c)
   const type = f.propertyType || 'ملک'
   const isRent = f.deal === 'اجاره'
-  const dealWord = isRent ? pick(['آمادهٔ اجاره', 'برای اجاره']) : pick(['آمادهٔ فروش', 'برای فروش'])
   const loc = f.hood || f.city || ''
-  const adjs = take(pool, maybe(0.6) ? 2 : 1).join(' و ')
+  const dealWord = isRent ? pick(['آمادهٔ اجاره', 'برای اجاره', 'آمادهٔ واگذاری به‌صورتِ اجاره']) : pick(['آمادهٔ فروش', 'برای فروش', 'آمادهٔ واگذاری'])
+  const adjs = take(pool, 2)
+  const areaTxt = f.area ? `${f.area} متری` : ''
 
-  // بندِ ۱ — معرفیِ روان (نوع + صفت‌های امن + متراژ + موقعیت + معامله)
-  const p1 = `${type}${adjs ? `ِ ${adjs}` : ''}${f.area ? ` ${f.area}متری` : ''}${loc ? ` در ${loc}` : ''}، ${dealWord}.`
+  // بندِ ۱ — قلابِ معرفی (نوع + صفت‌های امن + متراژ + موقعیت + معامله)
+  const headBits = [`${type}${adjs.length ? `ِ ${joinFa(adjs)}` : ''}`, areaTxt, loc ? `در ${loc}` : ''].filter(Boolean)
+  const p1 = `${headBits.join(' ')}، ${dealWord}.` + ' ' + pick(['🏠', '✨', '📍', ''])
 
-  // بندِ ۲ — مشخصات و امکاناتِ واقعی، در یک جملهٔ روان
-  const specBits: string[] = []
-  if (f.rooms != null && f.rooms !== '' && Number(f.rooms) > 0) specBits.push(`${f.rooms} خوابه`)
-  const ft = floorText(f.floor, f.totalFloors); if (ft) specBits.push(ft)
-  const feats = [f.parking && 'پارکینگ', f.elevator && 'آسانسور', f.storage && 'انباری', f.patio && 'پاسیو'].filter(Boolean) as string[]
-  const subject = type.includes('آپارتمان') ? pick(['این واحد', 'این آپارتمان']) : pick(['این ملک', 'این واحد'])
+  // بندِ ۲ — فضا و اتاق‌ها، با قابِ سبکِ‌زندگی (بدونِ ادعای متراژیِ «جادار» که به عدد وابسته است)
+  // ارقامِ فارسیِ اتاق را هم بپذیر (Number('۳')=NaN وگرنه «۳ خوابه» می‌افتاد).
+  const roomsN = (f.rooms != null && f.rooms !== '') ? Number(toEnNum(String(f.rooms)).replace(/\D/g, '')) : NaN
+  const rooms = Number.isFinite(roomsN) ? roomsN : null
+  const ft = floorText(f.floor, f.totalFloors)
+  const subject = type.includes('آپارتمان') ? pick(['این واحد', 'این آپارتمان'])
+    : (type.includes('ویلا') || type.includes('خانه')) ? pick(['این خانه', 'این ملک'])
+    : pick(['این ملک', 'این واحد'])
+  const spaceBits: string[] = []
+  if (rooms != null) spaceBits.push(rooms === 0 ? 'به‌صورتِ سوئیت (بدونِ اتاقِ خواب)' : `${rooms} خوابه`)
+  if (ft) spaceBits.push(ft)
   let p2 = ''
-  if (specBits.length && feats.length) p2 = `${subject} ${specBits.join(' و ')} و ${pick(['مجهز به', 'دارای', 'بهره‌مند از'])} ${feats.join('، ')} است.`
-  else if (specBits.length) p2 = `${subject} ${specBits.join(' و ')} است.`
-  else if (feats.length) p2 = `${subject} ${pick(['مجهز به', 'دارای'])} ${feats.join('، ')} است.`
+  if (spaceBits.length) {
+    const fam = rooms != null && rooms >= 3 ? pick(['، فضایی مناسب برای یک خانوادهٔ پرجمعیت', '، درخورِ یک زندگیِ خانوادگیِ راحت', '']) : ''
+    p2 = `${subject} ${joinFa(spaceBits)} است${fam}.`
+  }
 
-  const ageTxt = f.age ? pick([`سنِ بنا ${f.age}.`, `ساختِ ${f.age}.`]) : ''
-  const soft = maybe(0.65) ? pick(SOFT_LINE) + '.' : ''
+  // بندِ ۳ — امکاناتِ واقعی (در جملهٔ روانِ تعریف‌کننده) + سنِ بنا
+  const feats = [f.parking && 'پارکینگ', f.elevator && 'آسانسور', f.storage && 'انباری', f.patio && 'پاسیو'].filter(Boolean) as string[]
+  const featLine = feats.length ? pick([
+    `از امکاناتِ آن ${joinFa(feats)} است که آسایشِ روزمره را کامل می‌کند.`,
+    `${pick(['بهره‌مند از', 'مجهز به', 'دارای'])} ${joinFa(feats)} است.`,
+    `امکاناتی همچون ${joinFa(feats)} رفاهِ ساکنان را تأمین می‌کند.`,
+  ]) : ''
+  const p3 = [featLine, ageLine(f.age)].filter(Boolean).join(' ')
+
+  // بندِ ۴ — موقعیت و ارزش (نرم و عمومی، بدونِ ادعای خاصِ راستی‌آزمایی‌پذیر مثل «۵ دقیقه تا مترو»)
+  const locLine = loc ? pick([
+    `موقعیتِ ${loc} دسترسیِ مناسب به امکاناتِ روزمره را فراهم می‌کند.`,
+    `قرارگیری در ${loc} از نقاطِ قوتِ این ملک است.`,
+    `${loc} یکی از موقعیت‌های مناسب برای ${isRent ? 'سکونت' : 'سکونت و سرمایه‌گذاری'} به شمار می‌رود.`,
+    '',
+  ]) : ''
+  const soft = maybe(0.55) ? pick(SOFT_LINE) + '.' : ''
+  const p4 = [locLine, soft].filter(Boolean).join(' ')
+
+  // CTA
   const cta = (f.advisorName
-    ? pick([`برای هماهنگیِ بازدید با ${f.advisorName} تماس بگیرید.`, `${f.advisorName} آمادهٔ پاسخ‌گویی و هماهنگیِ بازدید است.`])
-    : pick([`برای بازدید و اطلاعاتِ بیشتر تماس بگیرید.`, `برای هماهنگیِ بازدید در تماس باشید.`])) + ' ' + pick(['🔑', '🏠', ''])
+    ? pick([`برای هماهنگیِ بازدید با ${f.advisorName} تماس بگیرید.`, `${f.advisorName} آمادهٔ پاسخ‌گویی و هماهنگیِ بازدید است.`, `جهتِ بازدید و اطلاعاتِ بیشتر با ${f.advisorName} در تماس باشید.`])
+    : pick([`برای بازدید و اطلاعاتِ بیشتر تماس بگیرید.`, `برای هماهنگیِ بازدید در تماس باشید.`])) + ' ' + pick(['🔑', '🏠', '📞', ''])
 
-  // چیدمان: بندِ معرفی، بندِ مشخصات/کیفیت (روان، نه تکه‌تکه)، دعوت
-  const midParts = [p2, ageTxt, soft].filter(Boolean)
-  const blocks = [p1 + ' ' + pick(['🏠', '✨', '📍', '']), midParts.join(' '), cta].filter(s => s && s.trim())
+  const blocks = [p1, p2, p3, p4, cta].filter(s => s && s.trim())
   const out = faShow(blocks.join('\n\n').replace(/[ \t]+/g, ' ').trim())
   return out.length > 40 ? out : null
 }
