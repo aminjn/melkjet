@@ -168,7 +168,7 @@ async function mutateQueue<R>(fn: (jobs: GradJob[]) => R): Promise<R> {
   await ensureRosterShards()
   return kvMutate<{ jobs?: GradJob[] }, R>(QK, { jobs: [] }, box => { box.jobs = box.jobs || []; return fn(box.jobs) })
 }
-async function anyScrapeRunning(): Promise<boolean> {
+export async function anyScrapeRunning(): Promise<boolean> {
   const now = Date.now()
   if (!pgEnabled()) return Object.values(fileLoad().scrapes).some(s => !!s.running && !isStale(s, now))
   await ensureRosterShards()

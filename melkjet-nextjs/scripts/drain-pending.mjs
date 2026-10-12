@@ -16,16 +16,20 @@ const pendingCount = async () => (await listItems('listing')).filter(i => i.stat
 
 let start = await pendingCount()
 console.log(`شروع — منتظر: ${start}`)
-let total = 0
-for (let i = 1; i <= 120; i++) {
+console.log('(توجه: درین به سینکِ روستر باج می‌دهد؛ اگر روستر در جریان باشد این دورها ۰ می‌شوند و منتظر می‌ماند.)')
+let total = 0, idle = 0
+for (let i = 1; i <= 400; i++) {
   let r
-  try { r = await moderatePending(250) }
-  catch (e) { console.log(`دور ${i}: خطای گذرا (${String(e.message || e).slice(0, 60)}) — کمی صبر و ادامه`); await new Promise(res => setTimeout(res, 2000)); continue }
+  try { r = await moderatePending(200) }
+  catch (e) { console.log(`دور ${i}: خطای گذرا (${String(e.message || e).slice(0, 60)}) — صبر و ادامه`); await new Promise(res => setTimeout(res, 3000)); continue }
   total += r.moderated
   const left = await pendingCount()
-  console.log(`دور ${i}: حکم‌شده ${r.moderated} | باقی‌مانده منتظر: ${left}${r.error ? ' · ' + r.error : ''}`)
-  if (left <= 20 || r.moderated === 0) break
-  await new Promise(res => setTimeout(res, 400))   // نفس به کرون/اسکرپرِ زنده بده (کاهشِ رقابتِ قفل)
+  console.log(`دور ${i}: حکم‌شده ${r.moderated} | باقی‌مانده: ${left}${r.error ? ' · ' + r.error : ''}`)
+  if (left <= 20) break
+  // فقط وقتی تسلیم شو که چند دورِ پیاپی صفر بود (نه یک دورِ تنها — ممکن است روستر مشغول باشد).
+  idle = r.moderated === 0 ? idle + 1 : 0
+  if (idle >= 8) { console.log('۸ دورِ پیاپی بی‌پیشرفت — فعلاً متوقف. بعداً دوباره بزن یا بگذار کرون آرام تخلیه کند.'); break }
+  await new Promise(res => setTimeout(res, r.moderated === 0 ? 4000 : 600))   // بیکار؟ صبرِ بیشتر
 }
 const end = await pendingCount()
 console.log(`\n✅ تمام. منتظر: ${start} → ${end} (جمعاً ${total} حکم).`)

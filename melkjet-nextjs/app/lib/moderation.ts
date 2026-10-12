@@ -293,10 +293,18 @@ export async function moderatePending(max = 300): Promise<{ moderated: number; r
   // از آن‌ها دوباره حکم می‌گیرند — با سیاستِ جاری (pendingPolicy=approve → نامطمئن تأیید، آشغال رد).
   // این انباشتِ ۸٬۲۵۷تایی را طیِ چند تیک به‌طورِ خودکار و امن تخلیه می‌کند (گِیتِ سلامت همچنان فعال).
   // خود-محدودکننده: پس از تخلیه، آگهیِ pendingِ باقی‌مانده تقریباً صفر است (سیاست فوری تصمیم می‌گیرد).
+  // فاز ۳۰۳ی — تخلیهٔ انباشت «به روستر باج می‌دهد»: هر دو روی همان قفلِ FOR UPDATEِ scraper_meta
+  // می‌نشینند؛ اگر روستر وسطِ ایمپورت باشد، درینِ بزرگ قفل را نمی‌گیرد و statement_timeout می‌خورد و
+  // روستر را هم کندتر می‌کند. پس وقتی روستر در جریان است، انباشت را دست نمی‌زنیم (فقط صفِ freshِ کوچک)؛
+  // و در حالتِ آزاد هم فقط ۶۰تا در هر تیک تا قفل را طولانی نگیریم. انباشت در دقایقِ خلوت آرام تخلیه می‌شود.
   let stuck: Item[] = []
   try {
-    const seen = new Set(queue.map(q => q.id))
-    stuck = (await listItems('listing')).filter(i => i.type === 'listing' && i.status === 'pending' && !seen.has(i.id)).slice(0, max)
+    let rosterBusy = false
+    try { const { anyScrapeRunning } = await import('./agency-roster-store'); rosterBusy = await anyScrapeRunning() } catch { /* بی‌خطر */ }
+    if (!rosterBusy) {
+      const seen = new Set(queue.map(q => q.id))
+      stuck = (await listItems('listing')).filter(i => i.type === 'listing' && i.status === 'pending' && !seen.has(i.id)).slice(0, 60)
+    }
   } catch { /* اختیاری */ }
   const work = [...queue, ...stuck]
   if (!work.length) return { moderated: 0, results: [] }
