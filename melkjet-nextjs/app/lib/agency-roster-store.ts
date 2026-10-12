@@ -66,7 +66,10 @@ export interface RosterScrape {
   phase?: 'scrape' | 'cluster' | 'import'   // فاز ۱۹۳/۱۹۴ — کدام مرحله؟ (اسکرپ/شناساییِ نام‌ها/ایمپورت)
   stopRequested?: boolean  // فاز ۱۹۶ — دکمهٔ «⏹ توقف»: رانِ زنده در اولین چکِ بعدی تمیز می‌ایستد
   progress?: { done: number; total: number }
-  runRequested?: boolean   // «همگام‌سازی الان» — کرونِ اینستنسِ ۰ برمی‌دارد
+  runRequested?: boolean   // «همگام‌سازی الان» (دستی) — هر ساعت، فوری. کرونِ اینستنسِ ۰ برمی‌دارد
+  // فاز ۳۰۳ط — تلاشِ دوبارهٔ یک سینکِ «زمان‌بندی‌شده» که گذرا شکست خورد: فوری دوباره، ولی «فقط در
+  // پنجرهٔ شب». قبلاً گذرا runRequested می‌شد و وسطِ روز هم اجرا می‌شد (نقضِ بازهٔ ۰–۶).
+  retryPending?: boolean
 }
 // تنظیماتِ سراسریِ زمان‌بندی — سینکِ خودکار فقط در «پنجرهٔ شبانه» اجرا می‌شود تا روزها
 // ترافیک/دیوار درگیر نشود. «همگام‌سازی الان» (runRequested) همیشه و فوری اجرا می‌شود.
@@ -276,7 +279,7 @@ export async function removeScrape(id: string): Promise<void> { await deleteScra
 // از دیوار گرفته شوند (کشِ کهنهٔ دورهٔ پروکسیِ مرده که متنِ خالی داشت، دیگر استفاده نمی‌شود).
 export async function requestRun(id: string): Promise<boolean> {
   let hadError = false
-  const ok = await mutateScrape(id, s => { if (!s) return false; hadError = !!s.lastError; s.runRequested = true; s.stopRequested = false; s.runAttempts = 0; s.lastError = ''; if (isStale(s)) s.running = false; return true })   // فاز ۱۹۶ب: کلیکِ دستی = شروعِ تمیز
+  const ok = await mutateScrape(id, s => { if (!s) return false; hadError = !!s.lastError; s.runRequested = true; s.retryPending = false; s.stopRequested = false; s.runAttempts = 0; s.lastError = ''; if (isStale(s)) s.running = false; return true })   // فاز ۱۹۶ب: کلیکِ دستی = شروعِ تمیز
   // فاز ۱۹۸ — کش دائمی است (اینکرمنتال)؛ کلیکِ دستی هرگز کش را دور نمی‌ریزد. تازگی با چرخشِ ۱۴روزه تأمین می‌شود.
   void hadError
   return ok
@@ -286,7 +289,7 @@ export async function requestRun(id: string): Promise<boolean> {
 export async function requestStop(id: string): Promise<boolean> {
   return mutateScrape(id, s => {
     if (!s) return false
-    s.stopRequested = true; s.runRequested = false; s.running = false; s.runAttempts = 0
+    s.stopRequested = true; s.runRequested = false; s.retryPending = false; s.running = false; s.runAttempts = 0
     s.lastError = 'با دکمهٔ توقف متوقف شد'
     return true
   })
@@ -348,6 +351,8 @@ export async function listDueRosters(now: number): Promise<RosterScrape[]> {
     // سررسیده است تا صفِ اولیه سریع خالی شود. تازه‌سازیِ آژانس‌های سینک‌شده فقط در پنجرهٔ شب می‌ماند.
     if (!s.lastRun) return true
     if (!inSyncWindow(hour, startHour, endHour)) return false   // خارج از پنجرهٔ همین اسکرپ (فقط تازه‌سازی)
+    // فاز ۳۰۳ط — تلاشِ دوبارهٔ گذرای زمان‌بندی‌شده: «در پنجره» فوری دوباره تلاش کن (نه وسطِ روز).
+    if (s.retryPending) return true
     // «daily» = یک‌بار در هر بازشدنِ پنجرهٔ شبانه (حتی اگر روز دستی سینک شده باشد، شب باز می‌گیرد).
     if (s.schedule === 'daily') return s.lastRun < windowOpenedAt(now, startHour)
     // «6h» = هر ۶ ساعت درونِ پنجره.
@@ -514,7 +519,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
   if (attempts192 > 8) {
     // فاز ۲۹۷ض — علتِ آخرین شکست را نگه دار (lastError هنوز پاک نشده) تا در پنل معلوم باشد چرا.
     const why = String(scrape.lastError || '').replace(/^خطای گذرا[^:]*:\s*/, '').slice(0, 120)
-    await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, lastError: `۸ بار پشتِ‌سرِهم ناتمام ماند${why ? ` — علت: ${why}` : ''} — «همگام‌سازی الان» را بزن` })
+    await patchScrape(id, { running: false, runRequested: false, retryPending: false, runAttempts: 0, lastError: `۸ بار پشتِ‌سرِهم ناتمام ماند${why ? ` — علت: ${why}` : ''} — «همگام‌سازی الان» را بزن` })
     return { ok: false, error: 'تلاش‌های ناتمامِ زیاد', advisors: 0, total: 0, unnamed: 0 }
   }
   await patchScrape(id, { running: true, runStartedAt: Date.now(), lastProgressAt: Date.now(), runAttempts: attempts192, phase: 'scrape', progress: { done: 0, total: 0 }, lastError: '' })
@@ -599,7 +604,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // (آن‌جا پیشرفتِ واقعی رخ داده)؛ خطای گذرای ایمپورت حالا می‌شمارد و بعد از ۸ بار «با علتِ
     // واقعی» تسلیم می‌شود تا در پنل دیده شود، نه این‌که ابدی بچرخد.
     console.log(`[roster] scrape+AI done: rows=${roster.scanned} advisors=${roster.advisors.length} unnamed=${roster.unnamed.tokens.length}`)
-    if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
+    if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, retryPending: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
     const freshByKey = new Map(roster.advisors.map(a => [a.key, a]))
@@ -670,7 +675,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       if (!s) return
       s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
       if (cityNow) s.city = cityNow
-      s.running = false; s.runRequested = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastOkAt = Date.now(); s.lastError = ''
+      s.running = false; s.runRequested = false; s.retryPending = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastOkAt = Date.now(); s.lastError = ''
       if (s.runStartedAt) s.lastOkMs = Date.now() - s.runStartedAt
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
@@ -701,9 +706,19 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // با پیامِ روشن تسلیم می‌شود، پس نه حلقهٔ بی‌صدا می‌ماند نه فشارِ بی‌پایان روی دیوار.
     // فاز ۲۹۷ض — علتِ واقعی دیگر دور ریخته نمی‌شود (قانون شمارهٔ یک): بدونِ آن، «۳۸ آژانس خطای
     // گذرا» بود ولی هیچ‌کس نمی‌دانست «چه چیزی» تایم‌اوت می‌خورد (PG؟ دیوار؟ سوکت؟).
-    await patchScrape(id, transient
-      ? { running: false, runRequested: true, lastRun: Date.now(), lastError: `خطای گذرا (تلاشِ ${attempts192}/۸): ${msg.slice(0, 140)}` }
-      : { running: false, runRequested: false, runAttempts: 0, lastRun: Date.now(), lastError: msg })
+    // فاز ۳۰۳ط — گذرا: سینکِ «دستی» (runRequested) فوری و هر ساعت دوباره؛ سینکِ «زمان‌بندی‌شده»
+    // فقط «در پنجرهٔ شب» دوباره (retryPending) — نه وسطِ روز. (قبلاً هر دو runRequested می‌شدند و
+    // آژانسِ شب‌تایم‌اوت‌خور کلِ روز اجرا و شکست می‌خورد — دقیقاً شکایتِ «۱۲ تا ۶ اجرا نمی‌شود».)
+    if (transient) {
+      await mutateScrape(id, s => {
+        if (!s) return
+        s.running = false; s.lastRun = Date.now()
+        s.lastError = `خطای گذرا (تلاشِ ${attempts192}/۸): ${msg.slice(0, 140)}`
+        if (!s.runRequested) s.retryPending = true   // زمان‌بندی‌شده → فقط در پنجره
+      })
+    } else {
+      await patchScrape(id, { running: false, runRequested: false, retryPending: false, runAttempts: 0, lastRun: Date.now(), lastError: msg })
+    }
     return { ok: false, error: msg, advisors: 0, total: 0, unnamed: 0 }
   } finally {
     clearInterval(heartbeat)
