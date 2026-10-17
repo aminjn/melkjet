@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const body = await req.json().catch(() => ({} as any))
   const action = body.action || (body.fileContent ? 'upload' : 'import')
+  // رفعِ گیر: اگر اجرایی روی قفلِ کهنه مانده (اسکریپت مُرده/هنگ)، کاربر می‌تواند قفل را آزاد کند.
+  if (action === 'clear-lock') { try { unlinkSync(LOCK) } catch {}; return NextResponse.json({ ok: true, cleared: true }) }
   if (running()) return NextResponse.json({ ok: false, running: true, note: 'یک اجرا در جریان است — صبر کن' })
 
   let flags: string[]

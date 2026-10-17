@@ -11,6 +11,7 @@ import { listReviews } from '@/app/lib/reviews-store'
 import { getItemById } from '@/app/lib/scraper-store'
 import { getSiteStats } from '@/app/lib/site-stats-store'
 import { sealPhone, phoneMask } from '@/app/lib/phone-token'
+import { canonCat } from '@/app/lib/directory-cats'
 
 export const revalidate = 600
 export function generateStaticParams() { return [] }
@@ -22,7 +23,7 @@ export async function generateMetadata({ params }: Props) {
   const id = decodeURIComponent((await params).id)
   const it = await getItemById(id)
   if (!it || it.type !== 'directory') return { title: 'یافت نشد | ملک‌جت' }
-  const role = CAT_FA[it.category || ''] || 'متخصص'
+  const role = CAT_FA[canonCat(it.category)] || 'متخصص'
   return { title: `${it.title} — ${role} | ملک‌جت`, description: `${it.title}، ${role}${it.location ? ` در ${it.location}` : ''}.`, alternates: { canonical: `https://melkjet.com/directory/${encodeURIComponent(id)}` } }
 }
 
@@ -35,7 +36,7 @@ export default async function DirectoryProfilePage({ params }: Props) {
   const it = await getItemById(id)
   if (!it || it.type !== 'directory') notFound()
   const m = (it.meta || {}) as Record<string, string>
-  const role = CAT_FA[it.category || ''] || it.category || 'متخصص'
+  const role = CAT_FA[canonCat(it.category)] || it.category || 'متخصص'
   const lat = Number(m['__lat']), lng = Number(m['__lng'])
   const hasMap = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) > 0.1
   // شماره‌ها «سربسته» (توکنِ رمزنگاری‌شده) به مرورگر می‌روند؛ با کلیکِ «نمایشِ شماره» باز می‌شوند.

@@ -3,6 +3,7 @@ import { listItems, SourceType } from '@/app/lib/scraper-store'
 import { slimListing } from '@/app/lib/listing-slim'
 import { cityMatch, dealOf } from '@/app/lib/listing-filter'
 import { swrMap } from '@/app/lib/swr-cache'
+import { canonCat } from '@/app/lib/directory-cats'
 
 // Public read endpoint — feeds search, directory, store, home.
 // Returns all non-rejected, non-duplicate scraped items.
@@ -27,7 +28,11 @@ export async function GET(req: NextRequest) {
   const cacheKey = `${type || ''}|${category || ''}|${owner}|${slim ? 1 : 0}|${limit}|${cityQ}|${dealQ}`
   const body = await RESP.get(cacheKey, async () => {
     const valid = type && ['listing', 'directory', 'product', 'article', 'price'].includes(type)
-    let items = await listItems(valid ? type : undefined, { category, publicOnly: true })
+    // دایرکتوری: دسته را «نرمال‌شده» تطبیق می‌دهیم (برچسب‌کامل/هم‌معنی هم بیاید) — پس فیلترِ خامِ
+    // listItems را برای دایرکتوری اعمال نمی‌کنیم و بعد از خواندن با canonCat فیلتر می‌کنیم.
+    const dirCat = type === 'directory' ? category : undefined
+    let items = await listItems(valid ? type : undefined, { category: dirCat ? undefined : category, publicOnly: true })
+    if (dirCat) { const want = canonCat(dirCat); items = items.filter(i => canonCat(i.category) === want) }
     // پیش‌نویس‌های CMS نباید در فهرست عمومی بیایند
     items = items.filter(i => !(i.type === 'article' && i.meta?.cmsStatus === 'draft'))
     // فیلتر بر اساس آگهی‌دهنده/نویسنده. مقاله‌ها نویسنده را در meta.author نگه می‌دارند

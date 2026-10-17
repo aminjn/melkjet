@@ -5,6 +5,7 @@ import { getProfile } from '@/app/lib/profile-store'
 import { allApprovedReviews } from '@/app/lib/reviews-store'
 import { allAdvisorProfilesLean } from '@/app/lib/advisor-store'
 import { FA_DIGITS, faDigit } from '@/app/lib/digits'
+import { canonCat } from '@/app/lib/directory-cats'
 
 // دایرکتوریِ متخصصانِ «ثبت‌شده در سایت» — تا کاربران واقعیِ نقش‌دار (مشاور/آژانس/سازنده/
 // مصالح/حقوقی) در دایرکتوری دیده شوند و به پروفایلِ عمومی‌شان لینک شوند.
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest) {
     try {
       const { listItems } = await import('@/app/lib/scraper-store')
       for (const it of await listItems('directory', { publicOnly: true })) {
-        const c = String((it as any).category || '').trim()
+        const c = canonCat(String((it as any).category || ''))   // دستهٔ هم‌معنی/برچسب‌کامل زیرِ کلیدِ canonical شمرده شود
         if (c) counts[c] = (counts[c] || 0) + 1
       }
     } catch {}
@@ -194,8 +195,8 @@ export async function GET(req: NextRequest) {
   try {
     const { listItems } = await import('@/app/lib/scraper-store')
     for (const it of await listItems('directory', { publicOnly: true })) {
-      const cat = it.category || 'حقوقی'
-      if (category && category !== cat) continue
+      const cat = canonCat(it.category) || 'حقوقی'   // برچسب‌کامل/هم‌معنی → کلیدِ canonical
+      if (category && canonCat(category) !== cat) continue
       items.push({
         id: it.id, sourceName: it.sourceName || 'منبعِ بیرونی', type: 'directory', category: cat,
         title: it.title, location: it.location || '', image: it.image || '',

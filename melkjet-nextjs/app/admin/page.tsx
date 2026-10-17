@@ -897,8 +897,8 @@ function LegalImportConfig() {
   const loadStats = () => fetch('/api/admin/legal-import?stats=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setStats(d) })
   useEffect(() => { poll(); loadStats(); const t = setInterval(poll, 3000); const t2 = setInterval(loadStats, 30000); return () => { clearInterval(t); clearInterval(t2) } }, [])
   const [upMsg, setUpMsg] = useState('')
-  const action = async (a: 'remove-bonyad' | 'delete-saz-tehran' | 'reset') => {
-    if (!confirm('مطمئنی؟ این عمل برگشت‌ناپذیر است.')) return
+  const action = async (a: 'remove-bonyad' | 'delete-saz-tehran' | 'reset' | 'clear-lock') => {
+    if (a !== 'clear-lock' && !confirm('مطمئنی؟ این عمل برگشت‌ناپذیر است.')) return
     setBusy(true)
     try { await fetch('/api/admin/legal-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: a }) }); await poll() } finally { setBusy(false) }
   }
@@ -936,6 +936,12 @@ function LegalImportConfig() {
         <OutlineButton onClick={() => action('remove-bonyad')} disabled={!!on}>🗑 حذفِ دادهٔ قدیمیِ بنیاد وکلا</OutlineButton>
         <OutlineButton onClick={() => action('delete-saz-tehran')} disabled={!!on}>🗑 حذفِ دستهٔ «سازندگان تهران»</OutlineButton>
       </div>
+      {st?.running && (
+        <div style={{ marginTop: 8 }}>
+          <OutlineButton onClick={() => action('clear-lock')} disabled={busy}>✖️ لغو / آزادسازیِ قفلِ گیرکرده</OutlineButton>
+          <span style={{ fontSize: 11.5, color: 'var(--muted)', marginRight: 8 }}>اگر «در حال اجرا…» بیش از چند دقیقه مانده، اینجا را بزن تا قفل آزاد شود.</span>
+        </div>
+      )}
       <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.7 }}>
         اگر قبلاً ایمپورت کرده‌ای و دسته‌بندی تکراری/بی‌شمار دیدی، اول <b>♻️ پاک‌سازیِ ایمپورتِ قبلی</b> را بزن،
         بعد فایل‌ها را دوباره بارگذاری کن — این‌بار با دستهٔ درست وارد می‌شوند و کارت‌ها پروفایلِ داخلی می‌گیرند.

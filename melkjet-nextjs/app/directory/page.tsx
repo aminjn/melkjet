@@ -13,20 +13,11 @@ import { useState, useEffect, useMemo } from 'react'
 import { fetchContent, gradientFor, initialsFor, avatarPosFor, type ContentItem } from '@/app/lib/content-display'
 import { dirItemScore, computeDist, topPercentLabel, scoreOutOf10, type ScoreDist } from '@/app/lib/provider-score'
 
-// دسته‌های اصلی طبقِ طرح — id همان دستهٔ داخلیِ دایرکتوری است (ROLE_CAT / اسکرپ)
-const CATS: { id: string; label: string; icon: IconName }[] = [
-  { id: 'مشاور', label: 'مشاوران املاک', icon: 'people' },
-  { id: 'آژانس', label: 'آژانس‌ها', icon: 'office' },
-  { id: 'سازنده', label: 'سازندگان', icon: 'crane' },
-  { id: 'مصالح', label: 'فروشندگان مصالح', icon: 'bricks' },
-  { id: 'معمار', label: 'معماران و طراحان', icon: 'ruler' },
-  { id: 'پیمانکار', label: 'پیمانکاران', icon: 'tools' },
-  { id: 'کارشناس', label: 'کارشناسان رسمی', icon: 'clipboard' },
-  { id: 'حقوقی', label: 'دفاتر حقوقی و وکلا', icon: 'scale' },
-  { id: 'بیمه', label: 'بانک و بیمه', icon: 'bank' },
-  { id: 'دفترخانه', label: 'دفاتر اسناد رسمی', icon: 'doc' },
-]
-const catLabelOf = (id: string) => CATS.find(c => c.id === id)?.label || id
+// دسته‌های اصلی طبقِ طرح — id همان دستهٔ داخلیِ دایرکتوری است (ROLE_CAT / اسکرپ).
+// تعاریف از مرجعِ واحدِ directory-cats می‌آیند (تا شمارش/فیلترِ سرور و نمایشِ کلاینت یکی باشند).
+import { DIR_CAT_DEFS, isKnownCat, catLabelOf } from '@/app/lib/directory-cats'
+const CAT_ICON: Record<string, IconName> = { 'مشاور': 'people', 'آژانس': 'office', 'سازنده': 'crane', 'مصالح': 'bricks', 'معمار': 'ruler', 'پیمانکار': 'tools', 'کارشناس': 'clipboard', 'حقوقی': 'scale', 'بیمه': 'bank', 'دفترخانه': 'doc' }
+const CATS: { id: string; label: string; icon: IconName }[] = DIR_CAT_DEFS.map(c => ({ ...c, icon: CAT_ICON[c.id] || 'layers' }))
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 const faDec = (n: number) => (Number(n) || 0).toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
@@ -96,7 +87,7 @@ export default function DirectoryPage() {
       .catch(() => {})
     fetch('/api/content/categories', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : { categories: [] })
-      .then(d => setExtraCats(((d.categories || []) as string[]).filter(c => !CATS.some(k => k.id === c))))
+      .then(d => setExtraCats(((d.categories || []) as string[]).filter(c => !isKnownCat(c))))
       .catch(() => {})
   }, [])
 
