@@ -897,8 +897,8 @@ function LegalImportConfig() {
   const loadStats = () => fetch('/api/admin/legal-import?stats=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setStats(d) })
   useEffect(() => { poll(); loadStats(); const t = setInterval(poll, 3000); const t2 = setInterval(loadStats, 30000); return () => { clearInterval(t); clearInterval(t2) } }, [])
   const [upMsg, setUpMsg] = useState('')
-  const action = async (a: 'remove-bonyad' | 'delete-saz-tehran' | 'reset' | 'clear-lock') => {
-    if (a !== 'clear-lock' && !confirm('مطمئنی؟ این عمل برگشت‌ناپذیر است.')) return
+  const action = async (a: 'remove-bonyad' | 'delete-saz-tehran' | 'reset' | 'clear-lock' | 'regeo') => {
+    if (a !== 'clear-lock' && a !== 'regeo' && !confirm('مطمئنی؟ این عمل برگشت‌ناپذیر است.')) return
     setBusy(true)
     try { await fetch('/api/admin/legal-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: a }) }); await poll() } finally { setBusy(false) }
   }
@@ -937,6 +937,7 @@ function LegalImportConfig() {
         <span style={{ display: 'inline-block', cursor: on ? 'not-allowed' : 'pointer', opacity: on ? 0.5 : 1, background: 'var(--gold)', color: '#241a06', fontWeight: 800, borderRadius: 11, padding: '9px 16px', fontSize: 13 }}>{on ? '⏳ در حال اجرا…' : '📤 بارگذاریِ فایلِ JSON'}</span>
       </label>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+        <OutlineButton onClick={() => action('regeo')} disabled={!!on}>🗺 محاسبهٔ دوبارهٔ موقعیتِ نقشه (تصحیحِ پین‌های غلط)</OutlineButton>
         <OutlineButton onClick={() => action('reset')} disabled={!!on}>♻️ پاک‌سازیِ ایمپورتِ قبلی (قبل از بارگذاریِ دوباره)</OutlineButton>
         <OutlineButton onClick={() => action('remove-bonyad')} disabled={!!on}>🗑 حذفِ دادهٔ قدیمیِ بنیاد وکلا</OutlineButton>
         <OutlineButton onClick={() => action('delete-saz-tehran')} disabled={!!on}>🗑 حذفِ دستهٔ «سازندگان تهران»</OutlineButton>

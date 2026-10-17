@@ -803,15 +803,17 @@ export async function updateItem(itemId: string, patch: EditableItem) {
 
 // فاز ۲۰۱ — مختصاتِ به‌دست‌آمده هنگامِ غنی‌سازی (دیوار) روی خودِ آگهی می‌نشیند تا نقشهٔ جستجو پین‌دار شود.
 // فقط اگر آگهی مختصات نداشت (مختصاتِ دستی/مشاور هرگز بازنویسی نمی‌شود).
-export async function setItemCoords(itemId: string, lat: number, lng: number) {
-  if (!lat || !lng) return
+export async function setItemCoords(itemId: string, lat: number, lng: number, force = false) {
+  if (!force && (!lat || !lng)) return
   // ۱۹ سپتامبر — داغ‌ترین نویسندهٔ سایت: غنی‌سازی برای هر آگهیِ دارای مختصات صدایش
   // می‌زند، و با mutate هر بار ۴۶ هزار ردیف خوانده می‌شد — با قفلِ نویسنده در دست.
+  // force=true: بازنویسی حتی اگر مختصات دارد (محاسبهٔ دوباره)؛ با lat/lng=0 پینِ اشتباه را پاک می‌کند.
   return mutateSome([itemId], ({ items }) => {
     const it = items.find(i => i.id === itemId)
     if (!it) return
     it.meta = it.meta || {}
-    if (Number(it.meta['__lat']) && Number(it.meta['__lng'])) return
+    if (!force && Number(it.meta['__lat']) && Number(it.meta['__lng'])) return
+    if (force && (!lat || !lng)) { delete it.meta['__lat']; delete it.meta['__lng']; return }
     it.meta['__lat'] = String(lat); it.meta['__lng'] = String(lng)
   })
 }

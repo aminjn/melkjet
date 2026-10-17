@@ -25,17 +25,33 @@ const BONYAD = 'بنیاد وکلا — وکلای ملکی'
 console.log(process.env.DATABASE_URL ? '🗄  PostgreSQL (زنده)' : '⚠️  DATABASE_URL نیست!')
 console.log(geoApiEnabled() ? '🗺  نکسا‌مپ: پیکربندی‌شده' : '⚠️  کلیدِ نکسا‌مپ تنظیم نیست — بدونِ مختصات', '\n')
 
-// ── ژئوکد با نکسا‌مپ (کشِ شهر/آدرس + throttle) ─────────────────────────────
+// ── ژئوکد با نکسا‌مپ (مرکزِ شهر + اعتبارسنجیِ استان) ─────────────────────────
+// آدرسِ آزادِ این دیتاست برای شهرهای کوچک نکسامپ را به شهرِ دیگری می‌برد (مثلِ «قیروکارزین، فارس»
+// که روی «ارومیه» می‌افتاد). پس «شهر، استان» (مرکزِ شهر) مبنا است و نتیجه فقط وقتی پذیرفته می‌شود
+// که آدرسِ برگشتیِ نکسامپ همان استان/شهر را داشته باشد — وگرنه پین گذاشته نمی‌شود (پینِ غلط بدتر از بی‌پین).
 const geoCache = new Map()
-async function geo(province, city, addr) {
+const fold = s => String(s || '').replace(/\s+/g, '').replace(/[يی]/g, 'ی').replace(/[كک]/g, 'ک').replace(/ـ/g, '')
+function fmtOk(fmt, prov, city) {
+  const nf = fold(fmt); if (!nf) return false
+  const np = fold(prov), nc = fold(city)
+  return (np.length >= 3 && nf.includes(np)) || (nc.length >= 3 && nf.includes(nc))
+}
+async function geo(province, city /*, addr — عمداً استفاده نمی‌شود */) {
   if (NO_GEO || !geoApiEnabled()) return null
-  const q = [province, city, addr].map(S).filter(Boolean).join(' ')
-  if (!q) return null
-  const key = addr ? q : `${S(province)} ${S(city)}`
-  if (geoCache.has(key)) return geoCache.get(key)
-  let pt = null
-  try { const r = await geoGeocode(q, 6000); if (r && r.lat && r.lng) pt = { lat: r.lat, lng: r.lng } } catch {}
-  geoCache.set(key, pt); await new Promise(r => setTimeout(r, 150)); return pt
+  const prov = S(province), city0 = S(city)
+  if (!prov && !city0) return null
+  const tries = []
+  if (city0 && prov) tries.push(`${city0}، ${prov}`)
+  else if (city0) tries.push(city0)
+  if (prov) tries.push(prov)   // آخرین‌چاره: مرکزِ استان
+  for (const q of tries) {
+    if (geoCache.has(q)) { const c = geoCache.get(q); if (c) return c; continue }
+    let pt = null
+    try { const r = await geoGeocode(q, 6000); if (r && r.lat && r.lng && fmtOk(r.formatted, prov, city0)) pt = { lat: r.lat, lng: r.lng } } catch {}
+    geoCache.set(q, pt); await new Promise(r => setTimeout(r, 150))
+    if (pt) return pt
+  }
+  return null
 }
 const loc = (city, prov) => [S(city), S(prov)].filter(Boolean).join('، ')
 function rawExpert(e) {
@@ -92,7 +108,26 @@ if (args.includes('--reset')) {
   await removeCategory('کارشناسان رسمی'); await removeCategory('دفاتر حقوقی و وکلا')
   console.log('🗑 دسته‌های برچسب‌کاملِ اشتباه از فهرست پاک شدند.')
 }
-if (FILE) { await importFile(FILE) }
+async function regeoAll() {
+  // محاسبهٔ دوبارهٔ موقعیتِ «همهٔ» موارد حقوقی با منطقِ اعتبارسنجی‌شده (برای تصحیحِ پین‌های غلطِ قبلی).
+  if (NO_GEO || !geoApiEnabled()) { console.log('ژئوکد غیرفعال.'); return }
+  const items = (await listItems('directory')).filter(i => i.sourceId === 'legal-experts' || i.sourceId === 'legal-lawyers')
+  console.log(`محاسبهٔ دوبارهٔ موقعیت برای ${items.length} موردِ حقوقی…`)
+  let done = 0, ok = 0, cleared = 0
+  for (const it of items) {
+    const m = it.meta || {}
+    const pt = await geo(m['استان'], m['شهر'], m['آدرس'])
+    try {
+      if (pt) { await setItemCoords(it.id, pt.lat, pt.lng, true); ok++ }
+      else { await setItemCoords(it.id, 0, 0, true); cleared++ }   // پینِ غلط را بردار (بی‌پین بهتر از غلط)
+    } catch {}
+    if (++done % 25 === 0) console.log(`  ${done}/${items.length} (درست ${ok} · بی‌پین ${cleared})`)
+  }
+  console.log(`✅ موقعیتِ دوباره: درست=${ok} · بی‌پین=${cleared} از ${items.length}`)
+}
+
+if (args.includes('--regeo')) { await regeoAll() }
+else if (FILE) { await importFile(FILE) }
 else if (args.includes('--reset')) { /* فقط ریست */ }
 else if (args.includes('--remove-bonyad')) {
   const v = (await listItems('directory')).filter(i => i.sourceName === BONYAD)

@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
   } else if (action === 'remove-bonyad') flags = ['--remove-bonyad']
   else if (action === 'delete-saz-tehran') flags = ['--delete-cat=سازندگان تهران']
   else if (action === 'reset') flags = ['--reset']
+  else if (action === 'regeo') flags = ['--regeo']
   else return NextResponse.json({ ok: false, note: 'عملِ نامعتبر' })
 
   try {
