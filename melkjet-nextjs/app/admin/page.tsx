@@ -886,45 +886,54 @@ function NeshanConfig() {
   )
 }
 
-// فاز ۲۵۰ — اسکرپِ وکلای ملکیِ بنیاد وکلا برای دایرکتوریِ متخصصان (دستهٔ «حقوقی»).
-function BonyadLawyersConfig() {
-  const [count, setCount] = useState<number | null>(null)
-  const [busy, setBusy] = useState<'' | 'scrape' | 'debug'>('')
-  const [msg, setMsg] = useState<React.ReactNode>(null)
-  useEffect(() => { fetch('/api/admin/bonyad-lawyers').then(r => r.ok ? r.json() : null).then(d => { if (d) setCount(d.count ?? 0) }) }, [])
-  const run = async (action: 'scrape' | 'debug') => {
-    setBusy(action); setMsg(null)
-    try {
-      const r = await fetch('/api/admin/bonyad-lawyers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) })
-      const d = await r.json()
-      if (action === 'debug') {
-        setMsg(d.ok
-          ? `✓ اتصال سالم — ${Number(d.count).toLocaleString('fa-IR')} کارت در صفحهٔ نمونه. نمونه: ${(d.sample || []).map((s: any) => s.name).join('، ')}`
-          : `✗ ${d.note || 'ناموفق'} (HTTP ${d.status})`)
-      } else {
-        if (d.ok) {
-          setCount(prev => (prev || 0))
-          const cities = Object.entries(d.byCity || {}).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5).map(([c, n]: any) => `${c} (${Number(n).toLocaleString('fa-IR')})`).join('، ')
-          setMsg(`✓ ${Number(d.found).toLocaleString('fa-IR')} وکیلِ ملکی — نو: ${Number(d.added).toLocaleString('fa-IR')}، به‌روز: ${Number(d.updated).toLocaleString('fa-IR')} (${Number(d.pages).toLocaleString('fa-IR')} صفحه). شهرها: ${cities}`)
-          fetch('/api/admin/bonyad-lawyers').then(r => r.ok ? r.json() : null).then(x => { if (x) setCount(x.count ?? 0) })
-        } else setMsg(`✗ ${d.note || 'اسکرپ ناموفق'}`)
-      }
-    } catch { setMsg('✗ خطا در اجرا') } finally { setBusy('') }
+// فاز ۳۰۴ — ایمپورتِ «کارشناسِ رسمی + وکیل» از دادهٔ کانون (جایگزینِ اسکرپِ قدیمیِ بنیاد وکلا).
+// دادهٔ همراهِ پروژه (۴۳۵ کارشناس + ۲۳۴ وکیل) با یک کلیک به دایرکتوری می‌رود + مختصاتِ نکسا‌مپ.
+function LegalImportConfig() {
+  const [st, setSt] = useState<{ running: boolean; log: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const poll = () => fetch('/api/admin/legal-import').then(r => r.ok ? r.json() : null).then(d => { if (d) setSt(d) })
+  useEffect(() => { poll(); const t = setInterval(poll, 3000); return () => clearInterval(t) }, [])
+  const [upMsg, setUpMsg] = useState('')
+  const action = async (a: 'remove-bonyad' | 'delete-saz-tehran') => {
+    if (!confirm('مطمئنی؟ این عمل برگشت‌ناپذیر است.')) return
+    setBusy(true)
+    try { await fetch('/api/admin/legal-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: a }) }); await poll() } finally { setBusy(false) }
   }
+  const upload = async (files: FileList | null) => {
+    if (!files || !files.length) return
+    setBusy(true); setUpMsg('')
+    try {
+      for (const f of Array.from(files)) {
+        setUpMsg(`در حال بارگذاریِ «${f.name}»…`)
+        const text = await f.text()
+        const r = await fetch('/api/admin/legal-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileContent: text }) })
+        const d = await r.json().catch(() => ({}))
+        if (!d.ok) { setUpMsg(`✗ «${f.name}»: ${d.note || 'ناموفق'}`); break }
+        setUpMsg(`✓ «${f.name}» ارسال شد — ایمپورت در پس‌زمینه شروع شد.`)
+        // صبر تا پایانِ این فایل، بعد فایلِ بعدی (قفلِ سرور هم‌زمانی را نمی‌پذیرد).
+        for (let i = 0; i < 600; i++) { await new Promise(res => setTimeout(res, 2000)); const s = await fetch('/api/admin/legal-import').then(x => x.ok ? x.json() : null).catch(() => null); setSt(s); if (s && !s.running) break }
+      }
+    } finally { setBusy(false); poll() }
+  }
+  const on = busy || st?.running
   return (
     <Card style={{ marginBottom: 14 }}>
-      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>⚖️ وکلای حقوقیِ ملکی (بنیاد وکلا)</div>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>⚖️ ایمپورتِ کارشناسِ رسمی و وکیل (آپلودِ فایل)</div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>
-        وکلای <b>تخصص‌های ملکی</b> (ملکی و املاک، ثبت اسناد، قرارداد و تعهدات، ارث و وصیت) از bonyadvokala.com اسکرپ و در
-        دستهٔ «حقوقی» دایرکتوری نمایش داده می‌شوند؛ دکمهٔ «مشاهده» به پروفایلِ همان وکیل در منبع می‌رود.
-        اسکرپِ مجدد، همان‌ها را <b>به‌روز می‌کند</b> (نه تکراری). «تستِ اتصال» یک صفحه می‌گیرد و نمونه را نشان می‌دهد — سند، نه ادعا.
-        {count !== null && <> در حال حاضر <b style={{ color: '#5fd98a' }}>{count.toLocaleString('fa-IR')}</b> وکیل در دایرکتوری.</>}
+        فایلِ JSONِ کانون را اینجا بارگذاری کن (یکی یا هر دو با هم). سیستم خودش از روی <code>section</code> تشخیص می‌دهد
+        «کارشناسِ رسمی» است یا «وکیل»، به دستهٔ درست در دایرکتوری اضافه می‌کند، و آدرس/استان/شهر را با <b>نکسا‌مپ</b>
+        روی نقشه می‌نشاند (وکلا دقیق، کارشناس‌ها روی مرکزِ شهر). دوباره‌بارگذاری <b>به‌روز می‌کند</b>، تکراری نمی‌سازد. در پس‌زمینه اجرا می‌شود.
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <GoldButton onClick={() => run('scrape')} disabled={!!busy}>{busy === 'scrape' ? 'در حال اسکرپ…' : '⬇️ اسکرپِ وکلای ملکی'}</GoldButton>
-        <GoldButton onClick={() => run('debug')} disabled={!!busy}>{busy === 'debug' ? 'در حال تست…' : '🔌 تستِ اتصال'}</GoldButton>
+      <label style={{ display: 'inline-block' }}>
+        <input type="file" accept=".json,application/json" multiple disabled={!!on} onChange={e => { upload(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+        <span style={{ display: 'inline-block', cursor: on ? 'not-allowed' : 'pointer', opacity: on ? 0.5 : 1, background: 'var(--gold)', color: '#241a06', fontWeight: 800, borderRadius: 11, padding: '9px 16px', fontSize: 13 }}>{on ? '⏳ در حال اجرا…' : '📤 بارگذاریِ فایلِ JSON'}</span>
+      </label>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+        <OutlineButton onClick={() => action('remove-bonyad')} disabled={!!on}>🗑 حذفِ دادهٔ قدیمیِ بنیاد وکلا</OutlineButton>
+        <OutlineButton onClick={() => action('delete-saz-tehran')} disabled={!!on}>🗑 حذفِ دستهٔ «سازندگان تهران»</OutlineButton>
       </div>
-      {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: String(msg).startsWith('✓') ? '#5fd98a' : '#e7674a', lineHeight: 1.8 }}>{msg}</div>}
+      {upMsg && <div style={{ marginTop: 8, fontSize: 12.5, color: upMsg.startsWith('✗') ? '#e7674a' : '#5fd98a' }}>{upMsg}</div>}
+      {st?.log && <pre style={{ marginTop: 10, fontSize: 11.5, color: 'var(--muted)', background: 'var(--bg2)', borderRadius: 10, padding: 10, maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap', direction: 'rtl' }}>{st.log.split('\n').slice(-18).join('\n')}</pre>}
     </Card>
   )
 }
@@ -4751,7 +4760,7 @@ function ConnectionsView() {
       </Card>
       <PodiumConfig />
       <NeshanConfig />
-      <BonyadLawyersConfig />
+      <LegalImportConfig />
       <SmtpConfig />
       <ZarinpalConfig />
       <ImgbbConfig />

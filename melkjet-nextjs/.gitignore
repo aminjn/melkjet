@@ -142,3 +142,5 @@ INSTALLATION_COMPLETE
 # فاز ۲۹۹ — کانفیگ/وضعیتِ فیلترشکنِ داخلیِ v2ray (شاملِ کلیدِ سرورها — هرگز کامیت نشود)
 .v2ray/
 bin/xray
+.legal-import.*
+.legal-upload-*.json
