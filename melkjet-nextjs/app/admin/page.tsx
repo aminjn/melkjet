@@ -904,17 +904,22 @@ function LegalImportConfig() {
   }
   const upload = async (files: FileList | null) => {
     if (!files || !files.length) return
+    const list = Array.from(files)
     setBusy(true); setUpMsg('')
     try {
-      for (const f of Array.from(files)) {
+      for (let fi = 0; fi < list.length; fi++) {
+        const f = list[fi]
         setUpMsg(`در حال بارگذاریِ «${f.name}»…`)
         const text = await f.text()
         const r = await fetch('/api/admin/legal-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileContent: text }) })
         const d = await r.json().catch(() => ({}))
         if (!d.ok) { setUpMsg(`✗ «${f.name}»: ${d.note || 'ناموفق'}`); break }
-        setUpMsg(`✓ «${f.name}» ارسال شد — ایمپورت در پس‌زمینه شروع شد.`)
-        // صبر تا پایانِ این فایل، بعد فایلِ بعدی (قفلِ سرور هم‌زمانی را نمی‌پذیرد).
-        for (let i = 0; i < 600; i++) { await new Promise(res => setTimeout(res, 2000)); const s = await fetch('/api/admin/legal-import').then(x => x.ok ? x.json() : null).catch(() => null); setSt(s); if (s && !s.running) break }
+        setUpMsg(`✓ «${f.name}» ارسال شد — آیتم‌ها ظرفِ چند ثانیه در دایرکتوری می‌آیند؛ موقعیتِ نقشه در پس‌زمینه ادامه دارد. پیشرفت را در لاگِ پایین ببین.`)
+        // فقط اگر فایلِ دیگری در صف است صبر کن (قفلِ سرور هم‌زمانی را نمی‌پذیرد) — وگرنه
+        // UI را تا پایانِ ژئوکد قفل نکن؛ لاگِ زنده (پولِ هر ۳ث) خودش پیشرفت را نشان می‌دهد.
+        if (fi < list.length - 1) {
+          for (let i = 0; i < 900; i++) { await new Promise(res => setTimeout(res, 2000)); const s = await fetch('/api/admin/legal-import').then(x => x.ok ? x.json() : null).catch(() => null); setSt(s); if (s && !s.running) break }
+        }
       }
     } finally { setBusy(false); poll() }
   }

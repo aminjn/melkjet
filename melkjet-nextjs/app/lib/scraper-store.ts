@@ -908,6 +908,14 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
         if (r.image) exact.image = r.image
         if (r.excerpt) exact.excerpt = r.excerpt
         if (r.phone && !exact.phone) exact.phone = r.phone
+        // دایرکتوری: متای تازه (مثلاً «صلاحیتِ» کامل که قبلاً نصفه ذخیره شده بود) refresh می‌شود،
+        // ولی مختصاتِ __lat/__lng که با setItemCoords نشسته حفظ می‌شود (ژئوکد دوباره لازم نشود).
+        if (source.type === 'directory' && (r as { meta?: Record<string, string> }).meta) {
+          const rm = (r as { meta?: Record<string, string> }).meta!
+          const lat = exact.meta?.['__lat'], lng = exact.meta?.['__lng']
+          exact.meta = { ...rm }
+          if (lat && lng) { exact.meta['__lat'] = lat; exact.meta['__lng'] = lng }
+        }
         exact.scrapedAt = Date.now()
         if (exact.meta?.['__dealStatus']) { delete exact.meta['__dealStatus']; delete exact.meta['__soldAt'] }
         if (exact.status === 'duplicate') { exact.status = 'pending'; exact.moderatedAt = undefined; exact.aiReason = 'اسکرپِ تازهٔ همان آگهی — بازگشت از تکراری برای ممیزی' }
