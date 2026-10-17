@@ -61,9 +61,14 @@ export default async function DirectoryProfilePage({ params }: Props) {
         </nav>
 
         <div style={{ ...card, marginBottom: 16 }}>
-          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text)' }}>{it.title}</div>
-          <div style={{ fontSize: 14, color: 'var(--gold)', fontWeight: 700, marginTop: 4 }}>{role}</div>
-          {it.location && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>📍 {it.location}</div>}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {it.image && <img src={it.image} alt={it.title} loading="lazy" referrerPolicy="no-referrer" style={{ width: 96, height: 96, borderRadius: 14, objectFit: 'cover', border: '1px solid var(--line2)', flexShrink: 0, background: 'var(--bg2)' }} />}
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text)' }}>{it.title}</div>
+              <div style={{ fontSize: 14, color: 'var(--gold)', fontWeight: 700, marginTop: 4 }}>{role}</div>
+              {it.location && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>📍 {it.location}</div>}
+            </div>
+          </div>
           {(it.excerpt || m['صلاحیت']) && <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 2, marginTop: 12, whiteSpace: 'pre-wrap' }}>{m['صلاحیت'] || it.excerpt}</p>}
           <div style={{ marginTop: 14 }}>
             <RevealPhoneDir id={id} phones={phones} />

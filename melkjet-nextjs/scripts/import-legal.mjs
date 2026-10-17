@@ -41,11 +41,11 @@ const loc = (city, prov) => [S(city), S(prov)].filter(Boolean).join('، ')
 function rawExpert(e) {
   // صلاحیت را کامل نگه می‌داریم (قبلاً به ۳۰۰ نویسه بریده می‌شد و متن «نصفه» می‌آمد)؛ فقط سقفِ ایمنی ۲۰۰۰.
   const meta = { 'استان': S(e['استان']), 'شهر': S(e['شهر']), 'پایه': S(e['پایه']), 'رشته': S(e['رشته کارشناسی']), 'شماره پروانه': S(e['شماره پروانه']), 'اعتبار پروانه': S(e['اعتبار']), 'تلفن موسسه': S(e['تلفن موسسه']), 'آدرس': S(e['آدرس']), 'صلاحیت': S(e['صلاحیت های کارشناس']).slice(0, 2000) }
-  return { title: S(e['نام']), owner: S(e['نام']), location: loc(e['شهر'], e['استان']), phone: digits(e['تلفن همراه']) || undefined, url: S(e['لینک پروفایل']) || undefined, excerpt: [S(e['پایه']), S(e['رشته کارشناسی']) && `رشتهٔ ${S(e['رشته کارشناسی'])}`, S(e['صلاحیت های کارشناس']).slice(0, 140)].filter(Boolean).join(' · '), tags: [S(e['رشته کارشناسی'])].filter(Boolean), meta }
+  return { title: S(e['نام']), owner: S(e['نام']), location: loc(e['شهر'], e['استان']), phone: digits(e['تلفن همراه']) || undefined, url: S(e['لینک پروفایل']) || undefined, image: S(e['عکس']) || undefined, excerpt: [S(e['پایه']), S(e['رشته کارشناسی']) && `رشتهٔ ${S(e['رشته کارشناسی'])}`, S(e['صلاحیت های کارشناس']).slice(0, 140)].filter(Boolean).join(' · '), tags: [S(e['رشته کارشناسی'])].filter(Boolean), meta }
 }
 function rawLawyer(l) {
   const meta = { 'استان': S(l['استان']), 'شهر': S(l['شهر']), 'پایه': S(l['پایه']), 'شماره پروانه': S(l['شماره پروانه']), 'اعتبار پروانه': S(l['اعتبار']), 'تلفن موسسه': S(l['تلفن موسسه']), 'آدرس': S(l['آدرس']) }
-  return { title: S(l['نام']), owner: S(l['نام']), location: loc(l['شهر'], l['استان']), phone: digits(l['تلفن همراه']) || undefined, url: S(l['لینک پروفایل']) || undefined, excerpt: [S(l['پایه']) || 'وکیل دادگستری', loc(l['شهر'], l['استان'])].filter(Boolean).join(' · '), tags: [S(l['پایه'])].filter(Boolean), meta }
+  return { title: S(l['نام']), owner: S(l['نام']), location: loc(l['شهر'], l['استان']), phone: digits(l['تلفن همراه']) || undefined, url: S(l['لینک پروفایل']) || undefined, image: S(l['عکس']) || undefined, excerpt: [S(l['پایه']) || 'وکیل دادگستری', loc(l['شهر'], l['استان'])].filter(Boolean).join(' · '), tags: [S(l['پایه'])].filter(Boolean), meta }
 }
 
 async function importFile(path) {
