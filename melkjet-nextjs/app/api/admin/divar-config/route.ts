@@ -5,16 +5,20 @@ import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
 export async function GET() {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const url = getAdminData().divar?.proxyUrl || ''
-  return NextResponse.json({ configured: !!url, proxyUrl: url })
+  const d = (getAdminData().divar || {}) as { proxyUrl?: string; direct?: boolean }
+  return NextResponse.json({ configured: !!d.proxyUrl, proxyUrl: d.proxyUrl || '', direct: d.direct === true })
 }
 
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const { proxyUrl } = await req.json()
+  const body = await req.json().catch(() => ({} as Record<string, unknown>))
   const data = getAdminData()
-  data.divar = { proxyUrl: proxyUrl ? String(proxyUrl).trim() : '' }
+  const cur = (data.divar || {}) as Record<string, unknown>
+  // فیلدهای دیگرِ divar (proxyPool…) حفظ می‌شوند؛ فقط آنچه فرستاده شده عوض می‌شود.
+  if ('proxyUrl' in body) cur.proxyUrl = body.proxyUrl ? String(body.proxyUrl).trim() : ''
+  if ('direct' in body) cur.direct = body.direct === true
+  data.divar = cur
   saveAdminData(data)
   return NextResponse.json({ ok: true })
 }

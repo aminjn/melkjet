@@ -17,16 +17,18 @@ import { getAdminData } from './admin-store'
 // مثال (.env.production.local):
 //   DIVAR_PROXIES=http://127.0.0.1:1080,http://user:pass@94.x.x.x:8080,http://95.x.x.x:3128
 
+// فاز ۳۰۵ — «دیوار باید بدونِ پروکسی برود» (خواستهٔ صریحِ مالک): توگلِ divar.direct هر پروکسی را
+// کنار می‌گذارد و درخواست مستقیم می‌رود. (پروکسیِ خراب/منقضیِ سرور علتِ «به دیوار نرسید» بود.)
+export function divarDirect(): boolean {
+  return (getAdminData().divar as { direct?: boolean } | undefined)?.direct === true
+}
+
 function rawProxyConfig(): string {
+  if (divarDirect()) return ''   // مستقیم — هیچ پروکسی‌ای، حتی اگر پیکربندی شده باشد
   const d = getAdminData().divar as (Record<string, unknown> | undefined)
-  return String(
-    process.env.DIVAR_PROXIES
-    || (d?.proxyPool as string | undefined)
-    || d?.proxyUrl
-    || process.env.HTTPS_PROXY || process.env.https_proxy
-    || process.env.HTTP_PROXY || process.env.http_proxy
-    || '',
-  )
+  // فقط پروکسیِ «مخصوصِ دیوار»؛ دیگر به HTTPS_PROXY/HTTP_PROXYِ عمومی (مالِ گیت‌هاب/سرویس‌های دیگر)
+  // سقوط نمی‌کند — وگرنه با پاک‌کردنِ فیلدِ دیوار، باز هم ناخواسته از پروکسیِ عمومی می‌رفت.
+  return String(process.env.DIVAR_PROXIES || (d?.proxyPool as string | undefined) || d?.proxyUrl || '')
 }
 
 /** فهرستِ پروکسی‌های معتبرِ پیکربندی‌شده (بدونِ تکرار). */

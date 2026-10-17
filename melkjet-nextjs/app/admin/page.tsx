@@ -1228,27 +1228,55 @@ function ImgbbConfig() {
 function DivarProxyConfig() {
   const [url, setUrl] = useState('')
   const [saved, setSaved] = useState('')
+  const [direct, setDirect] = useState(false)
   const [msg, setMsg] = useState('')
   const [open, setOpen] = useState(false)
-  useEffect(() => { fetch('/api/admin/divar-config').then(r => r.ok ? r.json() : null).then(d => d && setSaved(d.proxyUrl || '')) }, [])
-  const save = async () => {
+  const [test, setTest] = useState<any>(null)
+  const [testing, setTesting] = useState(false)
+  useEffect(() => { fetch('/api/admin/divar-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setSaved(d.proxyUrl || ''); setDirect(!!d.direct) } }) }, [])
+  const save = async (patch: Record<string, unknown>) => {
     setMsg('')
-    const r = await fetch('/api/admin/divar-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxyUrl: url }) })
-    if (r.ok) { setMsg('✓ ذخیره شد'); setSaved(url) } else setMsg('خطا')
+    const r = await fetch('/api/admin/divar-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+    if (r.ok) { setMsg('✓ ذخیره شد'); if ('proxyUrl' in patch) setSaved(String(patch.proxyUrl || '')) } else setMsg('خطا')
+  }
+  const toggleDirect = async () => { const v = !direct; setDirect(v); await save({ direct: v }) }
+  const runTest = async () => {
+    setTesting(true); setTest(null)
+    try { const r = await fetch('/api/admin/divar-test'); setTest(await r.json()) } catch { setTest({ verdict: 'خطا در اجرای تست' }) } finally { setTesting(false) }
   }
   return (
     <Card style={{ marginBottom: 14 }}>
       <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-        <div style={{ fontWeight: 700, fontSize: 14 }}>پروکسی دیوار {saved ? <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده</span> : <span style={{ color: '#e7a14a', fontSize: 12 }}>● تنظیم نشده</span>}</div>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>اتصال به دیوار {direct ? <span style={{ color: '#5fd98a', fontSize: 12 }}>● مستقیم (بدونِ پروکسی)</span> : saved ? <span style={{ color: '#5fd98a', fontSize: 12 }}>● از پروکسی</span> : <span style={{ color: '#e7a14a', fontSize: 12 }}>● تنظیم نشده</span>}</div>
         <span style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
       </div>
       {open && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>چون دیوار فقط از طریق پروکسی در دسترس است، آدرس پروکسی سرور را اینجا بگذار (مثلاً <span style={{ direction: 'ltr', display: 'inline-block' }}>http://127.0.0.1:1080</span>). برای پیداکردنش روی سرور بزن: <span style={{ direction: 'ltr', display: 'inline-block' }}>proxy-on; env | grep -i proxy</span></div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input value={url} onChange={e => setUrl(e.target.value)} placeholder={saved || 'http://host:port'} style={{ flex: 1, minWidth: 220, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
-            <GoldButton onClick={save}>ذخیره</GoldButton>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: 12, marginBottom: 12 }}>
+            <input type="checkbox" checked={direct} onChange={toggleDirect} style={{ marginTop: 3, width: 18, height: 18 }} />
+            <span>
+              <b style={{ fontSize: 13 }}>اتصالِ مستقیم به دیوار (بدونِ پروکسی)</b>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.7 }}>اگر سرور مستقیم به دیوار دسترسی دارد، این را روشن کن — همهٔ درخواست‌ها بدونِ پروکسی می‌روند و به تونل/فیلترشکن وابسته نیستند. (علتِ «به دیوار نرسید» معمولاً خاموش/منقضی‌بودنِ همان پروکسی است.)</div>
+            </span>
+          </label>
+          {!direct && <>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>آدرسِ پروکسیِ سرور (مثلاً <span style={{ direction: 'ltr', display: 'inline-block' }}>http://127.0.0.1:1080</span>). برای حالتِ مستقیم، تیکِ بالا را بزن.</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input value={url} onChange={e => setUrl(e.target.value)} placeholder={saved || 'http://host:port'} style={{ flex: 1, minWidth: 220, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+              <GoldButton onClick={() => save({ proxyUrl: url })}>ذخیره</GoldButton>
+            </div>
+          </>}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            <OutlineButton onClick={runTest} disabled={testing}>{testing ? '⏳ در حال تست…' : '🔌 تستِ زندهٔ اتصال به دیوار'}</OutlineButton>
           </div>
+          {test && (
+            <div style={{ marginTop: 10, fontSize: 12, background: 'var(--bg2)', borderRadius: 10, padding: 12, lineHeight: 1.9 }}>
+              <div style={{ fontWeight: 700, color: test.postsFound > 0 ? '#5fd98a' : '#e7674a' }}>{test.verdict || (test.ok ? 'وصل شد' : 'ناموفق')}</div>
+              {test.postsFound != null && <div>آگهیِ خوانده‌شده: <b>{Number(test.postsFound).toLocaleString('fa-IR')}</b>{test.brandName ? ` · ${test.brandName}` : ''}</div>}
+              <div style={{ color: 'var(--muted)' }}>منبعِ پروکسی: {test.proxySource} · {test.proxiesConfigured?.length ? test.proxiesConfigured.join('، ') : 'مستقیم'}{test.ms != null ? ` · ${Number(test.ms).toLocaleString('fa-IR')}ms` : ''}</div>
+              {test.error && <div style={{ color: '#e7674a', direction: 'ltr', textAlign: 'left' }}>{test.error}</div>}
+            </div>
+          )}
           {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
         </div>
       )}

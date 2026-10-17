@@ -48,6 +48,8 @@ export interface AdminData {
   }
   divar?: {
     proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server
+    proxyPool?: string   // چند پروکسیِ جداشده با کاما/خط (استخرِ چرخشی) — اختیاری
+    direct?: boolean     // فاز ۳۰۵ — اتصالِ مستقیم به دیوار بدونِ هیچ پروکسی (خواستهٔ مالک)
   }
   // فاز ۳۰۰ — رباتِ پیام‌رسانِ بله (داخلی، سازگار با تلگرام). توکن از @botfatherِ بله.
   bale?: {

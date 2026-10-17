@@ -2,7 +2,7 @@ import { listAccounts } from './account-store'
 import { getDivar } from './advisor-divar-store'
 import { getProfile } from './profile-store'
 import { fetchDivarProfileTokens, divarProfileSlug } from './divar-post'
-import { getAdminData } from './admin-store'
+import { pickDivarProxy } from './divar-proxy-pool'
 import { proxiedRequest } from './proxy-fetch'
 import { urlTypeForRole } from './provider-public'
 
@@ -44,7 +44,8 @@ export function ownAdvisorClusters(minAdvisors = 1): OwnCluster[] {
 }
 
 function proxy(): string | undefined {
-  return getAdminData().divar?.proxyUrl || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || undefined  // فاز ۲۶۸ — خالی = مستقیم (دیوار الان مستقیم وصل می‌شود)
+  // فاز ۳۰۵ — از استخرِ واحدِ دیوار می‌خواند تا توگلِ «مستقیم» و پیکربندیِ پروکسی یک‌جا اعمال شود.
+  return pickDivarProxy()
 }
 
 // شمارهٔ یک آگهی را (best-effort، گِیت‌شده) از دیوار می‌گیرد.
