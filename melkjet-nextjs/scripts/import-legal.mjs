@@ -9,7 +9,7 @@ if (!process.env.DATABASE_URL) {
     try { for (const line of readFileSync(f, 'utf8').split('\n')) { const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/); if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '') } } catch {}
   }
 }
-const { insertItems, listItems, deleteItems, setModerationBatch } = await import('../app/lib/scraper-store.ts')
+const { insertItems, listItems, deleteItems, setModerationBatch, removeCategory } = await import('../app/lib/scraper-store.ts')
 const { geoGeocode, geoApiEnabled } = await import('../app/lib/geo-api.ts')
 
 const FA = /[۰-۹]/g
@@ -52,7 +52,9 @@ async function importFile(path) {
   const items = (doc.groups || []).flatMap(g => g.items || [])
   const section = S(doc.section)
   const isLawyer = /وکیل/.test(section) || !/کارشناس/.test(section) && (doc.groups || []).some(g => /lawyer/.test(S(g.source)))
-  const category = isLawyer ? 'دفاتر حقوقی و وکلا' : 'کارشناسان رسمی'
+  // کلیدِ کوتاهِ دستهٔ دایرکتوری (نه برچسبِ کامل) — وگرنه دستهٔ تکراری ساخته می‌شود و شمارش نمی‌خورد.
+  // 'کارشناس' → «کارشناسان رسمی» · 'حقوقی' → «دفاتر حقوقی و وکلا» (نگاشت در app/directory CATS).
+  const category = isLawyer ? 'حقوقی' : 'کارشناس'
   const mapper = isLawyer ? rawLawyer : rawExpert
   const srcId = isLawyer ? 'legal-lawyers' : 'legal-experts'
   const srcName = isLawyer ? 'وکلای دادگستری (کانون)' : 'کارشناسانِ رسمی (کانون)'
@@ -72,14 +74,24 @@ async function importFile(path) {
   console.log(`✅ «${category}»: added=${res.added} updated=${res.updated} dup=${res.dup} · ژئوکدشده=${g}/${raw.length}`)
 }
 
+if (args.includes('--reset')) {
+  // پاک‌سازیِ ایمپورتِ قبلی (دستهٔ اشتباه) تا دوباره با کلیدِ درست وارد شود.
+  const v = (await listItems('directory')).filter(i => i.sourceId === 'legal-experts' || i.sourceId === 'legal-lawyers')
+  if (v.length) { await deleteItems(v.map(i => i.id)); console.log(`🗑 ${v.length} آیتمِ ایمپورتِ قبلی حذف شد.`) } else console.log('ایمپورتِ قبلی: چیزی نبود.')
+  await removeCategory('کارشناسان رسمی'); await removeCategory('دفاتر حقوقی و وکلا')
+  console.log('🗑 دسته‌های برچسب‌کاملِ اشتباه از فهرست پاک شدند.')
+}
 if (FILE) { await importFile(FILE) }
+else if (args.includes('--reset')) { /* فقط ریست */ }
 else if (args.includes('--remove-bonyad')) {
   const v = (await listItems('directory')).filter(i => i.sourceName === BONYAD)
   if (v.length) { await deleteItems(v.map(i => i.id)); console.log(`🗑 ${v.length} آیتمِ «بنیاد وکلا» حذف شد.`) } else console.log('بنیاد وکلا: چیزی نبود.')
 }
 else if (delCat) {
   const v = (await listItems('directory')).filter(i => S(i.category) === delCat)
-  if (v.length) { await deleteItems(v.map(i => i.id)); console.log(`🗑 دستهٔ «${delCat}»: ${v.length} آیتم حذف شد.`) } else console.log(`دستهٔ «${delCat}»: آیتمی نبود.`)
+  if (v.length) { await deleteItems(v.map(i => i.id)); console.log(`🗑 دستهٔ «${delCat}»: ${v.length} آیتم حذف شد.`) } else console.log(`دستهٔ «${delCat}»: آیتمی نداشت.`)
+  await removeCategory(delCat)   // خودِ «دسته» را هم از فهرست پاک کن (حتی اگر بی‌آیتم بود)
+  console.log(`🗑 دستهٔ «${delCat}» از فهرستِ دسته‌ها برداشته شد.`)
 }
 else {
   const dir = await listItems('directory'); const byCat = {}

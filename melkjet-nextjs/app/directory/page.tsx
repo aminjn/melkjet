@@ -49,7 +49,10 @@ function toProfessional(it: ContentItem) {
     promoKind: (it as any).promoKind as (string | undefined),
     badges: ((it as any).badges || []) as { id: string; label: string; icon: string; desc?: string }[],
     avatarGradient: gradientFor(it.title, 'avatar'),
-    url: it.url && /bonyadvokala\.com\/lawyers\//.test(it.url) ? `/lawyers/${it.url.match(/\/lawyers\/([^/?#]+)/)?.[1] || ''}` : it.url,
+    // فاز ۳۰۴ — کارشناس/وکیلِ کانون (hub.23055.ir) → پروفایلِ داخلیِ ملک‌جت، نه سایتِ منبع.
+    url: it.url && /bonyadvokala\.com\/lawyers\//.test(it.url) ? `/lawyers/${it.url.match(/\/lawyers\/([^/?#]+)/)?.[1] || ''}`
+      : it.url && /hub\.23055\.ir/.test(it.url) ? `/directory/${encodeURIComponent(it.id)}`
+      : it.url,
     hasPhone: it.hasPhone,
     image: it.image,
     stats,

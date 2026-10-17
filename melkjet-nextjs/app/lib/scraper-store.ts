@@ -537,6 +537,17 @@ export async function addCategory(name: string): Promise<string[]> {
   return categoriesOf(await load())
 }
 
+// فاز ۳۰۴ — حذفِ یک «دستهٔ» ذخیره‌شده (نه آیتم‌ها). دسته‌ای که آیتم ندارد ولی در فهرست مانده
+// (مثلِ «سازندگان تهران»). اگر دسته همچنان از آیتمی مشتق شود، در خواندنِ بعدی برمی‌گردد (پس اول آیتم‌ها).
+export async function removeCategory(name: string): Promise<string[]> {
+  const n = String(name || '').trim()
+  if (n) await mutateMeta(m => {
+    const cats = (m.categories || DEFAULT_CATEGORIES.slice()).filter(c => c !== n)
+    m.categories = cats
+  })
+  return categoriesOf(await load())
+}
+
 export async function addSource(input: Omit<Source, 'id' | 'lastRun' | 'lastCount' | 'status'>): Promise<Source> {
   return mutateMeta(m => {
     const src: Source = { ...input, id: id(), lastRun: null, lastCount: 0, status: 'idle' }
