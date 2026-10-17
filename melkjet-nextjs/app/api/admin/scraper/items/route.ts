@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listItems, setItemStatus, updateItem, deleteItem, deleteItems, addItemManual, getItemById, SourceType, ItemStatus, EditableItem } from '@/app/lib/scraper-store'
+import { listItems, setItemStatus, setModerationBatch, updateItem, deleteItem, deleteItems, addItemManual, getItemById, SourceType, ItemStatus, EditableItem } from '@/app/lib/scraper-store'
 import { clearEnrichment } from '@/app/lib/enrich-store'
 import { logAudit } from '@/app/lib/audit-store'
 import { teachFromAdmin, displayReason } from '@/app/lib/moderation'
@@ -104,6 +104,29 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json()
+  // فاز ۳۰۳ک — حکمِ گروهی در «یک» درخواست (نوشتنِ تکه‌تکهٔ سرور) به‌جای N درخواستِ تکیِ موازیِ کلاینت
+  // که هرکدام قفلِ scraper_meta می‌گرفتند و زیرِ بار ۲۲۵ از ۳۰۰ تایم‌اوت می‌خورد («حکم ثبت نشد»).
+  if (Array.isArray(b.ids) && b.status && ['pending', 'approved', 'duplicate', 'rejected'].includes(b.status)) {
+    const status = b.status as ItemStatus
+    const ids = [...new Set((b.ids as unknown[]).filter((x): x is string => typeof x === 'string'))].slice(0, 5000)
+    if (!ids.length) return NextResponse.json({ ok: true, updated: 0 })
+    const byId = new Map((await listItems('listing')).map(i => [i.id, i]))
+    const toNotify: any[] = []
+    if (status === 'approved' || status === 'rejected') {
+      for (const id of ids) {
+        const prev = byId.get(id)
+        if (prev && prev.type === 'listing' && prev.status !== status) {
+          try { teachFromAdmin(prev, status, prev.status) } catch { /* یادگیری اختیاری */ }
+          if (prev.sourceId === 'user') toNotify.push(prev)
+        }
+      }
+    }
+    // نوشتنِ تکه‌تکه (setModerationBatch خودش ۸۰تایی می‌نویسد)؛ آلارمِ انبوهِ مشترکان خاموش.
+    await setModerationBatch(ids.map(id => ({ id, status, reason: 'حکمِ دستیِ ادمین', score: status === 'approved' ? 100 : status === 'rejected' ? 0 : 50 })), { notifyNew: false })
+    logAudit(await actor(), `تغییر وضعیتِ گروهی به ${status}`, `${ids.length} مورد`)
+    for (const prev of toNotify) import('@/app/lib/listing-approve-notify').then(m => m.notifyListingDecision(prev, status as 'approved' | 'rejected', (prev as any).status)).catch(() => {})
+    return NextResponse.json({ ok: true, updated: ids.length })
+  }
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   if (b.patch && typeof b.patch === 'object') {
     const it = await updateItem(b.id, b.patch as EditableItem)

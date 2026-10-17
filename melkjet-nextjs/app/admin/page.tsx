@@ -480,10 +480,9 @@ function ListingsView() {
   const bulkStatus = async (status: string) => {
     if (!sel.size) return
     const ids = [...sel]; setItems(items.map(i => sel.has(i.id) ? { ...i, status } : i)); setSel(new Set())
-    // فاز ۱۵۶ (B4): نتیجهٔ ۲۰ درخواست دیگر دور ریخته نمی‌شود — شکست‌ها شمرده و لیست از سرور بازخوانی می‌شود
-    const rs = await Promise.all(ids.map(id => fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }).catch(() => null)))
-    const failed = rs.filter(r => !r || !r.ok).length
-    if (failed) alert(`${failed} از ${ids.length} حکم ثبت نشد — دوباره تلاش کنید`)
+    // فاز ۳۰۳ک — «یک» درخواستِ گروهی (سرور تکه‌تکه می‌نویسد) به‌جای N درخواستِ موازی که قفل را خفه می‌کرد.
+    const r = await fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, status }) }).catch(() => null)
+    if (!r || !r.ok) alert('ثبتِ گروهی ناموفق بود — دوباره تلاش کنید')
     await load()
   }
   const bulkFeature = async (featured: boolean) => {
