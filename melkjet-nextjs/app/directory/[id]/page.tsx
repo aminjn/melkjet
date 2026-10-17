@@ -6,8 +6,11 @@ import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import NeshanMap from '@/app/components/NeshanMap'
 import ProviderReviews from '@/app/components/ProviderReviews'
+import RevealPhoneDir from './RevealPhoneDir'
 import { listReviews } from '@/app/lib/reviews-store'
 import { getItemById } from '@/app/lib/scraper-store'
+import { getSiteStats } from '@/app/lib/site-stats-store'
+import { sealPhone, phoneMask } from '@/app/lib/phone-token'
 
 export const revalidate = 600
 export function generateStaticParams() { return [] }
@@ -35,7 +38,11 @@ export default async function DirectoryProfilePage({ params }: Props) {
   const role = CAT_FA[it.category || ''] || it.category || 'متخصص'
   const lat = Number(m['__lat']), lng = Number(m['__lng'])
   const hasMap = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) > 0.1
-  const phones = [it.phone, m['تلفن موسسه']].map(s => faDigit(s)).filter(Boolean)
+  // شماره‌ها «سربسته» (توکنِ رمزنگاری‌شده) به مرورگر می‌روند؛ با کلیکِ «نمایشِ شماره» باز می‌شوند.
+  const phones = ([{ raw: it.phone, label: 'همراه' }, { raw: m['تلفن موسسه'], label: 'دفتر' }] as { raw?: string; label: string }[])
+    .filter(x => String(x.raw || '').trim())
+    .map(x => ({ token: sealPhone(String(x.raw)), mask: phoneMask(String(x.raw)), label: x.label }))
+  const reveals = (await getSiteStats('dir:' + id))?.totalP || 0
   const rows: [string, string][] = ([
     ['پایه', m['پایه']], ['رشتهٔ کارشناسی', m['رشته']], ['شمارهٔ پروانه', faDigit(m['شماره پروانه'])],
     ['اعتبارِ پروانه', faDigit(m['اعتبار پروانه'])], ['استان', m['استان']], ['شهر', m['شهر']], ['آدرس', m['آدرس']],
@@ -56,11 +63,11 @@ export default async function DirectoryProfilePage({ params }: Props) {
           <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text)' }}>{it.title}</div>
           <div style={{ fontSize: 14, color: 'var(--gold)', fontWeight: 700, marginTop: 4 }}>{role}</div>
           {it.location && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>📍 {it.location}</div>}
-          {(it.excerpt || m['صلاحیت']) && <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 2, marginTop: 12 }}>{m['صلاحیت'] || it.excerpt}</p>}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
-            {phones.map(p => <a key={p} href={`tel:${p}`} style={{ background: 'var(--gold)', color: '#241a06', fontWeight: 800, borderRadius: 11, padding: '9px 16px', fontSize: 13.5, textDecoration: 'none' }}>☎ {p}</a>)}
-            {it.url && <a href={it.url} target="_blank" rel="noreferrer" style={{ border: '1px solid var(--line2)', color: 'var(--text)', borderRadius: 11, padding: '9px 16px', fontSize: 13, textDecoration: 'none' }}>پروفایل در منبع (کانون) ↗</a>}
+          {(it.excerpt || m['صلاحیت']) && <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 2, marginTop: 12, whiteSpace: 'pre-wrap' }}>{m['صلاحیت'] || it.excerpt}</p>}
+          <div style={{ marginTop: 14 }}>
+            <RevealPhoneDir id={id} phones={phones} />
           </div>
+          {reveals > 0 && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>👁 شمارهٔ این متخصص {faDigit(String(reveals))} بار نمایش داده شده</div>}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: hasMap ? '1fr 1fr' : '1fr', gap: 16 }} className="mjs-dir2">

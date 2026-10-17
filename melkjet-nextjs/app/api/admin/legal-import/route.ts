@@ -3,6 +3,8 @@ import { getSession } from '@/app/lib/session'
 import { spawn } from 'child_process'
 import { openSync, existsSync, readFileSync, writeFileSync, unlinkSync, statSync } from 'fs'
 import { join } from 'path'
+import { kvGetPrefix, pgEnabled } from '@/app/lib/db'
+import { getItemById } from '@/app/lib/scraper-store'
 
 // فاز ۳۰۴ — ایمپورتِ «کارشناسِ رسمی + وکیل» از پنل (جایگزینِ اسکرپِ قدیمیِ بنیاد وکلا).
 // دادهٔ کانون در scripts/data/ همراهِ پروژه است؛ این API اسکریپتِ import-legal را در
@@ -17,8 +19,22 @@ async function guard() {
 }
 const running = () => { if (!existsSync(LOCK)) return false; try { return Date.now() - Number(readFileSync(LOCK, 'utf8')) < 30 * 60_000 } catch { return true } }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  // میزانِ «نمایشِ شماره»ی متخصصان (کلیدِ dir:{id}) — برای سوپرادمین. فقط وقتی ?stats=1 (نه در پولِ لاگ).
+  if (req.nextUrl.searchParams.get('stats') && pgEnabled()) {
+    try {
+      const rows = await kvGetPrefix<{ totalP?: number }>('sstat:dir:')
+      const ranked = rows.map(r => ({ id: r.key.slice('sstat:dir:'.length), reveals: Number(r.data?.totalP) || 0 }))
+        .filter(x => x.reveals > 0).sort((a, b) => b.reveals - a.reveals).slice(0, 30)
+      const top = await Promise.all(ranked.map(async x => {
+        const it = await getItemById(x.id).catch(() => null)
+        return { id: x.id, reveals: x.reveals, title: it?.title || x.id, location: it?.location || '' }
+      }))
+      const totalReveals = rows.reduce((s, r) => s + (Number(r.data?.totalP) || 0), 0)
+      return NextResponse.json({ top, totalReveals })
+    } catch { return NextResponse.json({ top: [], totalReveals: 0 }) }
+  }
   let log = ''
   try { log = readFileSync(LOG, 'utf8').slice(-4000) } catch {}
   return NextResponse.json({ running: running(), log })

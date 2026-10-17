@@ -889,10 +889,13 @@ function NeshanConfig() {
 // فاز ۳۰۴ — ایمپورتِ «کارشناسِ رسمی + وکیل» از دادهٔ کانون (جایگزینِ اسکرپِ قدیمیِ بنیاد وکلا).
 // دادهٔ همراهِ پروژه (۴۳۵ کارشناس + ۲۳۴ وکیل) با یک کلیک به دایرکتوری می‌رود + مختصاتِ نکسا‌مپ.
 function LegalImportConfig() {
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const [st, setSt] = useState<{ running: boolean; log: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [stats, setStats] = useState<{ top: { id: string; reveals: number; title: string; location: string }[]; totalReveals: number } | null>(null)
   const poll = () => fetch('/api/admin/legal-import').then(r => r.ok ? r.json() : null).then(d => { if (d) setSt(d) })
-  useEffect(() => { poll(); const t = setInterval(poll, 3000); return () => clearInterval(t) }, [])
+  const loadStats = () => fetch('/api/admin/legal-import?stats=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setStats(d) })
+  useEffect(() => { poll(); loadStats(); const t = setInterval(poll, 3000); const t2 = setInterval(loadStats, 30000); return () => { clearInterval(t); clearInterval(t2) } }, [])
   const [upMsg, setUpMsg] = useState('')
   const action = async (a: 'remove-bonyad' | 'delete-saz-tehran' | 'reset') => {
     if (!confirm('مطمئنی؟ این عمل برگشت‌ناپذیر است.')) return
@@ -939,6 +942,23 @@ function LegalImportConfig() {
       </div>
       {upMsg && <div style={{ marginTop: 8, fontSize: 12.5, color: upMsg.startsWith('✗') ? '#e7674a' : '#5fd98a' }}>{upMsg}</div>}
       {st?.log && <pre style={{ marginTop: 10, fontSize: 11.5, color: 'var(--muted)', background: 'var(--bg2)', borderRadius: 10, padding: 10, maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap', direction: 'rtl' }}>{st.log.split('\n').slice(-18).join('\n')}</pre>}
+      {stats && (
+        <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>👁 میزانِ «نمایشِ شماره» — مجموع: {fa(stats.totalReveals)} کلیک</div>
+          {!stats.top.length ? (
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز کسی روی «نمایشِ شماره» کلیک نکرده.</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 6 }}>
+              {stats.top.map((x, i) => (
+                <div key={x.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5, borderBottom: '1px dashed var(--line)', paddingBottom: 5 }}>
+                  <a href={`/directory/${encodeURIComponent(x.id)}`} target="_blank" rel="noreferrer" style={{ color: 'var(--text)', textDecoration: 'none' }}>{fa(i + 1)}. {x.title}{x.location ? <span style={{ color: 'var(--muted)' }}> — {x.location}</span> : null}</a>
+                  <span style={{ color: 'var(--gold)', fontWeight: 800, whiteSpace: 'nowrap' }}>{fa(x.reveals)} کلیک</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   )
 }
