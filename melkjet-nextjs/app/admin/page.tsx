@@ -938,8 +938,9 @@ function LegalImportConfig() {
       </div>
       {st?.running && (
         <div style={{ marginTop: 8 }}>
-          <OutlineButton onClick={() => action('clear-lock')} disabled={busy}>✖️ لغو / آزادسازیِ قفلِ گیرکرده</OutlineButton>
-          <span style={{ fontSize: 11.5, color: 'var(--muted)', marginRight: 8 }}>اگر «در حال اجرا…» بیش از چند دقیقه مانده، اینجا را بزن تا قفل آزاد شود.</span>
+          {/* همیشه کلیک‌پذیر — حتی وقتی upload در حالِ انتظار است (busy) — وگرنه «رو هیچی نمیشه کلیک کرد». */}
+          <OutlineButton onClick={() => action('clear-lock')}>✖️ لغو / آزادسازیِ قفلِ گیرکرده</OutlineButton>
+          <span style={{ fontSize: 11.5, color: 'var(--muted)', marginRight: 8 }}>اگر «در حال اجرا…» بیش از چند دقیقه مانده یا دکمه‌ها قفل شده، اینجا را بزن تا پروسه متوقف و قفل آزاد شود.</span>
         </div>
       )}
       <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.7 }}>

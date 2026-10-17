@@ -17,7 +17,14 @@ async function guard() {
   const s = await getSession()
   return !!s && (s.role === 'super_admin' || (s.staff || []).length > 0)
 }
-const running = () => { if (!existsSync(LOCK)) return false; try { return Date.now() - Number(readFileSync(LOCK, 'utf8')) < 30 * 60_000 } catch { return true } }
+// قفل می‌تواند «عدد (قدیمی)» یا JSON `{at,pid}` (جدید — تا بشود پروسهٔ گیرکرده را کُشت) باشد.
+function lockInfo(): { at: number; pid: number } | null {
+  try {
+    const raw = readFileSync(LOCK, 'utf8')
+    try { const j = JSON.parse(raw); return { at: Number(j.at) || 0, pid: Number(j.pid) || 0 } } catch { return { at: Number(raw) || 0, pid: 0 } }
+  } catch { return null }
+}
+const running = () => { if (!existsSync(LOCK)) return false; const l = lockInfo(); return !!l && Date.now() - l.at < 30 * 60_000 }
 
 export async function GET(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
@@ -44,8 +51,13 @@ export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const body = await req.json().catch(() => ({} as any))
   const action = body.action || (body.fileContent ? 'upload' : 'import')
-  // رفعِ گیر: اگر اجرایی روی قفلِ کهنه مانده (اسکریپت مُرده/هنگ)، کاربر می‌تواند قفل را آزاد کند.
-  if (action === 'clear-lock') { try { unlinkSync(LOCK) } catch {}; return NextResponse.json({ ok: true, cleared: true }) }
+  // رفعِ گیر: پروسهٔ ایمپورتِ گیرکرده را می‌کُشد و قفل را آزاد می‌کند (اسکریپت مُرده/هنگ یا UI چسبیده).
+  if (action === 'clear-lock') {
+    const l = lockInfo()
+    if (l?.pid) { try { process.kill(l.pid, 'SIGKILL') } catch {} }
+    try { unlinkSync(LOCK) } catch {}
+    return NextResponse.json({ ok: true, cleared: true })
+  }
   if (running()) return NextResponse.json({ ok: false, running: true, note: 'یک اجرا در جریان است — صبر کن' })
 
   let flags: string[]
@@ -65,9 +77,10 @@ export async function POST(req: NextRequest) {
   else return NextResponse.json({ ok: false, note: 'عملِ نامعتبر' })
 
   try {
-    writeFileSync(LOCK, String(Date.now()))
+    writeFileSync(LOCK, JSON.stringify({ at: Date.now(), pid: 0 }))
     const out = openSync(LOG, 'w')
     const child = spawn(process.execPath, ['--import', join(ROOT, 'scripts/reos-loader.mjs'), join(ROOT, 'scripts/import-legal.mjs'), ...flags], { cwd: ROOT, env: process.env, stdio: ['ignore', out, out] })
+    try { writeFileSync(LOCK, JSON.stringify({ at: Date.now(), pid: child.pid || 0 })) } catch {}   // pid برای «لغو»
     child.on('exit', () => { try { unlinkSync(LOCK) } catch {} })
     child.on('error', () => { try { unlinkSync(LOCK) } catch {} })
     child.unref()

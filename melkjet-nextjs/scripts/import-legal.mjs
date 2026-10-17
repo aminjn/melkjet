@@ -60,19 +60,32 @@ async function importFile(path) {
   const srcId = isLawyer ? 'legal-lawyers' : 'legal-experts'
   const srcName = isLawyer ? 'وکلای دادگستری (کانون)' : 'کارشناسانِ رسمی (کانون)'
   console.log(`فایل: section=«${section}» → دستهٔ «${category}» · ${items.length} مورد`)
-  const raw = []; let g = 0
+  // بارگذاریِ مجدد = سریع: مختصاتِ قبلاً‌ذخیره‌شده دوباره ژئوکد نمی‌شوند (ژئوکد با throttle ۳۵۰ms بود و
+  // ۴۳۵ مورد ~۲.۵ دقیقه UI را قفل می‌کرد). کلید = لینکِ پروفایل (یا نام) → __lat/__lng موجود.
+  const prevCoords = new Map()
+  try {
+    for (const it of (await listItems('directory')).filter(i => i.sourceId === srcId)) {
+      const m = it.meta || {}
+      if (m['__lat'] && m['__lng']) prevCoords.set(String(it.url || it.title || ''), { lat: m['__lat'], lng: m['__lng'] })
+    }
+  } catch {}
+  const raw = []; let g = 0, reused = 0
   for (const x of items) {
     const r = mapper(x); if (!r.title) continue
-    const pt = await geo(r.meta['استان'], r.meta['شهر'], r.meta['آدرس'])
-    if (pt) { r.meta['__lat'] = String(pt.lat); r.meta['__lng'] = String(pt.lng); g++ }
+    const prev = prevCoords.get(String(r.url || r.title || ''))
+    if (prev) { r.meta['__lat'] = prev.lat; r.meta['__lng'] = prev.lng; reused++ }
+    else {
+      const pt = await geo(r.meta['استان'], r.meta['شهر'], r.meta['آدرس'])
+      if (pt) { r.meta['__lat'] = String(pt.lat); r.meta['__lng'] = String(pt.lng); g++ }
+    }
     raw.push(r)
-    if (raw.length % 50 === 0) console.log(`  آماده‌سازی ${raw.length}/${items.length} (ژئوکد ${g})`)
+    if (raw.length % 50 === 0) console.log(`  آماده‌سازی ${raw.length}/${items.length} (ژئوکدِ تازه ${g} · بازاستفاده ${reused})`)
   }
   const source = { id: srcId, name: srcName, url: '', type: 'directory', category, method: 'manual', enabled: true, schedule: 'manual', lastRun: null, lastCount: 0, status: 'idle' }
   const res = await insertItems(source, raw)
   const mine = (await listItems('directory')).filter(i => i.sourceId === srcId && i.status === 'pending')
   if (mine.length) await setModerationBatch(mine.map(i => ({ id: i.id, status: 'approved', reason: 'دایرکتوریِ حرفه‌ای — کانون', score: 90 })), { notifyNew: false })
-  console.log(`✅ «${category}»: added=${res.added} updated=${res.updated} dup=${res.dup} · ژئوکدشده=${g}/${raw.length}`)
+  console.log(`✅ «${category}»: added=${res.added} updated=${res.updated} dup=${res.dup} · ژئوکدِ تازه=${g} · بازاستفاده=${reused} از ${raw.length}`)
 }
 
 if (args.includes('--reset')) {
