@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
     flags = [`--file=${tmp}`]
   } else if (action === 'remove-bonyad') flags = ['--remove-bonyad']
   else if (action === 'delete-saz-tehran') flags = ['--delete-cat=سازندگان تهران']
+  else if (action === 'reset') flags = ['--reset']
   else return NextResponse.json({ ok: false, note: 'عملِ نامعتبر' })
 
   try {

@@ -894,7 +894,7 @@ function LegalImportConfig() {
   const poll = () => fetch('/api/admin/legal-import').then(r => r.ok ? r.json() : null).then(d => { if (d) setSt(d) })
   useEffect(() => { poll(); const t = setInterval(poll, 3000); return () => clearInterval(t) }, [])
   const [upMsg, setUpMsg] = useState('')
-  const action = async (a: 'remove-bonyad' | 'delete-saz-tehran') => {
+  const action = async (a: 'remove-bonyad' | 'delete-saz-tehran' | 'reset') => {
     if (!confirm('مطمئنی؟ این عمل برگشت‌ناپذیر است.')) return
     setBusy(true)
     try { await fetch('/api/admin/legal-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: a }) }); await poll() } finally { setBusy(false) }
@@ -929,8 +929,13 @@ function LegalImportConfig() {
         <span style={{ display: 'inline-block', cursor: on ? 'not-allowed' : 'pointer', opacity: on ? 0.5 : 1, background: 'var(--gold)', color: '#241a06', fontWeight: 800, borderRadius: 11, padding: '9px 16px', fontSize: 13 }}>{on ? '⏳ در حال اجرا…' : '📤 بارگذاریِ فایلِ JSON'}</span>
       </label>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+        <OutlineButton onClick={() => action('reset')} disabled={!!on}>♻️ پاک‌سازیِ ایمپورتِ قبلی (قبل از بارگذاریِ دوباره)</OutlineButton>
         <OutlineButton onClick={() => action('remove-bonyad')} disabled={!!on}>🗑 حذفِ دادهٔ قدیمیِ بنیاد وکلا</OutlineButton>
         <OutlineButton onClick={() => action('delete-saz-tehran')} disabled={!!on}>🗑 حذفِ دستهٔ «سازندگان تهران»</OutlineButton>
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.7 }}>
+        اگر قبلاً ایمپورت کرده‌ای و دسته‌بندی تکراری/بی‌شمار دیدی، اول <b>♻️ پاک‌سازیِ ایمپورتِ قبلی</b> را بزن،
+        بعد فایل‌ها را دوباره بارگذاری کن — این‌بار با دستهٔ درست وارد می‌شوند و کارت‌ها پروفایلِ داخلی می‌گیرند.
       </div>
       {upMsg && <div style={{ marginTop: 8, fontSize: 12.5, color: upMsg.startsWith('✗') ? '#e7674a' : '#5fd98a' }}>{upMsg}</div>}
       {st?.log && <pre style={{ marginTop: 10, fontSize: 11.5, color: 'var(--muted)', background: 'var(--bg2)', borderRadius: 10, padding: 10, maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap', direction: 'rtl' }}>{st.log.split('\n').slice(-18).join('\n')}</pre>}
