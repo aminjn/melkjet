@@ -68,7 +68,7 @@ export default function MaterialsDirectory() {
             {shops.map(s => (
               <Link key={s.slug} href={`/store/${s.slug}`} className="mjd-card" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', transition: 'transform .15s, box-shadow .15s' }}>
                 {/* cover */}
-                <div style={{ height: 92, background: s.cover ? `center/cover no-repeat url(${s.cover})` : 'linear-gradient(120deg,#242b38,#12151c)', position: 'relative' }}>
+                <div style={{ height: 92, background: s.cover ? `center/cover no-repeat url(${s.cover})` : 'var(--cover-fallback)', position: 'relative' }}>
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--surface), transparent 70%)' }} />
                   {s.rating > 0 && <span style={{ position: 'absolute', top: 12, insetInlineEnd: 12, fontSize: 11.5, fontWeight: 800, color: 'var(--gold)', background: 'rgba(10,9,8,0.8)', borderRadius: 999, padding: '4px 10px' }}>★ {fa(s.rating)}</span>}
                 </div>

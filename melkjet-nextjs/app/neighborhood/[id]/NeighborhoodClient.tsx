@@ -140,22 +140,22 @@ export default function NeighborhoodClient({ name }: { name: string }) {
       <Nav />
 
       {/* Hero Banner */}
-      <div style={{ height: '200px', background: 'linear-gradient(135deg, #1a0e04 0%, #2d1a06 35%, #4a2e0a 65%, #6b4510 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 2rem', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 20% 50%, rgba(184,134,11,0.18) 0%, transparent 60%)', pointerEvents: 'none' }} />
+      <div style={{ height: '200px', background: 'var(--nbh-hero)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 2rem', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'var(--nbh-glow)', pointerEvents: 'none' }} />
 
-        <div style={{ fontSize: '0.78rem', color: 'rgba(212,175,55,0.7)', marginBottom: '0.75rem', position: 'relative', zIndex: 1 }}>
-          <Link href="/" style={{ color: 'rgba(212,175,55,0.7)', textDecoration: 'none' }}>خانه</Link>
+        <div style={{ fontSize: '0.78rem', color: 'var(--nbh-crumb)', marginBottom: '0.75rem', position: 'relative', zIndex: 1 }}>
+          <Link href="/" style={{ color: 'var(--nbh-crumb)', textDecoration: 'none' }}>خانه</Link>
           <span style={{ margin: '0 0.4rem', opacity: 0.5 }}>／</span>
-          <Link href="/search" style={{ color: 'rgba(212,175,55,0.7)', textDecoration: 'none' }}>محله‌ها</Link>
+          <Link href="/search" style={{ color: 'var(--nbh-crumb)', textDecoration: 'none' }}>محله‌ها</Link>
           <span style={{ margin: '0 0.4rem', opacity: 0.5 }}>／</span>
           <span style={{ color: 'var(--gold)' }}>{neighborhoodName}</span>
         </div>
 
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#fff', margin: '0 0 0.5rem 0', position: 'relative', zIndex: 1, textShadow: '0 2px 10px rgba(0,0,0,0.55)' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--nbh-h1)', margin: '0 0 0.5rem 0', position: 'relative', zIndex: 1, textShadow: 'var(--nbh-h1-shadow)' }}>
           خرید و فروش ملک در {neighborhoodName}
         </h1>
 
-        <p style={{ fontSize: '0.9rem', color: 'rgba(212,175,55,0.85)', margin: 0, position: 'relative', zIndex: 1, letterSpacing: '0.02em' }}>
+        <p style={{ fontSize: '0.9rem', color: 'var(--nbh-sub)', margin: 0, position: 'relative', zIndex: 1, letterSpacing: '0.02em' }}>
           {stats?.count ? `${toFa(stats.count)} آگهیِ فعال · ` : ''}تحلیل بازار به‌روز · راهنمای خرید هوشمند
         </p>
       </div>

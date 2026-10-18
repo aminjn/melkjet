@@ -52,8 +52,8 @@ export default function StorefrontView({ shop }: { shop: PShop }) {
 
       {/* ── Hero ── */}
       <div style={{ position: 'relative' }}>
-        <div style={{ height: 220, background: shop.cover ? `center/cover no-repeat url(${shop.cover})` : 'linear-gradient(120deg,#1f2937,#0f2340)', position: 'relative' }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,var(--bg) 4%,rgba(0,0,0,0.35) 60%,rgba(0,0,0,0.15))' }} />
+        <div style={{ height: 220, background: shop.cover ? `center/cover no-repeat url(${shop.cover})` : 'var(--cover-fallback)', position: 'relative' }}>
+          <div style={{ position: 'absolute', inset: 0, background: shop.cover ? 'linear-gradient(to top,var(--bg) 4%,rgba(0,0,0,0.35) 60%,rgba(0,0,0,0.15))' : 'linear-gradient(to top,var(--bg) 4%,transparent 60%)' }} />
         </div>
         <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 20px' }}>
           <div className="mjf-hero" style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginTop: -60, position: 'relative', flexWrap: 'wrap' }}>
