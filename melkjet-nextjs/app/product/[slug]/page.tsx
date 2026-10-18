@@ -3,7 +3,7 @@ import { sellersOfCatalog } from '@/app/lib/materials-store'
 import { productIdForSlug, slugForProductId, ensureProductSlug } from '@/app/lib/product-slug-store'
 import ProductPageView from './ProductPageView'
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
+import { redirect, notFound } from 'next/navigation'
 
 export const revalidate = 600
 export function generateStaticParams() { return [] }
@@ -33,9 +33,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params
   const id = await resolveId(slug)
   const product = id ? getProduct(id) : null
-  if (!product || !product.active) {
-    return <div dir="rtl" style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>کالا یافت نشد.</div>
-  }
+  if (!product || !product.active) notFound()  // ۴۰۴ِ واقعی به‌جای soft-404 با وضعیتِ ۲۰۰
   // کنونیکال: اگر با idِ خام آمده و slug داریم/می‌سازیم، به /product/{slug} ریدایرکت کن.
   const canonSlug = (await slugForProductId(id!)) || (await ensureProductSlug(id!, product.name))
   if (canonSlug && slug !== canonSlug) redirect(`/product/${canonSlug}`)

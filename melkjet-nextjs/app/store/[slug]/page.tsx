@@ -1,5 +1,6 @@
 import { publicShop } from '@/app/lib/materials-store'
 import StorefrontView from './StorefrontView'
+import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 
 export const revalidate = 600
@@ -22,13 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function StorefrontPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const shop = await publicShop(slug)
-  if (!shop) {
-    return (
-      <div dir="rtl" style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>
-        فروشگاه یافت نشد.
-      </div>
-    )
-  }
+  if (!shop) notFound()  // ۴۰۴ِ واقعی (نه soft-404 با وضعیتِ ۲۰۰) — وگرنه گوگل صفحهٔ «یافت نشد» را ایندکس می‌کند
   // فاز ۲۵۴ (سئو): Store/LocalBusiness JSON-LD — نام/تصویر/آدرس/امتیاز؛ فیلدهای خالی حذف می‌شوند.
   const url = `https://melkjet.com/store/${slug}`
   const ld: Record<string, unknown> = {

@@ -9,13 +9,15 @@ import { notFound } from 'next/navigation'
 export const revalidate = 600
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params
+  const slug = decodeURIComponent((await params).slug)   // اسلاگِ فارسیِ درصد-کدشده را باز کن (وگرنه pageOf ۴۰۴ می‌دهد)
   const p = pageOf(slug)
-  return { title: p ? `${p.title} | ملک‌جت` : 'ملک‌جت', alternates: { canonical: `https://melkjet.com/page/${slug}` } }
+  if (!p) return { title: 'یافت نشد | ملک‌جت' }
+  const desc = (p.body || '').replace(/[#*>\-]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 155) || p.title
+  return { title: `${p.title} | ملک‌جت`, description: desc, alternates: { canonical: `https://melkjet.com/page/${encodeURIComponent(slug)}` } }
 }
 
 export default async function CustomPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params
+  const slug = decodeURIComponent((await params).slug)
   const page = pageOf(slug)
   if (!page) notFound()
   return (

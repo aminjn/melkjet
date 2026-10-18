@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
-import Nav from '../../components/Nav'
-import Footer from '../../components/Footer'
+import { redirect, notFound } from 'next/navigation'
 import { assembleBuilderProfile } from '../../lib/builder-profile'
 import { isFollowing } from '../../lib/builder-public-store'
 import { getSession } from '../../lib/session'
@@ -39,9 +37,7 @@ export default async function BuilderProfile({ params }: { params: Promise<{ slu
   const { slug } = await params
   const id = await resolveId(slug)
   const profile = id ? assembleBuilderProfile(id) : null
-  if (!profile) {
-    return (<><Nav /><main style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>سازنده پیدا نشد</main><Footer /></>)
-  }
+  if (!profile) notFound()  // ۴۰۴ِ واقعی به‌جای soft-404 با وضعیتِ ۲۰۰
   // کنونیکال: اگر با idِ خام آمده و slug داریم/می‌سازیم، به /builders/{slug} ریدایرکت کن.
   const canonSlug = (await slugForBuilderId(id!)) || (await ensureBuilderSlug(id!, profile.name))
   if (canonSlug && slug !== canonSlug) redirect(`/builders/${canonSlug}`)

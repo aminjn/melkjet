@@ -187,6 +187,20 @@ export async function buildShards(force = false): Promise<Shard[]> {
     } catch {}
   }
 
+  // ── فاز ۳۰۹ی — دایرکتوریِ متخصصان (کارشناسِ رسمی / وکیل / …) — صفحاتِ /directory/{id}.
+  // این‌ها متخصصانِ اسکرپیِ بی‌حساب‌اند و در بخشِ providers (که فقط حساب‌دارها را دارد) نبودند،
+  // پس کلِ دایرکتوریِ حقوقی برای گوگل کشف‌نشدنی بود. canonical همان صفحهٔ /directory/[id] است. ──
+  if (enabled(sections, 'directory')) {
+    try {
+      const { listItems } = await import('./scraper-store')
+      const items = await listItems('directory', { publicOnly: true })
+      const s = items.filter(it => it.id).map(it => ({
+        url: `${BASE}/directory/${encodeURIComponent(it.id)}`, lastModified: iso(it.scrapedAt), priority: 0.5, changeFrequency: 'monthly' as ChangeFreq,
+      }))
+      addSection('directory', 'دایرکتوری', s)
+    } catch {}
+  }
+
   // ── فاز ۲۹۶ — سایت‌های اختصاصیِ اشخاص (melkjet.com/{نام}) — هدف: رتبهٔ جست‌وجوی نام ──
   if (enabled(sections, 'sites')) {
     try {

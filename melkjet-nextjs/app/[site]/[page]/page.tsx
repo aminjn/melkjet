@@ -20,9 +20,14 @@ export async function generateMetadata(
   const want = sanitizeSlug(pageSlug)
   const page = site.pages.find(p => p.slug === want)
   if (!page) return {}
+  // فاز ۳۰۹ی (سئو): canonicalِ خودارجاع تا زیرصفحه‌های سایتِ منتشرشده محتوای تکراری شمرده نشوند.
+  const url = `https://melkjet.com/${encodeURIComponent(site.slug)}/${encodeURIComponent(page.slug)}`
+  const title = `${page.title} | ${site.seo?.title || site.title}`
+  const description = site.seo?.description || undefined
   return {
-    title: `${page.title} | ${site.seo?.title || site.title}`,
-    description: site.seo?.description || undefined,
+    title, description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, type: 'website' },
   }
 }
 
