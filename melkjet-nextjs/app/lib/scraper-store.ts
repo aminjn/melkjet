@@ -575,7 +575,10 @@ export async function deleteSource(sid: string) {
 function buildList(db: DB, type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Item[] {
   let items = type ? db.items.filter(i => i.type === type) : [...db.items]
   if (opts?.category) items = items.filter(i => i.category === opts.category)
-  if (opts?.publicOnly) { const now = Date.now(); items = items.filter(i => i.status !== 'rejected' && i.status !== 'duplicate' && !isExpired(i, now)) }
+  // فاز ۳۰۹م (فیدبک: «پارادوکس — آگهیِ منتظرِ تأیید روی سایت دیده می‌شود»): آگهیِ «منتظر» نباید
+  // عمومی باشد؛ فقط «تأییدشده» عمومی است. (ایمن چون pendingPolicy پیش‌فرض=approve → منتظر گذراست.)
+  // سایرِ نوع‌ها (دایرکتوری/محصول/مقاله) ممیزیِ آگهی ندارند — همان قاعدهٔ «غیرِ ردشده/تکراری».
+  if (opts?.publicOnly) { const now = Date.now(); items = items.filter(i => !isExpired(i, now) && (i.type === 'listing' ? i.status === 'approved' : (i.status !== 'rejected' && i.status !== 'duplicate'))) }
   return items.sort((a, b) => b.scrapedAt - a.scrapedAt)
 }
 
@@ -618,7 +621,7 @@ export async function listingsByLoc(needle: string, limit = 60, offset = 0, type
   try {
     const r = await pgTx(c => c.query(
       `SELECT data, count(*) OVER () AS total FROM listings
-       WHERE type=$1 AND status NOT IN ('rejected','duplicate') AND loc_norm LIKE '%'||$2||'%'
+       WHERE type=$1 AND (($1='listing' AND status='approved') OR ($1<>'listing' AND status NOT IN ('rejected','duplicate'))) AND loc_norm LIKE '%'||$2||'%'
        ORDER BY scraped_at DESC LIMIT $3 OFFSET $4`, [type, needle, limit, offset]))
     const now = Date.now()
     const total = r.rows.length ? Number(r.rows[0].total) || 0 : 0
@@ -651,7 +654,7 @@ export async function candidateListings(limit = 500, type: SourceType = 'listing
       const r = await pgTx(c => c.query(
         `WITH pool AS (
            SELECT data, scraped_at, split_part(coalesce(loc_norm,''), '،', 1) AS city
-           FROM listings WHERE type=$1 AND status NOT IN ('rejected','duplicate')
+           FROM listings WHERE type=$1 AND (($1='listing' AND status='approved') OR ($1<>'listing' AND status NOT IN ('rejected','duplicate')))
          ),
          tot AS (SELECT greatest(count(*), 1)::float AS n FROM pool),
          q AS (
