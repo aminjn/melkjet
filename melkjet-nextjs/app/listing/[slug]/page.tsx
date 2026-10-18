@@ -23,7 +23,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // می‌شود + سئوِ محله‌ای — منطق در listing-detail-data (مشترک با صفحهٔ آگهیِ سایت‌ساز، فاز ۲۹۷د).
   const { title, desc } = await listingSeoText(it)
   // فاز ۲۱۸ (ممیزیِ کاملِ سئو): canonical همیشه «یک» URLِ حقیقی.
-  const url = `https://melkjet.com${listingHref(it.id, it.title, it.location)}`
+  // فاز ۳۰۹ک (باگِ «آگهی‌ها اصلا ایندکس نمی‌شوند»): canonical باید از seoSlugِ «منجمد» ساخته شود —
+  // دقیقاً مثلِ URLِ صفحه (خط ۴۳)، سایت‌مپ و JSON-LD. قبلاً بدونِ seoSlug بود، پس وقتی عنوانِ آگهی
+  // عوض می‌شد canonical به URLِ قدیمی اشاره می‌کرد که خودش ۳۰۸ ریدایرکت می‌شد → گوگل کلِ آگهی‌ها را
+  // «Page with redirect» می‌دید و ایندکس نمی‌کرد. (دایرکتوری چون id ثابت دارد سالم ایندکس می‌شد.)
+  const url = `https://melkjet.com${listingHref(it.id, it.title, it.location, (it as { seoSlug?: string }).seoSlug)}`
   return {
     title: `${title} | ملک‌جت`,
     description: desc,
