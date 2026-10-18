@@ -61,7 +61,7 @@ html.light {
   --hero-sky:radial-gradient(1200px 560px at 70% 48%, rgba(236,151,56,.40), rgba(188,108,38,.14) 42%, transparent 70%), radial-gradient(880px 440px at 85% -12%, rgba(247,222,146,.20), transparent 62%), linear-gradient(180deg,#060810 0%,#0a0e1a 36%,#171209 100%);
   --hero-bottom:linear-gradient(180deg,transparent,rgba(4,6,11,.82));
   --hero-orb:radial-gradient(circle, rgba(236,170,70,.30), transparent 68%);
-  --hero-h1:#F6F1E6; --hero-h1-shadow:0 2px 30px rgba(0,0,0,.4); --hero-lede:rgba(244,238,225,.78); --hero-accent:linear-gradient(120deg,#F7DE92,#D9AD3E);
+  --hero-h1:#F6F1E6; --hero-h1-shadow:0 2px 30px rgba(0,0,0,.4); --hero-lede:rgba(244,238,225,.78); --hero-lede-shadow:0 1px 16px rgba(0,0,0,.45); --hero-accent:linear-gradient(120deg,#F7DE92,#D9AD3E);
   --hero-chip-bg:rgba(255,255,255,.05); --hero-chip-brd:rgba(247,222,146,.22); --hero-chip-text:rgba(244,238,225,.92);
   --hero-ic-stroke:#F5D982; --hero-ic-bg:rgba(255,255,255,.08); --hero-ic-brd:rgba(247,222,146,.4);
   --hero-card-brd:rgba(247,222,146,.26); --hero-card-shadow:0 26px 60px -26px rgba(0,0,0,.8); --hero-fade:#080b14;
@@ -76,11 +76,12 @@ html.light {
 }
 html.light {
   --hero-base:#eef3f6;
-  --hero-img-ov:linear-gradient(to left, rgba(255,255,255,.04) 0%, rgba(250,250,248,.28) 55%, rgba(247,242,234,.6) 100%), linear-gradient(180deg, rgba(255,255,255,.26) 0%, transparent 34%, rgba(246,239,225,.46) 100%);
+  /* سمتِ راست (متن، 0٪ در gradientِ «to left») پررنگ روشن می‌شود تا متنِ تیره خوانا بماند؛ سمتِ چپ (پنلِ شیشه‌ای) کم‌تر. */
+  --hero-img-ov:linear-gradient(to left, rgba(248,244,237,.82) 0%, rgba(249,246,240,.52) 46%, rgba(255,255,255,.16) 100%), linear-gradient(180deg, rgba(255,255,255,.34) 0%, transparent 50%, rgba(246,239,225,.4) 100%);
   --hero-sky:radial-gradient(1200px 640px at 72% 30%, rgba(247,222,146,.5), rgba(217,173,62,.12) 42%, transparent 72%), radial-gradient(900px 520px at 88% -8%, rgba(255,255,255,.8), transparent 60%), linear-gradient(180deg,#b9d6ea 0%,#d7e6ee 30%,#eef2ec 60%,#f6efe1 100%);
   --hero-bottom:linear-gradient(180deg,transparent,rgba(246,239,225,.7));
   --hero-orb:radial-gradient(circle, rgba(247,214,120,.45), transparent 68%);
-  --hero-h1:#17202e; --hero-h1-shadow:0 1px 18px rgba(255,255,255,.7); --hero-lede:rgba(23,32,46,.74); --hero-accent:linear-gradient(120deg,#C79A2E,#9A6B18);
+  --hero-h1:#141b27; --hero-h1-shadow:0 1px 3px rgba(255,255,255,.95), 0 2px 22px rgba(255,255,255,.85); --hero-lede:#2a3545; --hero-lede-shadow:0 1px 2px rgba(255,255,255,.95), 0 1px 14px rgba(255,255,255,.8); --hero-accent:linear-gradient(120deg,#B5811F,#7E560F);
   --hero-chip-bg:rgba(255,255,255,.62); --hero-chip-brd:rgba(23,32,46,.14); --hero-chip-text:#17202e;
   --hero-ic-stroke:#A9761D; --hero-ic-bg:rgba(217,173,62,.14); --hero-ic-brd:rgba(217,173,62,.4);
   --hero-card-brd:rgba(255,255,255,.85); --hero-card-shadow:0 20px 44px -22px rgba(23,32,46,.5); --hero-fade:#eef3f6;

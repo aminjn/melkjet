@@ -167,7 +167,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
               خانه‌ی بعدی‌ات،<br />
               <span style={{ background: 'var(--hero-accent)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>هوشمندانه</span> انتخاب می‌شود
             </h1>
-            <p style={{ margin: '20px 0 0', maxWidth: 560, fontSize: 'clamp(15px,2vw,18.5px)', lineHeight: 1.85, color: 'var(--hero-lede)' }}>
+            <p style={{ margin: '20px 0 0', maxWidth: 560, fontSize: 'clamp(15px,2vw,18.5px)', lineHeight: 1.85, color: 'var(--hero-lede)', textShadow: 'var(--hero-lede-shadow)' }}>
               به زبان خودت بگو چه می‌خواهی. ملک‌جت بازار را تحلیل می‌کند، دلیل هر پیشنهاد را توضیح می‌دهد و کنارت می‌ماند تا بهترین تصمیم را بگیری.
             </p>
             {/* دسترسیِ سریع — ایکون‌های حرفه‌ایِ SVG در قابِ شیشه‌ای (فاز ۲۹۸ی۱۲) */}
