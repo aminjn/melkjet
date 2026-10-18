@@ -75,6 +75,9 @@ listen_addr = 127.0.0.1
 listen_port = 6432
 auth_type = scram-sha-256
 auth_file = $BQ_DIR/userlist.txt
+# دیدِ مانیتورینگ: SHOW POOLS/STATS از دیتابیسِ مجازیِ pgbouncer با همین کاربر
+stats_users = $DB_USER
+admin_users = $DB_USER
 pool_mode = transaction
 max_client_conn = 2000
 default_pool_size = 30
