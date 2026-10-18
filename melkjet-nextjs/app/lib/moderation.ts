@@ -190,10 +190,20 @@ async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex)
     const reason = `تأییدِ خودکار — ${ex.reasons.length ? ex.reasons.join(' · ') : 'مشابهِ آگهی‌های سالمِ تأییدشده'} (اطمینان ${conf}٪)`
     return { id: it.id, title: it.title, status: 'approved', score: Math.round(p.prob * 100), via: 'ml', reason, settled: true }
   }
-  if (!model) return { id: it.id, title: it.title, status: 'pending', reason: 'در انتظارِ ممیزی (مدل تنظیم نشده و دادهٔ یادگیری کافی نیست)', score: 0, via: 'none', settled: false }
-  const v = await getVerdict(it, model, cfg)
-  if (v.status === 'approved' || v.status === 'rejected') { try { learn(it, v.status, 'ai'); noteDecision('ai') } catch {} }
-  return { ...v, via: 'ai' }
+  // فاز ۳۱۱ — ممیزیِ خودکار «فقط ML» (خواستِ صریحِ مالک + AIِ گپ مدت‌هاست بی‌اعتبار/مرده).
+  // ریشهٔ «خودش اتومات تأیید نمی‌کند»: وقتی مدل به تصمیمِ قطعی نمی‌رسید، getVerdict (AIِ گپ) صدا
+  // می‌خورد، شکست می‌خورد (quota) و آگهی را در limboی «pendingِ settled=false» نگه می‌داشت —
+  // هر تیک دوباره امتحان و هرگز خالی نمی‌شد. حالا AI از مسیرِ خودکار حذف شد: آگهیِ نامطمئن که
+  // از گیت‌های قطعی (تکرار/تماس/سلامت/ردِ مطمئنِ مدل) گذشته، طبقِ pendingPolicy حکمِ «قطعی»
+  // می‌گیرد — پیش‌فرض تأییدِ خودکار (settled=true، پس دیگر بی‌پایان در صف نمی‌ماند).
+  noteDecision('ml')
+  const mlScore = Math.round((p.prob || 0.5) * 100)
+  if (cfg.pendingPolicy !== 'review') {
+    return { id: it.id, title: it.title, status: 'approved', score: mlScore, via: 'ml', settled: true,
+      reason: 'تأییدِ خودکار — از گیت‌های سلامت/تکرار/تماس گذشت و مدل به ردِ قطعی نرسید (فقط ML)' }
+  }
+  return { id: it.id, title: it.title, status: 'pending', score: mlScore, via: 'ml', settled: true,
+    reason: 'در صفِ بازبینیِ انسانی — مدل به تصمیمِ قطعی نرسید (فقط ML)' }
 }
 
 // Moderate a single item now (persists immediately). Used for one-off (user submit / single id).
