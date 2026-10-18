@@ -48,14 +48,24 @@ export async function isDuplicateListing(it: Item): Promise<boolean> {
 export interface DupCandidate { id: string; status: string; scrapedAt: number; f: Fields }
 // ایندکسِ بلوکه‌شده: نگاشتِ کلیدِ بلوک → نامزدها. جست‌وجو فقط در بلوک‌های مرتبط (نه کلِ ۱۸هزار).
 export interface DupIndex { blocks: Map<string, DupCandidate[]> }
-export async function buildDupIndex(): Promise<DupIndex> {
+// فاز ۳۱۰ — کشِ ایندکسِ تکرار: قبلاً moderatePending هر تیک (۴۵ثانیه) این را روی «همهٔ ۵۴هزار
+// آگهی» با fieldsOf از نو می‌ساخت — سنگین‌ترین کارِ مسیرِ ممیزی و علتِ کُندیِ تخلیهٔ صف. ایندکس
+// کند تغییر می‌کند و گِیتِ تکرار «تورِ ایمنی» است نه مسیرِ بحرانی (انتشار twinIndexِ خودش را دارد)،
+// پس کشِ ۳دقیقه‌ای امن است: بدترین حالت، آگهیِ تکراریِ همین چند دقیقه لحظه‌ای دیرتر گرفته می‌شود.
+let _dupCache: { at: number; idx: DupIndex } | null = null
+const DUP_TTL = 180_000
+export function invalidateDupIndex() { _dupCache = null }
+export async function buildDupIndex(force = false): Promise<DupIndex> {
+  if (!force && _dupCache && Date.now() - _dupCache.at < DUP_TTL) return _dupCache.idx
   const blocks = new Map<string, DupCandidate[]>()
   for (const x of await listItems('listing')) {
     if (x.status !== 'approved' && x.status !== 'pending') continue
     const c: DupCandidate = { id: x.id, status: String(x.status), scrapedAt: x.scrapedAt || 0, f: fieldsOf(x) }
     for (const k of blockKeys(c.f)) { let a = blocks.get(k); if (!a) { a = []; blocks.set(k, a) } a.push(c) }
   }
-  return { blocks }
+  const idx = { blocks }
+  _dupCache = { at: Date.now(), idx }
+  return idx
 }
 // «مَستر»ِ تکرار برای یک آیتم را در ایندکس می‌یابد (اگر باشد). قانونِ نگهداریِ قدیمی‌تر:
 // یک نامزد فقط وقتی مَستر است که یا «approved» باشد، یا «pending»ِ قدیمی‌تر (تساوی زمان → idِ کوچک‌تر).
