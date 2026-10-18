@@ -130,7 +130,14 @@ async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex)
   if (it.type === 'listing') {
     const idx = dupIndex || await buildDupIndex()
     const master = dupMasterInIndex(it, idx)
-    if (master) return { id: it.id, title: it.title, status: 'duplicate', score: 100, via: 'dup', reason: DUP_REASON, settled: true }
+    // فاز ۳۱۲ (فیدبک: «باید نشان بدهد با کدام آگهی و چه کدی تکراری است») — شفافیتِ تکرار:
+    // عنوان + کد + متراژِ «آگهیِ مرجع» در دلیل می‌آید تا ادمین بتواند هر تکراری را راستی‌آزمایی کند.
+    if (master) {
+      const mt = (master.f?.title || '').replace(/\s+/g, ' ').trim().slice(0, 50)
+      const ma = master.f?.area ? ` · متراژ ${master.f.area}` : ''
+      return { id: it.id, title: it.title, status: 'duplicate', score: 100, via: 'dup', settled: true,
+        reason: `تکراری با آگهیِ «${mt}» (کد ${master.id}${ma})` }
+    }
   }
   // فاز ۱۳۸ (فیدبک: «به‌خاطرِ واژه‌هایی که مشکل نیست رد می‌کند») — ردِ خودکار حالا «فقط» با مدرکِ
   // قطعی و قابلِ‌نمایش انجام می‌شود: شماره/لینک/آیدیِ تماسِ واقعی داخلِ متن، با نقلِ همان تکه در دلیل،
