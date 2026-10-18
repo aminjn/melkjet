@@ -175,7 +175,7 @@ export default function DirectoryPage() {
             <input
               type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="نام متخصص یا شهر…"
-              style={{ width: '100%', padding: '14px 18px 14px 48px', fontSize: '.95rem', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(247,222,146,.3)', borderRadius: 13, color: '#f3ede0', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+              style={{ width: '100%', padding: '14px 18px 14px 48px', fontSize: '.95rem', background: 'var(--ph-chip-bg)', border: '1px solid rgba(247,222,146,.3)', borderRadius: 13, color: 'var(--ph-chip-text)', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
               onFocus={(e) => { e.currentTarget.style.borderColor = '#F7DE92' }}
               onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(247,222,146,.3)' }}
             />

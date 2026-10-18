@@ -47,7 +47,7 @@ export default function MaterialPrices() {
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
       <Nav />
       <PageHeader eyebrow="نرخِ روز" title="نرخِ روزِ مصالح" subtitle="نرخِ مرجعِ مصالح با روندِ تاریخیِ قیمت + قیمتِ واقعیِ فروشگاه‌های ملک‌جت. برای سازنده‌ها و پیمانکارها جهتِ برآوردِ هزینه.">
-        <Link href="/stores" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#f3ede0', textDecoration: 'none', border: '1px solid rgba(221,194,122,.4)', background: 'rgba(255,255,255,.05)', borderRadius: 999, padding: '9px 15px', whiteSpace: 'nowrap', fontWeight: 600 }}>🧱 فروشگاه‌های مصالح ↗</Link>
+        <Link href="/stores" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--ph-chip-text)', textDecoration: 'none', border: '1px solid rgba(221,194,122,.4)', background: 'var(--ph-chip-bg)', borderRadius: 999, padding: '9px 15px', whiteSpace: 'nowrap', fontWeight: 600 }}>🧱 فروشگاه‌های مصالح ↗</Link>
       </PageHeader>
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '28px 20px 60px' }}>
         {/* فاز ۱۰۰ (جلد ۴۳): شاخصِ مصالحِ ملک‌جت — پایه ۱۰۰ از اولین روزِ با پوششِ کافی؛ همه از قیمت‌های واقعیِ فروشندگان */}

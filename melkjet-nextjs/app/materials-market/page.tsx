@@ -128,8 +128,8 @@ export default function BazarMasaleh() {
       <Nav />
       <PageHeader eyebrow="بازارِ مصالح" title="بازارِ مصالح ساختمانی" subtitle={`${facets ? `${fa(facets.total)} کالا` : 'همهٔ محصولات'} — با قیمتِ مرجع، مقایسهٔ فروشندگان و نرخِ روز.`}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Link href="/stores" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 999, border: '1px solid rgba(247,222,146,.3)', background: 'rgba(255,255,255,.05)', color: '#f3ede0', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>🏪 فروشگاه‌ها ↗</Link>
-          <Link href="/materials-prices" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 999, border: '1px solid rgba(247,222,146,.3)', background: 'rgba(255,255,255,.05)', color: '#f3ede0', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>📊 نرخِ روز ↗</Link>
+          <Link href="/stores" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 999, border: '1px solid rgba(247,222,146,.3)', background: 'var(--ph-chip-bg)', color: 'var(--ph-chip-text)', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>🏪 فروشگاه‌ها ↗</Link>
+          <Link href="/materials-prices" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 999, border: '1px solid rgba(247,222,146,.3)', background: 'var(--ph-chip-bg)', color: 'var(--ph-chip-text)', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>📊 نرخِ روز ↗</Link>
         </div>
       </PageHeader>
       <div style={{ maxWidth: 1240, margin: '0 auto', padding: '24px 20px 60px' }}>

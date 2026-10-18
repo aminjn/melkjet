@@ -42,7 +42,7 @@ export default function MaterialsDirectory() {
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
       <Nav />
       <PageHeader eyebrow="فروشگاه‌های مصالح" title="بازار مصالح ساختمانی" subtitle={`فروشگاه‌های مصالح ساختمانی${facets ? ` — ${fa(facets.shopCount)} فروشگاه` : ''}. نرخِ روز، مقایسه و استعلامِ مستقیم از فروشنده.`}>
-        <Link href="/materials-prices" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#f3ede0', textDecoration: 'none', border: '1px solid rgba(247,222,146,.3)', background: 'rgba(255,255,255,.05)', borderRadius: 999, padding: '9px 15px', fontWeight: 600 }}>📊 نرخِ روزِ مصالح ↗</Link>
+        <Link href="/materials-prices" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--ph-chip-text)', textDecoration: 'none', border: '1px solid rgba(247,222,146,.3)', background: 'var(--ph-chip-bg)', borderRadius: 999, padding: '9px 15px', fontWeight: 600 }}>📊 نرخِ روزِ مصالح ↗</Link>
       </PageHeader>
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 20px 60px' }}>
 
