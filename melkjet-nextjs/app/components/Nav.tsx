@@ -16,7 +16,8 @@ const DASH_LABEL: Record<string, string> = {
 }
 
 interface MenuItem { ic: IconName; label: string; desc: string; href: string }
-interface Menu { label: string; items: MenuItem[] }
+// منو یا کشویی است (items) یا «لینکِ مستقیم» (href بدونِ items) — مثلِ «فروشگاه‌ها» که یک‌کلیکه باز می‌شود.
+interface Menu { label: string; href?: string; items?: MenuItem[] }
 // منوهای کشویی — همهٔ لینک‌ها به صفحاتِ واقعیِ سایت.
 const MENUS: Menu[] = [
   { label: 'خرید و اجاره', items: [
@@ -35,6 +36,8 @@ const MENUS: Menu[] = [
     { ic: 'store', label: 'فروشگاه‌های مصالح', desc: 'فروشندگانِ مصالح', href: '/stores' },
     { ic: 'bars', label: 'نرخِ روزِ مصالح', desc: 'قیمتِ روزِ آهن، سیمان و…', href: '/materials-prices' },
   ] },
+  // «فروشگاه‌ها» — لینکِ مستقیم (بدونِ کشویی): یک کلیک → فهرستِ فروشگاه‌ها.
+  { label: 'فروشگاه‌ها', href: '/stores' },
   { label: 'متخصصان', items: [
     { ic: 'people', label: 'مشاوران املاک', desc: 'یافتن مشاور', href: '/directory?category=مشاور' },
     { ic: 'office', label: 'آژانس‌های املاک', desc: 'دفاتر و شعب', href: '/directory?category=آژانس' },
@@ -129,7 +132,9 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
             دکمه‌های اقدام چپ می‌مانند و منو دقیقاً در مرکزِ نوار می‌نشیند. */}
         <div style={{ flex: 1 }} />
         <div className="mj-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 14.5, fontWeight: 600 }}>
-          {MENUS.map(m => (
+          {MENUS.map(m => m.href && !m.items ? (
+            <Link key={m.label} href={m.href} style={{ display: 'flex', alignItems: 'center', padding: '9px 13px', borderRadius: 9, color: navText, textShadow: navShadow, textDecoration: 'none', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>{m.label}</Link>
+          ) : (
             <div key={m.label} style={{ position: 'relative' }} onMouseEnter={() => openMenu(m.label)} onMouseLeave={scheduleClose}>
               <button onClick={() => (open === m.label ? setOpen(null) : openMenu(m.label))} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: open === m.label ? 'var(--text)' : navText, textShadow: open === m.label ? undefined : navShadow, background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>
                 {m.label}<span style={{ display: 'flex', opacity: .75 }}><IconSvg name="chevronDown" size={11} /></span>
@@ -142,7 +147,7 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
                       می‌شود (هم‌رنگِ روکشِ خودِ هیرو) و جای دیگر از توکنِ تم می‌گیرد. رنگِ متن هم
                       با همان حالت می‌آید، وگرنه دوباره «متنِ تیره روی شیشهٔ تیره» می‌شد. */}
                   <div style={{ background: onHero ? 'rgba(14,18,28,.92)' : 'var(--surface)', border: `1px solid ${onHero ? 'rgba(243,237,224,.16)' : 'var(--line2)'}`, borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.6)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
-                    {m.items.map(it => (
+                    {(m.items || []).map(it => (
                       <Link key={it.label + it.href} href={it.href} onClick={() => setOpen(null)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, textDecoration: 'none', color: 'inherit' }} className="mj-menu-item">
                         <GlassIcon name={it.ic} size={38} box={19} tone={onHero ? 'hero' : 'theme'} />
                         <span style={{ flex: 1 }}>
@@ -189,12 +194,14 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
       {/* Mobile drawer with expandable sections */}
       {menuOpen && (
         <div style={{ background: 'var(--navbg)', borderTop: '1px solid var(--line)', padding: '10px 16px 18px', maxHeight: '80vh', overflowY: 'auto' }}>
-          {MENUS.map(m => (
+          {MENUS.map(m => m.href && !m.items ? (
+            <Link key={m.label} href={m.href} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '13px 12px', borderRadius: 10, color: 'var(--text)', textDecoration: 'none', fontFamily: 'inherit', fontSize: 15, fontWeight: 700 }}>{m.label}</Link>
+          ) : (
             <div key={m.label}>
               <button onClick={() => setMobOpen(o => o === m.label ? null : m.label)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 12px', borderRadius: 10, color: 'var(--text)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700 }}>
                 {m.label}<span style={{ fontSize: 11, color: 'var(--muted)' }}>{mobOpen === m.label ? '−' : '+'}</span>
               </button>
-              {mobOpen === m.label && m.items.map(it => (
+              {mobOpen === m.label && (m.items || []).map(it => (
                 <Link key={it.label + it.href} href={it.href} onClick={() => setMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px 10px 22px', borderRadius: 10, textDecoration: 'none', color: 'inherit' }}>
                   <GlassIcon name={it.ic} size={30} box={16} />
                   <span><span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{it.label}</span><span style={{ display: 'block', fontSize: 11, color: 'var(--muted)' }}>{it.desc}</span></span>
