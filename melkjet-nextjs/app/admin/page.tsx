@@ -16,6 +16,7 @@ import StaffCrmView from '@/app/components/StaffCrmView'
 import { STAFF_GRANTABLE } from '@/app/lib/admin-access'
 import { listingHref } from '@/app/lib/listing-url'
 import { FA_DIGITS, faDigit } from '@/app/lib/digits'
+import ThemeToggle from '@/app/components/ThemeToggle'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
@@ -8223,16 +8224,17 @@ export default function SuperAdminPage() {
         width: 248, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)',
         display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden'
       }}>
-        {/* Logo */}
+        {/* Logo + دکمهٔ تمِ روز/شب (کنارِ لوگو تا در پنل هم واضح و در دسترس باشد) */}
         <div style={{ padding: '20px 16px 14px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0 }}>
               <span style={{ width: 14, height: 14, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }} />
             </div>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-.5px', color: 'var(--text)' }}>ملک‌جت</div>
               <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600, marginTop: 1 }}>{staffOnly ? 'پنلِ پرسنل' : 'سوپر ادمین'}</div>
             </div>
+            <ThemeToggle size={34} />
           </div>
         </div>
 
