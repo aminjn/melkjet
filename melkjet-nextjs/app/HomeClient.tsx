@@ -2,6 +2,7 @@
 // و فقط جزیره‌های تعاملی (جستجو، آکاردئونِ FAQ، دکمهٔ لایک، بنر، دستیارِ AI) در مرورگر
 // اجرا می‌شوند → main-thread و JavaScriptِ کلاینت به‌شدت کمتر.
 import Link from 'next/link'
+import Image from 'next/image'
 import Nav from './components/Nav'
 import GlassIcon, { IconSvg, type IconName } from './components/GlassIcon'
 import Footer from './components/Footer'
@@ -152,7 +153,8 @@ export default function HomeClient({ initial, heroImage = '', heroImageDay = '' 
         {/* ── لایهٔ «شب» (فقط تمِ تیره) ── */}
         <div className="mjhero-night" aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
           {heroImage ? (<>
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${heroImage})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
+            {/* next/image = بهینه‌سازیِ خودکار (چندمگابایت → ~۱۵۰KB، کش‌شده) — رفعِ «خیلی سنگین/کند» */}
+            <Image src={heroImage} alt="" fill priority sizes="100vw" style={{ objectFit: 'cover', objectPosition: 'center 30%' }} />
             <div style={{ position: 'absolute', inset: 0, background: 'var(--hero-img-ov)' }}></div>
           </>) : (<>
             <div style={{ position: 'absolute', inset: 0, background: 'var(--hero-sky)' }}></div>
@@ -163,7 +165,7 @@ export default function HomeClient({ initial, heroImage = '', heroImageDay = '' 
         {/* ── لایهٔ «روز» (فقط تمِ روشن) ── عکسِ روزِ جدا؛ خالی = آسمانِ گرادیانیِ روز ── */}
         <div className="mjhero-day" aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
           {heroImageDay ? (<>
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${heroImageDay})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
+            <Image src={heroImageDay} alt="" fill sizes="100vw" style={{ objectFit: 'cover', objectPosition: 'center 30%' }} />
             <div style={{ position: 'absolute', inset: 0, background: 'var(--hero-img-ov)' }}></div>
           </>) : (<>
             <div style={{ position: 'absolute', inset: 0, background: 'var(--hero-sky)' }}></div>
