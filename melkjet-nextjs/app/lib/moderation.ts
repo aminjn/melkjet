@@ -24,10 +24,17 @@ export function listingSanityIssues(it: Item): string[] {
     const curY = new Date().getFullYear() - 621   // تقریبِ سالِ شمسی
     if (Number.isFinite(yr) && yr >= 1300 && yr <= 1600 && yr > curY) issues.push(`سالِ ساختِ آینده (${m['سن بنا'] || m['سال ساخت']})`)
   }
-  // هر عددِ ≥ ۱۰۰۰ میلیارد تومان در قیمت/ودیعه/اجاره تقریباً همیشه غلط/اسپم است.
-  // جداکننده‌های هزارگان (، ٬ ,) اول پاک می‌شوند وگرنه هر گروهِ ۳رقمی جدا دیده می‌شد.
-  const nums = (toEn(String(it.price || '')).replace(/[,٬،]/g, '').match(/\d{4,}/g) || []).map(n => Number(n))
-  if (nums.some(n => Number.isFinite(n) && n >= 1e12)) issues.push('قیمتِ نجومی/غیرواقعی')
+  // فاز ۳۱۴ (فیدبک: ملکِ بزرگِ تریلیونی الکی رد می‌شد) — «قیمتِ نجومی» نسبی است، نه مطلق:
+  // زمینِ ۴۰۰۰متریِ شهرک غرب واقعاً تریلیونی است. معیار = «قیمتِ هر متر». متراژ از متا، وگرنه
+  // از عنوان. اگر متراژ نامعلوم بود، فقط سقفِ مطلقِ خیلی‌بالا (۱۰۰ تریلیون) اسپمِ قطعی است.
+  // جداکننده‌های هزارگان اول پاک می‌شوند وگرنه هر گروهِ ۳رقمی جدا دیده می‌شد.
+  const nums = (toEn(String(it.price || '')).replace(/[,٬،]/g, '').match(/\d{4,}/g) || []).map(n => Number(n)).filter(Number.isFinite)
+  const maxPrice = nums.length ? Math.max(...nums) : 0
+  let areaN = m['متراژ'] ? parseInt(toEn(m['متراژ']).replace(/\D/g, ''), 10) : 0
+  if (!areaN) { const mt = toEn(it.title || '').match(/(\d{2,6})\s*متر/); if (mt) areaN = parseInt(mt[1], 10) }
+  const PER_M_CAP = 5e9   // ۵ میلیارد تومان در هر متر — بالاتر از گران‌ترین ملکِ واقعیِ ایران
+  if (areaN > 0 && maxPrice > 0) { if (maxPrice / areaN > PER_M_CAP) issues.push('قیمتِ هر مترِ غیرواقعی') }
+  else if (maxPrice >= 1e14) issues.push('قیمتِ نجومی/غیرواقعی')
   return issues
 }
 
