@@ -34,7 +34,8 @@ export interface SiteBrand {
   logoDark?: string    // لوگو برای تمِ تاریک
   favicon?: string
   accent?: string      // رنگِ برند (hex)
-  heroImage?: string   // عکسِ پس‌زمینهٔ هیروی صفحهٔ اصلی — خالی = گرادیانِ سینمایی (فاز ۲۹۸ی۸)
+  heroImage?: string   // عکسِ هیروی «شب» (تمِ تیره) — خالی = گرادیانِ سینمایی (فاز ۲۹۸ی۸)
+  heroImageDay?: string // فاز ۳۰۹ج — عکسِ هیروی «روز» (تمِ روشن) — خالی = گرادیانِ آسمانِ روز
 }
 export interface SiteConfig {
   brand: SiteBrand

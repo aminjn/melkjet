@@ -12,6 +12,7 @@ export const revalidate = 300
 
 export default async function Home() {
   const initial = await getHomeData()
-  const heroImage = siteConfig().brand?.heroImage || ''   // عکسِ هیرو از پنلِ ادمین (خالی = گرادیان)
-  return <HomeClient initial={initial} heroImage={heroImage} />
+  const heroImage = siteConfig().brand?.heroImage || ''       // هیروی شب (تمِ تیره)
+  const heroImageDay = siteConfig().brand?.heroImageDay || ''  // هیروی روز (تمِ روشن)
+  return <HomeClient initial={initial} heroImage={heroImage} heroImageDay={heroImageDay} />
 }

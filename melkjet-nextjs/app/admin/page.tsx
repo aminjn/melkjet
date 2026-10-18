@@ -7579,7 +7579,7 @@ function SiteView() {
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>نام، لوگو (روشن/تیره)، فاوآیکون، عکسِ هیروی صفحهٔ اصلی و رنگِ برند. لوگو خالی = نمایشِ نام و نشانِ پیش‌فرض. عکسِ هیرو خالی = گرادیانِ سینمایی.</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={{ gridColumn: '1 / -1' }}><span style={lbl}>نامِ سایت</span><input style={inp} value={cfg.brand?.name || ''} onChange={e => setCfg({ ...cfg, brand: { ...cfg.brand, name: e.target.value } })} placeholder="ملک‌جت" /></div>
-          {(([['logoLight', 'لوگوی روشن (روی پس‌زمینهٔ روشن)'], ['logoDark', 'لوگوی تیره (روی پس‌زمینهٔ تیره)'], ['favicon', 'فاوآیکون (آیکونِ تبِ مرورگر)'], ['heroImage', 'عکسِ هیروی صفحهٔ اصلی (خالی = گرادیان)']]) as [string, string][]).map(([key, label]) => (
+          {(([['logoLight', 'لوگوی روشن (روی پس‌زمینهٔ روشن)'], ['logoDark', 'لوگوی تیره (روی پس‌زمینهٔ تیره)'], ['favicon', 'فاوآیکون (آیکونِ تبِ مرورگر)'], ['heroImage', 'عکسِ هیروی شب (تمِ تیره — خالی = گرادیان)'], ['heroImageDay', 'عکسِ هیروی روز (تمِ روشن — طلوع/روشن؛ خالی = گرادیانِ روز)']]) as [string, string][]).map(([key, label]) => (
             <div key={key}>
               <span style={lbl}>{label}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

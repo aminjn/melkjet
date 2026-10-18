@@ -63,7 +63,7 @@ function bedsFromItem(it: ContentItem): string {
   return m ? m[1] : '—'
 }
 
-export default function HomeClient({ initial, heroImage = '' }: { initial: HomeData; heroImage?: string }) {
+export default function HomeClient({ initial, heroImage = '', heroImageDay = '' }: { initial: HomeData; heroImage?: string; heroImageDay?: string }) {
   // دادهٔ اولیه از سرور می‌آید (SSR با محتوا).
   const { listings, advisorItems, promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight, sysStats } = initial
 
@@ -149,16 +149,28 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
       <main>
       {/* HERO — تمام‌ارتفاع (مطابقِ موکاپ)؛ عکس از پنلِ ادمین، خالی = گرادیانِ غروب */}
       <section style={{ position: 'relative', overflow: 'hidden', background: 'var(--hero-base)', color: 'var(--hero-h1)', minHeight: '100vh', display: 'flex', alignItems: 'center', padding: 'clamp(92px,10vw,120px) 24px clamp(56px,6vw,80px)' }}>
-        {heroImage ? (<>
-          {/* عکسِ هیرو (full-bleed) + روکشِ خوانایی (روکش با تم عوض می‌شود: شب تیره، روز روشن) */}
-          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: `url(${heroImage})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
-          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'var(--hero-img-ov)' }}></div>
-        </>) : (<>
-          {/* بدونِ عکس → گرادیانِ سینماییِ غروب (شب) / آسمانِ آفتابی (روز) */}
-          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'var(--hero-sky)' }}></div>
-          <div className="mjh-orb" style={{ position: 'absolute', top: '-10%', insetInlineEnd: '-6%', width: 'clamp(300px,38vw,560px)', height: 'clamp(300px,38vw,560px)', borderRadius: '50%', background: 'var(--hero-orb)', filter: 'blur(26px)', pointerEvents: 'none', animation: 'mjfloat 9s ease-in-out infinite' }}></div>
-          <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', pointerEvents: 'none', background: 'var(--hero-bottom)' }}></div>
-        </>)}
+        {/* ── لایهٔ «شب» (فقط تمِ تیره) ── */}
+        <div className="mjhero-night" aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          {heroImage ? (<>
+            <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${heroImage})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
+            <div style={{ position: 'absolute', inset: 0, background: 'var(--hero-img-ov)' }}></div>
+          </>) : (<>
+            <div style={{ position: 'absolute', inset: 0, background: 'var(--hero-sky)' }}></div>
+            <div className="mjh-orb" style={{ position: 'absolute', top: '-10%', insetInlineEnd: '-6%', width: 'clamp(300px,38vw,560px)', height: 'clamp(300px,38vw,560px)', borderRadius: '50%', background: 'var(--hero-orb)', filter: 'blur(26px)', animation: 'mjfloat 9s ease-in-out infinite' }}></div>
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', background: 'var(--hero-bottom)' }}></div>
+          </>)}
+        </div>
+        {/* ── لایهٔ «روز» (فقط تمِ روشن) ── عکسِ روزِ جدا؛ خالی = آسمانِ گرادیانیِ روز ── */}
+        <div className="mjhero-day" aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          {heroImageDay ? (<>
+            <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${heroImageDay})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
+            <div style={{ position: 'absolute', inset: 0, background: 'var(--hero-img-ov)' }}></div>
+          </>) : (<>
+            <div style={{ position: 'absolute', inset: 0, background: 'var(--hero-sky)' }}></div>
+            <div className="mjh-orb" style={{ position: 'absolute', top: '-10%', insetInlineEnd: '-6%', width: 'clamp(300px,38vw,560px)', height: 'clamp(300px,38vw,560px)', borderRadius: '50%', background: 'var(--hero-orb)', filter: 'blur(26px)', animation: 'mjfloat 9s ease-in-out infinite' }}></div>
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', background: 'var(--hero-bottom)' }}></div>
+          </>)}
+        </div>
 
         <div className="mjhero-grid" style={{ position: 'relative', width: '100%', maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr', gap: 'clamp(30px,4vw,52px)', alignItems: 'center' }}>
           {/* ستونِ متن (سمتِ راست/آغاز در RTL) */}
