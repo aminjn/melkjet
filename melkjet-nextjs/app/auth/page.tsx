@@ -165,7 +165,7 @@ export default function AuthPage() {
         {/* Left branding panel */}
         <div style={{
           flex: '0 0 42%',
-          background: 'linear-gradient(145deg,#1a1a2e 0%,#16213e 40%,#0f3460 100%)',
+          background: 'var(--auth-panel)',
           display: 'flex', flexDirection: 'column', justifyContent: 'center',
           alignItems: 'flex-start', padding: '60px 48px',
           position: 'relative', overflow: 'hidden',
@@ -176,11 +176,11 @@ export default function AuthPage() {
             <div style={{ fontSize: 42, fontWeight: 900, background: 'linear-gradient(135deg,var(--gold),var(--gold2))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', letterSpacing: '-1px', lineHeight: 1 }}>MelkJet</div>
             <div style={{ color: 'var(--gold)', fontSize: 13, marginTop: 4, opacity: 0.8, letterSpacing: 2 }}>✦ پلتفرم هوشمند ملک</div>
           </div>
-          <h2 style={{ color: '#fff', fontSize: 26, fontWeight: 700, lineHeight: 1.6, marginBottom: 12, position: 'relative', zIndex: 1 }}>
+          <h2 style={{ color: 'var(--auth-panel-text)', fontSize: 26, fontWeight: 700, lineHeight: 1.6, marginBottom: 12, position: 'relative', zIndex: 1 }}>
             خرید، فروش و اجاره ملک<br />
             <span style={{ color: 'var(--gold)' }}>با اطمینان کامل</span>
           </h2>
-          <p style={{ color: 'rgba(255,255,255,.6)', fontSize: 15, lineHeight: 1.8, marginBottom: 40, position: 'relative', zIndex: 1 }}>
+          <p style={{ color: 'var(--auth-panel-sub)', fontSize: 15, lineHeight: 1.8, marginBottom: 40, position: 'relative', zIndex: 1 }}>
             بزرگ‌ترین بازار آنلاین ملک ایران با هزاران آگهی تایید‌شده
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', zIndex: 1 }}>
@@ -193,7 +193,7 @@ export default function AuthPage() {
             ].map(item => (
               <div key={item.text} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontSize: 20 }}>{item.icon}</span>
-                <span style={{ color: 'rgba(255,255,255,.8)', fontSize: 14 }}>{item.text}</span>
+                <span style={{ color: 'var(--auth-panel-feat)', fontSize: 14 }}>{item.text}</span>
               </div>
             ))}
           </div>

@@ -130,13 +130,13 @@ export default function AuthModal() {
       <style>{`@keyframes mjFade{from{opacity:0}to{opacity:1}}@keyframes mjPop{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}`}</style>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--line2)', boxShadow: '0 30px 80px -20px rgba(0,0,0,.7)', overflow: 'hidden', animation: 'mjPop .25s cubic-bezier(.2,.8,.2,1)' }}>
         {/* سربرگِ جذاب */}
-        <div style={{ position: 'relative', padding: '26px 26px 22px', background: 'linear-gradient(135deg,#1a1a2e,#16213e 55%,#0f3460)', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', padding: '26px 26px 22px', background: 'var(--auth-panel)', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -50, insetInlineEnd: -50, width: 180, height: 180, borderRadius: '50%', background: 'radial-gradient(circle,rgba(212,175,55,.22),transparent 70%)' }} />
-          <button onClick={() => setOpen(false)} aria-label="بستن" style={{ position: 'absolute', top: 14, insetInlineStart: 14, width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(255,255,255,.18)', background: 'rgba(0,0,0,.25)', color: '#fff', cursor: 'pointer', fontSize: 16 }}>×</button>
+          <button onClick={() => setOpen(false)} aria-label="بستن" style={{ position: 'absolute', top: 14, insetInlineStart: 14, width: 32, height: 32, borderRadius: 9, border: '1px solid color-mix(in srgb, var(--auth-panel-text) 20%, transparent)', background: 'color-mix(in srgb, var(--auth-panel-text) 10%, transparent)', color: 'var(--auth-panel-text)', cursor: 'pointer', fontSize: 16 }}>×</button>
           <div style={{ position: 'relative' }}>
             <div style={{ fontSize: 30, fontWeight: 900, background: 'linear-gradient(135deg,var(--gold),var(--gold2))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-.5px' }}>ملک‌جت</div>
-            <div style={{ color: 'rgba(255,255,255,.82)', fontSize: 14, marginTop: 6, fontWeight: 600 }}>{reason || 'ورود یا ثبت‌نام'}</div>
-            <div style={{ color: 'rgba(255,255,255,.5)', fontSize: 12, marginTop: 3 }}>سریع، با شمارهٔ موبایل — بدونِ نیاز به رمز</div>
+            <div style={{ color: 'var(--auth-panel-feat)', fontSize: 14, marginTop: 6, fontWeight: 600 }}>{reason || 'ورود یا ثبت‌نام'}</div>
+            <div style={{ color: 'var(--auth-panel-sub)', fontSize: 12, marginTop: 3 }}>سریع، با شمارهٔ موبایل — بدونِ نیاز به رمز</div>
           </div>
         </div>
 

@@ -89,6 +89,8 @@ html.light .mjhero-night { display: none; }
   /* فاز ۳۰۹ح — بنرِ هیروی صفحهٔ محله تم‌آگاه: شب همان گرادیانِ گرمِ قبلی، روز روشنِ کرمی. */
   --nbh-hero:linear-gradient(135deg, #1a0e04 0%, #2d1a06 35%, #4a2e0a 65%, #6b4510 100%); --nbh-glow:radial-gradient(ellipse at 20% 50%, rgba(184,134,11,0.18) 0%, transparent 60%);
   --nbh-crumb:rgba(212,175,55,0.7); --nbh-h1:#fff; --nbh-h1-shadow:0 2px 10px rgba(0,0,0,0.55); --nbh-sub:rgba(212,175,55,0.85);
+  /* فاز ۳۰۹ط — پنلِ برندِ ورود (صفحهٔ /auth + هدرِ AuthModal) تم‌آگاه: شب سرمه‌ایِ تیره، روز روشنِ برندی. */
+  --auth-panel:linear-gradient(145deg,#1a1a2e 0%,#16213e 40%,#0f3460 100%); --auth-panel-text:#fff; --auth-panel-sub:rgba(255,255,255,.6); --auth-panel-feat:rgba(255,255,255,.8);
 }
 html.light {
   --hero-base:#eef3f6;
@@ -118,6 +120,7 @@ html.light {
   --cover-scrim:linear-gradient(to bottom,transparent 42%,rgba(238,243,246,0.82) 100%); --cover-title:#17202e; --cover-title-shadow:0 1px 2px rgba(255,255,255,0.9); --cover-sub:rgba(23,32,46,0.7);
   --nbh-hero:linear-gradient(135deg, #fbf3e2 0%, #f6e8c8 45%, #efdcae 100%); --nbh-glow:radial-gradient(ellipse at 20% 50%, rgba(184,134,11,0.12) 0%, transparent 62%);
   --nbh-crumb:rgba(122,86,15,0.9); --nbh-h1:#3a2a08; --nbh-h1-shadow:0 1px 2px rgba(255,255,255,0.85); --nbh-sub:#7E560F;
+  --auth-panel:linear-gradient(145deg,#e8edf5 0%,#dbe6f2 40%,#c9d9ec 100%); --auth-panel-text:#17202e; --auth-panel-sub:rgba(23,32,46,.66); --auth-panel-feat:rgba(23,32,46,.8);
 }
 
 /* فاز ۶۱: بازی (empRoot) همیشه پالتِ تیرهٔ طراحی‌شدهٔ خودش را دارد — مستقل از تمِ سایت.
