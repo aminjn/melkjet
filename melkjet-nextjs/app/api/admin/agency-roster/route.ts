@@ -72,11 +72,16 @@ export async function POST(req: NextRequest) {
     const onlyStale = b.onlyStale !== false   // پیش‌فرض: فقط آن‌هایی که امروز سینکِ موفق نداشته‌اند
     const dayAgo = Date.now() - 20 * 3600_000
     const list = await listScrapes()
-    const targets = onlyStale ? list.filter(sc => !sc.lastOkAt || sc.lastOkAt < dayAgo || sc.lastError) : list
+    const targets = (onlyStale ? list.filter(sc => !sc.lastOkAt || sc.lastOkAt < dayAgo || sc.lastError) : list).filter(sc => !sc.running)
+    // فاز ۳۱۳ — «پله‌ای»: دیگر ۱۳۲ آژانس را یک‌جا force نمی‌کنیم (ریشهٔ خفگیِ دیتابیسِ ۱۸ اکتبر —
+    // runRequested پنجرهٔ شب را دور می‌زد و همه با هم وسطِ روز دیتابیس را قُرق می‌کردند). فقط
+    // N تای کهنه‌ترین را «الان» در صف می‌گذاریم؛ بقیهٔ کهنه‌ها خودکار در پنجرهٔ شبانهٔ (۰–۶) سینک می‌شوند.
+    const cap = Math.max(1, Math.min(Number(b.cap) || 8, 40))
+    targets.sort((a, c) => (a.lastOkAt || 0) - (c.lastOkAt || 0))
     let n = 0
-    for (const sc of targets) { if (!sc.running && await requestRun(sc.id)) n++ }
-    logAudit(who(s), 'همگام‌سازیِ همهٔ بک‌لاگ', `${n} آژانس در صف`)
-    return NextResponse.json({ ok: true, queued: n, total: list.length })
+    for (const sc of targets.slice(0, cap)) { if (await requestRun(sc.id)) n++ }
+    logAudit(who(s), 'همگام‌سازیِ بک‌لاگ (پله‌ای)', `${n} آژانس الان؛ ${Math.max(0, targets.length - n)} برای پنجرهٔ شب`)
+    return NextResponse.json({ ok: true, queued: n, deferred: Math.max(0, targets.length - n), total: list.length })
   }
   // فاز ۱۹۶ — «⏹ توقفِ همگام‌سازی»: state فوراً بسته می‌شود؛ رانِ زنده در اولین چک می‌ایستد
   if (action === 'stop') {

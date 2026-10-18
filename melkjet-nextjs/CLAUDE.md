@@ -177,6 +177,28 @@ The `!important` is REQUIRED to override inline styles.
 Read this to resume work in a fresh session. **Everything is committed to git** — the
 repo + this file are the source of truth, no chat history needed.
 
+## ⚙️ زیرساختِ دیتابیس — pgbouncer + تیونِ PG + ممیزیِ ML-only (۱۸ اکتبر ۲۰۲۶، بحرانِ یک‌روزه)
+یک روزِ کامل «اتصال/تایم‌اوت storm» (connect/statement timeout) که سایت/ممیزی/تلگرام را می‌خواباند.
+ریشه: PostgreSQL روی **همان باکسِ ۸گیگِ مشترک با ۴ اینستنسِ اپ**، و همهٔ نوشتن‌ها از یک قفلِ
+`scraper_meta FOR UPDATE` سریال می‌شدند؛ یک «همگام‌سازیِ همهٔ بک‌لاگ» (runRequested روی هر ۱۳۲
+آژانس) وسطِ روز دیتابیس را قُرق کرد. راه‌حلِ لایه‌ای که **حالا فعال است**:
+- **pgbouncer (transaction pooling) فعال است** — `DATABASE_URL` روی **پورت 6432** (نه 5432).
+  نصب/کانفیگ: `scripts/ops/setup-pgbouncer.sh` (+ `pgbouncer-smoketest.mjs` که عینِ اپ تست می‌کند).
+  ریپو برای transaction-mode امن است (نه LISTEN/NOTIFY، نه prepared stmt، نه advisory lockِ نشستی).
+  برگشت: `DATABASE_URL` را به 5432 برگردان + `pm2 reload --update-env`. رانبوک: `docs/INFRA-DB.md`.
+- **تیونِ PG:** `scripts/ops/pg-tune.sh` → `conf.d/melkjet-tuning.conf` (چک‌پوینتِ هموار ریشهٔ PANIC،
+  `max_wal_size=3GB`، `shared_buffers=512MB`، autovacuum تهاجمی‌تر). همه reloadی جز shared_buffers.
+- **قفلِ `scraper_meta` هنوز هست** — «نوشتنِ بدونِ‌قفلِ ممیزی» کارِ بازِ بعدی است (اگر دوباره
+  روستر ممیزی را خفه کرد). پایدارترین گام: PG روی سرورِ جدا (با pgbouncer فقط host عوض می‌شود).
+- **ممیزیِ خودکار «فقط ML» (فاز ۳۱۱):** smartVerdict دیگر AIِ گپِ مرده را صدا نمی‌زند (ریشهٔ «خودش
+  اتومات تأیید نمی‌کرد» — آگهی در pendingِ unsettled گیر می‌کرد). نامطمئن که از گیت‌های قطعی گذشت →
+  طبقِ pendingPolicy (پیش‌فرض approve) حکمِ قطعی. کشِ ایندکسِ تکرار (فاز ۳۱۰، TTL ۳د) هم ممیزی را سبک کرد.
+- **تأییدِ دستیِ تکی → تلگرام (فاز ۳۰۹ن):** با `force` گاردِ ۶ساعته را رد می‌کند؛ گروهی عمداً ساکت.
+- **شفافیتِ تکرار (فاز ۳۱۲):** دلیلِ «تکراری» حالا عنوان+کد+متراژِ آگهیِ مرجع را نشان می‌دهد.
+- **توقفِ اضطراریِ روستر:** `scripts/roster-pause.mjs` روی همهٔ روسترها requestStop می‌زند.
+- **«همگام‌سازیِ همه» پله‌ای شد (فاز ۳۱۳):** فقط N کهنه‌ترین (cap=۸) الان، بقیه در پنجرهٔ شب.
+- **ROSTER_SYNCS=1** در `.env.production.local` (سریال — ضدِ اشباعِ استخر).
+
 ## PostgreSQL migration (IN PROGRESS — gated by DATABASE_URL)
 - **`app/lib/db.ts`** = pg Pool + `kv(key jsonb)` layer: `kvGet`/`kvSet`/`kvMutate`
   (kvMutate = atomic read-modify-write with `FOR UPDATE` row lock → no lost concurrent writes).
