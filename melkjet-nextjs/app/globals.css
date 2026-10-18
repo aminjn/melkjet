@@ -83,6 +83,9 @@ html.light .mjhero-night { display: none; }
   --ph-overlay:radial-gradient(900px 300px at 78% -20%, rgba(236,151,56,.28), transparent 62%), radial-gradient(700px 260px at 12% 120%, rgba(70,96,150,.18), transparent 60%), linear-gradient(120deg,#070a12,#0b0e1a 55%,#141009);
   --ph-text:#F6F1E6; --ph-sub:rgba(244,238,225,.72); --ph-crumb:rgba(244,238,225,.7); --ph-crumb-faint:rgba(244,238,225,.35); --ph-gold:#F7DE92;
   --ph-chip-bg:rgba(255,255,255,.07); --ph-chip-brd:rgba(247,222,146,.22); --ph-chip-text:#f3ede0;
+  /* فاز ۳۰۹ز — نوارِ کاورِ صفحهٔ پروژه/سازنده (حالتِ بی‌عکس) تم‌آگاه: شب تیره، روز روشن. */
+  --cover-fallback:linear-gradient(135deg,#1a2535,#0d1520); --cover-fallback-2:linear-gradient(120deg,#1c1a14,#0d0d0f 70%); --cover-fallback-3:linear-gradient(135deg,#1a2620,#101610);
+  --cover-scrim:linear-gradient(to bottom,transparent 35%,rgba(13,13,15,0.92) 100%); --cover-title:#fff; --cover-title-shadow:0 2px 12px rgba(0,0,0,0.5); --cover-sub:rgba(255,255,255,0.68);
 }
 html.light {
   --hero-base:#eef3f6;
@@ -107,6 +110,9 @@ html.light {
   --ph-overlay:radial-gradient(900px 300px at 78% -20%, rgba(247,222,146,.42), transparent 62%), radial-gradient(700px 260px at 12% 120%, rgba(150,185,225,.24), transparent 60%), linear-gradient(120deg,#e7edf3,#eef2ec 55%,#f7f0e2);
   --ph-text:#17202e; --ph-sub:rgba(23,32,46,.72); --ph-crumb:rgba(23,32,46,.62); --ph-crumb-faint:rgba(23,32,46,.32); --ph-gold:#9A6B18;
   --ph-chip-bg:rgba(255,255,255,.72); --ph-chip-brd:rgba(23,32,46,.14); --ph-chip-text:#17202e;
+  /* فاز ۳۰۹ز — نوارِ کاورِ بی‌عکس در تمِ روز: گرادیانِ روشن + متنِ تیره (روی عکسِ واقعی همان تیره می‌ماند). */
+  --cover-fallback:linear-gradient(135deg,#dbe6f0,#eef3f6); --cover-fallback-2:linear-gradient(120deg,#f1ece0,#eef3f6 70%); --cover-fallback-3:linear-gradient(135deg,#dde9e0,#eef3f6);
+  --cover-scrim:linear-gradient(to bottom,transparent 42%,rgba(238,243,246,0.82) 100%); --cover-title:#17202e; --cover-title-shadow:0 1px 2px rgba(255,255,255,0.9); --cover-sub:rgba(23,32,46,0.7);
 }
 
 /* فاز ۶۱: بازی (empRoot) همیشه پالتِ تیرهٔ طراحی‌شدهٔ خودش را دارد — مستقل از تمِ سایت.

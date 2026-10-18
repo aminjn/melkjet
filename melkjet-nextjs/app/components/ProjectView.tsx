@@ -101,17 +101,18 @@ export default function ProjectView({ p }: { p: ViewProject }) {
       {/* Hero */}
       <div style={{ position: 'relative', height: 320, background: 'var(--bg2)', overflow: 'hidden' }}>
         {cover ? <img src={cover} alt={p.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg,#1a2535,#0d1520)' }} />}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom,transparent 35%,rgba(13,13,15,0.92) 100%)' }} />
+          : <div style={{ position: 'absolute', inset: 0, background: 'var(--cover-fallback)' }} />}
+        {/* روی عکسِ واقعی اسکریمِ تیره می‌ماند (عکس خودش بافتِ تیره است)؛ بی‌عکس = توکنِ تم‌آگاه (روز روشن). */}
+        <div style={{ position: 'absolute', inset: 0, background: cover ? 'linear-gradient(to bottom,transparent 35%,rgba(13,13,15,0.92) 100%)' : 'var(--cover-scrim)' }} />
         <div style={{ position: 'absolute', top: 18, right: 18, background: 'rgba(13,13,15,0.7)', backdropFilter: 'blur(8px)', borderRadius: 10, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, color: 'var(--gold)', border: '1px solid rgba(201,169,106,0.35)' }}>● {p.statusLabel}</div>
         {!!p.photos.length && <div style={{ position: 'absolute', top: 18, left: 18, background: 'rgba(13,13,15,0.7)', backdropFilter: 'blur(8px)', borderRadius: 10, padding: '7px 14px', fontSize: 12, color: 'var(--muted)', border: '1px solid var(--line)' }}>{fa(p.photos.length)} عکسِ واقعی</div>}
         <div style={{ position: 'absolute', bottom: 24, right: 24, left: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <div style={{ width: 44, height: 44, borderRadius: 14, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontSize: 18, fontWeight: 900 }}>{devLogo}</div>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{p.builder.name}</span>
+            <span style={{ fontSize: 13, color: cover ? 'rgba(255,255,255,0.82)' : 'var(--cover-sub)' }}>{p.builder.name}</span>
           </div>
-          <h1 style={{ margin: 0, fontSize: 'clamp(19px,3vw,30px)', fontWeight: 900, color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.5)', lineHeight: 1.5 }}>{p.title}</h1>
-          <div style={{ marginTop: 8, fontSize: 13.5, color: 'rgba(255,255,255,0.65)' }}>📍 {p.region}{p.phase ? ` · مرحله: ${p.phase}` : ''}</div>
+          <h1 style={{ margin: 0, fontSize: 'clamp(19px,3vw,30px)', fontWeight: 900, color: cover ? '#fff' : 'var(--cover-title)', textShadow: cover ? '0 2px 12px rgba(0,0,0,0.5)' : 'var(--cover-title-shadow)', lineHeight: 1.5 }}>{p.title}</h1>
+          <div style={{ marginTop: 8, fontSize: 13.5, color: cover ? 'rgba(255,255,255,0.65)' : 'var(--cover-sub)' }}>📍 {p.region}{p.phase ? ` · مرحله: ${p.phase}` : ''}</div>
         </div>
       </div>
 

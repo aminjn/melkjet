@@ -92,7 +92,7 @@ export default function BuilderProfileView({ profile, initialFollowing, loggedIn
       <Nav />
 
       {/* Hero */}
-      <div style={{ position: 'relative', height: 230, background: 'linear-gradient(120deg,#1c1a14,#0d0d0f 70%)', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', height: 230, background: 'var(--cover-fallback-2)', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 16px,rgba(255,255,255,0.02) 16px,rgba(255,255,255,0.02) 17px)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(120% 80% at 80% 0%, rgba(201,169,106,0.10), transparent 60%)' }} />
       </div>
@@ -206,13 +206,13 @@ function ProjectGrid({ items, past, empty }: { items: ProjectCard[]; past?: bool
 function CurrentCard({ p }: { p: ProjectCard }) {
   const inner = (
     <article style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', height: '100%' }}>
-      <div style={{ height: 150, position: 'relative', background: 'linear-gradient(135deg,#26201a,#161410)' }}>
+      <div style={{ height: 150, position: 'relative', background: p.photo ? 'linear-gradient(135deg,#26201a,#161410)' : 'var(--cover-fallback-3)' }}>
         {p.photo && <img src={p.photo} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom,transparent 30%,rgba(13,13,15,0.88) 100%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: p.photo ? 'linear-gradient(to bottom,transparent 30%,rgba(13,13,15,0.88) 100%)' : 'var(--cover-scrim)' }} />
         <span style={{ position: 'absolute', top: 12, left: 12, fontSize: 11, fontWeight: 800, padding: '5px 12px', borderRadius: 999, background: 'rgba(13,13,15,0.7)', color: STATUS_COLOR[p.status], border: `1px solid ${STATUS_COLOR[p.status]}66` }}>{p.statusLabel}</span>
         <div style={{ position: 'absolute', bottom: 12, right: 14, left: 14, textAlign: 'right' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-          {p.location && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 3 }}>{p.location}</div>}
+          <div style={{ fontSize: 15, fontWeight: 800, color: p.photo ? '#fff' : 'var(--cover-title)', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+          {p.location && <div style={{ fontSize: 12, color: p.photo ? 'rgba(255,255,255,0.7)' : 'var(--cover-sub)', marginTop: 3 }}>{p.location}</div>}
         </div>
       </div>
       <div style={{ padding: '14px 16px' }}>
@@ -241,13 +241,13 @@ function CurrentCard({ p }: { p: ProjectCard }) {
 function PastCard({ p }: { p: ProjectCard }) {
   const inner = (
     <article style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', height: '100%' }}>
-      <div style={{ height: 130, position: 'relative', background: 'linear-gradient(135deg,#1a2620,#101610)' }}>
+      <div style={{ height: 130, position: 'relative', background: p.photo ? 'linear-gradient(135deg,#1a2620,#101610)' : 'var(--cover-fallback-3)' }}>
         {p.photo && <img src={p.photo} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom,transparent 30%,rgba(13,13,15,0.88) 100%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: p.photo ? 'linear-gradient(to bottom,transparent 30%,rgba(13,13,15,0.88) 100%)' : 'var(--cover-scrim)' }} />
         <span style={{ position: 'absolute', top: 12, left: 12, fontSize: 11, fontWeight: 800, padding: '5px 12px', borderRadius: 999, background: 'rgba(13,13,15,0.7)', color: '#5fd98a', border: '1px solid rgba(95,217,138,0.4)' }}>تحویل‌شده{p.deliveryDate ? ` ${fa(p.deliveryDate)}` : ''}</span>
         <div style={{ position: 'absolute', bottom: 12, right: 14, left: 14, textAlign: 'right' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-          {p.location && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 3 }}>{p.location}</div>}
+          <div style={{ fontSize: 15, fontWeight: 800, color: p.photo ? '#fff' : 'var(--cover-title)', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+          {p.location && <div style={{ fontSize: 12, color: p.photo ? 'rgba(255,255,255,0.7)' : 'var(--cover-sub)', marginTop: 3 }}>{p.location}</div>}
         </div>
       </div>
       <div style={{ padding: '14px 16px' }}>
