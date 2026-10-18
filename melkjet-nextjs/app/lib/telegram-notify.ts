@@ -97,13 +97,17 @@ export async function seedChannel(limit = 5): Promise<number> {
   return items.length
 }
 
-export async function notifyNewListings(items: Item[]) {
+export async function notifyNewListings(items: Item[], opts?: { force?: boolean }) {
   const now = Date.now()
   // «تازگی» تابعِ تاریخِ ثبتِ فایل است، نه تاریخِ آخرین نوشتن. scrapedAt در هر
   // به‌روزرسانی ریست می‌شود، پس آگهیِ سه‌ماهه‌ای که دوباره منتشر شود از این گارد
   // رد می‌شد و به‌عنوانِ «جدید» به کانال می‌رفت — ۲۹ اوت ۲۰۲۶، ترمیمِ انتشار.
+  // فاز ۳۰۹ن — opts.force: تأییدِ دستیِ ادمین «اراده‌ای صریح» برای انتشار است، پس فارغ از سنِ
+  // اسکرپ اعلام می‌شود (قبلاً آگهی‌ای که به‌خاطرِ بک‌لاگِ ممیزی >۶ساعت منتظر مانده بود، حتی پس از
+  // تأیید هم به تلگرام نمی‌رفت چون گاردِ ۶ساعته از «زمانِ اسکرپ» حساب می‌کرد).
   const fresh = items.filter(it => {
     if (it.type !== 'listing') return false
+    if (opts?.force) return true
     const born = it.firstSeenAt || it.scrapedAt
     return !born || now - born < 6 * 3600 * 1000
   })

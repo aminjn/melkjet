@@ -143,6 +143,10 @@ export async function PATCH(req: NextRequest) {
     // فاز ۳۰۰ج — خبر به صاحبِ آگهیِ کاربرساخته (پیامک + رباتِ تلگرام/بله). پس‌زمینه، غیرِمسدودکننده.
     if ((b.status === 'approved' || b.status === 'rejected') && prev)
       import('@/app/lib/listing-approve-notify').then(m => m.notifyListingDecision(prev, b.status as 'approved' | 'rejected', prev.status)).catch(() => {})
+    // فاز ۳۰۹ن — تأییدِ دستیِ تکیِ آگهی باید به کانال/آلارم‌های تلگرام هم برود (قبلاً setItemStatus
+    // اصلاً notifyNewListings را صدا نمی‌زد؛ فقط مسیرِ خودکار می‌فرستاد). force=true تا بک‌لاگِ کهنه هم برود.
+    if (b.status === 'approved' && prev && prev.type === 'listing' && prev.status !== 'approved')
+      import('@/app/lib/telegram-notify').then(m => m.notifyNewListings([prev], { force: true })).catch(() => {})
     return NextResponse.json({ ok: true })
   }
   return NextResponse.json({ error: 'ورودی نامعتبر' }, { status: 400 })
