@@ -61,7 +61,11 @@ export function featuresOf(it: Partial<Item>): string[] {
   const priceTxt = faToEn(it.price || '')
   const nums = (priceTxt.match(/\d[\d,]*/g) || []).map(n => parseInt(n.replace(/,/g, ''), 10)).filter(n => n > 0)
   const price = nums.length ? Math.max(...nums) : 0
-  f.push('#pb' + (price <= 0 ? 'x' : price < 1e8 ? 'lo' : price < 1e9 ? '0' : price < 1e10 ? '1' : price < 5e10 ? '2' : '3'))
+  // فاز ۳۰۹ل (فیدبک: «الکی خیلی آگهی‌ها را رد کرده») — «توافقی» قیمتِ معتبر و رایج است، نه
+  // «نامشخص/نامعتبر». قبلاً چون رقم نداشت price=0 و #pbx (مدرکِ سختِ رد) می‌گرفت، پس همهٔ
+  // آگهی‌های توافقی الکی رد می‌شدند. حالا نشانهٔ خنثیِ #price_nego (در مدرکِ سختِ رد نیست).
+  const negoPrice = !nums.length && /توافق|مقطوع|تماس/.test(String(it.price || ''))
+  f.push(negoPrice ? '#price_nego' : '#pb' + (price <= 0 ? 'x' : price < 1e8 ? 'lo' : price < 1e9 ? '0' : price < 1e10 ? '1' : price < 5e10 ? '2' : '3'))
   // فاز ۳۰۰و — ویژگی‌های عددیِ صریح تا مدل «مقدارِ نامعقول» را هم یاد بگیرد، نه فقط الگوی متن.
   // (ریشهٔ «آگهیِ چرت با ۸۸٪ تأیید شد»: ویژگی‌ها فقط متنی بودند و متراژ/سال/قیمتِ نجومی را نمی‌دیدند.)
   const areaN = parseInt(faToEn(String(it.meta?.['متراژ'] || '')).replace(/\D/g, ''), 10)
@@ -196,12 +200,17 @@ export function contactEvidenceOf(it: Partial<Item>): string[] {
 
 // فاز ۵۴ — قانونِ سختِ جدید: «شباهتِ صرفاً واژه‌ای هرگز حقِ ردِ خودکار ندارد». این تابع می‌گوید شواهدِ
 // ردِ مدل شاملِ کدام نشانه‌های ساختاری (#phone_in_text، #pbx و…) است؛ اگر هیچ، رد فقط واژه‌ای است.
+// فاز ۳۰۹ل — «مدرکِ سختِ رد» فقط نشانه‌های سوءاستفاده/آشغالِ واقعی است، نه کیفیتِ پایینِ مشروع.
+// قبلاً هر پرچمِ FEATURE_FA (شاملِ #short/#thin_desc/#pbx/#pblo/#no_area/#no_price) «سخت» بود، پس
+// آگهیِ کوتاه/توافقی/بی‌متراژِ سالم هم «الکی» ردِ خودکار می‌شد. آگهیِ کم‌کیفیت باید به بازبینی/تأیید
+// برود، نه ردِ خودکار — رد فقط با نشانهٔ واقعی: تماس در متن، یا مقدارِ به‌وضوح جعلی/نامعقول.
+const HARD_REJECT = new Set(['#phone_in_text', '#contact_in_text', '#price_absurd', '#area_tiny', '#area_absurd', '#year_future'])
 export function rejectEvidenceOf(it: Partial<Item>): { hard: string[]; hardFa: string[]; wordsOnly: boolean } {
   const d = load()
   const ap = d.approved, rj = d.rejected
   const V = new Set([...Object.keys(ap.tok), ...Object.keys(rj.tok)]).size || 1
   const w = (t: string) => Math.log(((rj.tok[t] || 0) + 1) / (rj.total + V)) - Math.log(((ap.tok[t] || 0) + 1) / (ap.total + V))
-  const hard = [...new Set(featuresOf(it))].filter(t => t.startsWith('#') && FEATURE_FA[t] && w(t) > 0)
+  const hard = [...new Set(featuresOf(it))].filter(t => HARD_REJECT.has(t) && w(t) > 0)
   return { hard, hardFa: hard.map(t => FEATURE_FA[t]), wordsOnly: hard.length === 0 }
 }
 
