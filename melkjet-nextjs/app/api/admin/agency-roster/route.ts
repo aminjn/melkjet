@@ -66,6 +66,18 @@ export async function POST(req: NextRequest) {
     const ok = await requestRun(String(b.id))
     return NextResponse.json({ ok, queued: ok, note: ok ? 'در صفِ همگام‌سازیِ اینستنسِ ۰ قرار گرفت' : 'اسکرپ یافت نشد' })
   }
+  // همگام‌سازیِ «همهٔ بک‌لاگ» روی تقاضا: همهٔ آژانس‌ها (یا فقط آن‌هایی که امروز سینکِ موفق نداشته‌اند)
+  // را در صف می‌گذارد — runRequested پنجرهٔ شب را دور می‌زند و کرونِ سریال یکی‌یکی می‌رساندشان.
+  if (action === 'sync-all') {
+    const onlyStale = b.onlyStale !== false   // پیش‌فرض: فقط آن‌هایی که امروز سینکِ موفق نداشته‌اند
+    const dayAgo = Date.now() - 20 * 3600_000
+    const list = await listScrapes()
+    const targets = onlyStale ? list.filter(sc => !sc.lastOkAt || sc.lastOkAt < dayAgo || sc.lastError) : list
+    let n = 0
+    for (const sc of targets) { if (!sc.running && await requestRun(sc.id)) n++ }
+    logAudit(who(s), 'همگام‌سازیِ همهٔ بک‌لاگ', `${n} آژانس در صف`)
+    return NextResponse.json({ ok: true, queued: n, total: list.length })
+  }
   // فاز ۱۹۶ — «⏹ توقفِ همگام‌سازی»: state فوراً بسته می‌شود؛ رانِ زنده در اولین چک می‌ایستد
   if (action === 'stop') {
     const ok = await requestStop(String(b.id))

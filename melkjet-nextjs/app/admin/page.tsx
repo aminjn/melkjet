@@ -2612,6 +2612,14 @@ function AgencyRosterPanel() {
         <p style={{ fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.9, margin: '8px 0 0' }}>
           این <b>پیش‌فرض</b> برای آژانس‌هایی است که زمان‌بندیِ اختصاصی ندارند. هر آژانس می‌تواند زیرِ کارتِ خودش بازهٔ جداگانه بگذارد. همگام‌سازیِ خودکار فقط در بازه (به وقتِ ایران) اجرا می‌شود تا روزها ترافیک و دیوار درگیر نشوند — آژانس‌ها یکی‌یکی در صف می‌روند. دکمهٔ «🔄 همگام‌سازی الان» همیشه و بی‌درنگ کار می‌کند و به بازه وابسته نیست.
         </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+          <GoldButton disabled={busy} onClick={async () => {
+            if (!confirm('همهٔ آژانس‌هایی که امروز سینکِ موفق نداشته‌اند همین الان در صف می‌روند (پنجرهٔ شب را دور می‌زند؛ یکی‌یکی سریال سینک می‌شوند). ادامه؟')) return
+            setBusy(true); setMsg('')
+            try { const j = await post({ action: 'sync-all', onlyStale: true }); setMsg(j.ok ? `✅ ${fa(j.queued)} آژانس در صف رفت — یکی‌یکی سینک می‌شوند` : '❌ ' + (j.error || 'خطا')); load(); loadHealth() } finally { setBusy(false) }
+          }}>🔄 همگام‌سازیِ همهٔ بک‌لاگ (الان)</GoldButton>
+          <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>آژانس‌هایی که امروز آپدیت نشده‌اند را فوری در صف می‌گذارد — برای جبرانِ بک‌لاگ بدونِ انتظارِ شب.</span>
+        </div>
       </div>
 
       {/* ۸ اکتبر — نوارِ نظم. پیشترها همهٔ آژانس‌ها (روی سرور ۱۵۵ تا) بی‌هیچ فیلتری
