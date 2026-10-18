@@ -2448,7 +2448,9 @@ function AgencyRosterPanel() {
   // شهرها مسیرِ جداگانه‌اند و یک‌بار گرفته می‌شوند — داخلِ pollِ ۴ثانیه‌ایِ سینک نیستند،
   // چون برای ردیف‌هایی که هنوز city ندارند شاردِ advisor می‌خوانند.
   const loadCities = () => { setCitiesBusy(true); return fetch('/api/admin/agency-roster?cities=1', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) setCities(j.cities || {}) }).catch(() => {}).finally(() => setCitiesBusy(false)) }
-  useEffect(() => { load().then(loadCities) }, [])
+  const [health, setHealth] = useState<any>(null)
+  const loadHealth = () => fetch('/api/admin/agency-roster?health=1', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) setHealth(j) }).catch(() => {})
+  useEffect(() => { load().then(loadCities); loadHealth(); const t = setInterval(loadHealth, 20000); return () => clearInterval(t) }, [])
 
   const cityList = useMemo(() => {
     const n = new Map<string, number>()
@@ -2567,6 +2569,25 @@ function AgencyRosterPanel() {
         <GoldButton disabled={busy} onClick={add}>{busy ? '…' : '➕ افزودن آژانس'}</GoldButton>
       </div>
       {msg && <div style={{ fontSize: 12.5, color: 'var(--gold)', marginBottom: 8 }}>{msg}</div>}
+
+      {/* وضعیتِ کرون — آیا همگام‌سازیِ خودکار اصلاً اجرا می‌شود؟ (پاسخِ «دیشب چرا نرفت») */}
+      {health && (() => {
+        const beat = health.cron || {}
+        const tickMin = beat.at ? Math.round((health.serverNow - beat.at) / 60000) : null
+        const cronAlive = tickMin != null && tickMin < 5   // تیکِ کرون هر ۴۵ث است
+        const syncAgo = beat.lastRosterSyncAt ? ago(beat.lastRosterSyncAt) : 'هرگز'
+        return (
+          <div style={{ border: `1px solid ${cronAlive ? '#2f6b45' : '#7a3b2e'}`, background: cronAlive ? 'rgba(95,217,138,.08)' : 'rgba(231,103,74,.1)', borderRadius: 12, padding: 12, marginBottom: 12, fontSize: 12.5, lineHeight: 1.9 }}>
+            <div style={{ fontWeight: 800 }}>{cronAlive ? '🟢 کرونِ اینستنسِ ۰ زنده است' : '🔴 کرون اجرا نمی‌شود — همگام‌سازیِ خودکار متوقف است'}</div>
+            <div style={{ color: 'var(--muted)' }}>
+              آخرین تیکِ کرون: <b>{beat.at ? ago(beat.at) : 'هرگز'}</b> (اینستنس {beat.instance ?? '—'}) ·
+              آخرین همگام‌سازیِ خودکار: <b>{syncAgo}</b>{beat.lastRosterSyncSlug ? ` (${beat.lastRosterSyncSlug})` : ''} ·
+              الان سررسیده: <b>{fa(health.dueNow)}</b> · در حالِ اجرا: <b>{fa(health.runningNow)}</b>
+            </div>
+            {!cronAlive && <div style={{ color: '#e7a14a', marginTop: 4 }}>کرون فقط روی اینستنسِ ۰ است و بعد از ری‌استارت/کرشِ حافظه باید خودکار دوباره روشن شود. اگر «آخرین تیک» قدیمی است، اینستنسِ ۰ را روی سرور ری‌استارت کن: <span style={{ direction: 'ltr', display: 'inline-block' }}>pm2 restart melkjet-3000</span></div>}
+          </div>
+        )
+      })()}
 
       {/* زمان‌بندیِ همگام‌سازیِ خودکار — پنجرهٔ شبانه */}
       <div style={{ border: '1px solid var(--line2)', borderRadius: 12, padding: 12, marginBottom: 12, background: 'var(--bg2)' }}>

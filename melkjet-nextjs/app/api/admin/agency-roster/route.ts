@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor} from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, listDueRosters} from '@/app/lib/agency-roster-store'
+import { getCronBeat } from '@/app/lib/cron-heartbeat'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { rosterCities } from '@/app/lib/agency-roster-city'
 import { logAudit } from '@/app/lib/audit-store'
@@ -23,6 +24,17 @@ export async function GET(req: NextRequest) {
     const list = await listScrapes()
     const force = req.nextUrl.searchParams.get('force') === '1'
     return NextResponse.json({ ok: true, cities: await rosterCities(list, force) }, { headers: { 'Cache-Control': 'no-store' } })
+  }
+  // ?health=1 → وضعیتِ کرون (آیا شبانه اجرا می‌شود؟). جدا از GETِ اصلی تا پولِ ۴ثانیه‌ای سنگین نشود.
+  if (req.nextUrl.searchParams.get('health')) {
+    const [cron, due] = await Promise.all([getCronBeat(), listDueRosters(Date.now())])
+    const scrapes = await listScrapes()
+    return NextResponse.json({
+      ok: true, cron,
+      dueNow: due.length,
+      runningNow: scrapes.filter(s => s.running).length,
+      serverNow: Date.now(),
+    }, { headers: { 'Cache-Control': 'no-store' } })
   }
   return NextResponse.json({ ok: true, scrapes: await listScrapes(), settings: await getRosterSettings() })
 }
