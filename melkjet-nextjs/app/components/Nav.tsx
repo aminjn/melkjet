@@ -77,10 +77,11 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
   // تصویرِ تیره است نه پس‌زمینهٔ تم — و همین بود که در تمِ روشن برچسب‌ها را نامرئی می‌کرد.
   // روی هیرو پشتِ نوار همیشه تیره است (هیرو background '#080b14' دارد، با عکس یا بی‌عکس)،
   // پس رنگِ کرم به اسکرول وابسته نیست — فقط ماتیِ نوار وابسته است.
+  // فاز ۳۰۹ — رنگِ ناوِ روی هیرو تم‌آگاه شد: تمِ تیره روشن، تمِ روشن تیره (وگرنه روی آسمانِ روز نامرئی بود).
   const onHero = overlay
-  const navText = onHero ? '#f3ede0' : 'var(--text)'
-  const navDim = onHero ? 'rgba(243,237,224,0.78)' : 'var(--muted)'
-  const navShadow = onHero ? '0 1px 10px rgba(0,0,0,.55)' : undefined
+  const navText = onHero ? 'var(--hero-nav-text)' : 'var(--text)'
+  const navDim = onHero ? 'var(--hero-nav-dim)' : 'var(--muted)'
+  const navShadow = onHero ? 'var(--hero-nav-shadow)' : undefined
   const [menuOpen, setMenuOpen] = useState(false)
   const [open, setOpen] = useState<string | null>(null)        // منوی دسکتاپِ بازشده
   const [mobOpen, setMobOpen] = useState<string | null>(null)  // بخشِ بازشدهٔ موبایل
@@ -112,10 +113,10 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
       // ۶۴ پیکسل پایین می‌انداخت (متنِ کرم روی زمینهٔ روشن = نامرئی).
       // اسکریمِ گرادیانی عمدی است: بدونِ جاوااسکریپت هم متن خوانا می‌ماند، و رنگش
       // همان rgba(6,8,16) روکشِ خودِ هیروست تا درز معلوم نشود.
-      ? { position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, color: '#f3ede0',
-          background: scrolled ? 'linear-gradient(rgba(8,11,20,.94),rgba(8,11,20,.94))' : 'linear-gradient(to bottom, rgba(6,8,16,.72), rgba(6,8,16,.3) 72%, rgba(6,8,16,0))',
+      ? { position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, color: 'var(--hero-nav-text)',
+          background: scrolled ? 'var(--hero-nav-scrim-scrolled)' : 'var(--hero-nav-scrim)',
           backdropFilter: scrolled ? 'blur(18px)' : undefined, WebkitBackdropFilter: scrolled ? 'blur(18px)' : undefined,
-          borderBottom: scrolled ? '1px solid rgba(243,237,224,0.14)' : '1px solid transparent',
+          borderBottom: scrolled ? '1px solid var(--hero-nav-line)' : '1px solid transparent',
           boxShadow: scrolled ? '0 6px 24px -14px rgba(0,0,0,.6)' : undefined, transition: 'background .25s, border-color .25s' }
       : { position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', background: 'linear-gradient(var(--navbg),var(--navbg)), var(--bg)', borderBottom: '1px solid var(--line2)', boxShadow: '0 6px 24px -14px rgba(0,0,0,.45)' }}>
       <nav style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', height: 64, display: 'flex', alignItems: 'center', gap: 18 }}>
@@ -146,13 +147,13 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
                   {/* ۸ اکتبر — پنلِ سفیدِ وسطِ یک صفحهٔ تیره بد می‌نشست. روی هیرو شیشه‌ایِ تیره
                       می‌شود (هم‌رنگِ روکشِ خودِ هیرو) و جای دیگر از توکنِ تم می‌گیرد. رنگِ متن هم
                       با همان حالت می‌آید، وگرنه دوباره «متنِ تیره روی شیشهٔ تیره» می‌شد. */}
-                  <div style={{ background: onHero ? 'rgba(14,18,28,.92)' : 'var(--surface)', border: `1px solid ${onHero ? 'rgba(243,237,224,.16)' : 'var(--line2)'}`, borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.6)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+                  <div style={{ background: onHero ? 'var(--hero-nav-pop-bg)' : 'var(--surface)', border: `1px solid ${onHero ? 'var(--hero-nav-pop-brd)' : 'var(--line2)'}`, borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.6)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
                     {(m.items || []).map(it => (
                       <Link key={it.label + it.href} href={it.href} onClick={() => setOpen(null)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, textDecoration: 'none', color: 'inherit' }} className="mj-menu-item">
                         <GlassIcon name={it.ic} size={38} box={19} tone={onHero ? 'hero' : 'theme'} />
                         <span style={{ flex: 1 }}>
-                          <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: onHero ? '#f3ede0' : 'var(--text)' }}>{it.label}</span>
-                          <span style={{ display: 'block', fontSize: 11.5, color: onHero ? 'rgba(243,237,224,.7)' : 'var(--muted)', marginTop: 2 }}>{it.desc}</span>
+                          <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: onHero ? 'var(--hero-nav-pop-text)' : 'var(--text)' }}>{it.label}</span>
+                          <span style={{ display: 'block', fontSize: 11.5, color: onHero ? 'var(--hero-nav-pop-dim)' : 'var(--muted)', marginTop: 2 }}>{it.desc}</span>
                         </span>
                       </Link>
                     ))}
@@ -169,13 +170,13 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
           <ThemeToggle size={40} onHero={onHero} />
           {me ? (
             <>
-              <button onClick={logout} title="خروج از حساب" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid rgba(243,237,224,0.38)' : '1px solid var(--line2)', background: 'transparent', color: navDim, textShadow: navShadow, fontFamily: 'inherit', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>خروج</button>
-              {me.dash !== '/buyer' && <Link href="/content" title="مقالاتِ من" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid rgba(243,237,224,0.38)' : '1px solid var(--line2)', background: 'transparent', color: navText, textShadow: navShadow, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>✎ مقالات</Link>}
+              <button onClick={logout} title="خروج از حساب" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid var(--hero-nav-brd)' : '1px solid var(--line2)', background: 'transparent', color: navDim, textShadow: navShadow, fontFamily: 'inherit', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>خروج</button>
+              {me.dash !== '/buyer' && <Link href="/content" title="مقالاتِ من" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid var(--hero-nav-brd)' : '1px solid var(--line2)', background: 'transparent', color: navText, textShadow: navShadow, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>✎ مقالات</Link>}
               <Link href={me.dash} style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>{dashLabel}</Link>
             </>
           ) : (
             <>
-              <button onClick={() => openAuth()} style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid rgba(243,237,224,0.38)' : '1px solid var(--line2)', background: 'transparent', color: navText, textShadow: navShadow, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600 }}>ورود / ثبت‌نام</button>
+              <button onClick={() => openAuth()} style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid var(--hero-nav-brd)' : '1px solid var(--line2)', background: 'transparent', color: navText, textShadow: navShadow, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600 }}>ورود / ثبت‌نام</button>
               <Link href="/submit" style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>ثبت آگهی</Link>
             </>
           )}

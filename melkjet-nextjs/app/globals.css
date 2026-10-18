@@ -52,6 +52,48 @@ html.light {
   --shadow: 0 24px 60px -28px rgba(40,30,10,0.18);
 }
 
+/* فاز ۳۰۹ — هیرو و ناوِ روی هیرو «تم‌آگاه»: شب (پیش‌فرض/:root) ↔ روز (html.light).
+   قبلاً هیرو همیشه‌تیره هارد‌کد بود، پس تمِ روشن «با روز فرقی نداشت». حالا با تمِ روشن،
+   هیرو روز می‌شود (آسمانِ آفتابی، پنلِ شیشه‌ایِ سفید، متنِ تیره) و با تمِ تیره همان شبِ فعلی. */
+:root {
+  --hero-base:#080b14;
+  --hero-img-ov:linear-gradient(to left, rgba(6,8,16,.18) 0%, rgba(6,8,16,.5) 50%, rgba(6,8,16,.8) 100%), linear-gradient(180deg, rgba(6,8,16,.55) 0%, transparent 26%, rgba(4,6,11,.62) 100%);
+  --hero-sky:radial-gradient(1200px 560px at 70% 48%, rgba(236,151,56,.40), rgba(188,108,38,.14) 42%, transparent 70%), radial-gradient(880px 440px at 85% -12%, rgba(247,222,146,.20), transparent 62%), linear-gradient(180deg,#060810 0%,#0a0e1a 36%,#171209 100%);
+  --hero-bottom:linear-gradient(180deg,transparent,rgba(4,6,11,.82));
+  --hero-orb:radial-gradient(circle, rgba(236,170,70,.30), transparent 68%);
+  --hero-h1:#F6F1E6; --hero-h1-shadow:0 2px 30px rgba(0,0,0,.4); --hero-lede:rgba(244,238,225,.78); --hero-accent:linear-gradient(120deg,#F7DE92,#D9AD3E);
+  --hero-chip-bg:rgba(255,255,255,.05); --hero-chip-brd:rgba(247,222,146,.22); --hero-chip-text:rgba(244,238,225,.92);
+  --hero-ic-stroke:#F5D982; --hero-ic-bg:rgba(255,255,255,.08); --hero-ic-brd:rgba(247,222,146,.4);
+  --hero-card-brd:rgba(247,222,146,.26); --hero-card-shadow:0 26px 60px -26px rgba(0,0,0,.8); --hero-fade:#080b14;
+  --hsg-bg:linear-gradient(158deg, rgba(76,95,114,.34), rgba(8,10,12,.5) 60%); --hsg-brd:rgba(244,244,244,.3);
+  --hsg-shadow:0 40px 90px -34px rgba(0,0,0,.78), inset 0 1px 0 rgba(255,255,255,.1);
+  --hsg-field-bg:rgba(221,194,122,.08); --hsg-field-brd:rgba(221,194,122,.4); --hsg-text:#f3ede0; --hsg-label:#F5D982;
+  --hsg-ai-bg:rgba(255,255,255,.04); --hsg-ai-brd:rgba(221,194,122,.28); --hsg-send-bg:rgba(14,17,24,.55);
+  --hsg-ex-bg:rgba(255,255,255,.05); --hsg-ex-brd:rgba(247,222,146,.22); --hsg-ex-text:rgba(244,238,225,.85); --hsg-ex-k:rgba(244,238,225,.6);
+  --hero-nav-text:#f3ede0; --hero-nav-dim:rgba(243,237,224,0.78); --hero-nav-shadow:0 1px 10px rgba(0,0,0,.55); --hero-nav-brd:rgba(243,237,224,0.38);
+  --hero-nav-pop-bg:rgba(14,18,28,.92); --hero-nav-pop-brd:rgba(243,237,224,.16); --hero-nav-pop-text:#f3ede0; --hero-nav-pop-dim:rgba(243,237,224,.7);
+  --hero-nav-scrim:linear-gradient(to bottom, rgba(6,8,16,.72), rgba(6,8,16,.3) 72%, rgba(6,8,16,0)); --hero-nav-scrim-scrolled:linear-gradient(rgba(8,11,20,.94),rgba(8,11,20,.94)); --hero-nav-line:rgba(243,237,224,0.14);
+}
+html.light {
+  --hero-base:#eef3f6;
+  --hero-img-ov:linear-gradient(to left, rgba(255,255,255,.04) 0%, rgba(250,250,248,.28) 55%, rgba(247,242,234,.6) 100%), linear-gradient(180deg, rgba(255,255,255,.26) 0%, transparent 34%, rgba(246,239,225,.46) 100%);
+  --hero-sky:radial-gradient(1200px 640px at 72% 30%, rgba(247,222,146,.5), rgba(217,173,62,.12) 42%, transparent 72%), radial-gradient(900px 520px at 88% -8%, rgba(255,255,255,.8), transparent 60%), linear-gradient(180deg,#b9d6ea 0%,#d7e6ee 30%,#eef2ec 60%,#f6efe1 100%);
+  --hero-bottom:linear-gradient(180deg,transparent,rgba(246,239,225,.7));
+  --hero-orb:radial-gradient(circle, rgba(247,214,120,.45), transparent 68%);
+  --hero-h1:#17202e; --hero-h1-shadow:0 1px 18px rgba(255,255,255,.7); --hero-lede:rgba(23,32,46,.74); --hero-accent:linear-gradient(120deg,#C79A2E,#9A6B18);
+  --hero-chip-bg:rgba(255,255,255,.62); --hero-chip-brd:rgba(23,32,46,.14); --hero-chip-text:#17202e;
+  --hero-ic-stroke:#A9761D; --hero-ic-bg:rgba(217,173,62,.14); --hero-ic-brd:rgba(217,173,62,.4);
+  --hero-card-brd:rgba(255,255,255,.85); --hero-card-shadow:0 20px 44px -22px rgba(23,32,46,.5); --hero-fade:#eef3f6;
+  --hsg-bg:linear-gradient(158deg, rgba(255,255,255,.84), rgba(255,255,255,.64) 60%); --hsg-brd:rgba(255,255,255,.9);
+  --hsg-shadow:0 40px 90px -34px rgba(23,32,46,.38), inset 0 1px 0 rgba(255,255,255,.85);
+  --hsg-field-bg:#ffffff; --hsg-field-brd:rgba(23,32,46,.12); --hsg-text:#17202e; --hsg-label:#A9761D;
+  --hsg-ai-bg:#ffffff; --hsg-ai-brd:rgba(23,32,46,.12); --hsg-send-bg:#ffffff;
+  --hsg-ex-bg:rgba(217,173,62,.12); --hsg-ex-brd:rgba(217,173,62,.28); --hsg-ex-text:#A9761D; --hsg-ex-k:rgba(23,32,46,.5);
+  --hero-nav-text:#17202e; --hero-nav-dim:rgba(23,32,46,0.7); --hero-nav-shadow:0 1px 10px rgba(255,255,255,.6); --hero-nav-brd:rgba(23,32,46,0.22);
+  --hero-nav-pop-bg:rgba(255,255,255,.96); --hero-nav-pop-brd:rgba(23,32,46,.12); --hero-nav-pop-text:#17202e; --hero-nav-pop-dim:rgba(23,32,46,.62);
+  --hero-nav-scrim:linear-gradient(to bottom, rgba(247,243,235,.78), rgba(247,243,235,.32) 72%, rgba(247,243,235,0)); --hero-nav-scrim-scrolled:linear-gradient(rgba(250,248,243,.95),rgba(250,248,243,.95)); --hero-nav-line:rgba(23,32,46,0.12);
+}
+
 /* فاز ۶۱: بازی (empRoot) همیشه پالتِ تیرهٔ طراحی‌شدهٔ خودش را دارد — مستقل از تمِ سایت.
    در تمِ روشن --text تقریباً مشکی می‌شود و روی زمینهٔ تیرهٔ بازی هیچ‌چیز خوانا نیست. */
 .empRoot {

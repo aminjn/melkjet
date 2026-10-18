@@ -49,14 +49,14 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
   }
 
   // ── حالتِ glass — پنلِ هیروی سینمایی (مطابقِ موکاپ) ──
-  const GOLD = '#F5D982'
-  const pill: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 50, padding: '0 20px', borderRadius: 999, border: '1px solid rgba(221,194,122,.4)', background: 'rgba(221,194,122,.08)', color: '#f3ede0', overflow: 'hidden', boxSizing: 'border-box' }
-  const pillLabel: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: GOLD, whiteSpace: 'nowrap', flexShrink: 0 }
-  const selStyle: React.CSSProperties = { flex: 1, width: 0, minWidth: 0, appearance: 'none', WebkitAppearance: 'none', border: 'none', outline: 'none', background: 'transparent', color: '#f3ede0', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'right', direction: 'rtl', textOverflow: 'ellipsis' }
+  // رنگ‌ها از توکن‌های تم‌آگاهِ --hsg-* (globals.css) می‌آیند: شب تیره، روز روشن.
+  const pill: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 50, padding: '0 20px', borderRadius: 999, border: '1px solid var(--hsg-field-brd)', background: 'var(--hsg-field-bg)', color: 'var(--hsg-text)', overflow: 'hidden', boxSizing: 'border-box' }
+  const pillLabel: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: 'var(--hsg-label)', whiteSpace: 'nowrap', flexShrink: 0 }
+  const selStyle: React.CSSProperties = { flex: 1, width: 0, minWidth: 0, appearance: 'none', WebkitAppearance: 'none', border: 'none', outline: 'none', background: 'transparent', color: 'var(--hsg-text)', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'right', direction: 'rtl', textOverflow: 'ellipsis' }
 
   return (
     <div style={{ width: '100%', textAlign: 'right' }}>
-      <div style={{ position: 'relative', background: 'linear-gradient(158deg, rgba(76,95,114,.34), rgba(8,10,12,.5) 60%)', border: '1px solid rgba(244,244,244,.3)', borderRadius: 30, padding: 'clamp(16px,2.2vw,22px)', boxShadow: '0 40px 90px -34px rgba(0,0,0,.78), inset 0 1px 0 rgba(255,255,255,.1)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}>
+      <div style={{ position: 'relative', background: 'var(--hsg-bg)', border: '1px solid var(--hsg-brd)', borderRadius: 30, padding: 'clamp(16px,2.2vw,22px)', boxShadow: 'var(--hsg-shadow)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}>
         {/* ردیفِ بالا: فیلترها (راست) + جعبهٔ زبانِ طبیعی (چپ). دسکتاپ کنارِ هم؛ موبایل روی هم. */}
         <div className="mjhp-top" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'stretch' }}>
           {/* ستونِ فیلترها — دسکتاپ عمودی؛ موبایل اسکرولِ افقی (جمع‌وجور) */}
@@ -85,23 +85,23 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
             </button>
           </div>
           {/* جعبهٔ زبانِ طبیعی */}
-          <textarea className="mjhp-textarea" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSearch() } }} placeholder="به زبان خودت بگو چه می‌خواهی… مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو" style={{ flex: '2 1 240px', minWidth: 0, minHeight: 176, resize: 'none', borderRadius: 16, border: '1px solid rgba(221,194,122,.35)', outline: 'none', background: 'rgba(221,194,122,.08)', color: '#f6f1e6', fontFamily: 'inherit', fontSize: 15.5, lineHeight: 1.85, padding: '14px 16px' }} />
+          <textarea className="mjhp-textarea" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSearch() } }} placeholder="به زبان خودت بگو چه می‌خواهی… مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو" style={{ flex: '2 1 240px', minWidth: 0, minHeight: 176, resize: 'none', borderRadius: 16, border: '1px solid var(--hsg-field-brd)', outline: 'none', background: 'var(--hsg-field-bg)', color: 'var(--hsg-text)', fontFamily: 'inherit', fontSize: 15.5, lineHeight: 1.85, padding: '14px 16px' }} />
         </div>
 
         {/* نوارِ دستیارِ هوشمند با دکمهٔ گردِ ارسال */}
-        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10, height: 56, padding: '0 8px 0 18px', borderRadius: 999, border: '1px solid rgba(221,194,122,.28)', background: 'rgba(255,255,255,.04)' }}>
-          <input value={chat} onChange={e => setChat(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') runChat() }} placeholder="از دستیارِ هوشمندِ ملک‌جت بپرس…" style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', color: '#f3ede0', fontFamily: 'inherit', fontSize: 14.5 }} />
-          {/* Send: دایرهٔ تیره با فلشِ طلایی (مطابقِ Send.svg) */}
-          <button onClick={runChat} aria-label="ارسال به دستیار" style={{ flexShrink: 0, width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(221,194,122,.7)', background: 'rgba(14,17,24,.55)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5D982" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'scaleX(-1)' }}><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10, height: 56, padding: '0 8px 0 18px', borderRadius: 999, border: '1px solid var(--hsg-ai-brd)', background: 'var(--hsg-ai-bg)' }}>
+          <input value={chat} onChange={e => setChat(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') runChat() }} placeholder="از دستیارِ هوشمندِ ملک‌جت بپرس…" style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', color: 'var(--hsg-text)', fontFamily: 'inherit', fontSize: 14.5 }} />
+          {/* Send: دایره با فلشِ طلایی (رنگِ دایره و فلش تم‌آگاه) */}
+          <button onClick={runChat} aria-label="ارسال به دستیار" style={{ flexShrink: 0, width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(221,194,122,.7)', background: 'var(--hsg-send-bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'scaleX(-1)', stroke: 'var(--hsg-label)' }}><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           </button>
         </div>
 
         {/* نمونه‌های پیشنهادی */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-          <span style={{ fontSize: 12.5, color: 'rgba(244,238,225,.6)', alignSelf: 'center' }}>امتحان کنید:</span>
+          <span style={{ fontSize: 12.5, color: 'var(--hsg-ex-k)', alignSelf: 'center' }}>امتحان کنید:</span>
           {examples.slice(0, 3).map(ex => (
-            <button key={ex} onClick={() => fillQuery(ex)} style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(247,222,146,.22)', background: 'rgba(255,255,255,.05)', color: 'rgba(244,238,225,.85)', fontFamily: 'inherit', fontSize: 12.5, cursor: 'pointer' }}>{ex}</button>
+            <button key={ex} onClick={() => fillQuery(ex)} style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid var(--hsg-ex-brd)', background: 'var(--hsg-ex-bg)', color: 'var(--hsg-ex-text)', fontFamily: 'inherit', fontSize: 12.5, cursor: 'pointer' }}>{ex}</button>
           ))}
         </div>
       </div>

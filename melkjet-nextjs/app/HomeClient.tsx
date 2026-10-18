@@ -148,26 +148,26 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
 
       <main>
       {/* HERO — تمام‌ارتفاع (مطابقِ موکاپ)؛ عکس از پنلِ ادمین، خالی = گرادیانِ غروب */}
-      <section style={{ position: 'relative', overflow: 'hidden', background: '#080b14', color: '#f3ede0', minHeight: '100vh', display: 'flex', alignItems: 'center', padding: 'clamp(92px,10vw,120px) 24px clamp(56px,6vw,80px)' }}>
+      <section style={{ position: 'relative', overflow: 'hidden', background: 'var(--hero-base)', color: 'var(--hero-h1)', minHeight: '100vh', display: 'flex', alignItems: 'center', padding: 'clamp(92px,10vw,120px) 24px clamp(56px,6vw,80px)' }}>
         {heroImage ? (<>
-          {/* عکسِ هیرو (full-bleed) + روکشِ خوانایی */}
+          {/* عکسِ هیرو (full-bleed) + روکشِ خوانایی (روکش با تم عوض می‌شود: شب تیره، روز روشن) */}
           <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: `url(${heroImage})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}></div>
-          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(to left, rgba(6,8,16,.18) 0%, rgba(6,8,16,.5) 50%, rgba(6,8,16,.8) 100%), linear-gradient(180deg, rgba(6,8,16,.55) 0%, transparent 26%, rgba(4,6,11,.62) 100%)' }}></div>
+          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'var(--hero-img-ov)' }}></div>
         </>) : (<>
-          {/* بدونِ عکس → گرادیانِ سینماییِ غروب */}
-          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(1200px 560px at 70% 48%, rgba(236,151,56,.40), rgba(188,108,38,.14) 42%, transparent 70%), radial-gradient(880px 440px at 85% -12%, rgba(247,222,146,.20), transparent 62%), linear-gradient(180deg,#060810 0%,#0a0e1a 36%,#171209 100%)' }}></div>
-          <div className="mjh-orb" style={{ position: 'absolute', top: '-10%', insetInlineEnd: '-6%', width: 'clamp(300px,38vw,560px)', height: 'clamp(300px,38vw,560px)', borderRadius: '50%', background: 'radial-gradient(circle, rgba(236,170,70,.30), transparent 68%)', filter: 'blur(26px)', pointerEvents: 'none', animation: 'mjfloat 9s ease-in-out infinite' }}></div>
-          <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', pointerEvents: 'none', background: 'linear-gradient(180deg,transparent,rgba(4,6,11,.82))' }}></div>
+          {/* بدونِ عکس → گرادیانِ سینماییِ غروب (شب) / آسمانِ آفتابی (روز) */}
+          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'var(--hero-sky)' }}></div>
+          <div className="mjh-orb" style={{ position: 'absolute', top: '-10%', insetInlineEnd: '-6%', width: 'clamp(300px,38vw,560px)', height: 'clamp(300px,38vw,560px)', borderRadius: '50%', background: 'var(--hero-orb)', filter: 'blur(26px)', pointerEvents: 'none', animation: 'mjfloat 9s ease-in-out infinite' }}></div>
+          <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', pointerEvents: 'none', background: 'var(--hero-bottom)' }}></div>
         </>)}
 
         <div className="mjhero-grid" style={{ position: 'relative', width: '100%', maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr', gap: 'clamp(30px,4vw,52px)', alignItems: 'center' }}>
           {/* ستونِ متن (سمتِ راست/آغاز در RTL) */}
           <div style={{ textAlign: 'right' }}>
-            <h1 style={{ marginTop: 0, fontSize: 'clamp(34px,5.6vw,62px)', lineHeight: 1.14, fontWeight: 800, letterSpacing: '-1px', color: '#F6F1E6', textShadow: '0 2px 30px rgba(0,0,0,.4)' }}>
+            <h1 style={{ marginTop: 0, fontSize: 'clamp(34px,5.6vw,62px)', lineHeight: 1.14, fontWeight: 800, letterSpacing: '-1px', color: 'var(--hero-h1)', textShadow: 'var(--hero-h1-shadow)' }}>
               خانه‌ی بعدی‌ات،<br />
-              <span style={{ background: 'linear-gradient(120deg,#F7DE92,#D9AD3E)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>هوشمندانه</span> انتخاب می‌شود
+              <span style={{ background: 'var(--hero-accent)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>هوشمندانه</span> انتخاب می‌شود
             </h1>
-            <p style={{ margin: '20px 0 0', maxWidth: 560, fontSize: 'clamp(15px,2vw,18.5px)', lineHeight: 1.85, color: 'rgba(244,238,225,.78)' }}>
+            <p style={{ margin: '20px 0 0', maxWidth: 560, fontSize: 'clamp(15px,2vw,18.5px)', lineHeight: 1.85, color: 'var(--hero-lede)' }}>
               به زبان خودت بگو چه می‌خواهی. ملک‌جت بازار را تحلیل می‌کند، دلیل هر پیشنهاد را توضیح می‌دهد و کنارت می‌ماند تا بهترین تصمیم را بگیری.
             </p>
             {/* دسترسیِ سریع — ایکون‌های حرفه‌ایِ SVG در قابِ شیشه‌ای (فاز ۲۹۸ی۱۲) */}
@@ -180,7 +180,7 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
                 { l: 'سازندگان', h: '/builders', ic: 'crane' as IconName },
                 { l: 'دستیارِ AI', h: '/plan-ai', ic: 'spark' as IconName },
               ].map(p => (
-                <Link key={p.l} href={p.h} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 16px 7px 7px', borderRadius: 999, border: '1px solid rgba(247,222,146,.22)', background: 'rgba(255,255,255,.05)', color: 'rgba(244,238,225,.92)', textDecoration: 'none', fontSize: 13, fontWeight: 600, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                <Link key={p.l} href={p.h} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 16px 7px 7px', borderRadius: 999, border: '1px solid var(--hero-chip-brd)', background: 'var(--hero-chip-bg)', color: 'var(--hero-chip-text)', textDecoration: 'none', fontSize: 13, fontWeight: 600, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
                   <GlassIcon name={p.ic} size={30} box={16} tone="hero" />
                   {p.l}
                 </Link>
@@ -198,10 +198,10 @@ export default function HomeClient({ initial, heroImage = '' }: { initial: HomeD
                     href={listingHref(it.id, it.title, it.location)}
                     title={it.title}
                     aria-label={it.title}
-                    style={{ position: 'relative', display: 'block', flex: '1 1 0', minWidth: 0, maxWidth: 268, aspectRatio: '16 / 10', borderRadius: 18, overflow: 'hidden', border: '1px solid rgba(247,222,146,.26)', boxShadow: '0 26px 60px -26px rgba(0,0,0,.8)', textDecoration: 'none' }}
+                    style={{ position: 'relative', display: 'block', flex: '1 1 0', minWidth: 0, maxWidth: 268, aspectRatio: '16 / 10', borderRadius: 18, overflow: 'hidden', border: '1px solid var(--hero-card-brd)', boxShadow: 'var(--hero-card-shadow)', textDecoration: 'none' }}
                   >
                     <span aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${it.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-                    <PhotoFade to="#080b14" blur={34} height="64%" />
+                    <PhotoFade to="var(--hero-fade)" blur={34} height="64%" />
                   </Link>
                 ))}
               </div>

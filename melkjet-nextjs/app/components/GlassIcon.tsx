@@ -92,9 +92,9 @@ export default function GlassIcon({
   tint?: string          // رنگِ اختصاصیِ کارت — شیشه رویش می‌نشیند
 }) {
   const hero = tone === 'hero'
-  const stroke = tint || (hero ? '#F5D982' : 'var(--gold)')
-  const bg = tint ? `${tint}1f` : hero ? 'rgba(255,255,255,.08)' : 'var(--goldDim)'
-  const border = tint ? `${tint}55` : hero ? 'rgba(247,222,146,.4)' : 'var(--line2)'
+  const stroke = tint || (hero ? 'var(--hero-ic-stroke)' : 'var(--gold)')
+  const bg = tint ? `${tint}1f` : hero ? 'var(--hero-ic-bg)' : 'var(--goldDim)'
+  const border = tint ? `${tint}55` : hero ? 'var(--hero-ic-brd)' : 'var(--line2)'
   const ic = Math.round(box || size * 0.52)
   return (
     <span aria-hidden style={{
