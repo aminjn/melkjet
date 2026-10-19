@@ -133,9 +133,9 @@ export default function CitySelector({ onHero = false }: { onHero?: boolean } = 
         <span>{city || 'انتخاب شهر'}</span>
         <span style={{ display: 'flex', opacity: .75 }}><IconSvg name="chevronDown" size={11} /></span>
       </button>
+      {/* فاز ۳۲۰ — شیشه‌ای «همه‌جا» (نه فقط هیرو)، تم‌آگاه با --hero-nav-pop-*. */}
       {open && (
-        {/* فاز ۳۲۰ — شیشه‌ای «همه‌جا» (نه فقط هیرو)، تم‌آگاه با --hero-nav-pop-*. */}
-        <div style={{ position: 'absolute', top: '110%', insetInlineStart: 0, zIndex: 100, width: 230, background: 'var(--hero-nav-pop-bg)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderRadius: 12, boxShadow: '0 20px 56px -14px rgba(0,0,0,.5), inset 0 1px 0 var(--hero-nav-pop-hi)', padding: 6 }}>
+        <div style={{ position: 'absolute', top: '110%', insetInlineStart: 0, zIndex: 100, width: 230, background: 'var(--hero-nav-pop-bg)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', backdropFilter: 'blur(26px) saturate(1.5)', WebkitBackdropFilter: 'blur(26px) saturate(1.5)', borderRadius: 12, boxShadow: '0 20px 56px -14px rgba(0,0,0,.5), inset 0 1px 0 var(--hero-nav-pop-hi)', padding: 6 }}>
           <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="جست‌وجوی شهر…" style={{ width: '100%', boxSizing: 'border-box', height: 36, padding: '0 11px', borderRadius: 9, background: 'rgba(128,128,128,.14)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 6 }} />
           <div style={{ maxHeight: 300, overflowY: 'auto' }}>
             {filtered.provinceHit && <div style={{ padding: '6px 11px 4px', fontSize: 11, color: 'var(--hsg-label)', fontWeight: 700 }}>استانِ {filtered.provinceHit} — {filtered.cities.length.toLocaleString('fa-IR')} شهر</div>}

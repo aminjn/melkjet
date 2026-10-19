@@ -151,7 +151,7 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
                       با همان حالت می‌آید، وگرنه دوباره «متنِ تیره روی شیشهٔ تیره» می‌شد. */}
                   {/* فاز ۳۲۰ — منوی شیشه‌ای «همه‌جا» (نه فقط هیرو): توکن‌های --hero-nav-pop-* تم‌آگاه‌اند
                       (شیشهٔ سفید در روز، آبی‌تیره در شب) و روی هر صفحه‌ای درست می‌نشینند. */}
-                  <div style={{ background: 'var(--hero-nav-pop-bg)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.55), inset 0 1px 0 var(--hero-nav-pop-hi)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}>
+                  <div style={{ background: 'var(--hero-nav-pop-bg)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.55), inset 0 1px 0 var(--hero-nav-pop-hi)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(26px) saturate(1.5)', WebkitBackdropFilter: 'blur(26px) saturate(1.5)' }}>
                     {(m.items || []).map(it => (
                       <Link key={it.label + it.href} href={it.href} onClick={() => setOpen(null)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, textDecoration: 'none', color: 'inherit' }} className="mj-menu-item">
                         <GlassIcon name={it.ic} size={38} box={19} tone="theme" />
