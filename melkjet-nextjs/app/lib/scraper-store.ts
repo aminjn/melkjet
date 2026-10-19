@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { readJsonCached, writeJsonCached } from './json-file'
+import type { PoolClient } from 'pg'
 import { pgEnabled, kvGet, pgTx, pgListingsAll } from './db'
 // موتورِ خالصِ هم‌ملک‌یابیِ ویژگی‌محور (متن+مشخصات+لوکیشن) — گِیتِ ضدتکراریِ همهٔ ورودی‌ها
 import { fieldsOf as simFieldsOf, TwinIndex, norm as simNorm } from './listing-similarity'
@@ -464,7 +465,9 @@ async function mutateMeta<R>(fn: (meta: { sources: Source[]; categories?: string
   return r
 }
 
-async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Partial<DB> }) => R): Promise<R> {
+// opts.metaDirty=true → fn متادیتا را هم عوض می‌کند (فقط publishUserListingsBatch: افزودنِ اونر)؛
+// مسیرِ قدیمیِ meta-first نگه داشته می‌شود. بقیهٔ صدازننده‌ها فقط آگهی‌ها را دست می‌زنند → meta-late.
+async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Partial<DB> }) => R, opts?: { metaDirty?: boolean }): Promise<R> {
   if (!pgEnabled()) {
     const d = fileLoad()
     const sub = d.items.filter(i => ids.includes(i.id))
@@ -475,20 +478,7 @@ async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Par
   await ensureMigrated()
   let revOut = 0
   let changedOut: Item[] = []   // فاز ۲۹۸ — ردیف‌های تغییرکرده برای وصله به کشِ گرم
-  const r = await pgTx(async (c) => {
-    await c.query(`SET LOCAL statement_timeout = '45s'`)   // انتظارِ صفِ قفل ≠ کوئریِ سرکش (۲۸ سپتامبر)
-    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
-    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
-    const meta = (metaRow.rows[0]?.data || {}) as Partial<DB> & { __rev?: number }
-    const res = ids.length ? await c.query('SELECT data FROM listings WHERE id = ANY($1::text[])', [ids]) : { rows: [] as { data: Item }[] }
-    const items = res.rows.map(x => x.data as Item)
-    const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
-    const result = fn({ items, meta })
-    const changed = items.filter(it => before.get(it.id) !== JSON.stringify(it))
-    const rev = (meta.__rev || 0) + 1
-    revOut = rev
-    const logSome = withLog(meta as MetaDoc, rev, changed.map(it => it.id), [])
-    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...meta, __rev: rev, __log: logSome })])
+  const writeChanged = async (c: PoolClient, changed: Item[]) => {
     for (const it of changed) {
       await c.query(
         `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
@@ -496,6 +486,56 @@ async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Par
         [it.id, it.scrapedAt || 0, it.type, it.status, JSON.stringify(it)],
       )
     }
+  }
+  // بن‌بستِ متقابلِ نادر (meta-late «ردیف→متا» در برابر meta-first «متا→ردیف» روی یک آگهیِ مشترک)
+  // با plain pgTx به خطای ۴۰P01 منجر می‌شود؛ retry نمی‌زنیم چون fnها side-effectِ بیرونی دارند
+  // (newListingIds/_tgNew/idx) و اجرای دوباره آن‌ها را دوبار می‌کند. در عوض حلقه‌های بیرونی خودشان
+  // دوباره تلاش می‌کنند: ممیزی هر تیک، ایمپورت هر اسکرپ، publish-sweep هر دور. بدون فساد، فقط یک
+  // چرخهٔ نادرِ هدررفته — بسیار بهتر از صفِ ۲۲ثانیه‌ایِ قبلی.
+  const r = await pgTx(async (c) => {
+    await c.query(`SET LOCAL statement_timeout = '45s'`)   // انتظارِ صفِ قفل ≠ کوئریِ سرکش (۲۸ سپتامبر)
+    if (opts?.metaDirty) {
+      // مسیرِ قدیمی (meta-first): fn ممکن است متادیتا را هم تغییر دهد (اونر).
+      await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
+      const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
+      const meta = (metaRow.rows[0]?.data || {}) as Partial<DB> & { __rev?: number }
+      const res = ids.length ? await c.query('SELECT data FROM listings WHERE id = ANY($1::text[])', [ids]) : { rows: [] as { data: Item }[] }
+      const items = res.rows.map(x => x.data as Item)
+      const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
+      const result = fn({ items, meta })
+      const changed = items.filter(it => before.get(it.id) !== JSON.stringify(it))
+      const rev = (meta.__rev || 0) + 1
+      revOut = rev
+      const logSome = withLog(meta as MetaDoc, rev, changed.map(it => it.id), [])
+      await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...meta, __rev: rev, __log: logSome })])
+      await writeChanged(c, changed)
+      changedOut = changed
+      return result
+    }
+    // فاز ۳۱۷ — «meta-late» (مسیرِ داغ: ممیزی/ویرایش/وضعیت): اول کارِ ردیف‌ها زیرِ قفلِ ردیفیِ
+    // ریزدانه (ORDER BY id تا ترتیبِ قفل قطعی و بی‌بن‌بست باشد)، و قفلِ سراسریِ scraper_meta «آخر»
+    // و فقط برای ~۱ms بالابردنِ rev. همین صفِ ۲۲ثانیه‌ایِ «SELECT kv FOR UPDATE» را حذف می‌کند.
+    const res = ids.length ? await c.query('SELECT data FROM listings WHERE id = ANY($1::text[]) ORDER BY id FOR UPDATE', [ids]) : { rows: [] as { data: Item }[] }
+    const items = res.rows.map(x => x.data as Item)
+    const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
+    const meta0 = (await c.query('SELECT data FROM kv WHERE key=$1', [KV_META])).rows[0]?.data as Partial<DB> || {}   // بافتِ fn، بدونِ قفل
+    const metaSnap = JSON.stringify({ s: meta0.sources, c: meta0.categories, o: meta0.owners })
+    const result = fn({ items, meta: meta0 })
+    // گاردِ footgun: این مسیر تغییرِ متادیتای fn را ذخیره نمی‌کند (فقط rev). اگر صدازننده‌ای در آینده
+    // متادیتا را عوض کند باید metaDirty بدهد، وگرنه بی‌صدا گم می‌شود — این‌جا بلند فریاد می‌زنیم.
+    if (JSON.stringify({ s: meta0.sources, c: meta0.categories, o: meta0.owners }) !== metaSnap)
+      console.error('[scraper-store] BUG: meta-late fn mutated metadata without opts.metaDirty — change dropped!')
+    const changed = items.filter(it => before.get(it.id) !== JSON.stringify(it))
+    await writeChanged(c, changed)
+    // قفلِ کوتاهِ متادیتا فقط برای rev/log؛ مقدارِ تازهٔ قفل‌شده نوشته می‌شود تا تغییرِ هم‌زمانِ
+    // متادیتای نویسندهٔ دیگر کلوب نشود (fnهای این مسیر متادیتا را دست نمی‌زنند).
+    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
+    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
+    const meta = (metaRow.rows[0]?.data || {}) as Partial<DB> & { __rev?: number }
+    const rev = (meta.__rev || 0) + 1
+    revOut = rev
+    const logSome = withLog(meta as MetaDoc, rev, changed.map(it => it.id), [])
+    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...meta, __rev: rev, __log: logSome })])
     changedOut = changed
     return result
   })
@@ -1186,7 +1226,7 @@ export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): P
         res.push({ item: it, created: true })
       }
       return res
-    })
+    }, { metaDirty: true })   // فاز ۳۱۷ — این مسیر اونر به متادیتا اضافه می‌کند → مسیرِ meta-first
     out.push(...part)
   }
   return out
