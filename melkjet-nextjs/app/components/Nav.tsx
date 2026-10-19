@@ -113,12 +113,14 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
       // ۶۴ پیکسل پایین می‌انداخت (متنِ کرم روی زمینهٔ روشن = نامرئی).
       // اسکریمِ گرادیانی عمدی است: بدونِ جاوااسکریپت هم متن خوانا می‌ماند، و رنگش
       // همان rgba(6,8,16) روکشِ خودِ هیروست تا درز معلوم نشود.
+      // فاز ۳۲۰ — backdrop-filterِ خودِ نوار حذف شد: اگر نیایِ یک عنصر backdrop-filter داشته باشد،
+      // backdrop-filterِ فرزند (منوی شیشه‌ای) دیگر زمینهٔ صفحه را بلور نمی‌کند («بلور نیست، زیر
+      // متن‌دار می‌رود»). نوار با زمینهٔ ~۹۴٪ مات خودش بی‌بلور هم خوانا می‌ماند؛ منوها حالا بلور می‌شوند.
       ? { position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, color: 'var(--hero-nav-text)',
           background: scrolled ? 'var(--hero-nav-scrim-scrolled)' : 'var(--hero-nav-scrim)',
-          backdropFilter: scrolled ? 'blur(18px)' : undefined, WebkitBackdropFilter: scrolled ? 'blur(18px)' : undefined,
           borderBottom: scrolled ? '1px solid var(--hero-nav-line)' : '1px solid transparent',
           boxShadow: scrolled ? '0 6px 24px -14px rgba(0,0,0,.6)' : undefined, transition: 'background .25s, border-color .25s' }
-      : { position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', background: 'linear-gradient(var(--navbg),var(--navbg)), var(--bg)', borderBottom: '1px solid var(--line2)', boxShadow: '0 6px 24px -14px rgba(0,0,0,.45)' }}>
+      : { position: 'sticky', top: 0, zIndex: 50, background: 'linear-gradient(var(--navbg),var(--navbg)), var(--bg)', borderBottom: '1px solid var(--line2)', boxShadow: '0 6px 24px -14px rgba(0,0,0,.45)' }}>
       <nav style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', height: 64, display: 'flex', alignItems: 'center', gap: 18 }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'var(--text)', flexShrink: 0 }}>
           {/* ری‌برندِ ۲۹۸ی۵ — لوگومارکِ «M» طلایی همیشه نمایش داده می‌شود (برندِ ذخیره‌شدهٔ قدیمیِ
@@ -147,13 +149,15 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
                   {/* ۸ اکتبر — پنلِ سفیدِ وسطِ یک صفحهٔ تیره بد می‌نشست. روی هیرو شیشه‌ایِ تیره
                       می‌شود (هم‌رنگِ روکشِ خودِ هیرو) و جای دیگر از توکنِ تم می‌گیرد. رنگِ متن هم
                       با همان حالت می‌آید، وگرنه دوباره «متنِ تیره روی شیشهٔ تیره» می‌شد. */}
-                  <div style={{ background: onHero ? 'var(--hero-nav-pop-bg)' : 'var(--surface)', border: `1px solid ${onHero ? 'var(--hero-nav-pop-brd)' : 'var(--line2)'}`, borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.6)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}>
+                  {/* فاز ۳۲۰ — منوی شیشه‌ای «همه‌جا» (نه فقط هیرو): توکن‌های --hero-nav-pop-* تم‌آگاه‌اند
+                      (شیشهٔ سفید در روز، آبی‌تیره در شب) و روی هر صفحه‌ای درست می‌نشینند. */}
+                  <div style={{ background: 'var(--hero-nav-pop-bg)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.55), inset 0 1px 0 var(--hero-nav-pop-hi)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}>
                     {(m.items || []).map(it => (
                       <Link key={it.label + it.href} href={it.href} onClick={() => setOpen(null)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, textDecoration: 'none', color: 'inherit' }} className="mj-menu-item">
-                        <GlassIcon name={it.ic} size={38} box={19} tone={onHero ? 'hero' : 'theme'} />
+                        <GlassIcon name={it.ic} size={38} box={19} tone="theme" />
                         <span style={{ flex: 1 }}>
-                          <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: onHero ? 'var(--hero-nav-pop-text)' : 'var(--text)' }}>{it.label}</span>
-                          <span style={{ display: 'block', fontSize: 11.5, color: onHero ? 'var(--hero-nav-pop-dim)' : 'var(--muted)', marginTop: 2 }}>{it.desc}</span>
+                          <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--hero-nav-pop-text)' }}>{it.label}</span>
+                          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--hero-nav-pop-dim)', marginTop: 2 }}>{it.desc}</span>
                         </span>
                       </Link>
                     ))}
@@ -224,7 +228,7 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
           )}
         </div>
       )}
-      <style>{`.mj-menu-item:hover{background:${onHero ? 'rgba(255,255,255,.07)' : 'var(--bg2)'}}`}</style>
+      <style>{`.mj-menu-item:hover{background:rgba(221,194,122,.16)}`}</style>
     </header>
   )
 }

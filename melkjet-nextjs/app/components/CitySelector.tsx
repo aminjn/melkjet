@@ -134,14 +134,15 @@ export default function CitySelector({ onHero = false }: { onHero?: boolean } = 
         <span style={{ display: 'flex', opacity: .75 }}><IconSvg name="chevronDown" size={11} /></span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: '110%', insetInlineStart: 0, zIndex: 100, width: 230, background: onHero ? 'var(--hero-nav-pop-bg)' : 'var(--surface)', border: `1px solid ${onHero ? 'var(--hero-nav-pop-brd)' : 'var(--line2)'}`, backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderRadius: 12, boxShadow: '0 20px 56px -14px rgba(0,0,0,.5)', padding: 6 }}>
-          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="جست‌وجوی شهر…" style={{ width: '100%', boxSizing: 'border-box', height: 36, padding: '0 11px', borderRadius: 9, background: onHero ? 'rgba(128,128,128,.12)' : 'var(--bg2)', border: `1px solid ${onHero ? 'var(--hero-nav-pop-brd)' : 'var(--line2)'}`, color: onHero ? 'var(--hero-nav-pop-text)' : 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 6 }} />
+        {/* فاز ۳۲۰ — شیشه‌ای «همه‌جا» (نه فقط هیرو)، تم‌آگاه با --hero-nav-pop-*. */}
+        <div style={{ position: 'absolute', top: '110%', insetInlineStart: 0, zIndex: 100, width: 230, background: 'var(--hero-nav-pop-bg)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderRadius: 12, boxShadow: '0 20px 56px -14px rgba(0,0,0,.5), inset 0 1px 0 var(--hero-nav-pop-hi)', padding: 6 }}>
+          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="جست‌وجوی شهر…" style={{ width: '100%', boxSizing: 'border-box', height: 36, padding: '0 11px', borderRadius: 9, background: 'rgba(128,128,128,.14)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 6 }} />
           <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-            {filtered.provinceHit && <div style={{ padding: '6px 11px 4px', fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>استانِ {filtered.provinceHit} — {filtered.cities.length.toLocaleString('fa-IR')} شهر</div>}
+            {filtered.provinceHit && <div style={{ padding: '6px 11px 4px', fontSize: 11, color: 'var(--hsg-label)', fontWeight: 700 }}>استانِ {filtered.provinceHit} — {filtered.cities.length.toLocaleString('fa-IR')} شهر</div>}
             {filtered.cities.length === 0 ? (
-              <div style={{ padding: '14px 11px', color: onHero ? 'var(--hero-nav-pop-dim)' : 'var(--muted)', fontSize: 12.5, textAlign: 'center' }}>شهری یافت نشد</div>
+              <div style={{ padding: '14px 11px', color: 'var(--hero-nav-pop-dim)', fontSize: 12.5, textAlign: 'center' }}>شهری یافت نشد</div>
             ) : filtered.cities.map(c => (
-              <button key={c} onClick={() => pick(c)} style={{ display: 'block', width: '100%', textAlign: 'right', padding: '9px 11px', borderRadius: 8, border: 'none', background: city === c ? (onHero ? 'rgba(247,222,146,.18)' : 'var(--goldDim)') : 'transparent', color: city === c ? (onHero ? 'var(--hsg-label)' : 'var(--gold)') : (onHero ? 'var(--hero-nav-pop-text)' : 'var(--text)'), cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: city === c ? 700 : 500 }} className="mj-menu-item">{c}</button>
+              <button key={c} onClick={() => pick(c)} style={{ display: 'block', width: '100%', textAlign: 'right', padding: '9px 11px', borderRadius: 8, border: 'none', background: city === c ? 'rgba(221,194,122,.18)' : 'transparent', color: city === c ? 'var(--hsg-label)' : 'var(--hero-nav-pop-text)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: city === c ? 700 : 500 }} className="mj-menu-item">{c}</button>
             ))}
           </div>
         </div>
