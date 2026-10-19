@@ -147,7 +147,7 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
                   {/* ۸ اکتبر — پنلِ سفیدِ وسطِ یک صفحهٔ تیره بد می‌نشست. روی هیرو شیشه‌ایِ تیره
                       می‌شود (هم‌رنگِ روکشِ خودِ هیرو) و جای دیگر از توکنِ تم می‌گیرد. رنگِ متن هم
                       با همان حالت می‌آید، وگرنه دوباره «متنِ تیره روی شیشهٔ تیره» می‌شد. */}
-                  <div style={{ background: onHero ? 'var(--hero-nav-pop-bg)' : 'var(--surface)', border: `1px solid ${onHero ? 'var(--hero-nav-pop-brd)' : 'var(--line2)'}`, borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.6)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+                  <div style={{ background: onHero ? 'var(--hero-nav-pop-bg)' : 'var(--surface)', border: `1px solid ${onHero ? 'var(--hero-nav-pop-brd)' : 'var(--line2)'}`, borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.6)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}>
                     {(m.items || []).map(it => (
                       <Link key={it.label + it.href} href={it.href} onClick={() => setOpen(null)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, textDecoration: 'none', color: 'inherit' }} className="mj-menu-item">
                         <GlassIcon name={it.ic} size={38} box={19} tone={onHero ? 'hero' : 'theme'} />

@@ -79,8 +79,8 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
                 </select>
               </label>
             </div>
-            <button onClick={runSearch} style={{ height: 50, border: 'none', borderRadius: 999, background: 'linear-gradient(100deg,#BF9C3C,#E6C766 55%,#DDC27A)', color: '#16140f', fontFamily: 'inherit', fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 12px 28px -10px rgba(217,173,62,.7)' }}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16140f" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <button onClick={runSearch} style={{ height: 50, borderRadius: 999, background: 'linear-gradient(100deg, rgba(221,194,122,.32), rgba(230,199,102,.2))', border: '1px solid rgba(221,194,122,.7)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', color: 'var(--hsg-label)', fontFamily: 'inherit', fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 10px 26px -12px rgba(217,173,62,.5)' }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--hsg-label)" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
               جستجو
             </button>
           </div>
