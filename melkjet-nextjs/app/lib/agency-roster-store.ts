@@ -7,8 +7,8 @@ import { importDivarToken } from './advisor-divar-import'
 import { warmEnrichment } from './enrich-warm'
 import { getEnrichment, patchEnrichment } from './enrich-store'
 import { parseFaNum, rentPartsOf } from './reos/features'
-import { getDivar, recordImport, clearImports } from './advisor-divar-store'
-import { getAdvisor, addListing, publishListingsBatch, deleteListing, setListingStatus, updateAdvisorProfile, type Listing , updateListing} from './advisor-store'
+import { getDivar, recordImport, clearImports, beginDivarBatch, endDivarBatch, checkpointDivarBatch } from './advisor-divar-store'
+import { getAdvisor, addListing, publishListingsBatch, deleteListing, setListingStatus, updateAdvisorProfile, type Listing , updateListing, beginAdvisorBatch, flushAdvisorBatch, checkpointAdvisorBatch } from './advisor-store'
 import { createAccount, accountExists, adminUpdate } from './account-store'
 import { cityOfScrape } from './agency-roster-city'
 import { FA_DIGITS, faDigit } from '../lib/digits'
@@ -448,6 +448,9 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
     while (true) {
       if (abortedAll) return
       const myIdx = cursor++; if (myIdx >= tokens.length) return
+      // فاز ۳۱۶ — چک‌پوینتِ دوره‌ای (فقط تک‌کارگر): خوشهٔ بزرگ هر ۳۰۰ آگهی یک‌بار روی دیسک می‌نشیند
+      // تا کرشِ وسطِ کار، کلِ خوشه را از دست ندهد (کشِ متن هم هست، ولی این را هم دوباره نمی‌گیرد).
+      if (CONC === 1 && myIdx > 0 && myIdx % 300 === 0) { try { await checkpointAdvisorBatch(); checkpointDivarBatch() } catch {} }
       const token = tokens[myIdx]
       const freshId = freshByToken.get(token)
       if (freshId) {
@@ -648,10 +651,25 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     await patchScrape(id, { phase: 'import', progress: { done: 0, total: totalTokens193 } })
     const deadline193 = Date.now() + (opts196?.budgetMs ?? 45 * 60_000)   // بودجهٔ زمانیِ هر ران؛ ادامه در رانِ بعد (خودکار، فاز ۱۹۲)
     let budgetHit = false
-    for (const j of jobs) {
-      const r = await importClusterTokens(j.owner, j.tokens, scrape.id, { deadline: deadline193, onEach: impTick, fetchPost: opts196?.fetchPost, shouldStop, posts: j.posts })
-      if (j.rec) j.rec.listingCount = r.live
-      if (r.aborted) { budgetHit = true; break }
+    // فاز ۳۱۶ — نشستِ دسته‌ای: فایلِ تاریخچهٔ دیوار یک‌بار برای کلِ سینک، و بلابِ هر مالک یک‌بار
+    // در پایانِ همان خوشه نوشته می‌شود (به‌جای per-آگهی → O(N²)). خوشه‌ها سریالی‌اند، پس یک نشستِ
+    // مالکِ فعال در لحظه امن است. flush/end در finally تا شکستِ یک خوشه هم پیشرفتش را ذخیره کند.
+    beginDivarBatch()
+    try {
+      for (const j of jobs) {
+        await beginAdvisorBatch(j.owner)
+        let aborted = false
+        try {
+          const r = await importClusterTokens(j.owner, j.tokens, scrape.id, { deadline: deadline193, onEach: impTick, fetchPost: opts196?.fetchPost, shouldStop, posts: j.posts })
+          if (j.rec) j.rec.listingCount = r.live
+          aborted = !!r.aborted
+        } finally {
+          try { await flushAdvisorBatch() } catch (e) { console.error(`[roster] advisor flush failed owner=${j.owner}: ${String((e as Error)?.message || e).slice(0, 100)}`) }
+        }
+        if (aborted) { budgetHit = true; break }
+      }
+    } finally {
+      try { endDivarBatch() } catch (e) { console.error(`[roster] divar flush failed: ${String((e as Error)?.message || e).slice(0, 100)}`) }
     }
     if (budgetHit) {
       done = true

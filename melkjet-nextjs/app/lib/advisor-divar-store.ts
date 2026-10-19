@@ -47,7 +47,25 @@ export interface AdvisorDivar {
 interface DB { advisors: Record<string, AdvisorDivar> }
 
 function load(): DB { return readJsonCached<DB>(DATA_FILE, { advisors: {} }) }
-function save(db: DB) { writeJsonCached(DATA_FILE, db, true) }
+// ── فاز ۳۱۶ — نشستِ دسته‌ای: writeJsonCached کلِ این فایلِ مشترک (تاریخچهٔ ایمپورتِ *همهٔ*
+// آژانس‌ها) را با fsync می‌نویسد؛ در سینکِ رُستر این per-آگهی صدا زده می‌شد (O(N²) + fsyncِ
+// چندمگابایتی به‌ازای هر آگهی). در نشست، نوشتن‌ها تا پایان (یا چک‌پوینت) معوق می‌ماند و فقط
+// یک‌بار روی دیسک می‌رود. شمارندهٔ عمق، تودرتوییِ نشست‌ها (کلِ سینک > هر خوشه) را می‌پوشاند.
+let _dvDeferDepth = 0
+let _dvDeferDirty = false
+export function beginDivarBatch() { _dvDeferDepth++ }
+export function endDivarBatch() {
+  if (_dvDeferDepth > 0) _dvDeferDepth--
+  if (_dvDeferDepth === 0 && _dvDeferDirty) { _dvDeferDirty = false; writeJsonCached(DATA_FILE, load(), true) }
+}
+/** چک‌پوینت: اگر تغییرِ معوق هست همین حالا روی دیسک بنویس، ولی نشست را باز نگه دار (ایمنیِ کرش). */
+export function checkpointDivarBatch() {
+  if (_dvDeferDepth > 0 && _dvDeferDirty) { _dvDeferDirty = false; writeJsonCached(DATA_FILE, load(), true) }
+}
+function save(db: DB) {
+  if (_dvDeferDepth > 0) { _dvDeferDirty = true; return }   // در نشست: معوق تا پایان (شیِ کش‌شده تغییرات را نگه می‌دارد)
+  writeJsonCached(DATA_FILE, db, true)
+}
 function sid() { return 'src_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4) }
 
 function seed(): AdvisorDivar {

@@ -200,23 +200,61 @@ export async function allAdvisorProfilesLean(): Promise<Record<string, AdvisorPr
   return out
 }
 
-export async function getAdvisor(o: string): Promise<AdvisorData> {
+// ── فاز ۳۱۶ — نشستِ دسته‌ایِ سینکِ رُستر (رفعِ O(N²)) ──────────────────────────
+// ریشهٔ «سینکِ آژانسِ بزرگ ساعت‌ها طول می‌کشد و timeout می‌خورد»: importClusterTokens برای
+// هر آگهی updateListing/setListingStatus می‌زد و هرکدام کلِ بلابِ AdvisorData (هزاران آگهی) را
+// زیرِ FOR UPDATE بازنویسی می‌کرد — N نوشتن × O(N) = O(N²). با نشستِ دسته‌ای، بلابِ یک مالک
+// یک‌بار در حافظه بار می‌شود، همهٔ نوشتن‌ها رویش اعمال و فقط یک‌بار (یا چک‌پوینتِ هر چند صد آگهی
+// برای ایمنیِ کرش) فلاش می‌شود. امن است چون خوشه‌ها «سریالی» ایمپورت می‌شوند (یک مالکِ فعال در
+// لحظه) و همان مالک در همین پروسه از نشست خوانده می‌شود؛ مالکِ دیگر مسیرِ عادیِ DB را می‌رود.
+let _batchOwner: string | null = null
+let _batchData: AdvisorData | null = null
+let _batchDirty = false
+
+// مسیرِ خواندنِ واقعیِ DB (بدونِ نشست) — بارگذاریِ اولیهٔ نشست و خواندنِ مالکِ غیرِنشست از همین‌جاست.
+async function loadAdvisorDb(o: string): Promise<AdvisorData> {
   if (pgEnabled()) {
     await ensureMigratedPg()
-    // مسیرِ داغ: اگر موجود و غیرِدمو بود، فقط بخوان (بدونِ نوشتن).
     const cur = await kvGet<AdvisorData | null>(ownerKey(o), null)
     if (cur && !isLegacyDemo(cur)) return cur
-    // نبود یا دمویِ قدیمی → seed/پاک‌سازی (فقط این‌جا می‌نویسد).
-    return kvMutate<AdvisorData, AdvisorData>(ownerKey(o), seed(), a => {
-      if (isLegacyDemo(a)) Object.assign(a, seed())   // AdvisorData شکلِ ثابت دارد → همهٔ کلیدها بازنویسی می‌شوند
-      return a
-    })
+    return kvMutate<AdvisorData, AdvisorData>(ownerKey(o), seed(), a => { if (isLegacyDemo(a)) Object.assign(a, seed()); return a })
   }
   const db = fileLoad()
   if (!applyAdvisor(db, o)) return db.advisors[o]
   fileSave(db); return db.advisors[o]
 }
+// نوشتنِ کاملِ بلابِ نشست روی DB (مرجعِ درست همان شیِ درون‌حافظه است → جایگزینیِ کامل).
+async function writeAdvisorDb(o: string, data: AdvisorData): Promise<void> {
+  if (pgEnabled()) {
+    await ensureMigratedPg()
+    // AdvisorData شکلِ ثابت دارد (همهٔ کلیدها همیشه هستند)، پس Object.assign همهٔ فیلدها را بازنویسی می‌کند.
+    await kvMutate<AdvisorData, void>(ownerKey(o), seed(), cur => { Object.assign(cur, data) })
+  } else {
+    const db = fileLoad(); db.advisors[o] = data; fileSave(db)
+  }
+}
+/** آغازِ نشستِ دسته‌ای برای یک مالک. نشستِ قبلی (اگر بود) اول فلاش می‌شود. */
+export async function beginAdvisorBatch(o: string): Promise<void> {
+  await flushAdvisorBatch()
+  _batchOwner = o; _batchData = await loadAdvisorDb(o); _batchDirty = false
+}
+/** پایانِ نشست: اگر تغییری بوده یک‌بار نوشته می‌شود و نشست بسته می‌شود. */
+export async function flushAdvisorBatch(): Promise<void> {
+  const o = _batchOwner, data = _batchData, dirty = _batchDirty
+  _batchOwner = null; _batchData = null; _batchDirty = false
+  if (o && data && dirty) await writeAdvisorDb(o, data)
+}
+/** چک‌پوینت: وضعیتِ فعلی را می‌نویسد ولی نشست را باز (و همان شیِ حافظه را) نگه می‌دارد — ایمنیِ کرش. */
+export async function checkpointAdvisorBatch(): Promise<void> {
+  if (_batchOwner && _batchData && _batchDirty) { await writeAdvisorDb(_batchOwner, _batchData); _batchDirty = false }
+}
+
+export async function getAdvisor(o: string): Promise<AdvisorData> {
+  if (_batchOwner === o && _batchData) return _batchData   // نشستِ فعال → از حافظه (بدونِ خواندنِ DB)
+  return loadAdvisorDb(o)
+}
 async function mutate(o: string, fn: (a: AdvisorData) => void): Promise<AdvisorData> {
+  if (_batchOwner === o && _batchData) { fn(_batchData); _batchDirty = true; return _batchData }   // نشست → در حافظه، بدونِ نوشتنِ DB
   if (pgEnabled()) {
     await ensureMigratedPg()
     return kvMutate<AdvisorData, AdvisorData>(ownerKey(o), seed(), a => { fn(a); return a })
