@@ -9,7 +9,7 @@
 // شماره + فهرستِ توکنِ آگهی‌ها). در هر آگهی، توکنِ برابر با آن نام مثبت است و بقیهٔ
 // توکن‌های ناحیهٔ امضا منفی. هر تأییدِ تازهٔ مدیر خودکار به دادهٔ آموزشی اضافه می‌شود.
 import { kvGet, kvSet } from './db'
-import { deEmoji, keyOf, isNoiseWord } from './agency-name-lexicon'
+import { deEmoji, keyOf, isNoiseWord, SOLO_NEVER_NAME } from './agency-name-lexicon'
 import { getCorpus, norm, type Corpus } from './roster-name-model'
 
 export const NER_KV = 'roster_ner_model'
@@ -143,6 +143,9 @@ const LABELED_RE = new RegExp(
 const LABELED_REJECT = /^(?:ملک|املاک|مسکن|خرید|فروش|رهن|اجاره|قیمت|بازدید|پاسخگویی|شماره|منطقه|محدوده|تخصصی|رسمی|ارشد|فایل|شما)$/
 // نام‌های ناحیه/محلهٔ تهران که ممکن است بعد از جداکنندهٔ ضعیف بیایند (نه اسمِ آدم).
 const PLACE_WORDS = new Set(['غرب', 'شرق', 'شمال', 'جنوب', 'مرکز', 'ونک', 'نیاوران', 'فرمانیه', 'جردن', 'الهیه', 'سعادت', 'پاسداران', 'ولنجک', 'زعفرانیه', 'اختیاریه', 'قیطریه', 'دروس', 'تجریش', 'شهرک', 'گیشا', 'صادقیه', 'پونک', 'ستارخان', 'یوسف‌آباد', 'نیلوفر'])
+// فاز ۳۲۱ — ضمیر/قید/واژهٔ عامِ تبلیغاتی که هرگز نامِ آدم نیست. «ما/اینجا» از «ما اینجا هستیم»
+// مشاورِ جعلیِ «مااینجا» ساخت؛ «مورد/اعتماد» از «امین و مورد اعتماد شما» با نامِ «امین» ⇒ «امین مورد».
+const NONNAME_STOP = new Set<string>(['ما', 'شما', 'اینجا', 'آنجا', 'همینجا', 'اینجانب', 'ایشان', 'خودم', 'خودمان', 'خودت', 'خودش', 'خودتان', 'مورد', 'اعتماد', 'همراه', 'ارادتمند', 'خدمتگزار'].map(keyOf))
 export function labeledName(desc: string): string | null {
   // فاز ۲۹۷ث۲ — جداکننده‌های ~ – — | ـ را پیش از deEmoji (که آن‌ها را به فاصله می‌کُشد) به «:» نرمال کن.
   const normalized = String(desc || '').replace(/[~ـ–—|]/g, ':')
@@ -153,7 +156,7 @@ export function labeledName(desc: string): string | null {
     const name = m[1].replace(/‌/g, ' ').trim()
     const toks = name.split(/\s+/)
     if (!toks.length) continue
-    if (toks.some(w => KEYW.test(w) || VERBISH.test(w) || LABELED_REJECT.test(w) || isNoiseWord(w))) continue
+    if (toks.some(w => KEYW.test(w) || VERBISH.test(w) || LABELED_REJECT.test(w) || isNoiseWord(w) || NONNAME_STOP.has(keyOf(w)))) continue
     // فاز ۲۹۷ث۲ — جداکنندهٔ ضعیف (~ – — |) پیش از نامِ مکان هم می‌آید: «منطقه ~ سعادت‌آباد».
     // چون برچسب‌دار p=0.98 می‌گیرد و از دروازهٔ nameProb رد نمی‌شود، نامِ مکان (پسوندِ آباد/
     // شهر/ده یا واژهٔ ناحیه) اینجا رد می‌شود تا مشاورِ جعلیِ «سعادت آباد» ساخته نشود.
@@ -199,7 +202,7 @@ function surnameOk(w: string): boolean {
   if (!/^[ء-ی‌]+$/.test(w)) return false
   if (KEYW.test(w) || VERBISH.test(w) || LABELED_REJECT.test(w) || isNoiseWord(w)) return false
   const k = keyOf(w)
-  if (PLACE_WORDS.has(k) || PLACE_SUFFIX.test(w)) return false
+  if (NONNAME_STOP.has(k) || PLACE_WORDS.has(k) || PLACE_SUFFIX.test(w)) return false
   return true
 }
 // نامِ لنگرخورده به «نامِ کوچکِ شناخته‌شده» یا «عنوان (آقای/خانم/…)» — فارغ از جداکننده.
@@ -255,19 +258,44 @@ export function gazetteerName(desc: string): string | null {
         if (surnameOk(a) && !KNOWN_AREAS.has(keyOf(a))) {
           // نامِ کوچکِ شناخته‌شده + خانوادگی: «منطقه علی رضایی»؛ وگرنه همان یک واژه.
           if (FIRST_NAMES.has(keyOf(a)) && b && surnameOk(b) && !FIRST_NAMES.has(keyOf(b)) && !KNOWN_AREAS.has(keyOf(b))) return `${a} ${b}`
-          return a
+          // تک‌کلمه: «منطقه طلایی/تهران» از حدسِ ناحیه‌ای نباید شخص شود (برخلافِ عنوانِ «خانم شهریار»).
+          if (!SOLO_NEVER_NAME.has(keyOf(a))) return a
         }
       }
     }
-    // (د) «… : فامیل» در انتهای خط (معرفیِ بی‌کلیدواژه): «در کنارتان هستیم: فریدمهر».
-    const mcol = scan[L].match(/[:：]\s*([ء-ی‌]{4,})\s*$/)
-    if (mcol) { const w = mcol[1].replace(/‌/g, '').trim(); if (surnameStrong(w)) return w }
+    // (ب۴) فاز ۳۲۱ — نامِ «تنها»ی پایانِ خطِ امضا پس از کلیدواژهٔ نقش، فارغ از جداکننده:
+    // «کارشناس فروش ( احسنی )» → احسنی، «مشاور جم» → جم، «مشاور و همراه شما ... کوروش» → کوروش.
+    // گازِتیر تا امروز یا نامِ کوچک+خانوادگی می‌خواست (ب) یا پسوندِ قویِ خانوادگی (ب۲)؛ نامِ
+    // تک‌کلمه‌ایِ تمیز (پسوندِ «ی»، یا نامِ کوچکِ شناخته‌شده، یا خطِ کوتاهِ «مشاور X») در شکاف
+    // می‌افتاد. دروازه: *آخرین* توکنِ خط (نه هر توکنی — تا «مشاور امین و مورد اعتماد شما» که
+    // آخرش «شما»ست نامِ جعلی نسازد) پس از نقش، surnameOk و نه محلهٔ شناخته‌شده. نامِ خودِ آژانس
+    // را گاردِ پایین‌دستِ validName (a.includes) می‌گیرد؛ واژهٔ آدرس را banned.
+    if (roleIdx >= 0 && toks.length - 1 > roleIdx) {
+      const last = toks[toks.length - 1], lk = keyOf(last)
+      if (surnameOk(last) && !KNOWN_AREAS.has(lk)) {
+        const prev = toks[toks.length - 2]
+        if (prev && toks.length - 2 > roleIdx && FIRST_NAMES.has(keyOf(prev)) && surnameOk(prev) && !FIRST_NAMES.has(lk)) return `${prev} ${last}`
+        // تک‌کلمه: نامِ کوچکِ شناخته‌شده، یا پسوندِ خانوادگی، یا خطِ «نقش + دقیقاً یک واژهٔ کوتاه».
+        if (!SOLO_NEVER_NAME.has(lk) && (FIRST_NAMES.has(lk) || SUFFIX.test(last) || surnameStrong(last) || (toks.length - 1 === roleIdx + 1 && last.length <= 3))) return last
+      }
+    }
+    // (د) «… : فامیل» در انتهای خط (معرفیِ بی‌کلیدواژه): «در کنارتان هستیم: فریدمهر»، «ارادتمند شما: مقصودی».
+    // فاز ۳۲۱ — از surnameStrong (فقط پسوندِ مرکب) به «شکلِ نام» (پسوندِ «ی»/نامِ کوچک) شل شد تا
+    // «مقصودی» هم بیاید؛ محله/واژهٔ عام با surnameOk + KNOWN_AREAS رد می‌شوند.
+    const mcol = scan[L].match(/[:：]\s*([ء-ی‌]{3,})\s*$/)
+    if (mcol) {
+      const w = mcol[1].replace(/‌/g, '').trim(), wk = keyOf(w)
+      if (surnameOk(w) && !KNOWN_AREAS.has(wk) && !SOLO_NEVER_NAME.has(wk) && (FIRST_NAMES.has(wk) || SUFFIX.test(w) || surnameStrong(w))) return w
+    }
     // (ج) فاز ۲۹۸م — برچسب روی یک خط، نام روی خطِ بعد: «کارشناس ملکی شما ؛ \n احمد باغبانی».
     // بسیار رایج است و مدل آن را از دست می‌داد (و به‌جایش نامِ مکان از آدرس را می‌گرفت، مثلِ
     // «رازقی» از «یاس رز رازقی»). فقط وقتی کلیدواژهٔ نقش نزدیکِ پایانِ خطِ برچسب است (برچسب،
     // نه وسطِ جمله) و خطِ بعد «نامِ کوچکِ شناخته‌شده + خانوادگی» باشد.
-    if (roleIdx >= 0 && toks.length - roleIdx <= 4 && L + 1 < scan.length) {
-      const nt = toksOfLine(scan[L + 1])
+    // فاز ۳۲۱ — خطِ بعد «یا» خطِ قبل: «▪ مصطفی هوشمند \n ▪ مشاور تخصصی شهرک غرب» نام را روی خطِ
+    // بالای برچسب می‌آورد. دروازهٔ «نامِ کوچکِ شناخته‌شده + خانوادگی» آن را دقیق و بی‌خطر می‌گیرد.
+    if (roleIdx >= 0 && toks.length - roleIdx <= 4) for (const nl of [L + 1, L - 1]) {
+      if (nl < 0 || nl >= scan.length) continue
+      const nt = toksOfLine(scan[nl])
       if (nt.length >= 2 && FIRST_NAMES.has(keyOf(nt[0])) && surnameOk(nt[1]) && !FIRST_NAMES.has(keyOf(nt[1]))) return `${nt[0]} ${nt[1]}`
     }
   }
@@ -283,14 +311,20 @@ const SELF_INTRO_RE = /^(?:بنده\s+|اینجانب\s+|من\s+)?([ء-ی]{2,}(?
 const SELF_REJECT = /^(?:مفتخر|خوشحال|خرسند|آماده|مشتاق|منتظر|امیدوار|خوشنود|سپاسگزار|ممنون|متشکر|موظف|متعهد|مصمم|افتخار|خدمت|خدمتگزار|همراه|مطمئن|معتقد)$/
 export function selfIntroName(desc: string): string | null {
   const lines = deEmoji(String(desc || '')).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
-  for (const line of lines.slice(-4)) {
+  // فاز ۳۲۱ — معرفیِ خود همیشه ته آگهی نیست: «✨ حیدری هستم مشاور شما… ✨» اولِ توضیحات بود و
+  // slice(-4) نمی‌دیدش. حالا همهٔ خط‌ها اسکن می‌شوند، ولی خطِ بیرونِ ۴خطِ پایانی فقط وقتی معتبر
+  // است که بافتِ نقش داشته باشد (مشاور/کارشناس/خدمت/همراه) — تا «… هستم»ِ وسطِ جمله نام نسازد.
+  const tailStart = Math.max(0, lines.length - 4)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     if (!/هست(?:م|یم)/.test(line)) continue
+    if (i < tailStart && !/(مشاور|کارشناس|فروشنده|خدمت|همراه|نماینده)/.test(line)) continue
     const m = line.match(SELF_INTRO_RE)
     if (!m) continue
     const name = m[1].replace(/‌/g, ' ').trim()
     const toks = name.split(/\s+/)
     if (!toks.length) continue
-    if (toks.some(w => KEYW.test(w) || VERBISH.test(w) || LABELED_REJECT.test(w) || SELF_REJECT.test(w) || isNoiseWord(w))) continue
+    if (toks.some(w => KEYW.test(w) || VERBISH.test(w) || LABELED_REJECT.test(w) || SELF_REJECT.test(w) || isNoiseWord(w) || NONNAME_STOP.has(keyOf(w)))) continue
     return name
   }
   return null
