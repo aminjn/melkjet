@@ -76,11 +76,20 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   // سکوت کند. تا امروز سکوتِ مدل باعث می‌شد الگوهای regexِ زیر اجرا شوند و برای
   // آگهیِ بی‌امضا نامِ جعلی بسازند («چت دیوار»، «درختان میوه»، «گیر کمد»).
   // همین یک بازگشت، همهٔ بهبودهای مدل را در آگهی‌های بی‌امضا خنثی می‌کرد.
+  // «فلاحی» از «بین فلاحی ۴۱»، «کسری» از «کسری بودجه»، و «امین» از «مشاور امینِ شما» (صفت، نه نام)
+  // هرگز اسم نمی‌شوند. فاز ۳۲۱ — این banned حالا به مسیرِ مدل هم اعمال می‌شود (قبلاً فقط در fallback
+  // بود، ولی تولید همیشه مدل‌دار است؛ «مشاور امین شما» ⇒ «امین»ِ جعلی از همین‌جا می‌آمد).
+  const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
+  const banned = new Set([...addressTokens(raw), ...contextNoiseTokens(raw)])
+  // هر واژه‌ای که بلافاصله پیش از «شما» بنشیند در جایگاهِ صفت است، نه نام: «امینِ شما»، «همراهِ شما».
+  for (const m of raw.matchAll(/([ء-ی]{3,15})\s*(?:ی|ِ)?\s*شما/g)) banned.add(keyOf(m[1]))
+
   const ner = bestName(title, desc)
   if (hasSparseModel() || ner) {
-    // فاز ۲۹۸ی۳ — نامِ برآمده از سیگنالِ قطعیِ شخص (عنوان/برچسب/معرفیِ خود، ner.trust) از
-    // بانِ «شهرِ تک‌کلمه‌ای» عبور می‌کند: «خانم شهریار»/«شهریار هستم» واقعاً شخص‌اند.
-    const v = ner ? validName(ner.name, agencyName, undefined, { trustPerson: !!ner.trust }) : ''
+    // فاز ۲۹۸ی۳ — نامِ برآمده از سیگنالِ قطعیِ شخص (عنوان/برچسب/معرفیِ خود، ner.trust) از بانِ
+    // «شهرِ تک‌کلمه‌ای» عبور می‌کند: «خانم شهریار»/«شهریار هستم» واقعاً شخص‌اند. فاز ۳۲۱: banned
+    // (آدرس/«Xِ شما») فقط به حدسِ مدل (بی‌trust) اعمال می‌شود — نامِ قطعیِ شخص از آن هم معاف است.
+    const v = ner ? validName(ner.name, agencyName, ner.trust ? undefined : banned, { trustPerson: !!ner.trust }) : ''
     if (!v) return []
     // فاز ۲۹۷ت — کیس‌استادیِ شاهان: حدسِ مدل («تمیز»، «سخت»، «همراهتان») بدونِ هیچ
     // دروازهٔ دومی پذیرفته می‌شد و با ۲ فایل مشاورِ جعلی می‌ساخت، درحالی‌که مسیرِ regex
@@ -93,13 +102,7 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
     return [v]
   }
 
-  const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
-  // «فلاحی» در «بین فلاحی ۴۱ و ۴۳» و «کسری» در «کسری بودجه» → هرگز اسم نمی‌شوند
-  const banned = new Set([...addressTokens(raw), ...contextNoiseTokens(raw)])
-  // PHRASE_TRAP — «مشاور و امینِ شما»: «امین» اینجا صفت است، نه نام. قاعدهٔ بافتاری
-  // است نه فهرستِ سیاه: همان واژه در «کارشناس فروش امین رضایی» آزاد می‌ماند.
-  // TRAP_V2 — شرطِ «و» را برداشتم: «امینِ شما» بدونِ «و» هم می‌آید. هر واژه‌ای که
-  // بلافاصله پیش از «شما» بنشیند در جایگاهِ صفت است، نه نام.
+  // raw/banned بالاتر (پیش از مسیرِ مدل) محاسبه شدند؛ خطِ زیر فقط برای مسیرِ fallback بی‌مدل است.
   for (const m of raw.matchAll(/([\u0621-\u06cc]{3,15})\s*(?:ی|ِ)?\s*شما/g)) banned.add(keyOf(m[1]))
   const out: string[] = []
   const scores = new Map<string, number>()
