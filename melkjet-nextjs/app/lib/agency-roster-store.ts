@@ -807,7 +807,10 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   const name = isAgency ? scrape.agencyName : rec!.name
   // اگر انتقالِ قبلی نیمه‌کاره مانده، مبدأ همان ownerِ موقتِ ذخیره‌شده است نه شمارهٔ تازه‌نشسته.
   const fromOwner = isAgency ? scrape.agencyOwner : (rec!.transferFrom || rec!.owner)
-  if (fromOwner === p) return { ok: false, error: 'این شماره از قبل تنظیم شده' }
+  // فاز ۳۲۱ج — fromOwner===p یعنی قبلاً با همین شماره graduate شده. اگر حساب واقعاً وجود دارد،
+  // این «از قبل انجام‌شده» است نه شکست؛ قبلاً پنل قرمزِ گمراه‌کنندهٔ «ساخت حساب ناموفق» نشان می‌داد
+  // در حالی که حساب ساخته شده بود (و صفِ سینک هر شب همان خطای کاذب را تکرار می‌کرد).
+  if (fromOwner === p) return accountExists(p) ? { ok: true, moved: 0 } : { ok: false, error: 'این شماره از قبل تنظیم شده' }
 
   step = 'account'
   if (!accountExists(p)) {
