@@ -354,23 +354,39 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   await ensureMigrated()
   let revOut = 0   // فاز ۲۴۰: revِ جدید برای انتشار در Redis (چکِ ارزانِ بین‌اینستنسی)
   let dbOut: DB | null = null   // فاز ۲۹۸ — حالتِ پس‌از‌نوشتن برای گرم‌نگه‌داشتنِ کش (به‌جای null)
-  const r = await pgTx(async (c) => {
-    // مثلِ kvMutate (۲۸ سپتامبر): خواندنِ کاملِ جدول + انتظارِ صفِ قفل زیرِ بار از ۱۵ث رد
-    // می‌شود و کشته‌شدنش یعنی تکرارِ کلِ کار (توفانِ retry). داخلِ همین تراکنش سقف ۴۵ث.
-    await c.query(`SET LOCAL statement_timeout = '45s'`)
-    // سریالایزِ نویسنده‌ها روی ردیفِ کوچکِ متادیتا (KV_META، نه بلابِ بزرگ).
-    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
-    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
-    const meta = (metaRow.rows[0]?.data || {}) as Partial<DB>
+  // فاز ۳۲۲ — خواندنِ کاملِ جدول (پارسِ ۲۳۲مگ = گران‌ترین کار و بندآورندهٔ حلقهٔ رویداد) و ساختِ
+  // نقشهٔ «before» را «پیش از» قفلِ scraper_meta انجام می‌دهیم تا قفل سرِ این کار نگه داشته نشود —
+  // ریشهٔ idle-in-transactionِ ۴۲ثانیه‌ای که pg_stat_activity نشان داد (۱۰ اتصال پشتِ یک قفلِ kv).
+  // سپس زیرِ قفل revِ فعلی را دوباره می‌خوانیم: اگر از زمانِ pre عوض نشده باشد، همان خوانده عینِ
+  // وضعِ جدول است (هیچ نوشتنی نبوده) و قفل فقط سرِ نوشتنِ کوچک نگه داشته می‌شود؛ اگر عوض شده
+  // (نوشتنِ همزمان)، زیرِ قفل تازه می‌خوانیم = رفتارِ قبلیِ سازگار. fn دقیقاً یک‌بار اجرا می‌شود.
+  const readAll = async (c: PoolClient): Promise<{ items: Item[]; before: Map<string, string> }> => {
     const itemsRes = await c.query('SELECT data FROM listings ORDER BY scraped_at DESC')
     const items = itemsRes.rows.map(x => x.data as Item)
+    const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
+    return { items, before }
+  }
+  const pre = await pgTx(async (c) => {
+    await c.query(`SET LOCAL statement_timeout = '45s'`)   // خواندنِ سنگینِ بی‌قفل هم نباید با سقفِ ۱۵ثِ استخر کشته شود
+    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
+    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1', [KV_META])
+    const rev = ((metaRow.rows[0]?.data || {}) as MetaDoc).__rev || 0
+    return { rev, ...(await readAll(c)) }
+  })
+  const r = await pgTx(async (c) => {
+    // داخلِ همین تراکنش سقف ۴۵ث (انتظارِ صفِ قفل ≠ کوئریِ سرکش، ۲۸ سپتامبر).
+    await c.query(`SET LOCAL statement_timeout = '45s'`)
+    // سریالایزِ نویسنده‌ها روی ردیفِ کوچکِ متادیتا (KV_META، نه بلابِ بزرگ).
+    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
+    const meta = (metaRow.rows[0]?.data || {}) as Partial<DB>
+    const curRev = (meta as MetaDoc).__rev || 0
+    const { items, before } = curRev === pre.rev ? pre : await readAll(c)
     const db: DB = {
       sources: meta.sources && meta.sources.length ? meta.sources : DEFAULT_SOURCES.slice(),
       items,
       categories: meta.categories,
       owners: meta.owners || [],
     }
-    const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
     const result = fn(db)
     // اول تفاوت را حساب کن، بعد متاداتا را بنویس — چون لاگِ شناسه‌ها باید با همان rev
     // ذخیره شود. خواننده فقط وقتی به دلتا اعتماد می‌کند که هر revِ فاصله لاگ داشته باشد.
