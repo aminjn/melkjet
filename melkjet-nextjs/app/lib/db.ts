@@ -76,6 +76,9 @@ async function ensureSchemaOnce(client: PoolClient) {
   // فاز A فقط می‌سازد و پر می‌کند؛ هیچ مسیرِ خواندنی هنوز از آن استفاده نمی‌کند (رفتار عوض نمی‌شود).
   await client.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS block_keys text[]`)
   await client.query(`CREATE INDEX IF NOT EXISTS listings_block_keys ON listings USING gin (block_keys)`)
+  // SCALE-2M مرحلهٔ B — ایندکسِ url: تطبیقِ دقیقِ «همان آگهی دوباره اسکرپ شد» (existingByKey) به‌جای
+  // اسکنِ کلِ جدول، یک lookupِ ایندکس‌دار می‌شود. عبارت‌ایندکسِ پایه، بدونِ نیاز به extension.
+  await client.query(`CREATE INDEX IF NOT EXISTS listings_url ON listings ((data->>'url'))`)
   // Enrichment deltas, one row per listing.
   //
   // The baseline stays in .enrich-data.json, which enrich-store reads synchronously

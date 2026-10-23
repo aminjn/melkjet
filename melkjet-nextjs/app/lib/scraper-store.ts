@@ -933,143 +933,181 @@ export async function clearItems(type?: SourceType) {
 //    آگهیِ بازنشرشدهٔ همان ملک (توکن/عنوانِ جدیدِ دیوار) به‌جای درجِ دوباره، «به‌روزرسانی» می‌شود
 //    (قیمت/عکس/توضیح/لینک تازه، حفظِ id/آمار/وضعیت؛ اگر مهرِ فروخته داشت چون دوباره فعال شده برداشته می‌شود).
 // Returns {added, dup, updated}
-export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>[]): Promise<{ added: number; dup: number; updated: number }> {
-  const newListingIds: string[] = []
-  const fieldsOf = simFieldsOf
-  const res = await mutate(db => {
-    // فاز ۱۵۶ (A1): نگاشتِ کلید→آیتم تا اسکرپِ مجددِ «عینِ همان» آگهی، آیتمِ موجود را
-    // درجا تازه کند — نه اینکه فقط «تکراری» شمرده شود و ردیف کهنه بماند.
-    const existingByKey = new Map<string, Item>()
-    for (const i of db.items) existingByKey.set((i.url || '') + '|' + i.title, i)
-    // فاز ۱۵۶ (A2): تکراری‌ها هم مبنای هم‌ملک‌یابی‌اند — اسکرپِ تازهٔ همان ملک باید ردیفِ
-    // قبلاً-تکراری را «بازپس بگیرد» و به صفِ ممیزی برگرداند، نه اینکه ردیفِ سوم بسازد.
-    const twinIdx = new TwinIndex<Item>()
+type InsertRaw = Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>
+type InsertView = { items: Item[]; owners: Owner[]; sources: Source[] }
+
+// حلِ لوکیشن و عنوانِ یک raw — «یک منبعِ حقیقت» تا همان مقادیری که insertCore برای ساختِ آیتم و
+// بردارِ شباهت به‌کار می‌برد، در _insertBlocked هم برای محاسبهٔ block_keysِ کاندیداگیری استفاده شود
+// (وگرنه کاندیدا با آیتمِ واقعی ناهم‌خوان می‌شد). منطق دقیقاً همان جای قبلی (فاز geo + تعمیرِ پیشوندِ زمان).
+function resolveRawFields(source: Source, r: InsertRaw): { meta?: Record<string, string>; rawMeta: Record<string, string>; loc?: string; title: string } {
+  const meta = source.meta && Object.keys(source.meta).length ? source.meta : undefined
+  const rawMeta = (r as { meta?: Record<string, string> }).meta || {}
+  const loc = (r.location ? resolveScrapedLocation(r.location, meta?.['شهر']) : '')
+    || [meta?.['شهر'], meta?.['محله']].filter(Boolean).join('، ')
+    || undefined
+  let title = r.title
+  if (hasTimePrefix(title || '')) {
+    const t = seoListingTitle(deriveListing({
+      id: '', title: r.title, price: r.price, location: loc, excerpt: r.excerpt,
+      category: source.category, url: r.url, meta: { ...(meta || {}), ...rawMeta },
+    }))
+    if (t && !hasTimePrefix(t)) title = t
+  }
+  return { meta, rawMeta, loc, title }
+}
+
+// هستهٔ مشترکِ dedup/درجِ اسکرپ — «یک کد» برای مسیرِ کامل و بلوکی (هم‌رفتاری by construction).
+// view.items تنها «مجموعهٔ در دسترس» است: مسیرِ کامل کلِ جدول را می‌دهد، مسیرِ بلوکی فقط کاندیداهای
+// هم‌بلوک/هم‌url را — و چون TwinIndex.find و existingByKey فقط همان‌ها را می‌گردند، نتیجه یکی است.
+function insertCore(view: InsertView, source: Source, raw: InsertRaw[], newListingIds: string[]): { added: number; dup: number; updated: number } {
+  // فاز ۱۵۶ (A1): نگاشتِ کلید→آیتم تا اسکرپِ مجددِ «عینِ همان» آگهی، آیتمِ موجود را درجا تازه کند.
+  const existingByKey = new Map<string, Item>()
+  for (const i of view.items) existingByKey.set((i.url || '') + '|' + i.title, i)
+  // فاز ۱۵۶ (A2): تکراری‌ها هم مبنای هم‌ملک‌یابی‌اند (status !== rejected، شاملِ duplicate).
+  const twinIdx = new TwinIndex<Item>()
+  if (source.type === 'listing') {
+    for (const i of view.items) if (i.type === 'listing' && i.status !== 'rejected') twinIdx.add(simFieldsOf(i), i)
+  }
+  // کلیدِ هویتیِ غیرآگهی‌ها (محصول/پروفایل/قیمت/مقاله): نوع + عنوانِ نرمال + مالک (تلفن/نام/منبع)
+  const identKey = (i: { type?: string; title?: string; phone?: string; owner?: string; sourceName?: string }) =>
+    `${i.type || source.type}|${simNorm(i.title)}|${(i.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '') || simNorm(i.owner) || simNorm(i.sourceName)}`
+  const identMap = new Map<string, Item>()
+  if (source.type !== 'listing') {
+    for (const i of view.items) if (i.type === source.type && i.status !== 'rejected') identMap.set(identKey(i), i)
+  }
+  let added = 0, dup = 0, updated = 0
+  view.owners = view.owners || []
+  for (const r of raw) {
+    const key = (r.url || '') + '|' + r.title
+    const exact = existingByKey.get(key)
+    if (exact) {
+      // فاز ۱۵۶ (A1): همان آگهی (همان URL+عنوان) دوباره اسکرپ شد → آپدیتِ درجا (نه «تکراری»)
+      if (r.price) exact.price = r.price
+      if (r.image) exact.image = r.image
+      if (r.excerpt) exact.excerpt = r.excerpt
+      if (r.phone && !exact.phone) exact.phone = r.phone
+      // دایرکتوری: متای تازه refresh می‌شود، ولی مختصاتِ __lat/__lng (setItemCoords) حفظ می‌شود.
+      if (source.type === 'directory' && (r as { meta?: Record<string, string> }).meta) {
+        const rm = (r as { meta?: Record<string, string> }).meta!
+        const lat = exact.meta?.['__lat'], lng = exact.meta?.['__lng']
+        exact.meta = { ...rm }
+        if (lat && lng) { exact.meta['__lat'] = lat; exact.meta['__lng'] = lng }
+      }
+      exact.scrapedAt = Date.now()
+      if (exact.meta?.['__dealStatus']) { delete exact.meta['__dealStatus']; delete exact.meta['__soldAt'] }
+      if (exact.status === 'duplicate') { exact.status = 'pending'; exact.moderatedAt = undefined; exact.aiReason = 'اسکرپِ تازهٔ همان آگهی — بازگشت از تکراری برای ممیزی' }
+      updated++
+      continue
+    }
+    const { meta, rawMeta, loc, title } = resolveRawFields(source, r)
+    // ── گِیتِ محتوایی: همان ملک با URL/عنوانِ جدید؟ → آپدیتِ آیتمِ موجود، نه درجِ تکراری ──
     if (source.type === 'listing') {
-      for (const i of db.items) if (i.type === 'listing' && i.status !== 'rejected') twinIdx.add(fieldsOf(i), i)
-    }
-    // کلیدِ هویتیِ غیرآگهی‌ها (محصول/پروفایل/قیمت/مقاله): نوع + عنوانِ نرمال + مالک (تلفن/نام/منبع)
-    const identKey = (i: { type?: string; title?: string; phone?: string; owner?: string; sourceName?: string }) =>
-      `${i.type || source.type}|${simNorm(i.title)}|${(i.phone || '').replace(FA_DIGITS, faDigit).replace(/\D/g, '') || simNorm(i.owner) || simNorm(i.sourceName)}`
-    const identMap = new Map<string, Item>()
-    if (source.type !== 'listing') {
-      for (const i of db.items) if (i.type === source.type && i.status !== 'rejected') identMap.set(identKey(i), i)
-    }
-    let added = 0, dup = 0, updated = 0
-    db.owners = db.owners || []
-    for (const r of raw) {
-      const key = (r.url || '') + '|' + r.title
-      const exact = existingByKey.get(key)
-      if (exact) {
-        // فاز ۱۵۶ (A1): همان آگهی (همان URL+عنوان) دوباره اسکرپ شد → آپدیتِ درجا (نه «تکراری»)
-        if (r.price) exact.price = r.price
-        if (r.image) exact.image = r.image
-        if (r.excerpt) exact.excerpt = r.excerpt
-        if (r.phone && !exact.phone) exact.phone = r.phone
-        // دایرکتوری: متای تازه (مثلاً «صلاحیتِ» کامل که قبلاً نصفه ذخیره شده بود) refresh می‌شود،
-        // ولی مختصاتِ __lat/__lng که با setItemCoords نشسته حفظ می‌شود (ژئوکد دوباره لازم نشود).
-        if (source.type === 'directory' && (r as { meta?: Record<string, string> }).meta) {
-          const rm = (r as { meta?: Record<string, string> }).meta!
-          const lat = exact.meta?.['__lat'], lng = exact.meta?.['__lng']
-          exact.meta = { ...rm }
-          if (lat && lng) { exact.meta['__lat'] = lat; exact.meta['__lng'] = lng }
-        }
-        exact.scrapedAt = Date.now()
-        if (exact.meta?.['__dealStatus']) { delete exact.meta['__dealStatus']; delete exact.meta['__soldAt'] }
-        if (exact.status === 'duplicate') { exact.status = 'pending'; exact.moderatedAt = undefined; exact.aiReason = 'اسکرپِ تازهٔ همان آگهی — بازگشت از تکراری برای ممیزی' }
+      const f = simFieldsOf({ title, price: r.price, location: loc, meta: { ...(meta || {}), ...rawMeta } })
+      const twin = twinIdx.find(f)
+      if (twin) {
+        if (r.price) twin.price = r.price
+        if (r.image) twin.image = r.image
+        if (r.excerpt) twin.excerpt = r.excerpt
+        if (r.url) twin.url = r.url
+        if (r.phone && !twin.phone) twin.phone = r.phone
+        twin.scrapedAt = Date.now()
+        if (!twin.seoSlug) twin.seoSlug = slugText(twin.title, twin.location)   // فاز ۲۹۸ی — انجمادِ تنبلِ آیتم‌های قدیمی
+        // بازنشر = ملک هنوز فعال است → مهرِ فروخته/اجاره‌رفتهٔ قبلی برداشته می‌شود
+        if (twin.meta?.['__dealStatus']) { delete twin.meta['__dealStatus']; delete twin.meta['__soldAt'] }
+        if (twin.status === 'duplicate') { twin.status = 'pending'; twin.moderatedAt = undefined; twin.aiReason = 'اسکرپِ تازهٔ همان ملک — بازگشت از تکراری برای ممیزی' }
         updated++
         continue
       }
-      // merge source meta (city/neighborhood/type/specialty) into the item
-      const meta = source.meta && Object.keys(source.meta).length ? source.meta : undefined
-      // Divar's card carries the relative time and the neighbourhood on one line, so
-      // an unguarded r.location stored things like «۱۴ساعتپیشدرسلسبیلشمالی» - 616 rows
-      // of it, matchable by no neighbourhood filter we have. Resolve against the geo
-      // tree here, at the only door this value comes through.
-      const loc = (r.location ? resolveScrapedLocation(r.location, meta?.['شهر']) : '')
-        || [meta?.['شهر'], meta?.['محله']].filter(Boolean).join('، ')
-        || undefined
-      // همان بلا در فیلدِ عنوان: ۸۳ ردیف خطِ «۳ هفته پیش در تهران، هروی، خ …» را
-      // به‌جای عنوان نگه داشتند؛ این مقدار هم H1ِ صفحه است هم اسلاگِ URL.
-      //
-      // enrich-warm عنوانِ واقعی را از خودِ دیوار می‌گیرد و جایگزین می‌کند، ولی فقط وقتی url توکنِ
-      // پست داشته باشد — در همان ۸۳ ردیف هیچ‌کدام نداشت. پس درِ واقعی این‌جاست: اگر عنوان
-      // پیشوندِ زمان داشت، از دادهٔ ساختاریافتهٔ همین آگهی عنوان می‌سازیم — با همان تابعی که متای
-      // صفحه استفاده می‌کند، پس صفحه و آدرس و متا یک چیز می‌گویند. نشد، همان می‌ماند.
-      let title = r.title
-      if (hasTimePrefix(title || '')) {
-        const rm = (r as { meta?: Record<string, string> }).meta || {}
-        const t = seoListingTitle(deriveListing({
-          id: '', title: r.title, price: r.price, location: loc, excerpt: r.excerpt,
-          category: source.category, url: r.url, meta: { ...(meta || {}), ...rm },
-        }))
-        if (t && !hasTimePrefix(t)) title = t
+    } else {
+      // ── غیرآگهی (محصول/پروفایل/قیمت/مقاله): همان کالا/موجودیت از همان مالک → آپدیت، نه تکرار ──
+      const twin = identMap.get(identKey({ ...r, type: source.type, sourceName: source.name }))
+      if (twin) {
+        if (r.price) twin.price = r.price
+        if (r.image) twin.image = r.image
+        if (r.excerpt) twin.excerpt = r.excerpt
+        if (r.url) twin.url = r.url
+        twin.scrapedAt = Date.now()
+        updated++
+        continue
       }
-      // ── گِیتِ محتوایی: همان ملک با URL/عنوانِ جدید؟ → آپدیتِ آیتمِ موجود، نه درجِ تکراری ──
-      if (source.type === 'listing') {
-        const f = fieldsOf({ title, price: r.price, location: loc, meta: { ...(meta || {}), ...((r as { meta?: Record<string, string> }).meta || {}) } })
-        const twin = twinIdx.find(f)
-        if (twin) {
-          if (r.price) twin.price = r.price
-          if (r.image) twin.image = r.image
-          if (r.excerpt) twin.excerpt = r.excerpt
-          if (r.url) twin.url = r.url
-          if (r.phone && !twin.phone) twin.phone = r.phone
-          twin.scrapedAt = Date.now()
-          if (!twin.seoSlug) twin.seoSlug = slugText(twin.title, twin.location)   // فاز ۲۹۸ی — انجمادِ تنبلِ آیتم‌های قدیمی
-          // بازنشر = ملک هنوز فعال است → مهرِ فروخته/اجاره‌رفتهٔ قبلی برداشته می‌شود
-          if (twin.meta?.['__dealStatus']) { delete twin.meta['__dealStatus']; delete twin.meta['__soldAt'] }
-          // فاز ۱۵۶ (A2): ردیفِ قبلاً-تکراری با اسکرپِ تازه بازپس گرفته می‌شود → صفِ ممیزی
-          if (twin.status === 'duplicate') { twin.status = 'pending'; twin.moderatedAt = undefined; twin.aiReason = 'اسکرپِ تازهٔ همان ملک — بازگشت از تکراری برای ممیزی' }
-          updated++
-          continue
-        }
-      } else {
-        // ── غیرآگهی (محصول/پروفایل/قیمت/مقاله): همان کالا/موجودیت از همان مالک → آپدیت، نه تکرار ──
-        const twin = identMap.get(identKey({ ...r, type: source.type, sourceName: source.name }))
-        if (twin) {
-          if (r.price) twin.price = r.price
-          if (r.image) twin.image = r.image
-          if (r.excerpt) twin.excerpt = r.excerpt
-          if (r.url) twin.url = r.url
-          twin.scrapedAt = Date.now()
-          updated++
-          continue
-        }
-      }
-      // owner dedup: one user per advertiser (by phone, else by name)
-      let ownerId: string | undefined
-      if (r.owner || r.phone) {
-        const pn = r.phone ? r.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') : ''
-        const nn = normName(r.owner || '')
-        let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
-        if (!owner) {
-          owner = { id: id(), name: r.owner || 'نامشخص', phone: r.phone, count: 0, firstSeen: Date.now() }
-          db.owners.push(owner)
-        }
-        if (r.phone && !owner.phone) owner.phone = r.phone
-        owner.count++
-        ownerId = owner.id
-      }
-      const newId = id()
-      const item: Item = {
-        id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
-        category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
-        ...r, title, location: loc, ownerId, firstSeenAt: Date.now(),
-        seoSlug: slugText(title, loc),   // فاز ۲۹۸ی — اسلاگِ منجمد (دیگر با اسکرپِ بعدی عوض نمی‌شود)
-      }
-      db.items.unshift(item)
-      existingByKey.set(key, item)
-      if (source.type === 'listing') { newListingIds.push(newId); twinIdx.add(fieldsOf(item), item) }
-      else identMap.set(identKey(item), item)
-      added++
     }
-    // no item cap
-    const s = db.sources.find(x => x.id === source.id)
-    if (s) { s.lastRun = Date.now(); s.lastCount = added; s.status = 'ok'; s.lastError = undefined }
-    return { added, dup, updated }
+    // owner dedup: one user per advertiser (by phone, else by name)
+    let ownerId: string | undefined
+    if (r.owner || r.phone) {
+      const pn = r.phone ? r.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') : ''
+      const nn = normName(r.owner || '')
+      let owner = view.owners.find(o => (pn && o.phone && o.phone.replace(FA_DIGITS, faDigit).replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
+      if (!owner) {
+        owner = { id: id(), name: r.owner || 'نامشخص', phone: r.phone, count: 0, firstSeen: Date.now() }
+        view.owners.push(owner)
+      }
+      if (r.phone && !owner.phone) owner.phone = r.phone
+      owner.count++
+      ownerId = owner.id
+    }
+    const newId = id()
+    const item: Item = {
+      id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
+      category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
+      ...r, title, location: loc, ownerId, firstSeenAt: Date.now(),
+      seoSlug: slugText(title, loc),   // فاز ۲۹۸ی — اسلاگِ منجمد
+    }
+    view.items.unshift(item)
+    existingByKey.set(key, item)
+    if (source.type === 'listing') { newListingIds.push(newId); twinIdx.add(simFieldsOf(item), item) }
+    else identMap.set(identKey(item), item)
+    added++
+  }
+  const s = view.sources.find(x => x.id === source.id)
+  if (s) { s.lastRun = Date.now(); s.lastCount = added; s.status = 'ok'; s.lastError = undefined }
+  return { added, dup, updated }
+}
+
+// مسیرِ قدیمی — mutateِ کامل (کلِ جدول در حافظه). (export برای تستِ هم‌ارزی.)
+export async function _insertFull(source: Source, raw: InsertRaw[], newListingIds: string[]): Promise<{ added: number; dup: number; updated: number }> {
+  return mutate(db => { db.owners = db.owners || []; return insertCore(db as InsertView, source, raw, newListingIds) })
+}
+
+// SCALE-2M مرحلهٔ B — مسیرِ بلوکی: کاندیداها فقط از ایندکسِ block_keys (هم‌ملک‌یابی) + ایندکسِ url
+// (تطبیقِ دقیقِ اسکرپِ مجدد)، نه کلِ جدول. شناسه‌های کاندیدا «پیش از» تراکنش گرفته می‌شوند تا به
+// mutateSome برای قفلِ FOR UPDATE داده شوند؛ خودِ داده داخلِ تراکنش تازه و قفل‌شده خوانده می‌شود.
+// انحرافِ آگاهانهٔ TOCTOU: اگر بینِ پیش‌واکشی و قفل، نویسندهٔ دیگری هم‌ملکِ تازه‌ای درج کند از قلم
+// می‌افتد — ولی اسکرپ سریالی روی اینستنسِ ۰ است (مثلِ publishUserListingsBatch)، پس عملاً منتفی.
+export async function _insertBlocked(source: Source, raw: InsertRaw[], newListingIds: string[]): Promise<{ added: number; dup: number; updated: number }> {
+  const blockKeySet = new Set<string>()
+  const urls: string[] = []
+  for (const r of raw) {
+    if (r.url) urls.push(r.url)
+    const { meta, rawMeta, loc, title } = resolveRawFields(source, r)
+    for (const k of blockKeys(simFieldsOf({ title, price: r.price, location: loc, meta: { ...(meta || {}), ...rawMeta } }))) blockKeySet.add(k)
+  }
+  const candIds = await pgTx(async (c) => {
+    const ids = new Set<string>()
+    if (blockKeySet.size) {
+      const r1 = await c.query(`SELECT id FROM listings WHERE type='listing' AND status <> 'rejected' AND block_keys && $1::text[]`, [[...blockKeySet]])
+      for (const row of r1.rows) ids.add(row.id as string)
+    }
+    if (urls.length) {
+      const r2 = await c.query(`SELECT id FROM listings WHERE type='listing' AND data->>'url' = ANY($1::text[])`, [urls])
+      for (const row of r2.rows) ids.add(row.id as string)
+    }
+    return [...ids]
   })
-  // تحلیلِ AI هر آگهیِ جدید همین حالا (هنگامِ اسکرپ) در پس‌زمینه ساخته و در دیتابیس ذخیره می‌شود،
-  // تا بازکردنِ آگهی توسطِ کاربر دیگر AI را دوباره اجرا نکند. (import پویا برای پرهیز از حلقهٔ وابستگی.)
+  return mutateSome(candIds, ({ items, meta }) => {
+    meta.owners = meta.owners || []
+    meta.sources = (meta.sources && meta.sources.length) ? meta.sources : DEFAULT_SOURCES.slice()
+    const view: InsertView = { items, owners: meta.owners, sources: meta.sources }
+    return insertCore(view, source, raw, newListingIds)
+  }, { metaDirty: true })
+}
+
+// Insert items — dedup سه‌لایه (کلیدِ url+title، شباهتِ ویژگی‌محور، هویتِ غیرآگهی). Returns {added,dup,updated}.
+// فلگِ SCALE_BLOCK_DEDUP + منبعِ listing → مسیرِ بلوکی (بدونِ اسکنِ کلِ جدول)؛ وگرنه مسیرِ کاملِ قدیمی.
+export async function insertItems(source: Source, raw: InsertRaw[]): Promise<{ added: number; dup: number; updated: number }> {
+  const newListingIds: string[] = []
+  const useBlocked = SCALE_BLOCK_DEDUP && pgEnabled() && source.type === 'listing'
+  const res = useBlocked ? await _insertBlocked(source, raw, newListingIds) : await _insertFull(source, raw, newListingIds)
+  // تحلیلِ AI هر آگهیِ جدید در پس‌زمینه (import پویا برای پرهیز از حلقهٔ وابستگی).
   if (newListingIds.length) import('./enrich-warm').then(m => m.warmMany(newListingIds)).catch(() => {})
   return res
 }
