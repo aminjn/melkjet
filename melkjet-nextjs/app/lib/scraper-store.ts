@@ -15,6 +15,11 @@ const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 const KV_KEY = 'scraper'          // بلابِ قدیمی — بعد از migration دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند
 const KV_META = 'scraper_meta'    // متادیتای کوچکِ زنده (sources/categories/owners) پس از نرمال‌سازی
 
+// SCALE-2M مرحلهٔ B — مسیرِ dedupِ بلوکی: کاندیداهای هم‌ملک از ایندکسِ block_keys، نه اسکنِ کلِ جدول
+// (docs/SCALE-2M-DESIGN.md). تا backfillِ مرحلهٔ A کامل نشده نباید روشن شود (ردیفِ بدونِ block_keys
+// کاندیدا نمی‌دهد → تکراریِ ناگرفته، نه فساد). خاموش = رفتارِ قبلیِ اسکنِ کامل — درِ برگشت بدونِ ری‌دیپلوی.
+const SCALE_BLOCK_DEDUP = process.env.SCALE_BLOCK_DEDUP === '1'
+
 // Top-level content type → which public page it feeds
 export type SourceType = 'listing' | 'directory' | 'product' | 'article' | 'price'
 export type Method = 'auto' | 'jsonld' | 'og' | 'rss' | 'css' | 'divar'
@@ -1071,13 +1076,48 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
 
 // آیا این آگهیِ ورودی «هم‌ملکِ» یکی از آگهی‌های قابلِ‌نمایشِ موجود است؟
 // گِیتِ عمومیِ همهٔ درهای ورود (ثبتِ کاربر، ساختِ دستیِ ادمین، انتشارِ پنل‌ها) — موتورِ ویژگی‌محور.
-export async function findPublicListingTwin(probe: { title?: string; price?: string; location?: string; meta?: Record<string, string> }): Promise<Item | null> {
+type TwinProbe = { title?: string; price?: string; location?: string; meta?: Record<string, string> }
+
+// ایندکسِ هم‌ملک از یک مجموعهٔ آیتم (همان predicateِ همیشگی: listing و نه duplicate/rejected).
+function twinIndexOf(items: Item[]): TwinIndex<Item> {
   const idx = new TwinIndex<Item>()
-  for (const i of (await load()).items) {
+  for (const i of items) {
     if (i.type !== 'listing' || i.status === 'duplicate' || i.status === 'rejected') continue
     idx.add(simFieldsOf(i), i)
   }
-  return idx.find(simFieldsOf(probe))
+  return idx
+}
+
+// SCALE-2M مرحلهٔ B — کاندیداهای هم‌ملک فقط از بلوک‌های مشترک (نه کلِ جدول).
+// اثباتِ هم‌ارزی: TwinIndex.find(f) فقط سطل‌های blockKeys(f) را می‌گردد، پس تنها آیتم‌هایی مقایسه
+// می‌شوند که حداقل یک بلوکِ مشترک با probe دارند — دقیقاً همان مجموعه‌ای که «block_keys && probeKeys»
+// در SQL برمی‌گرداند. پس مسیرِ بلوکی با اسکنِ کامل by-construction یکی است (شرط: block_keys ذخیره‌شده
+// برابرِ blockKeys(fieldsOf(item)) باشد — مرحلهٔ A در هر نوشتن + backfill این را تضمین می‌کند).
+// opts.includeDuplicate برای مسیرِ ingest که آگهیِ duplicate را هم کاندیدِ بازپس‌گیری می‌داند.
+export async function candidatesByBlocks(keys: string[], opts?: { includeDuplicate?: boolean }): Promise<Item[]> {
+  if (!pgEnabled() || !keys.length) return []
+  const statusClause = opts?.includeDuplicate ? `status <> 'rejected'` : `status NOT IN ('duplicate','rejected')`
+  try {
+    const r = await pgTx(c => c.query(
+      `SELECT data FROM listings WHERE type='listing' AND ${statusClause} AND block_keys && $1::text[]`, [keys]))
+    return r.rows.map(x => x.data as Item)
+  } catch { return [] }
+}
+
+// مسیرِ قدیمی: ایندکس روی کلِ آگهی‌های کش‌شده. (export برای تستِ هم‌ارزی.)
+export async function _findTwinFull(probe: TwinProbe): Promise<Item | null> {
+  return twinIndexOf((await load()).items).find(simFieldsOf(probe))
+}
+// مسیرِ بلوکی: ایندکس فقط روی کاندیداهای هم‌بلوک.
+export async function _findTwinBlocked(probe: TwinProbe): Promise<Item | null> {
+  const f = simFieldsOf(probe)
+  return twinIndexOf(await candidatesByBlocks(blockKeys(f))).find(f)
+}
+
+// آیا این آگهیِ ورودی «هم‌ملکِ» یکی از آگهی‌های قابلِ‌نمایشِ موجود است؟
+// گِیتِ عمومیِ همهٔ درهای ورود (ثبتِ کاربر، ساختِ دستیِ ادمین، انتشارِ پنل‌ها) — موتورِ ویژگی‌محور.
+export async function findPublicListingTwin(probe: TwinProbe): Promise<Item | null> {
+  return (SCALE_BLOCK_DEDUP && pgEnabled()) ? _findTwinBlocked(probe) : _findTwinFull(probe)
 }
 
 // شکلِ ورودیِ مشترکِ ثبت/به‌روزرسانیِ آگهیِ کاربر (همان shapeِ همیشگی — فقط نام‌گذاری شد).
