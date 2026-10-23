@@ -4,7 +4,7 @@ import { readJsonCached, writeJsonCached } from './json-file'
 import type { PoolClient } from 'pg'
 import { pgEnabled, kvGet, pgTx, pgListingsAll } from './db'
 // موتورِ خالصِ هم‌ملک‌یابیِ ویژگی‌محور (متن+مشخصات+لوکیشن) — گِیتِ ضدتکراریِ همهٔ ورودی‌ها
-import { fieldsOf as simFieldsOf, TwinIndex, norm as simNorm } from './listing-similarity'
+import { fieldsOf as simFieldsOf, TwinIndex, norm as simNorm, blockKeys } from './listing-similarity'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 import { resolveScrapedLocation } from './geo-store'
 import { hasTimePrefix } from './location-match'
@@ -208,6 +208,25 @@ const RELOAD_FLOOR_MS = 30_000
 // نمی‌شود. کلِ منطقِ mutate(fn) دست‌نخورده روی همان db در حافظه کار می‌کند.
 function metaOf(db: DB) { return { sources: db.sources, categories: db.categories, owners: db.owners || [] } }
 
+// SCALE-2M مرحلهٔ A — کلیدهای بلوکه‌کردنِ یک آگهی برای ستونِ block_keys (docs/SCALE-2M-DESIGN.md).
+// فقط آگهی‌ها (listing) بلوک دارند؛ بقیهٔ نوع‌ها با identKey/غیره تکراری‌یابی می‌شوند، نه بلوک.
+// خطای محاسبه هرگز نباید نوشتن را بشکند → آرایهٔ خالی در بدترین حالت (رفتارِ قبلی، بدونِ بلوک).
+function listingBlockKeys(it: Item): string[] {
+  if (it.type !== 'listing') return []
+  try { return blockKeys(simFieldsOf(it)) } catch { return [] }
+}
+
+// upsertِ واحدِ یک ردیفِ listings — تنها جایی که SQLِ درج/به‌روزرسانیِ آگهی نوشته می‌شود،
+// تا block_keys در «هر» مسیرِ نوشتن (mutate/mutateSome/migration) هم‌زمان و بدونِ واگرایی پر شود.
+// dataStr اختیاری است چون mutate از قبل JSON.stringify را برای diff حساب کرده (دوباره‌کاری نشود).
+async function upsertListingRow(c: PoolClient, it: Item, dataStr?: string): Promise<void> {
+  await c.query(
+    `INSERT INTO listings(id, scraped_at, type, status, data, block_keys) VALUES($1,$2,$3,$4,$5,$6)
+     ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data, block_keys=EXCLUDED.block_keys`,
+    [it.id, it.scrapedAt || 0, it.type, it.status, dataStr ?? JSON.stringify(it), listingBlockKeys(it)],
+  )
+}
+
 // migrationِ خودکارِ غیرمخرب: بلابِ قدیمی (KV_KEY) دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند؛
 // آگهی‌ها به جدول کپی می‌شوند و متادیتا در KV_META (کلیدِ جدا) ساخته می‌شود. قفلِ FOR UPDATE
 // روی بلابِ قدیمی + بازچکِ KV_META چند instance را سریالایز می‌کند (idempotent، race-safe).
@@ -227,11 +246,7 @@ async function ensureMigrated(): Promise<void> {
     const cnt = await c.query('SELECT count(*)::int AS n FROM listings')
     if ((cnt.rows[0].n as number) === 0 && items.length) {
       for (const it of items) {
-        await c.query(
-          `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
-           ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
-          [it.id, it.scrapedAt || 0, it.type, it.status, JSON.stringify(it)],
-        )
+        await upsertListingRow(c, it)
       }
     }
     // متادیتای زنده را در کلیدِ جدا بساز؛ KV_KEY (بلابِ قدیمی) را برای rollback دست نمی‌زنیم.
@@ -388,11 +403,7 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
     const log156 = withLog(meta as MetaDoc, rev156, changed.map(x => x.it.id), del)
     await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify({ ...metaOf(db), __rev: rev156, __log: log156 })])
     for (const { it, str } of changed) {
-      await c.query(
-        `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
-         ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
-        [it.id, it.scrapedAt || 0, it.type, it.status, str],
-      )
+      await upsertListingRow(c, it, str)
     }
     if (del.length) await c.query(`DELETE FROM listings WHERE id = ANY($1::text[])`, [del])
     dbOut = db
@@ -480,11 +491,7 @@ async function mutateSome<R>(ids: string[], fn: (ctx: { items: Item[]; meta: Par
   let changedOut: Item[] = []   // فاز ۲۹۸ — ردیف‌های تغییرکرده برای وصله به کشِ گرم
   const writeChanged = async (c: PoolClient, changed: Item[]) => {
     for (const it of changed) {
-      await c.query(
-        `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
-         ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
-        [it.id, it.scrapedAt || 0, it.type, it.status, JSON.stringify(it)],
-      )
+      await upsertListingRow(c, it)
     }
   }
   // بن‌بستِ متقابلِ نادر (meta-late «ردیف→متا» در برابر meta-first «متا→ردیف» روی یک آگهیِ مشترک)

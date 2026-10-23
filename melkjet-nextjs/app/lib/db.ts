@@ -69,6 +69,13 @@ async function ensureSchemaOnce(client: PoolClient) {
   )`)
   await client.query(`CREATE INDEX IF NOT EXISTS listings_scraped ON listings(scraped_at DESC)`)
   await client.query(`CREATE INDEX IF NOT EXISTS listings_type ON listings(type)`)
+  // SCALE-2M مرحلهٔ A — کلیدهای بلوکه‌کردنِ dedup روی خودِ ردیف (docs/SCALE-2M-DESIGN.md):
+  // تا هم‌ملک‌یابی به‌جای کشیدنِ کلِ جدول به حافظه، فقط ردیف‌های «هم‌بلوک» را با ایندکسِ GIN
+  // بگیرد (block_keys && $1). ستونِ سادهٔ text[] است (نه GENERATED — منطقِ blockKeys در JS است)،
+  // در زمانِ نوشتن از scraper-store پر می‌شود. DDLِ پایه، بدونِ نیاز به extension/superuser.
+  // فاز A فقط می‌سازد و پر می‌کند؛ هیچ مسیرِ خواندنی هنوز از آن استفاده نمی‌کند (رفتار عوض نمی‌شود).
+  await client.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS block_keys text[]`)
+  await client.query(`CREATE INDEX IF NOT EXISTS listings_block_keys ON listings USING gin (block_keys)`)
   // Enrichment deltas, one row per listing.
   //
   // The baseline stays in .enrich-data.json, which enrich-store reads synchronously
