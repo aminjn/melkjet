@@ -2424,7 +2424,8 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
     }
     // فهرستِ سیاه/سفیدِ مدیریتیِ سوپرادمین — isNoiseWord در لحظه از کشِ سینک می‌خوانَد (بدونِ دیپلوی).
     {
-      const { isNoiseWord } = await import('../app/lib/agency-name-lexicon.ts')
+      const { isNoiseWord, validName } = await import('../app/lib/agency-name-lexicon.ts')
+      const { extractSignature } = await import('../app/lib/agency-roster.ts')
       const { setNameRules, loadNameRules } = await import('../app/lib/roster-name-rules.ts')
       const { rmSync } = await import('node:fs')
       // خطِ پایه: «آزاده» نوفه نیست، «لوکیشن» نوفه است.
@@ -2435,6 +2436,16 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       await loadNameRules()
       ok('سیاه: «آزاده» حالا نوفه است', isNoiseWord('آزاده') === true)
       ok('سفید: «لوکیشن» حالا نام می‌مانَد', isNoiseWord('لوکیشن') === false)
+      // بلک‌لیستِ عبارتِ چندکلمه‌ای (مثلِ «متریال استفاده») روی کلِ کاندیدا، نه فقط تک‌توکن.
+      await setNameRules({ blacklist: ['متریال استفاده'], whitelist: [] })
+      await loadNameRules()
+      ok('سیاهِ چندکلمه‌ای: «متریال استفاده» رد می‌شود', validName('متریال استفاده', '') === '')
+      // وایت‌لیستِ نامِ کامل → در extractSignature قطعی و مقدم بر سکوتِ مدل برمی‌گردد (بازخوردِ «زروان صیاد»).
+      const sigDesc = 'بهترین طبقه\nفایل شخصی دفتر\nکارگزار ملکی شما : زروان صیاد هستم ، با افتخار'
+      await setNameRules({ blacklist: [], whitelist: ['زروان صیاد'] })
+      await loadNameRules()
+      ok('سفیدِ نامِ کامل: «زروان صیاد» از متنِ آگهی قطعی استخراج می‌شود',
+        JSON.stringify(await extractSignature('۱۵۰ متر نوساز', sigDesc, 'آژانس املاک خلج')) === JSON.stringify(['زروان صیاد']))
       // پاک‌سازی: به خطِ پایه برمی‌گردد.
       await setNameRules({ blacklist: [], whitelist: [] })
       await loadNameRules()

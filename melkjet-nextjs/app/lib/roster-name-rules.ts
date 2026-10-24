@@ -33,8 +33,15 @@ export async function setNameRules(r: NameRules): Promise<NameRules> {
 // keyOf-نرمال تا با مقایسهٔ lexicon هم‌خوان باشد.
 let black = new Set<string>()
 let white = new Set<string>()
-function applyCache(r: NameRules) { black = new Set(r.blacklist.map(keyOf)); white = new Set(r.whitelist.map(keyOf)) }
+let blackRaw: string[] = []   // صورتِ اصلی (برای تطبیقِ عبارتِ چندکلمه‌ای در متنِ آگهی)
+let whiteRaw: string[] = []
+function applyCache(r: NameRules) {
+  black = new Set(r.blacklist.map(keyOf)); white = new Set(r.whitelist.map(keyOf))
+  blackRaw = r.blacklist.slice(); whiteRaw = r.whitelist.slice()
+}
 export function nameRuleSets(): { black: Set<string>; white: Set<string> } { return { black, white } }
+// صورتِ اصلیِ واژه‌ها — extractSignature برای «آیا نامِ وایت‌لیست در متن آمده؟» لازمش دارد.
+export function nameRuleLists(): { blacklist: string[]; whitelist: string[] } { return { blacklist: blackRaw, whitelist: whiteRaw } }
 
 // در ابتدای buildAgencyRoster صدا زده می‌شود تا قواعدِ تازه در این سینک اعمال شوند.
 export async function loadNameRules(): Promise<void> { try { applyCache(await getNameRules()) } catch {} }
