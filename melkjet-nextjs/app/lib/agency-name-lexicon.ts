@@ -16,6 +16,20 @@ export function keyOf(name: string): string {
   return /^[A-Za-z]+$/.test(s) ? s.toUpperCase() : s
 }
 
+// ── کشِ فهرستِ سیاه/سفیدِ مدیریتیِ سوپرادمین (ایزوله) ──────────────────────────────
+// ⚠️ درسِ گران: نسخهٔ قبلی این واژه‌نامه را واداشت `roster-name-rules` را import کند که آن هم
+// `db` را می‌کشید → importِ حلقوی در ماژولی که مدلِ ML (roster-ner) به آن وابسته است → بارگذاریِ
+// مدل خراب می‌شد و استخراج به مسیرِ بی‌مدلِ آشغال می‌افتاد. حالا برعکس: این واژه‌نامه «برگِ خالص»
+// می‌مانَد (هیچ import) و قواعد از بیرون با setNameRuleCache «هل داده» می‌شوند، نه «کشیده».
+// کلیدها keyOf-نرمال‌اند (مثلِ بقیهٔ مجموعه‌ها). پیش‌فرض خالی → رفتار دقیقاً مثلِ نبودِ قاعده.
+let _nrBlack = new Set<string>()
+let _nrWhite = new Set<string>()
+let _nrWhiteRaw: string[] = []
+export function setNameRuleCache(black: Set<string>, white: Set<string>, whiteRaw: string[]): void {
+  _nrBlack = black; _nrWhite = white; _nrWhiteRaw = whiteRaw
+}
+export function nameRuleWhitelistRaw(): string[] { return _nrWhiteRaw }
+
 // هر کاراکترِ غیرِ (حرفِ فارسی/لاتین، رقم، فاصله، ZWNJ) → فاصله. اموجی/نماد/بولت (▪•✅☎️…) که
 // به اسم می‌چسبند و مرزِ کلمه را از بین می‌برند، این‌طور جدا می‌شوند. کلیدِ رفعِ «♀️محمدی».
 // TATWEEL: کشیده (U+0640) حرف نیست، کشش تزئینی است. «ــ فــرجام» بدونِ حذفِ آن
@@ -142,6 +156,9 @@ const DIGIT = /[0-9۰-۹]/
 export function isNoiseWord(w: string): boolean {
   const k = keyOf(w)
   if (!k) return true
+  // فهرستِ مدیریتیِ سوپرادمین (زنده): سفید مقدم است (هرگز نوفه)، بعد سیاه (همیشه نوفه).
+  if (_nrWhite.has(k)) return false
+  if (_nrBlack.has(k)) return true
   if (TITLES.has(k) || STOPWORDS.has(w) || STOP_K.has(k) || REALTY_TOKENS.has(k) || ADDR_MARKERS.has(k)) return true
   if (DIGIT.test(k)) return true                                    // «۹۵متری»، «۴۱»
   if (/^(تک|یک|دو|سه|چهار|پنج|شش)?خوابه?$/.test(k)) return true      // «دوخواب/سه‌خوابه»
@@ -233,7 +250,13 @@ export function isBadName(v: string, trustPerson = false): boolean {
 // + (فاز ۲۷۵) ردِ هر کاندیدایی که توکنِ آدرسِ همان آگهی باشد.
 export function validName(s: string, agencyName = '', banned?: Set<string>, opts?: { trustPerson?: boolean }): string {
   const v = cleanName((s || '').trim())
-  if (!v || v.length < 2 || v.length > 24 || isBadName(v, !!opts?.trustPerson)) return ''
+  if (!v || v.length < 2 || v.length > 24) return ''
+  // فهرستِ مدیریتی روی «کلِ کاندیدا» (عبارتِ چندکلمه‌ای مثلِ «متریال استفاده» هم). سفید قاطع
+  // (همهٔ دروازه‌ها دور زده می‌شوند)، سیاه رد. در همهٔ مسیرها (مدل و fallback یکسان).
+  const _fk = keyOf(v)
+  if (_nrWhite.has(_fk)) return v
+  if (_nrBlack.has(_fk)) return ''
+  if (isBadName(v, !!opts?.trustPerson)) return ''
   const k = keyOf(v), a = keyOf(agencyName)
   if (a && k.length >= 2 && (k === a || a.includes(k) || k.includes(a))) return ''   // خودِ آژانس امضا نیست
   if (banned?.size && v.split(/\s+/).some(w => banned.has(keyOf(w)))) return ''      // «فلاحی» از «بین فلاحی ۴۱»

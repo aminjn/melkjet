@@ -2422,6 +2422,33 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('«کسری بودجه» دیگر مشاور نمی‌سازد', extractSignature('آپارتمان', 'امکان وام برای کسری بودجه\nمشاور فروش شما', 'مسکن دیپلمات').length === 0)
       ok('نامِ واقعی با همین قاعده آسیب نمی‌بیند', extractSignature('آپارتمان', 'محمد پرنده هستم مشاور و کارشناس شما', 'مسکن دیپلمات')[0] === 'محمد پرنده')
     }
+    // فهرستِ سیاه/سفیدِ مدیریتی (ایزوله) — کش از بیرون «هل» داده می‌شود؛ واژه‌نامه importِ حلقوی ندارد.
+    // ⚠️ ریشهٔ باگِ قبلی: واژه‌نامه (که مدلِ ML به آن وابسته است) roster-name-rules→db را import کرد
+    //    → importِ حلقوی → بارگذاریِ مدل خراب → استخراجِ آشغال. این تست‌ها نگهبانِ آن ریشه‌اند.
+    // (تستِ «مدلِ بارشده با فیچرِ فعال» در scripts/roster-name-rules-model-test.mjs است چون SP را عوض می‌کند.)
+    {
+      const lex = await import('../app/lib/agency-name-lexicon.ts')
+      const { setNameRules, loadNameRules } = await import('../app/lib/roster-name-rules.ts')
+      const { readFileSync, rmSync } = await import('node:fs')
+      // Test A — ایزوله (ساختاری): واژه‌نامه هیچ ماژولی import نمی‌کند → گرافِ وابستگیِ مدل دست‌نخورده.
+      const lexSrc = readFileSync(new URL('../app/lib/agency-name-lexicon.ts', import.meta.url), 'utf8')
+      const lexImports = lexSrc.split('\n').filter(l => /^\s*import\s/.test(l))   // خطِ importِ واقعی، نه ذکر در کامنت
+      ok('ایزوله: واژه‌نامه هیچ importی ندارد (مدل از آن خراب نمی‌شود)', lexImports.length === 0)
+      ok('ایزوله: واژه‌نامه roster-name-rules/db را import نمی‌کند', !lexImports.some(l => /roster-name-rules|\.\/db|\.\/json-file/.test(l)))
+      // Test C — سیاه/سفید (per-token) + چندکلمه‌ای (per-candidate) + force-injection.
+      await setNameRules({ blacklist: ['آزاده', 'متریال استفاده'], whitelist: ['لوکیشن'] }); await loadNameRules()
+      ok('سیاه: «آزاده» نوفه شد', lex.isNoiseWord('آزاده') === true)
+      ok('سفید: «لوکیشن» نام شد (مقدم)', lex.isNoiseWord('لوکیشن') === false)
+      ok('سیاهِ چندکلمه‌ای: «متریال استفاده» رد شد', lex.validName('متریال استفاده', '') === '')
+      await setNameRules({ blacklist: [], whitelist: ['زروان صیاد'] }); await loadNameRules()
+      ok('سفیدِ نامِ کامل: «زروان صیاد» از متنِ آگهی قطعی استخراج می‌شود',
+        JSON.stringify(await extractSignature('۱۵۰ متر', 'کارگزار ملکی شما : زروان صیاد هستم', 'آژانس خلج')) === JSON.stringify(['زروان صیاد']))
+      // پاک‌سازی (مهم: کش را خالی کن تا تست‌های بعدی آلوده نشوند).
+      await setNameRules({ blacklist: [], whitelist: [] }); await loadNameRules()
+      ok('پاک‌سازی: «آزاده» دوباره نام', lex.isNoiseWord('آزاده') === false)
+      ok('پاک‌سازی: «لوکیشن» دوباره نوفه', lex.isNoiseWord('لوکیشن') === true)
+      try { rmSync(new URL('../.roster-name-rules.json', import.meta.url), { force: true }) } catch {}
+    }
     // فاز ۲۷۹ (فیدبک: «محمد همان محمدپرنده است، وحید حسنی‌منش دوبار تکرار شده — علتش این است
     // که کاربر گاهی بین نام و فامیل فاصله می‌گذارد و گاهی نه») — ادغام روی کلیدِ بی‌فاصله.
     {
