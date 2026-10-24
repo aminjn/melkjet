@@ -68,6 +68,15 @@ const RE_TAIL = /(?:کارشناسِ?\s*فروش|مشاورِ?\s*فروش|جهت
 // بدونِ این الگو، امضای این سبک اصلاً دیده نمی‌شد (همهٔ الگوهای دیگر نامِ پس از کلیدواژه را می‌گیرند).
 const RE_SELF = /([ء-ی]{2,15}(?:\s+[ء-ی]{2,15})?)\s+(?:هستم|هستیم|در\s*خدمتم|در\s*خدمتتونم)/g
 
+// آیا نامِ استخراج‌شده از «سیگنالِ قطعیِ شخص» آمده؟ (عنوان «خانم/آقای X»، برچسبِ «نقش: X»،
+// معرفیِ «X هستم»، یا گازِتیرِ trust — p≥۰.۹۷). چنین نامی حتی روی «یک» آگهی مشاورِ واقعی است و نباید
+// با بانِ آدرس (مثلِ «منطقه خانم اسدی») یا گاردِ MIN_FILES بی‌نام شود. همان trustِ مسیرِ مدلِ extractSignature.
+export function signatureTrusted(title: string, desc: string, agencyName = ''): boolean {
+  const ner = bestName(title, desc)
+  if (!ner || !ner.trust) return false
+  return !!validName(ner.name, agencyName, undefined, { trustPerson: true })
+}
+
 export function extractSignature(title: string, desc: string, agencyName = ''): string[] {
   // مسیرِ اصلی: برچسب‌زنِ توکن (roster-ner). روی دادهٔ کنارگذاشته ۸۷.۹٪ درست بود.
   // الگوهای زیر فقط وقتی اجرا می‌شوند که مدل بارگذاری نشده باشد — پس در تولید
@@ -271,7 +280,7 @@ export async function buildAgencyRoster(
   const maxDetails = Math.max(1, Math.min(opts.maxDetails ?? 3000, posts.length))
   // برای هر آگهی: عنوان + توضیحات را می‌گیریم و کاندیدای امضا را می‌سازیم.
   // `addr` = توکن‌های آدرسِ همین آگهی؛ هیچ منبعی (AI/lexicon/heuristic) اجازه ندارد از آنها اسم بسازد.
-  const rows: { post: BrandPost; title: string; desc: string; cand: string[]; addr: Set<string> }[] = []
+  const rows: { post: BrandPost; title: string; desc: string; cand: string[]; addr: Set<string>; trusted: boolean }[] = []
   for (let i = 0; i < maxDetails; i++) {
     if (i % 5 === 0 && opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
     const p = posts[i]
@@ -286,7 +295,7 @@ export async function buildAgencyRoster(
       await sleep(600)   // نرخِ کندتر تا دیوار زیرِ فشار آگهی‌ها را رد نکند (fetchDivarPost خودش retry هم دارد)
     }
     const txt = `${title}\n${desc}`
-    rows.push({ post: p, title, desc, cand: extractSignature(title, desc, name), addr: new Set([...addressTokens(txt), ...contextNoiseTokens(txt)]) })
+    rows.push({ post: p, title, desc, cand: extractSignature(title, desc, name), addr: new Set([...addressTokens(txt), ...contextNoiseTokens(txt)]), trusted: signatureTrusted(title, desc, name) })
     try { opts.onProgress?.(i + 1, maxDetails) } catch {}
   }
 
@@ -358,7 +367,9 @@ export async function buildAgencyRoster(
   const unnamedIdx: number[] = []   // فاز ۲۸۰ — برای پاسِ دومِ «تعمیمِ کنترل‌شدهٔ واژه‌نامه»
   rows.forEach((r, idx) => {
     // کاندیداهای «موضعِ امضا»یِ همین آگهی (heuristic) — تنها جایی که یک اسم واقعاً امضای مشاور است.
-    const cand = r.cand.map(c => validName(c, name, r.addr)).filter(Boolean)
+    // نامِ trusted (سیگنالِ قطعیِ شخص) banned/آدرس را دور می‌زند — وگرنه «منطقه خانم اسدی» که
+    // «اسدی» را به addr می‌برد، همین‌جا نامِ درست را می‌کُشت و آگهی بی‌نام می‌ماند.
+    const cand = r.cand.map(c => validName(c, name, r.trusted ? undefined : r.addr, { trustPerson: r.trusted })).filter(Boolean)
     const candKeys = new Set(cand.map(c => keyOf(c)))
     const lexRaw = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), name, r.addr)
     // lexicon فقط وقتی معتبر است که نامِ آموخته‌شده در موضعِ امضایِ همین آگهی باشد (جزوِ cand)،
@@ -389,7 +400,9 @@ export async function buildAgencyRoster(
     if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); unnamedIdx.push(idx); return }
     const k = keyOf(chosen)
     // «سیگنالِ قوی» = نامِ آموختهٔ تثبیت‌شده در موضعِ امضا، یا توافقِ مستقلِ AI و heuristic.
-    if (res || lex || (ai && candKeys.has(keyOf(ai)))) strongKeys.add(k)
+    // نامِ trusted (امضای قطعیِ شخص) «سیگنالِ قوی» است → از تنزلِ MIN_FILES معاف؛ یک آگهیِ
+    // صریحِ «خانم اسدی مشاور» مشاورِ واقعی است، نه نوفهٔ تک‌فایلی.
+    if (res || lex || (ai && candKeys.has(keyOf(ai))) || r.trusted) strongKeys.add(k)
     // «تازه» = این اجرا از متن استخراج شد (AI یا heuristic)، نه صرفاً پژواکِ نامِ از قبل آموخته.
     if (ai || cand.length) freshKeys.add(k)
     fileCount.set(k, (fileCount.get(k) || 0) + 1)
