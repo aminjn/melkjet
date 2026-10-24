@@ -2408,6 +2408,63 @@ function DivarLinks({ tokens }: { tokens?: string[] }) {
   )
 }
 
+// ── پنلِ «فهرستِ سیاه/سفیدِ نامِ مشاور» — مدیریتِ زنده، بدونِ دیپلوی ──
+// سیاه: واژه‌ای که هرگز نامِ مشاور نیست (دوست/پیچ/متریال…). سفید: نامِ واقعیِ اشتباهاً نوفه.
+// سراسری، بدونِ شرط. در سینکِ بعدیِ هر آژانس اثر می‌کند (buildAgencyRoster → loadNameRules).
+function NameRulesPanel() {
+  const [black, setBlack] = useState('')
+  const [white, setWhite] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [open, setOpen] = useState(false)
+  const fa = (n: any) => (Number(n) || 0).toLocaleString('fa-IR')
+  const load = () => fetch('/api/admin/roster-name-rules', { cache: 'no-store' }).then(r => r.json()).then(j => {
+    if (j.ok) { setBlack((j.rules.blacklist || []).join('\n')); setWhite((j.rules.whitelist || []).join('\n')) }
+  }).catch(() => {})
+  useEffect(() => { load() }, [])
+  const count = (s: string) => s.split('\n').map(x => x.trim()).filter(Boolean).length
+  const save = async () => {
+    setBusy(true); setMsg('')
+    try {
+      const r = await fetch('/api/admin/roster-name-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blacklist: black, whitelist: white }) })
+      const j = await r.json()
+      if (j.ok) { setBlack((j.rules.blacklist || []).join('\n')); setWhite((j.rules.whitelist || []).join('\n')); setMsg(`ذخیره شد — سیاه: ${fa(j.rules.blacklist.length)} · سفید: ${fa(j.rules.whitelist.length)}. از سینکِ بعدیِ هر آژانس اثر می‌کند.`) }
+      else setMsg(j.error || 'خطا در ذخیره')
+    } catch { setMsg('خطای شبکه') } finally { setBusy(false) }
+  }
+  const ta: React.CSSProperties = { width: '100%', minHeight: 150, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '10px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', lineHeight: 2, outline: 'none', resize: 'vertical' }
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
+        <div style={{ fontSize: 15, fontWeight: 800 }}>🧹 فهرستِ سیاه/سفیدِ نامِ مشاور</div>
+        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>سیاه: {fa(count(black))} · سفید: {fa(count(white))}</span>
+        <span style={{ marginInlineStart: 'auto', fontSize: 18, color: 'var(--muted)' }}>{open ? '▾' : '▸'}</span>
+      </div>
+      {open && <div style={{ marginTop: 12 }}>
+        <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.9, margin: '0 0 12px' }}>
+          هر خط یک واژه. <b>سیاه</b> = واژه‌ای که هرگز نامِ مشاور نیست (مثلِ «دوست»، «پیچ»، «متریال استفاده»، «لوکیشن») → از نام‌ها حذف می‌شود.
+          <b> سفید</b> = نامِ واقعی که اشتباهاً نوفه تشخیص داده می‌شود → همیشه نام می‌مانَد (سفید مقدم است).
+          سراسری روی همهٔ آژانس‌ها. تغییر <b>بدونِ دیپلوی</b> از سینکِ بعدیِ هر آژانس اثر می‌کند.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6, color: '#e06a6a' }}>⛔ سیاه (هرگز نام نیست)</div>
+            <textarea style={ta} value={black} onChange={e => setBlack(e.target.value)} placeholder={'دوست\nپیچ\nمتریال استفاده'} dir="rtl" />
+          </div>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6, color: '#4a9e6a' }}>✅ سفید (همیشه نام)</div>
+            <textarea style={ta} value={white} onChange={e => setWhite(e.target.value)} placeholder={'آزاده\nپارسا'} dir="rtl" />
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
+          <GoldButton disabled={busy} onClick={save}>{busy ? '…' : '💾 ذخیره'}</GoldButton>
+          {msg && <span style={{ fontSize: 12, color: 'var(--muted)' }}>{msg}</span>}
+        </div>
+      </div>}
+    </Card>
+  )
+}
+
 // ── پنلِ «رُسترِ آژانس»: یک لینک بده → مشاورها خودکار جدا و هر کدام حسابِ جدا ──
 function AgencyRosterPanel() {
   const [scrapes, setScrapes] = useState<any[]>([])
@@ -2832,6 +2889,7 @@ function AgencyIntelView() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <AgencyRosterPanel />
+      <NameRulesPanel />
       {/* کاوشگرِ pro دیوار */}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>

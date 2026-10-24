@@ -8,6 +8,9 @@
 //   (۱) لیستِ سیاهِ واژگانِ املاکی نبود → «لوکیشن/منطقه/دوخواب/قابل/آزاد/ایرانی» اسم می‌شد.
 //   (۲) توکن‌های آدرس اسم حساب می‌شدند → «بین فلاحی ۴۱ و ۴۳» ⇒ مشاورِ جعلیِ «فلاحی».
 
+// فهرستِ سیاه/سفیدِ مدیریتیِ سوپرادمین — کشِ سینک (importِ حلقوی امن است: keyOf تابعِ هویستد است).
+import { nameRuleSets } from './roster-name-rules'
+
 const ZWNJ = /‌/g
 
 // نرمال‌سازیِ کلید: فارسی یکدست (ي→ی، ك→ک)، لاتین CAPS، فاصله/نیم‌فاصله حذف.
@@ -142,6 +145,11 @@ const DIGIT = /[0-9۰-۹]/
 export function isNoiseWord(w: string): boolean {
   const k = keyOf(w)
   if (!k) return true
+  // فهرستِ سیاه/سفیدِ مدیریتیِ سوپرادمین (زنده، بدونِ دیپلوی). سفید مقدم است: واژه‌ای که ادمین
+  // «همیشه نام» کرده هرگز نوفه نیست؛ واژهٔ سیاه هرگز نام نیست.
+  const { black, white } = nameRuleSets()
+  if (white.has(k)) return false
+  if (black.has(k)) return true
   if (TITLES.has(k) || STOPWORDS.has(w) || STOP_K.has(k) || REALTY_TOKENS.has(k) || ADDR_MARKERS.has(k)) return true
   if (DIGIT.test(k)) return true                                    // «۹۵متری»، «۴۱»
   if (/^(تک|یک|دو|سه|چهار|پنج|شش)?خوابه?$/.test(k)) return true      // «دوخواب/سه‌خوابه»

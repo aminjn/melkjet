@@ -4,6 +4,7 @@ import { nameProbSync, NAME_THRESHOLD, corpusCount } from './roster-name-model'
 import { bestName, hasSparse as hasSparseModel } from './roster-ner'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
 import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
+import { loadNameRules } from './roster-name-rules'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // ── خوشه‌بندیِ آگهی‌های یک آژانسِ دیوار به تفکیکِ مشاور، از روی «امضای» داخلِ آگهی ──
@@ -274,6 +275,10 @@ export async function buildAgencyRoster(
 
   const { posts, name, reason } = await (opts.f?.profileTokens || fetchDivarProfileTokens)(slug)
   if (!posts.length) return { ...base, agencyName: name, error: reason === 'unreachable' ? 'به دیوار نرسید (پروکسی؟)' : 'آگهی‌ای یافت نشد' }
+
+  // فهرستِ سیاه/سفیدِ مدیریتیِ سوپرادمین را از انبار بخوان تا موتورِ نام (isNoiseWord) در این سینک
+  // از قواعدِ تازه بخواند — هر ویرایش در سوپرادمین از سینکِ بعدی اثر می‌کند، بدونِ دیپلوی.
+  try { await loadNameRules() } catch {}
 
   // همهٔ آگهی‌ها پردازش می‌شوند (سقفِ ایمنی ۳۰۰۰). هر آگهی جزئیات + throttle دارد، پس سینکِ بزرگ
   // چند دقیقه طول می‌کشد — با ازسرگیری و heartbeat مشکلی نیست و در پنجرهٔ شبانه اجرا می‌شود.
