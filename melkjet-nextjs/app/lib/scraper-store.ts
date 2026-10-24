@@ -1246,8 +1246,12 @@ function updateUserListingCore(db: DB, itemId: string, raw: UserListingRaw, opts
   }
   return it
 }
+// SCALE-2M — آپدیتِ یک آگهیِ مشخص با id نیازی به خواندنِ کلِ جدول/dedup ندارد. قبلاً mutateِ کامل بود
+// و در مسیرِ پرتکرارِ انتشارِ روستر (advisor-divar-import → publishListing → این) هر آگهی یک خواندنِ ۲۳۲مگ
+// زیرِ قفلِ scraper_meta می‌زد → خفگیِ استخر و مرگِ enrich/launcher/autosite. حالا فقط همان ردیف،
+// زیرِ قفلِ ریزدانهٔ mutateSome (meta-late، قفلِ سراسری ~۱ms). بدونِ فلگ — بهبودِ خالص و بی‌ریسک.
 export async function updateUserListing(itemId: string, raw: UserListingRaw, opts?: { remoderate?: boolean }): Promise<Item | null> {
-  return mutate(db => updateUserListingCore(db, itemId, raw, opts))
+  return mutateSome([itemId], ({ items }) => updateUserListingCore({ items } as DB, itemId, raw, opts))
 }
 
 // ── انتشارِ دسته‌ای (CLAUDE.md «انتشارِ دسته‌ای») ────────────────────────────────
