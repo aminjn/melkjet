@@ -125,8 +125,18 @@ export async function pgListingsAll(): Promise<unknown[]> {
   const client = await acquire()
   try {
     await ensureSchema(client)
+    // خواندنِ کاملِ ~۲۳۲مگِ کشِ سرد روی سقفِ پیش‌فرضِ ۱۵ث statement کنسل می‌شد («canceling statement»)
+    // — هم موقعِ بیلدِ صفحاتِ SSG (/blog,/about که listItems صدا می‌زنند) هم موقعِ گرم‌شدنِ کشِ هر
+    // اینستنس پس از reload. SET LOCAL سقف را فقط برای همین خواندن و فقط داخلِ همین تراکنش بالا می‌برد
+    // (اتصالِ استخر بعدش دست‌نخورده). مرحلهٔ D این خواندنِ کامل را حذف می‌کند؛ این تا آن موقع جلوِ کنسل را می‌گیرد.
+    await client.query('BEGIN')
+    await client.query("SET LOCAL statement_timeout='120s'")
     const r = await client.query('SELECT data FROM listings ORDER BY scraped_at DESC')
+    await client.query('COMMIT')
     return r.rows.map(x => x.data)
+  } catch (e) {
+    try { await client.query('ROLLBACK') } catch {}
+    throw e
   } finally { client.release() }
 }
 
