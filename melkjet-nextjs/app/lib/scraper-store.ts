@@ -1211,7 +1211,18 @@ function addUserListingCore(db: DB, raw: UserListingRaw, twinIdx: TwinIndex<Item
 // گِیتِ ضدتکراری در لحظهٔ ثبت: اگر هم‌ملکِ آگهیِ موجود باشد، با وضعیتِ «duplicate» ساخته می‌شود
 // (هرگز عمومی نمی‌شود) و علتش برای ادمین ثبت است — نه اینکه نسخهٔ دوم واردِ سایت شود.
 export function addUserListing(raw: UserListingRaw): Promise<Item> {
+  if (SCALE_BLOCK_DEDUP && pgEnabled()) return _addUserListingBlocked(raw)
   return mutate(db => addUserListingCore(db, raw, buildUserTwinIndex(db)))
+}
+// SCALE-2M مرحلهٔ B3 — ثبتِ تکیِ کاربر/انتشارِ تکیِ روستر بدونِ خواندنِ کلِ جدول.
+async function _addUserListingBlocked(raw: UserListingRaw): Promise<Item> {
+  const keys = blockKeys(simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta }))
+  const candIds = (await candidatesByBlocks(keys)).map(i => i.id)
+  return mutateSome(candIds, ({ items, meta }) => {
+    meta.owners = meta.owners || []
+    const view = { items, owners: meta.owners } as DB
+    return addUserListingCore(view, raw, twinIndexOf(items))
+  }, { metaDirty: true })
 }
 // فاز ۱۴۰ (فیدبک: «تأیید می‌کنم دوباره خودش برمی‌گردد») — به‌روزرسانیِ «درجای» آگهیِ عمومیِ کاربر.
 // بازانتشار قبلاً حذف+ساختِ دوباره بود → هر سینکِ دیوار حکمِ ممیزی (تأیید/ردِ دستیِ ادمین) را پاک می‌کرد.
@@ -1262,8 +1273,14 @@ const PUBLISH_CHUNK = 15   // قفلِ KV_META را طولانی نکن — بز
 // منتفی است؛ مسیرِ تکیِ ثبتِ کاربر (addUserListing) همچنان داخلِ تراکنش چک می‌کند.
 export async function publishUserListingsBatch(reqs: PublishUserListingReq[]): Promise<{ item: Item; created: boolean }[]> {
   const out: { item: Item; created: boolean }[] = []
-  const idx = buildUserTwinIndex(await load())
   const probeOf = (raw: UserListingRaw) => simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta })
+  // SCALE-2M مرحلهٔ B3 — ریشهٔ «canceling statement»ِ روستر: این‌جا buildUserTwinIndex(await load())
+  // کلِ ~۲۳۲مگ جدول را زیرِ سقفِ ۱۵ث statement می‌خواند → تایم‌اوتِ سینکِ آژانس‌های بزرگ. با فلگ،
+  // ایندکسِ هم‌ملک فقط از کاندیداهای هم‌بلوکِ همهٔ درخواست‌ها ساخته می‌شود — هم‌ارزِ اسکنِ کامل برای
+  // find (TwinIndex.find فقط بلوکِ probe را می‌گردد)؛ twinIndexOf همان predicateِ buildUserTwinIndex.
+  const idx = (SCALE_BLOCK_DEDUP && pgEnabled())
+    ? twinIndexOf(await candidatesByBlocks([...new Set(reqs.flatMap(r => blockKeys(probeOf(r.raw))))]))
+    : buildUserTwinIndex(await load())
   for (let c = 0; c < reqs.length; c += PUBLISH_CHUNK) {
     const chunk = reqs.slice(c, c + PUBLISH_CHUNK)
     // ردیف‌هایی که این چانک ممکن است دست بزند: prevِ اعلام‌شده + هم‌ملکِ یافته در ایندکس.
