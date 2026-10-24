@@ -4,7 +4,7 @@ import { nameProbSync, NAME_THRESHOLD, corpusCount } from './roster-name-model'
 import { bestName, hasSparse as hasSparseModel } from './roster-ner'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
 import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord } from './agency-name-lexicon'
-import { loadNameRules, nameRuleLists } from './roster-name-rules'
+import { loadNameRules } from './roster-name-rules'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // ── خوشه‌بندیِ آگهی‌های یک آژانسِ دیوار به تفکیکِ مشاور، از روی «امضای» داخلِ آگهی ──
@@ -90,26 +90,6 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   // هرگز اسم نمی‌شوند. فاز ۳۲۱ — این banned حالا به مسیرِ مدل هم اعمال می‌شود (قبلاً فقط در fallback
   // بود، ولی تولید همیشه مدل‌دار است؛ «مشاور امین شما» ⇒ «امین»ِ جعلی از همین‌جا می‌آمد).
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
-
-  // ── وایت‌لیستِ مدیریتی: قاطع و مقدم بر همه‌چیز (حتی سکوتِ مدل) ──
-  // ریشهٔ بازخوردِ کاربر: ادمین «زروان صیاد» را وایت‌لیست کرد ولی مدل ساکت بود و چون مدل
-  // «حرفِ آخر» است (MODEL_AUTHORITATIVE پایین)، نام هرگز استخراج نمی‌شد. وایت‌لیست فقط
-  // «نوفه‌نبودن» را عوض می‌کرد، نه «استخراج‌شدن» را. حالا اگر عینِ نامِ وایت‌لیست (دنبالهٔ
-  // واژه‌ها، بی‌حساسیت به فاصله/نیم‌فاصله) در متنِ آگهی بیاید، همان‌جا قطعی برمی‌گردد.
-  const _wl = nameRuleLists().whitelist
-  if (_wl.length) {
-    const words = raw.split(/[^ء-یA-Za-z]+/).filter(Boolean).map(keyOf)
-    const hits: string[] = []
-    for (const wname of _wl) {
-      const wk = wname.split(/\s+/).filter(Boolean).map(keyOf).filter(Boolean)
-      if (!wk.length) continue
-      for (let i = 0; i + wk.length <= words.length; i++) {
-        if (wk.every((k, j) => k === words[i + j])) { hits.push(wname.replace(/\s+/g, ' ').trim()); break }
-      }
-    }
-    if (hits.length) return [...new Set(hits)]
-  }
-
   const banned = new Set([...addressTokens(raw), ...contextNoiseTokens(raw)])
   // هر واژه‌ای که بلافاصله پیش از «شما» بنشیند در جایگاهِ صفت است، نه نام: «امینِ شما»، «همراهِ شما».
   for (const m of raw.matchAll(/([ء-ی]{3,15})\s*(?:ی|ِ)?\s*شما/g)) banned.add(keyOf(m[1]))

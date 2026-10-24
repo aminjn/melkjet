@@ -241,14 +241,7 @@ export function isBadName(v: string, trustPerson = false): boolean {
 // + (فاز ۲۷۵) ردِ هر کاندیدایی که توکنِ آدرسِ همان آگهی باشد.
 export function validName(s: string, agencyName = '', banned?: Set<string>, opts?: { trustPerson?: boolean }): string {
   const v = cleanName((s || '').trim())
-  if (!v || v.length < 2 || v.length > 24) return ''
-  // فهرستِ سیاه/سفیدِ مدیریتیِ سوپرادمین روی «کلِ کاندیدا» (شاملِ عبارتِ چندکلمه‌ای مثلِ «متریال استفاده»).
-  // سفید مقدم و قاطع است: ادمین صریحاً گفته این نام است → همهٔ دروازه‌ها (بد/آژانس/بن) دور زده می‌شوند.
-  const { black: _blk, white: _wht } = nameRuleSets()
-  const _fk = keyOf(v)
-  if (_wht.has(_fk)) return v
-  if (_blk.has(_fk)) return ''
-  if (isBadName(v, !!opts?.trustPerson)) return ''
+  if (!v || v.length < 2 || v.length > 24 || isBadName(v, !!opts?.trustPerson)) return ''
   const k = keyOf(v), a = keyOf(agencyName)
   if (a && k.length >= 2 && (k === a || a.includes(k) || k.includes(a))) return ''   // خودِ آژانس امضا نیست
   if (banned?.size && v.split(/\s+/).some(w => banned.has(keyOf(w)))) return ''      // «فلاحی» از «بین فلاحی ۴۱»
