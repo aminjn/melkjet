@@ -179,7 +179,7 @@ export default function HomeClient({ initial, heroImage = '', heroImageDay = '' 
           <div style={{ textAlign: 'right' }}>
             <h1 style={{ marginTop: 0, fontSize: 'clamp(34px,5.6vw,62px)', lineHeight: 1.14, fontWeight: 800, letterSpacing: '-1px', color: 'var(--hero-h1)', textShadow: 'var(--hero-h1-shadow)' }}>
               خانه‌ی بعدی‌ات،<br />
-              <span style={{ background: 'var(--hero-accent)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>هوشمندانه</span> انتخاب می‌شود
+              <span className="mjhero-accent">هوشمندانه</span> انتخاب می‌شود
             </h1>
             <p style={{ margin: '20px 0 0', maxWidth: 560, fontSize: 'clamp(15px,2vw,18.5px)', lineHeight: 1.85, color: 'var(--hero-lede)', textShadow: 'var(--hero-lede-shadow)' }}>
               به زبان خودت بگو چه می‌خواهی. ملک‌جت بازار را تحلیل می‌کند، دلیل هر پیشنهاد را توضیح می‌دهد و کنارت می‌ماند تا بهترین تصمیم را بگیری.

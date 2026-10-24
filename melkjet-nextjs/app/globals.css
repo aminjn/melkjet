@@ -57,6 +57,17 @@ html.light {
 html.light .mjhero-day { display: block; }
 html.light .mjhero-night { display: none; }
 
+/* کلمهٔ طلاییِ عنوانِ هیرو: رنگِ توپرِ تم‌آگاه به‌عنوان پایه — روی همهٔ موبایل‌ها قابلِ‌اعتماد است.
+   علتِ «روی بعضی گوشی‌ها اصلا معلوم نیست»: background-clip:text + text-fill-color:transparent روی
+   موبایل (به‌ویژه iOS) گاهی گرادیان را داخلِ متن نقاشی نمی‌کند و متن کاملاً نامرئی می‌ماند (فقط سایه).
+   پس گرادیان فقط روی دسکتاپ (hover+pointer:fine) به‌عنوان تزئین اعمال می‌شود؛ موبایل همیشه رنگِ توپر. */
+.mjhero-accent { color: var(--hero-accent-solid); }
+@media (hover: hover) and (pointer: fine) {
+  @supports ((-webkit-background-clip: text) or (background-clip: text)) {
+    .mjhero-accent { background: var(--hero-accent); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  }
+}
+
 /* فاز ۳۰۹ — هیرو و ناوِ روی هیرو «تم‌آگاه»: شب (پیش‌فرض/:root) ↔ روز (html.light).
    قبلاً هیرو همیشه‌تیره هارد‌کد بود، پس تمِ روشن «با روز فرقی نداشت». حالا با تمِ روشن،
    هیرو روز می‌شود (آسمانِ آفتابی، پنلِ شیشه‌ایِ سفید، متنِ تیره) و با تمِ تیره همان شبِ فعلی. */
@@ -66,7 +77,7 @@ html.light .mjhero-night { display: none; }
   --hero-sky:radial-gradient(1200px 560px at 70% 48%, rgba(236,151,56,.40), rgba(188,108,38,.14) 42%, transparent 70%), radial-gradient(880px 440px at 85% -12%, rgba(247,222,146,.20), transparent 62%), linear-gradient(180deg,#060810 0%,#0a0e1a 36%,#171209 100%);
   --hero-bottom:linear-gradient(180deg,transparent,rgba(4,6,11,.82));
   --hero-orb:radial-gradient(circle, rgba(236,170,70,.30), transparent 68%);
-  --hero-h1:#F6F1E6; --hero-h1-shadow:0 2px 30px rgba(0,0,0,.4); --hero-lede:rgba(244,238,225,.78); --hero-lede-shadow:0 1px 16px rgba(0,0,0,.45); --hero-accent:linear-gradient(120deg,#F7DE92,#D9AD3E);
+  --hero-h1:#F6F1E6; --hero-h1-shadow:0 2px 30px rgba(0,0,0,.4); --hero-lede:rgba(244,238,225,.78); --hero-lede-shadow:0 1px 16px rgba(0,0,0,.45); --hero-accent:linear-gradient(120deg,#F7DE92,#D9AD3E); --hero-accent-solid:#F7DE92;
   --hero-chip-bg:rgba(255,255,255,.05); --hero-chip-brd:rgba(247,222,146,.22); --hero-chip-text:rgba(244,238,225,.92);
   --hero-ic-stroke:#F5D982; --hero-ic-bg:rgba(255,255,255,.08); --hero-ic-brd:rgba(247,222,146,.4);
   --hero-card-brd:rgba(247,222,146,.26); --hero-card-shadow:0 26px 60px -26px rgba(0,0,0,.8); --hero-fade:#080b14;
@@ -102,7 +113,7 @@ html.light {
   --hero-sky:radial-gradient(1200px 640px at 72% 30%, rgba(247,222,146,.5), rgba(217,173,62,.12) 42%, transparent 72%), radial-gradient(900px 520px at 88% -8%, rgba(255,255,255,.8), transparent 60%), linear-gradient(180deg,#b9d6ea 0%,#d7e6ee 30%,#eef2ec 60%,#f6efe1 100%);
   --hero-bottom:linear-gradient(180deg,transparent,rgba(246,239,225,.7));
   --hero-orb:radial-gradient(circle, rgba(247,214,120,.45), transparent 68%);
-  --hero-h1:#141b27; --hero-h1-shadow:0 1px 3px rgba(255,255,255,.95), 0 2px 22px rgba(255,255,255,.85); --hero-lede:#2a3545; --hero-lede-shadow:0 1px 2px rgba(255,255,255,.95), 0 1px 14px rgba(255,255,255,.8); --hero-accent:linear-gradient(120deg,#B5811F,#7E560F);
+  --hero-h1:#141b27; --hero-h1-shadow:0 1px 3px rgba(255,255,255,.95), 0 2px 22px rgba(255,255,255,.85); --hero-lede:#2a3545; --hero-lede-shadow:0 1px 2px rgba(255,255,255,.95), 0 1px 14px rgba(255,255,255,.8); --hero-accent:linear-gradient(120deg,#B5811F,#7E560F); --hero-accent-solid:#8a5c0f;
   --hero-chip-bg:rgba(255,255,255,.62); --hero-chip-brd:rgba(23,32,46,.14); --hero-chip-text:#17202e;
   --hero-ic-stroke:#A9761D; --hero-ic-bg:rgba(217,173,62,.14); --hero-ic-brd:rgba(217,173,62,.4);
   --hero-card-brd:rgba(255,255,255,.85); --hero-card-shadow:0 20px 44px -22px rgba(23,32,46,.5); --hero-fade:#eef3f6;
