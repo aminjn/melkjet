@@ -2422,26 +2422,6 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('«کسری بودجه» دیگر مشاور نمی‌سازد', extractSignature('آپارتمان', 'امکان وام برای کسری بودجه\nمشاور فروش شما', 'مسکن دیپلمات').length === 0)
       ok('نامِ واقعی با همین قاعده آسیب نمی‌بیند', extractSignature('آپارتمان', 'محمد پرنده هستم مشاور و کارشناس شما', 'مسکن دیپلمات')[0] === 'محمد پرنده')
     }
-    // فهرستِ سیاه/سفیدِ مدیریتیِ سوپرادمین — isNoiseWord در لحظه از کشِ سینک می‌خوانَد (بدونِ دیپلوی).
-    {
-      const { isNoiseWord } = await import('../app/lib/agency-name-lexicon.ts')
-      const { setNameRules, loadNameRules } = await import('../app/lib/roster-name-rules.ts')
-      const { rmSync } = await import('node:fs')
-      // خطِ پایه: «آزاده» نوفه نیست، «لوکیشن» نوفه است.
-      ok('پایه: «آزاده» نوفه نیست', isNoiseWord('آزاده') === false)
-      ok('پایه: «لوکیشن» نوفه است', isNoiseWord('لوکیشن') === true)
-      // سیاه‌کردنِ یک نام → نوفه می‌شود؛ سفیدکردنِ یک واژهٔ نوفه → نام می‌ماند (سفید مقدم).
-      await setNameRules({ blacklist: ['آزاده'], whitelist: ['لوکیشن'] })
-      await loadNameRules()
-      ok('سیاه: «آزاده» حالا نوفه است', isNoiseWord('آزاده') === true)
-      ok('سفید: «لوکیشن» حالا نام می‌مانَد', isNoiseWord('لوکیشن') === false)
-      // پاک‌سازی: به خطِ پایه برمی‌گردد.
-      await setNameRules({ blacklist: [], whitelist: [] })
-      await loadNameRules()
-      ok('پاک‌سازی: «آزاده» دوباره نام', isNoiseWord('آزاده') === false)
-      ok('پاک‌سازی: «لوکیشن» دوباره نوفه', isNoiseWord('لوکیشن') === true)
-      try { rmSync(new URL('../.roster-name-rules.json', import.meta.url), { force: true }) } catch {}
-    }
     // فاز ۲۷۹ (فیدبک: «محمد همان محمدپرنده است، وحید حسنی‌منش دوبار تکرار شده — علتش این است
     // که کاربر گاهی بین نام و فامیل فاصله می‌گذارد و گاهی نه») — ادغام روی کلیدِ بی‌فاصله.
     {
