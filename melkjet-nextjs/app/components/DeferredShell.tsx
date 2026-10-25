@@ -13,7 +13,6 @@ const SuspensionGate = dynamic(() => import('./SuspensionGate'), { ssr: false })
 const PlanLock = dynamic(() => import('./PlanLock'), { ssr: false })
 const CompareBar = dynamic(() => import('./CompareBar'), { ssr: false })
 const SupportLauncher = dynamic(() => import('./SupportLauncher'), { ssr: false })
-const LegalAssistant = dynamic(() => import('./LegalAssistant'), { ssr: false })
 const PWAInstall = dynamic(() => import('./PWAInstall'), { ssr: false })
 const BizPicker = dynamic(() => import('./BizPicker'), { ssr: false })   // فاز ۱۷۱ — انتخابِ کسب‌وکار بعد از ورود
 const AIAssistant = dynamic(() => import('./AIAssistant'), { ssr: false })   // فاز ۳۳۰ — دستیارِ سراسریِ صفحه‌آگاه (همهٔ صفحات)
@@ -43,7 +42,7 @@ export default function DeferredShell() {
       <BizPicker />
       <CompareBar />
       <SupportLauncher />
-      <LegalAssistant />
+      {/* فاز ۳۳۰ — دستیارِ حقوقیِ جدا حذف شد؛ دستیارِ اصلی (AIAssistant) حالا حقوقی را هم پوشش می‌دهد (یک دکمهٔ واحد). */}
       <AIAssistant />
       <PWAInstall />
     </>

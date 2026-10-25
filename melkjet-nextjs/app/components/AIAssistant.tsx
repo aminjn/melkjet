@@ -6,8 +6,8 @@ interface Ad { enabled?: boolean; title?: string; text?: string; imageUrl?: stri
 interface Source { title: string; url: string; content?: string }
 interface Msg { role: 'user' | 'assistant'; content: string; cards?: Card[]; ad?: Ad; sources?: Source[] }
 
-const DEFAULT_GREETING = 'سلام 👋 من می‌توانم در خرید، فروش، اجاره، تحلیل قیمت و سرمایه‌گذاری کمکت کنم و فایل‌های مناسب را نشانت بدهم. از کجا شروع کنیم؟'
-const DEFAULT_CHIPS = ['خونه زیر ۱۰ میلیارد تو تهران', 'آپارتمان برای اجاره', 'تحلیل قیمت یک محله']
+const DEFAULT_GREETING = 'سلام 👋 در خرید، فروش، اجاره، تحلیل قیمتِ محله، سرمایه‌گذاری و حتی سؤال‌های حقوقیِ ملک کمکت می‌کنم و فایل‌های مناسب را نشانت می‌دهم. از کجا شروع کنیم؟'
+const DEFAULT_CHIPS = ['خونه زیر ۱۰ میلیارد تو تهران', 'جنت‌آباد متری چنده؟', 'قرارداد اجاره و حقوق مستاجر']
 
 // آگاهیِ صفحه‌ای: عنوان + نشانی + متنِ اصلیِ صفحهٔ جاری تا دستیار به سؤالِ «همین صفحه» جواب دهد.
 function readPageContext(): { path: string; title: string; text: string } | undefined {

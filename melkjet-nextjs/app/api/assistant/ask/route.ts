@@ -3,15 +3,18 @@ import { getAdminData } from '@/app/lib/admin-store'
 import { aiFor, agentModel, aiActive, agentProvider } from '@/app/lib/gapgpt'
 import { searchAssistantListings, type AssistantFilters, type AssistantCard } from '@/app/lib/assistant-listings'
 import { sttConfigured, ttsConfigured, searchConfigured, selfHostSearch, type WebResult } from '@/app/lib/self-host'
+import { neighbourhoodStats } from '@/app/lib/market-stats'
 
 const { chatCompleteSafe } = aiFor('دستیارِ عمومیِ ملک‌جت')   // دفترِ مصرفِ AI
 export const maxDuration = 45
 
 // پرامپتِ پایه — با anti-hallucination (هرگز منطقه/محله/قیمتِ قطعیِ ساختگی) + آگاهی از «فایل‌ها».
 const DEFAULT_SYSTEM =
-  'تو «دستیار ملک‌جت» هستی، دستیارِ یک پلتفرمِ املاکِ ایرانی. فارسی، کوتاه، دقیق و دوستانه پاسخ بده. ' +
+  'تو «دستیار ملک‌جت» هستی، دستیارِ یک پلتفرمِ املاکِ ایرانی. فارسی، کوتاه، دقیق و دوستانه پاسخ بده و تا جای ممکن «کمک‌کننده» باش — نه اینکه زود کاربر را پس بزنی. ' +
   'می‌توانی فایل‌های واقعیِ سایت را جستجو و نشان بدهی؛ اگر کاربر می‌خواهد ملک/فایل ببیند، فیلترها را دربیاور. ' +
-  'هرگز شمارهٔ منطقهٔ تهران، نگاشتِ محله‑به‑منطقه یا قیمتِ دقیق را از خودت نساز و فهرست نکن؛ اگر مطمئن نیستی بپرس.'
+  'ملک‌جت آمارِ واقعیِ قیمتِ محله‌ها را از آگهی‌های فعالِ خودش دارد؛ اگر سیستم آمارِ یک محله را به تو داد، همان عددِ واقعی را با اطمینان بگو. ' +
+  'فقط «از خیالِ خودت» عددِ قیمت یا نگاشتِ محله‑به‑منطقهٔ شهرداری نساز؛ ولی سؤال‌های عمومیِ ملکی (روندِ بازار، نکاتِ خرید/فروش/اجاره، مراحلِ معامله، انتخابِ محله بر اساسِ بودجه) را کامل و مفید پاسخ بده. ' +
+  'به سؤال‌های حقوقیِ ملک هم (سند مالکیت، مبایعه‌نامه، قرارداد اجاره، حقوقِ خریدار و مستاجر، کد رهگیری، قولنامه) کوتاه و کاربردی پاسخ بده، و اگر موضوع پیچیده بود کاربر را به دایرکتوریِ وکلای ملک‌جت (/directory?category=حقوقی) راهنمایی کن.'
 
 function parseBudgetToman(text: string): number {
   const t = String(text || '')
@@ -75,6 +78,7 @@ export async function POST(req: NextRequest) {
 
   let reply = ''
   let wantListings = false
+  let wantPrice = false
   let wantWeb = false
   let webQuery = ''
   let filters: AssistantFilters = {}
@@ -84,8 +88,9 @@ export async function POST(req: NextRequest) {
   if (aiOn) {
     const extractSys = system + '\n\n' +
       'خروجی را «فقط» به‌صورتِ یک JSON بده، بدونِ هیچ متنِ اضافه:\n' +
-      '{"wantListings": true|false, "wantWeb": true|false, "webQuery":"", "filters": {"city":"","district":"","deal":"sale|rent|","type":"","budgetMax":0,"rooms":0,"areaMin":0,"areaMax":0}, "reply":"<پاسخِ کوتاهِ فارسی>"}\n' +
+      '{"wantListings": true|false, "wantPrice": true|false, "wantWeb": true|false, "webQuery":"", "filters": {"city":"","district":"","deal":"sale|rent|","type":"","budgetMax":0,"rooms":0,"areaMin":0,"areaMax":0}, "reply":"<پاسخِ کوتاهِ فارسی>"}\n' +
       'اگر کاربر می‌خواهد فایل/ملک ببیند wantListings=true و reply یک جملهٔ کوتاهِ مقدمه مثل «این چند فایلِ مناسب پیدا کردم:» باشد. ' +
+      'اگر کاربر دربارهٔ «قیمتِ متری/میانگینِ قیمتِ یک محله/چند بخرم» می‌پرسد wantPrice=true و district (و در صورتِ امکان city) را حتماً دربیاور. ' +
       (webOn ? 'اگر پاسخ به اطلاعاتِ «روزِ» وب نیاز دارد (خبر، نرخِ امروز، قانونِ جدید، رویدادِ تازه) wantWeb=true و webQuery یک عبارتِ جستجوی کوتاه باشد؛ وگرنه wantWeb=false. ' : 'wantWeb را همیشه false بگذار. ') +
       'budgetMax را به «تومان» بده (۱۰ میلیارد = 10000000000). اگر فیلدی معلوم نیست خالی/صفر بگذار.'
     const out = await chatCompleteSafe(model, [{ role: 'system', content: extractSys }, ...history, { role: 'user', content: message }], { temperature: 0.3, max_tokens: 500 }, provider).catch(() => null)
@@ -93,6 +98,7 @@ export async function POST(req: NextRequest) {
       try {
         const j = JSON.parse((out.match(/\{[\s\S]*\}/) || ['{}'])[0])
         wantListings = !!j.wantListings
+        wantPrice = !!j.wantPrice
         wantWeb = webOn && !!j.wantWeb
         webQuery = String(j.webQuery || '').trim()
         reply = String(j.reply || '').trim()
@@ -120,6 +126,27 @@ export async function POST(req: NextRequest) {
   }
   // بودجه را از متن هم تکمیل کن (مدل گاهی عددِ تومان را اشتباه می‌دهد).
   if (!filters.budgetMax) { const bb = parseBudgetToman(message + ' ' + history.map(h => h.content).join(' ')); if (bb) filters.budgetMax = bb }
+
+  // پاسخِ قیمتیِ داده‌محور: اگر کاربر قیمتِ متریِ یک محله را پرسید و «دادهٔ واقعی» داریم، همان را
+  // بده (نه ردِ کلی). این عدد از آگهی‌های فعالِ خودِ سایت است، پس توهم نیست.
+  if (wantPrice && filters.district) {
+    try {
+      const city = filters.city || 'تهران'
+      const ns = await neighbourhoodStats(city, filters.district)
+      const toM = (n: number) => Math.round(n / 1e6).toLocaleString('fa-IR')
+      if (ns && ns.avg > 0 && ns.count >= 3) {
+        let trendTxt = ''
+        if (ns.trend && ns.trend.length >= 2) {
+          const f = ns.trend[0].avg, l = ns.trend[ns.trend.length - 1].avg
+          if (l > f * 1.03) trendTxt = ' روندِ قیمت در ماه‌های اخیر صعودی بوده.'
+          else if (l < f * 0.97) trendTxt = ' روندِ قیمت در ماه‌های اخیر نزولی بوده.'
+        }
+        reply = `طبقِ آگهی‌های فروشِ فعالِ همین ملک‌جت، میانگینِ قیمتِ هر متر در ${filters.district} حدودِ ${toM(ns.avg)} میلیون تومان است (میانه ${toM(ns.median)}، بازه ${toM(ns.min)} تا ${toM(ns.max)} میلیون، از ${ns.count.toLocaleString('fa-IR')} آگهیِ مبنا).${trendTxt} این آمارِ زنده است؛ قیمتِ هر واحد به متراژ، طبقه، سن و موقعیت بستگی دارد. برای دیدنِ فایل‌های همین محله می‌توانی در «جستجو» فیلتر بزنی.`
+      } else {
+        reply = `الان آگهیِ کافی از ${filters.district} در سیستم نیست که میانگینِ قابلِ‌اتکا بدهم. محلهٔ نزدیکِ دیگری بگو، یا در صفحهٔ «جستجو» فایل‌های موجود را ببین تا از قیمتِ واقعی مطلع شوی.`
+      }
+    } catch { /* دادهٔ بازار در دسترس نبود → پاسخِ معمولی می‌ماند */ }
+  }
 
   // جستجوی وب (گراندینگ): اگر لازم است و سرویس روشن، نتایجِ وب را بگیر و پاسخِ «مستند» بساز.
   let sources: WebResult[] = []
