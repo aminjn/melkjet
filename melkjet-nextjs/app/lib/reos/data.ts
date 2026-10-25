@@ -1,5 +1,6 @@
 // REOS · Data adapters — موجودیت‌های موتور را از دادهٔ واقعیِ اپ می‌سازد (آگهی/مشاور/کاربر).
 import { candidateListings, getItemById, type Item } from '../scraper-store'
+import { embeddingsConfigured, embedListingsCached, cosine, listingEmbedText } from '../embeddings'
 import { forIds } from '../listing-stats-store'
 import { getPrefs } from '../user-store'
 import { getAgency } from '../agency-store'
@@ -66,7 +67,21 @@ export async function similarProperties(propertyId: string, k = 8): Promise<{ id
   if (!it) return []
   // کاندیداها از جدولِ آگهی‌ها (status سالم + expired حذف‌شده)، نه از استورِ بردارهای کهنه.
   const candidates = await candidateListings(1500)
-  return pickSimilar(it, candidates, k)
+  // بدونِ امبدینگ: همان فیلترِ سخت + امتیازِ kind.ts (رفتارِ قبلی، دست‌نخورده).
+  if (!embeddingsConfigured()) return pickSimilar(it, candidates, k)
+  // با امبدینگِ معناییِ bge-m3: استخرِ بزرگ‌تر از فیلترِ سخت بگیر، بعد با شباهتِ معنایی re-rank کن
+  // (فیلترهای سختِ معامله/نوع/شهر/متراژ دست‌نخورده می‌مانند؛ فقط ترتیبِ درونِ آن بهتر می‌شود).
+  const pool = pickSimilar(it, candidates, Math.max(k * 4, 30))
+  if (pool.length <= k) return pool
+  const byId = new Map(candidates.map((c: any) => [String(c.id), c]))
+  const embItems = [{ id: String(it.id), text: listingEmbedText(it) },
+    ...pool.map(p => ({ id: p.id, text: listingEmbedText(byId.get(p.id) || {}) }))]
+  const embs = await embedListingsCached(embItems)
+  const q = embs.get(String(it.id))
+  if (!q) return pool.slice(0, k)   // امبدینگِ هدف نیامد → همان ترتیبِ فیلترِ سخت
+  return pool
+    .map(p => { const v = embs.get(p.id); const sem = v ? Math.max(0, cosine(q, v)) : 0; return { id: p.id, sim: 0.45 * p.sim + 0.55 * sem } })
+    .sort((a, b) => b.sim - a.sim).slice(0, k)
 }
 
 // ── کاربر (خریدار/سرمایه‌گذار) → UserEntity: علاقه‌مندی + رفتار + ویژگی‌ها ──

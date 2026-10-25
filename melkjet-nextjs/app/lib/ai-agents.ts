@@ -11,6 +11,7 @@ export const AGENTS: AgentDef[] = [
   { id: 'pricing', name: 'PricingAgent', task: 'تحلیل و برآورد قیمت', needs: 'text' },
   { id: 'chat', name: 'ChatAgent', task: 'دستیار چت کاربر', needs: 'text' },
   { id: 'search', name: 'SearchAgent', task: 'جستجوی معنایی', needs: 'text' },
+  { id: 'embed', name: 'EmbeddingAgent', task: 'امبدینگِ معنایی (مشابه/ضدتکراری) — مثلِ bge-m3', needs: 'text' },
   { id: 'image', name: 'ImageAgent', task: 'تحلیل تصاویر ملک', needs: 'text' },
   { id: 'fraud', name: 'FraudAgent', task: 'تشخیص تقلب', needs: 'text' },
   { id: 'translation', name: 'TranslationAgent', task: 'ترجمه محتوا', needs: 'text' },

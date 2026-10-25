@@ -72,6 +72,30 @@ export function resolveAgent(prefs: [string, 'text' | 'image'][]): { model?: str
   return {}
 }
 
+// ── امبدینگِ معنایی (bge-m3 و…) — «مشابه‌ها/ضدتکراری». endpointِ ایجنتِ embed (یا search اگر embed خالی). ──
+export function embeddingsEndpoint(): { base: string; key: string; model: string } | null {
+  const { model, provider } = resolveAgent([['embed', 'text'], ['search', 'text']])
+  if (!model) return null
+  try { const { base, key } = providerCfg(provider); return { base, key, model } } catch { return null }
+}
+export function embeddingsConfigured(): boolean { return !!embeddingsEndpoint() }
+// بردارِ هر متن (یا null اگر خطا/تنظیم‌نشده). دسته‌ای — یک فراخوان برای همهٔ متن‌ها.
+export async function embedTexts(texts: string[]): Promise<(number[] | null)[]> {
+  const ep = embeddingsEndpoint()
+  if (!ep || !texts.length) return texts.map(() => null)
+  try {
+    const res = await gapHttp(`${ep.base}/embeddings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ep.key}` },
+      body: JSON.stringify({ model: ep.model, input: texts }),
+    }, 20000)
+    if (res.status !== 200) return texts.map(() => null)
+    const d = JSON.parse(res.body)
+    const arr = Array.isArray(d.data) ? d.data : []
+    return texts.map((_, i) => Array.isArray(arr[i]?.embedding) ? arr[i].embedding as number[] : null)
+  } catch { return texts.map(() => null) }
+}
+
 // GapGPT is a DOMESTIC service — always direct, NEVER via the (foreign) proxy,
 // which breaks/empties its responses. We resolve DNS via Shecan inside the app
 // (shecanRequest) so a reset/broken /etc/resolv.conf can no longer cause
