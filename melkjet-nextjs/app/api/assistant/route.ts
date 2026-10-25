@@ -17,7 +17,8 @@ const PANEL_PROMPTS: Record<string, string> = {
 }
 function systemPrompt(panel: string): string {
   const base = PANEL_PROMPTS[panel] || PANEL_PROMPTS.buyer
-  return `${base} فارسی، کوتاه، دقیق و کاربردی پاسخ بده؛ از تیتر و فهرست استفاده کن. اگر اطلاعاتِ لازم نیست، یک سؤالِ روشن‌کننده بپرس.`
+  return `${base} فارسی، کوتاه، دقیق و کاربردی پاسخ بده؛ از تیتر و فهرست استفاده کن. اگر اطلاعاتِ لازم نیست، یک سؤالِ روشن‌کننده بپرس. ` +
+    `هرگز واقعیتِ جغرافیایی/قیمتیِ قطعی را از خودت نساز (شمارهٔ منطقهٔ تهران، اینکه کدام محله در کدام منطقه است، یا قیمتِ دقیق) — اگر مطمئن نیستی بگو نامطمئنی یا بپرس؛ برای عدد و محلهٔ دقیق به داده و جستجوی خودِ ملک‌جت ارجاع بده.`
 }
 function model(): string { return agentModel('chat', 'text') || agentModel('content', 'text') || 'gpt-4o-mini' }
 async function aiSafe(messages: { role: string; content: string }[]): Promise<string | null> {
