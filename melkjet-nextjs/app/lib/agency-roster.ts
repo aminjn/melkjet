@@ -378,7 +378,9 @@ export async function buildAgencyRoster(
     rows.forEach((r, idx) => {
       const cachedName = opts.cached?.[r.post.token]?.name
       if (cachedName !== undefined) aiMap[idx] = cachedName
-      else if (resolved[idx]) { /* ML قطعاً نسبت داد → این آگهی به AI نمی‌رود (کم‌کردنِ AI) */ }
+      // AIِ روشن = «حرفِ آخر»: همهٔ ادهای کش‌نشده به AI می‌روند، نه فقط resolvedنشده‌ها. چون
+      // واژه‌نامهٔ آموخته (resolved) از پنجرهٔ خرابِ بی‌مدل آلوده شده بود («جهانگرد»ِ ۲۵فایلی)،
+      // اگر resolvedها را از AI معاف کنیم آلودگی باقی می‌مانَد. qwen روی سرورِ خودِ مالک است (رایگان).
       else pending.push({ idx, row: r })
     })
     const chunksTotal = Math.ceil(pending.length / 12)
