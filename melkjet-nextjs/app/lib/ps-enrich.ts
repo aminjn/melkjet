@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
-import { aiFor, agentModel, agentProvider } from './gapgpt'
+import { aiFor, agentModel, agentProvider , fallbackModel } from './gapgpt'
 const { chatCompleteSafe } = aiFor('غنی‌سازیِ سازنده‌ها')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { computeNearby } from './nearby'
 
@@ -44,7 +44,7 @@ export interface PSEnrichCtx {
 
 // تحلیلِ سرمایه‌گذاریِ AI از مشخصاتِ واقعیِ پروژه.
 async function aiAnalysis(ctx: PSEnrichCtx): Promise<{ analysis?: PSAnalysis; description?: string }> {
-  const model = agentModel('pricing', 'text') || agentModel('summary', 'text') || agentModel('content', 'text') || 'gpt-4o-mini'
+  const model = agentModel('pricing', 'text') || agentModel('summary', 'text') || agentModel('content', 'text') || fallbackModel()
   const provider = agentProvider('pricing', 'text') || agentProvider('summary', 'text')
   const facts = [
     ctx.region && `منطقه: ${ctx.region}`,

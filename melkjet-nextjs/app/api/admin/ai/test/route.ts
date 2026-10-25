@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { aiFor } from '@/app/lib/gapgpt'
+import { aiFor, fallbackModel } from '@/app/lib/gapgpt'
 const { chatComplete, generateImage } = aiFor('تستِ اتصالِ AI (ادمین)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { generateVideo } from '@/app/lib/ai-video'
 
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const m = (model && String(model)) || 'gpt-4o-mini'
+  const m = (model && String(model)) || fallbackModel()
   try {
     // فاز ۷۸: تایم‌اوتِ کوتاه (۲۰ث) تا تستِ مدلِ خراب، صفحه را دقیقه‌ها معطل نکند + پاسخِ خالی = مردود
     const text = await chatComplete(m, [{ role: 'user', content: 'به فارسی فقط بنویس: تست موفق بود.' }], { max_tokens: 30, timeoutMs: 20000 }, prov)

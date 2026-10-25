@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { marketOverview, soldStats } from '@/app/lib/market-stats'
-import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider , fallbackModel } from '@/app/lib/gapgpt'
 import { mlFirst } from '@/app/lib/ml-gateway'
 const { chatCompleteSafe } = aiFor('نمای بازار')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   let analysis: string | null = null
   if (u.get('ai') === '1' && ov.rows.length) {
     try {
-      const model = agentModel('pricing', 'text') || agentModel('summary', 'text') || 'gpt-4o-mini'
+      const model = agentModel('pricing', 'text') || agentModel('summary', 'text') || fallbackModel()
       const provider = agentProvider('pricing', 'text') || agentProvider('summary', 'text')
       const top = ov.rows.slice(0, 18).map(r => `${r.district}${r.city && r.city !== '—' ? `، ${r.city}` : ''}: ~${Math.round(r.avg / 1e6)} م.ت/متر (${r.count} آگهی)`).join('\n')
       const sys = 'تو تحلیل‌گرِ ارشدِ بازارِ مسکنِ ایران هستی. از دادهٔ واقعیِ قیمت، یک تحلیلِ کوتاهِ کاربردی به فارسی می‌نویسی. اغراق نکن و فقط بر پایهٔ همین ارقام.'

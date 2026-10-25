@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listPoints } from '@/app/lib/market-data'
-import { aiFor, agentModel } from '@/app/lib/gapgpt'
+import { aiFor, agentModel , fallbackModel } from '@/app/lib/gapgpt'
 const { chatCompleteSafe } = aiFor('گزارشِ بازار (ادمین)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // Generate a market analysis report from the dataset using AI.
@@ -10,7 +10,7 @@ export async function POST() {
   if (!s || !(s.role === 'super_admin' || (s.staff || []).length > 0)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const pts = listPoints().slice(0, 200)
   if (!pts.length) return NextResponse.json({ error: 'دیتاست خالی است' }, { status: 400 })
-  const model = agentModel('summary', 'text') || agentModel('content', 'text') || 'gpt-4o-mini'
+  const model = agentModel('summary', 'text') || agentModel('content', 'text') || fallbackModel()
   const data = pts.map(p => `${[p.district, p.city].filter(Boolean).join(' ')} ${p.period || ''} | ${p.metric}: ${p.value.toLocaleString('fa-IR')} ${p.unit || ''}`).join('\n')
   try {
     const text = await chatCompleteSafe(model, [

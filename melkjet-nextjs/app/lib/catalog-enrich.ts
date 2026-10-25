@@ -3,7 +3,7 @@
 // اسکرپِ بعدی هم فقط جاهای خالی چک و پُر می‌شوند.
 import { productsNeedingEnrich, setProductEnrichment, type CatalogProduct } from './catalog-store'
 import { listCategories } from './catalog-store'
-import { aiFor, agentModel, agentProvider } from './gapgpt'
+import { aiFor, agentModel, agentProvider , fallbackModel } from './gapgpt'
 const { chatCompleteSafe } = aiFor('غنی‌سازیِ کاتالوگ')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 function catName(id: string) { return listCategories().find(c => c.id === id)?.name || '' }
@@ -35,7 +35,7 @@ ${existing ? `مشخصاتِ موجود (تکرار نکن): ${existing}\n` : ''
 
 // یک بَچِ کوچک را پردازش می‌کند (برای دکمهٔ ادمین که تا پایان تکرار می‌کند و برای اسکرپِ خودکار).
 export async function enrichCatalogBatch(opts: { source?: string; limit?: number } = {}): Promise<{ enriched: number; remaining: number; noModel?: boolean }> {
-  const model = agentModel('content', 'text') || 'gpt-4o-mini'
+  const model = agentModel('content', 'text') || fallbackModel()
   const provider = agentProvider('content', 'text')
   if (!model) return { enriched: 0, remaining: 0, noModel: true }
   const limit = Math.min(6, Math.max(1, opts.limit || 4))

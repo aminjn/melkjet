@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { aiFor, resolveAgent } from '@/app/lib/gapgpt'
+import { aiFor, resolveAgent , fallbackModel } from '@/app/lib/gapgpt'
 const { chatCompleteSafe, chatVisionSafe, generateImageSafe } = aiFor('استودیوی AI')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout, type PlanRoom } from '@/app/lib/floorplan-svg'
 import { uploadToImgbb } from '@/app/lib/img-host'
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     // تلاش دوم: اگر مدل پاسخ داد ولی JSON معتبر نبود، با یک مدل متنی به قالب JSON تبدیلش کن
     if (raw && !(parsed && Array.isArray(parsed.rooms) && parsed.rooms.length)) {
       try {
-        const fixed = await chatCompleteSafe(visionModel || 'gpt-4o-mini', [
+        const fixed = await chatCompleteSafe(visionModel || fallbackModel(), [
           { role: 'user', content: `این تحلیل را فقط به همین JSON تبدیل کن و چیز دیگری ننویس:\n{"cols":N,"rows":N,"rooms":[{"name","type","x","y","w","h"}],"summaryFa":""}\nتحلیل:\n${raw.slice(0, 2000)}` },
         ], { max_tokens: 700 }, visionProvider)
         parsed = extractJson(fixed) as PlanLayout | null

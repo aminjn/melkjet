@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { normalizeForCompare, type CompareItem } from '@/app/lib/compare-normalize'
-import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider , fallbackModel } from '@/app/lib/gapgpt'
 const { chatCompleteSafe } = aiFor('مقایسهٔ ملک')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 export const dynamic = 'force-dynamic'
@@ -14,7 +14,7 @@ export interface CompareAnalysis {
 function stripFence(s: string): string { const m = s.match(/\{[\s\S]*\}/); return m ? m[0] : s }
 
 async function analyze(items: CompareItem[]): Promise<CompareAnalysis | null> {
-  const model = agentModel('pricing', 'text') || agentModel('summary', 'text') || 'gpt-4o-mini'
+  const model = agentModel('pricing', 'text') || agentModel('summary', 'text') || fallbackModel()
   const provider = agentProvider('pricing', 'text') || agentProvider('summary', 'text')
   const desc = items.map((it, i) => `گزینهٔ ${i + 1} — ${it.title}\n${it.specs.map(s => `${s.label}: ${s.value}`).join('، ')}`).join('\n\n')
   const sys = 'تو یک مشاورِ خبرهٔ سرمایه‌گذاریِ املاک در ایران هستی. چند گزینه را مقایسه می‌کنی و بهترین را با دلیل پیشنهاد می‌دهی. خروجی فقط JSON.'

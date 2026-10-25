@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider , fallbackModel } from '@/app/lib/gapgpt'
 import { mlFirst } from '@/app/lib/ml-gateway'
 const { chatCompleteSafe } = aiFor('امتیازدهیِ ملک')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   if (!lines.trim()) return NextResponse.json({ ok: true, result: null })
 
   const subject = kind === 'project' ? 'پروژهٔ ساختمانی (پیش‌فروش/فروش)' : 'آگهیِ ملک'
-  const model = agentModel('pricing', 'text') || agentModel('moderation', 'text') || agentModel('summary', 'text') || 'gpt-4o-mini'
+  const model = agentModel('pricing', 'text') || agentModel('moderation', 'text') || agentModel('summary', 'text') || fallbackModel()
   const provider = agentProvider('pricing', 'text') || agentProvider('moderation', 'text')
   const sys = `تو یک کارشناسِ خبرهٔ ${subject} هستی که کیفیت و کاملی‌بودنِ یک ${subject} را همان لحظه که کاربر می‌سازد بررسی می‌کنی و راهنمایی می‌دهی تا بهترین حالت ثبت شود. کوتاه، عملی و فارسی. خروجی فقط JSON.`
   const user = `اطلاعاتِ واردشده تا این لحظه:\n${lines}\n\nیک JSON بده:

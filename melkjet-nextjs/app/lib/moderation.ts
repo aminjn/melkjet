@@ -1,5 +1,5 @@
 import { pendingForModeration, setModeration, setModerationBatch, listItems, type Item, type ItemStatus } from './scraper-store'
-import { aiFor, agentModel } from './gapgpt'
+import { aiFor, agentModel , fallbackModel } from './gapgpt'
 const { chatCompleteSafe } = aiFor('بازبینیِ خودکارِ آگهی')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { predict, learn, learnBatch, noteDecision, explainPrediction, rejectEvidenceOf, contactEvidenceOf, correctFromAdmin, recentAccuracy, type MLabel } from './moderation-ml'
 import { getAdminData } from './admin-store'
@@ -116,7 +116,7 @@ export function moderationModel(): string | null {
 // فاز ۲۶۶ — آگهیِ ثبت‌شدهٔ کاربر باید «واقعاً» توسطِ AI ممیزی شود (تأیید/رد)، نه اینکه چون مدلی
 // تخصیص داده نشده در صفِ pending گیر کند. اگر مدلی ست نشده، از مدلِ مطمئنِ پیش‌فرض استفاده می‌شود.
 // (برخلافِ ممیزیِ دسته‌ایِ آگهی‌های اسکرپ‌شده که برای صرفه‌جویی به AI تکیه نمی‌کند.)
-export function userSubmitModel(): string { return moderationModel() || 'gpt-4o-mini' }
+export function userSubmitModel(): string { return moderationModel() || fallbackModel() }
 
 // AI verdict for one item (read-only — does NOT persist).
 async function getVerdict(it: Item, model: string, cfg: ModConfig) {

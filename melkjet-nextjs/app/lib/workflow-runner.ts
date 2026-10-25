@@ -2,7 +2,7 @@ import { allWorkflows, type Workflow, type WorkflowNode } from './workflow-store
 import { getAdvisor, addAppt, setLeadStage, updateLead } from './advisor-store'
 import { sendServiceSms } from './sms'
 import { getWfState, setWfState } from './workflow-runner-store'
-import { aiFor, resolveAgent } from './gapgpt'
+import { aiFor, resolveAgent , fallbackModel } from './gapgpt'
 const { chatCompleteSafe } = aiFor('اتوماسیون')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { getAdminData } from './admin-store'
 import { sendMail } from './smtp'
@@ -74,7 +74,7 @@ async function runFrom(owner: string, wf: Workflow, fromNode: WorkflowNode, ctx:
             : node.label.includes('ملک') ? 'یک توضیحِ کوتاه و جذاب برای ملکِ متناسب با این نیاز بنویس.'
               : 'این لید را در ۲ جمله تحلیل کن و یک اقدامِ بعدی پیشنهاد بده.')
         try {
-          const out = await chatCompleteSafe(model || 'gpt-4o-mini', [
+          const out = await chatCompleteSafe(model || fallbackModel(), [
             { role: 'system', content: 'تو دستیارِ فروشِ املاک هستی. کوتاه، فارسی و کاربردی پاسخ بده.' },
             { role: 'user', content: `${task}\nنام: ${ctx.name || '-'}\nنیاز: ${ctx.need || '-'}\nبودجه: ${ctx.budget || '-'}` },
           ], { max_tokens: 220 })

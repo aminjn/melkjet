@@ -8,14 +8,14 @@ import {
   getBuyer, listConversations, startConversation, addChatMessage, getConversation,
   upsertPropertyConversation, listAiChats, getAiChat, newAiChat, addAiChatMessage, renameAiChat, deleteAiChat,
 } from '@/app/lib/buyer-store'
-import { aiFor, agentModel } from '@/app/lib/gapgpt'
+import { aiFor, agentModel , fallbackModel } from '@/app/lib/gapgpt'
 const { chatCompleteSafe } = aiFor('پنلِ خریدار')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 export const maxDuration = 60
 
 // مدلِ متنیِ دستیار خریدار (ChatAgent → fallback)
 function buyerModel(): string {
-  return agentModel('chat', 'text') || agentModel('content', 'text') || 'gpt-4o-mini'
+  return agentModel('chat', 'text') || agentModel('content', 'text') || fallbackModel()
 }
 // تماسِ امن با AI؛ اگر تنظیم نشده یا خطا داد، null برمی‌گرداند تا fallback اعمال شود.
 async function aiSafe(messages: { role: string; content: string }[], opts?: { temperature?: number; max_tokens?: number }): Promise<string | null> {

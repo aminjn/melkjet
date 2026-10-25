@@ -56,6 +56,24 @@ export function agentModel(agentId: string, slot: 'text' | 'image' = 'text'): st
   return getAdminData().agentModels?.[agentId]?.[slot]
 }
 
+// فاز ۳۲۵ — مدلِ پیش‌فرضِ سراسری: جایگزینِ هاردکدِ gpt-4o-mini در «همهٔ» fallbackها.
+// اولویت: defaultModelِ تنظیم‌شده → اولین مدلِ تخصیص‌دادهٔ ایجنت‌های متنی → gpt-4o-mini.
+// نتیجه: وقتی مالک مدلِ خودش (qwen) را به ایجنت‌ها می‌دهد، هیچ fallbackی دیگر سراغِ gpt-4o-mini نمی‌رود.
+export function fallbackModel(): string {
+  const a = getAdminData()
+  if (a.defaultModel && a.defaultModel.trim()) return a.defaultModel.trim()
+  const am = a.agentModels || {}
+  for (const id of ['content', 'chat', 'summary', 'pricing', 'moderation', 'ScraperAgent', 'ContentAgent', 'ChatAgent']) { const m = am[id]?.text; if (m) return m }
+  // هر مدلِ متنیِ تخصیص‌دادهٔ دیگر
+  for (const v of Object.values(am)) { if (v?.text) return v.text }
+  return 'gpt-4o-mini'
+}
+export function fallbackProvider(): string | undefined {
+  const a = getAdminData()
+  if (a.defaultProvider && a.defaultProvider.trim()) return a.defaultProvider.trim()
+  return undefined
+}
+
 // provider تخصیص‌داده‌شده به یک اسلاتِ ایجنت (خالی = پیش‌فرض/گپ).
 export function agentProvider(agentId: string, slot: 'text' | 'image' = 'text'): string | undefined {
   const a = getAdminData().agentModels?.[agentId]
@@ -258,14 +276,15 @@ export async function chatComplete(model: string, messages: { role: string; cont
 export async function chatCompleteSafe(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string; timeoutMs?: number } = {}, provider?: string): Promise<string> {
   // فاز ۷۸ (مدارشکن): مدلی که چند بارِ پیاپی شکست خورده، تا مدتی مستقیم دور زده می‌شود —
   // دیگر هر درخواست یک تماسِ سوخته + تأخیرِ ۹۰ثانیه‌ای خرجِ مدلِ خراب نمی‌کند.
-  if (model !== 'gpt-4o-mini' && modelDown(model)) {
-    return await chatComplete('gpt-4o-mini', messages, opts, provider)
+  const fb = fallbackModel()   // فاز ۳۲۵ — مدلِ پیش‌فرضِ مالک، نه هاردکدِ gpt-4o-mini
+  if (model !== fb && modelDown(model)) {
+    return await chatComplete(fb, messages, opts, provider)
   }
   try {
     return await chatComplete(model, messages, opts, provider)
   } catch (e) {
-    if (model !== 'gpt-4o-mini') {
-      return await chatComplete('gpt-4o-mini', messages, opts, provider)
+    if (model !== fb) {
+      return await chatComplete(fb, messages, opts, provider)
     }
     throw e
   }
@@ -274,7 +293,8 @@ export async function chatCompleteSafe(model: string, messages: { role: string; 
 // مثلِ chatCompleteSafe ولی تعدادِ توکنِ مصرف‌شده را هم برمی‌گرداند (برای محاسبهٔ مصرفِ کاربر)
 async function chatCompleteRaw(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
   // فاز ۷۸: مسیرِ چت/اعتبارِ کاربر هم مدارشکن + ثبتِ خطا + fallback دارد — مدلِ خراب تجربهٔ کاربر را نمی‌کُشد
-  if (model !== 'gpt-4o-mini' && modelDown(model)) model = 'gpt-4o-mini'
+  const fb = fallbackModel()   // فاز ۳۲۵
+  if (model !== fb && modelDown(model)) model = fb
   const src54r = opts.src || callerSrcOf(new Error().stack)
   if (!aiActive(src54r, provider, 'text')) throw new AiOffError()
   const { base, key } = cfg(provider)
@@ -295,13 +315,14 @@ async function chatCompleteRaw(model: string, messages: { role: string; content:
   } catch (e: any) {
     noteModelResult(model, false)
     recordAiUse({ src: opts.src || callerSrcOf(new Error().stack), model, kind: 'text', tokens: 0, ok: false, ms: 0, err: e?.message || String(e) }).catch(() => {})
-    if (model !== 'gpt-4o-mini') return await attempt('gpt-4o-mini')
+    if (model !== fb) return await attempt(fb)
     throw e
   }
 }
 export async function chatCompleteUsage(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
+  const fb = fallbackModel()   // فاز ۳۲۵
   try { return await chatCompleteRaw(model, messages, opts, provider) }
-  catch (e) { if (model !== 'gpt-4o-mini') return await chatCompleteRaw('gpt-4o-mini', messages, opts, provider); throw e }
+  catch (e) { if (model !== fb) return await chatCompleteRaw(fb, messages, opts, provider); throw e }
 }
 
 export async function generateImage(model: string, prompt: string, size = '1024x1024', provider?: string, src?: string): Promise<string> {

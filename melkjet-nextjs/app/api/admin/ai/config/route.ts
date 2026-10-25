@@ -27,6 +27,8 @@ export async function GET() {
     aiEnabled: d.aiEnabled !== false,          // پیش‌فرض روشن
     aiAreas: d.aiAreas || {},                  // نبودِ کلید = روشن (مگر صریح false)
     areaList: AI_AREAS,
+    defaultModel: d.defaultModel || '',        // فاز ۳۲۵ — مدلِ پیش‌فرضِ سراسری (جای هاردکدِ gpt-4o-mini)
+    defaultProvider: d.defaultProvider || '',
   })
 }
 
@@ -37,6 +39,14 @@ export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({} as any))
   const data = getAdminData()
+
+  // فاز ۳۲۵ — مدلِ پیش‌فرضِ سراسری: جای هاردکدِ gpt-4o-mini در همهٔ fallbackها.
+  if ('defaultModel' in b || 'defaultProvider' in b) {
+    if ('defaultModel' in b) data.defaultModel = String(b.defaultModel || '').trim()
+    if ('defaultProvider' in b) data.defaultProvider = String(b.defaultProvider || '').trim()
+    saveAdminData(data)
+    return NextResponse.json({ ok: true, defaultModel: data.defaultModel || '', defaultProvider: data.defaultProvider || '' })
+  }
 
   // سوییچِ اتصال به AI (ماستر + per-area). فقط وقتی در بدنه آمده تغییر می‌دهد.
   if (typeof b.aiEnabled === 'boolean' || (b.aiAreas && typeof b.aiAreas === 'object')) {

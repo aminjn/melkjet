@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listChats, getChat, newChat, addMessage, renameChat, deleteChat } from '@/app/lib/assistant-store'
-import { aiFor, agentModel } from '@/app/lib/gapgpt'
+import { aiFor, agentModel , fallbackModel } from '@/app/lib/gapgpt'
 const { chatCompleteSafe } = aiFor('دستیارِ ملک‌جت')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 export const maxDuration = 60
@@ -20,7 +20,7 @@ function systemPrompt(panel: string): string {
   return `${base} فارسی، کوتاه، دقیق و کاربردی پاسخ بده؛ از تیتر و فهرست استفاده کن. اگر اطلاعاتِ لازم نیست، یک سؤالِ روشن‌کننده بپرس. ` +
     `هرگز واقعیتِ جغرافیایی/قیمتیِ قطعی را از خودت نساز (شمارهٔ منطقهٔ تهران، اینکه کدام محله در کدام منطقه است، یا قیمتِ دقیق) — اگر مطمئن نیستی بگو نامطمئنی یا بپرس؛ برای عدد و محلهٔ دقیق به داده و جستجوی خودِ ملک‌جت ارجاع بده.`
 }
-function model(): string { return agentModel('chat', 'text') || agentModel('content', 'text') || 'gpt-4o-mini' }
+function model(): string { return agentModel('chat', 'text') || agentModel('content', 'text') || fallbackModel() }
 async function aiSafe(messages: { role: string; content: string }[]): Promise<string | null> {
   try { const out = await chatCompleteSafe(model(), messages, { temperature: 0.6, max_tokens: 700 }); return out?.trim() || null } catch { return null }
 }

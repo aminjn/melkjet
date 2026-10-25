@@ -5234,6 +5234,7 @@ function APIView() {
   const [aiAreas, setAiAreas] = useState<Record<string, boolean>>({})
   const [areaList, setAreaList] = useState<{ key: string; label: string }[]>([])
   const [aiMsg, setAiMsg] = useState('')
+  const [defaultModel, setDefaultModel] = useState('')   // فاز ۳۲۵ — مدلِ پیش‌فرضِ سراسری
 
   const loadProviderModels = async (id: string) => {
     try { const r = await fetch(`/api/admin/ai/models?provider=${encodeURIComponent(id)}`); if (r.ok) { const d = await r.json(); setProvModels(m => ({ ...m, [id]: d.models || [] })) } } catch {}
@@ -5245,7 +5246,13 @@ function APIView() {
       const provs = d.providers || {}; setProviders(provs)
       for (const id of Object.keys(provs)) if (provs[id].configured) loadProviderModels(id)
       setAiEnabled(d.aiEnabled !== false); setAiAreas(d.aiAreas || {}); setAreaList(d.areaList || [])
+      setDefaultModel(d.defaultModel || '')
     }
+  }
+  const saveDefaultModel = async () => {
+    setAiMsg('در حال ذخیره…')
+    const r = await fetch('/api/admin/ai/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ defaultModel }) })
+    setAiMsg(r.ok ? '✓ مدلِ پیش‌فرض ذخیره شد' : '⚠ خطا در ذخیره'); setTimeout(() => setAiMsg(''), 3000)
   }
   // ذخیرهٔ سوییچِ AI (ماستر یا per-area) + بازخوانی
   const saveAiSwitch = async (patch: { aiEnabled?: boolean; aiAreas?: Record<string, boolean> }) => {
@@ -5449,6 +5456,16 @@ function APIView() {
             </div>
           </div>
         )}
+        {/* فاز ۳۲۵ — مدلِ پیش‌فرضِ سراسری: جای هاردکدِ gpt-4o-mini */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>مدلِ پیش‌فرضِ سراسری (جایگزینِ gpt-4o-mini)</div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8, marginBottom: 8 }}>هر جای کد که مدلی به ایجنت تخصیص داده نشده یا مدلِ فعلی خطا داد، به‌جای رفتن سراغِ <b dir="ltr">gpt-4o-mini</b> از این مدل استفاده می‌شود. برای سرورِ خودت این را روی مدلِ خودت بگذار (مثلاً <b dir="ltr">qwen3.8-27b</b>) تا هیچ‌جا دنبالِ گپ نرود و خطای ۴۰۴ ندهد. خالی = اولین مدلِ تخصیص‌دادهٔ ایجنت‌ها.</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input list="mj-default-models" value={defaultModel} onChange={e => setDefaultModel(e.target.value)} placeholder="qwen3.8-27b" dir="ltr" style={{ flex: 1, minWidth: 200, padding: '9px 11px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13 }} />
+            <datalist id="mj-default-models">{models.map(m => <option key={m} value={m} />)}</datalist>
+            <button onClick={saveDefaultModel} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>ذخیرهٔ مدلِ پیش‌فرض</button>
+          </div>
+        </div>
         {aiMsg && <div style={{ marginTop: 10, fontSize: 12.5, color: aiMsg.startsWith('✓') ? '#5fd98a' : 'var(--gold)' }}>{aiMsg}</div>}
       </Card>
       {/* API config */}

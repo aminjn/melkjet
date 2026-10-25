@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { createHash } from 'crypto'
 import { pgEnabled, pgTx } from '../db'
-import { resolveAgent } from '../gapgpt'
+import { resolveAgent, fallbackModel } from '../gapgpt'
 import { config } from './reos-config'
 
 export type LlmTask = 'agent' | 'content' | 'cheap' | 'vision'
@@ -14,7 +14,7 @@ export interface LlmResult { text: string; model: string; provider?: string; cac
 // callerِ واقعی: (model, messages, opts, provider) → {text, tokens}
 export type LlmCaller = (model: string, messages: LlmMsg[], opts: { temperature?: number; max_tokens?: number }, provider?: string) => Promise<{ text: string; tokens: number }>
 
-const FALLBACK_MODEL = 'gpt-4o-mini'
+// مدلِ fallback حالا پویاست — از fallbackModel() (مدلِ پیش‌فرضِ مالک)، نه هاردکدِ gpt-4o-mini.
 // نگاشتِ task → اولویتِ (agentId, slot) برای انتخابِ مدل از تنظیماتِ ادمین.
 const TASK_PREFS: Record<LlmTask, [string, 'text' | 'image'][]> = {
   agent: [['AssistantAgent', 'text'], ['ContentAgent', 'text']],
@@ -26,7 +26,7 @@ const TASK_PREFS: Record<LlmTask, [string, 'text' | 'image'][]> = {
 // ── Model selector / router ──
 export function selectModel(task: LlmTask): { model: string; provider?: string } {
   const r = resolveAgent(TASK_PREFS[task] || TASK_PREFS.agent)
-  return { model: r.model || FALLBACK_MODEL, provider: r.provider }
+  return { model: r.model || fallbackModel(), provider: r.provider }
 }
 
 // ── AI Cost Router: مسیریابی بر اساسِ پیچیدگیِ وظیفه (ساده→ارزان، پیچیده/حقوقی→قوی) ──
@@ -119,10 +119,10 @@ export async function runLLM(
   } catch {
     // fallback به مدلِ ارزان/پایدار
     try {
-      const r = await call(FALLBACK_MODEL, messages, { temperature: temp, max_tokens: opts.max_tokens })
+      const r = await call(fallbackModel(), messages, { temperature: temp, max_tokens: opts.max_tokens })
       const ms = Date.now() - t0
-      await recordUsage({ at: now, task, model: FALLBACK_MODEL, tokens: r.tokens, ms, cached: false, ok: true })
-      return { text: r.text, model: FALLBACK_MODEL, cached: false, tokens: r.tokens, ms, ok: true, fallback: true }
+      await recordUsage({ at: now, task, model: fallbackModel(), tokens: r.tokens, ms, cached: false, ok: true })
+      return { text: r.text, model: fallbackModel(), cached: false, tokens: r.tokens, ms, ok: true, fallback: true }
     } catch {
       await recordUsage({ at: now, task, model, tokens: 0, ms: Date.now() - t0, cached: false, ok: false })
       return { text: '', model, cached: false, tokens: 0, ms: Date.now() - t0, ok: false, fallback: true }

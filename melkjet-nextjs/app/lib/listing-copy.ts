@@ -1,7 +1,7 @@
 // فاز ۲۵۹ — تولیدِ «عنوان» و «توضیحاتِ» حرفه‌ایِ آگهی (مشترکِ سایت و تلگرام).
 // خروجی: متنِ چندخطی، گرم و تعریف‌کننده در سبکِ بهترین آگهی‌های دیوار — نه یک خطِ خشکِ کوتاه.
 // اگر AI در دسترس نبود، یک قالبِ محلیِ چندخطیِ خوب برمی‌گرداند (هرگز خطا نمی‌دهد).
-import { aiFor, resolveAgent } from './gapgpt'
+import { aiFor, resolveAgent , fallbackModel } from './gapgpt'
 import { moderationModel } from './moderation'
 
 export interface ListingFields {
@@ -172,7 +172,7 @@ export async function generateListingCopy(f: ListingFields): Promise<{ title: st
 
   const specs = specLines(f).join('\n')
   const { model, provider } = resolveAgent([['content', 'text'], ['chat', 'text'], ['moderation', 'text']])
-  const use = model || moderationModel() || 'gpt-4o-mini'
+  const use = model || moderationModel() || fallbackModel()
   const prompt = `تو یک مشاورِ املاکِ حرفه‌ای و کاربلدِ ایرانی هستی که آگهی‌های جذاب و پرفروش می‌نویسی (سبکِ بهترین آگهی‌های دیوار).
 بر اساسِ مشخصاتِ زیر، برای این ملک یک «عنوان» و یک «توضیحاتِ» حرفه‌ای بنویس.
 
