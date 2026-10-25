@@ -144,10 +144,12 @@ export default function PropertyClient({ id, initial, originality, initialEnrich
   const sendAsk = async (q?: string) => {
     const content = (q ?? ask).trim()
     if (!content || !item || asking) return
+    // تاریخچهٔ پرسش‌وپاسخِ همین آگهی تا دستیار رشتهٔ گفتگو را گم نکند (ai→assistant).
+    const history = askMsgs.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }))
     setAsk(''); setAskMsgs(m => [...m, { role: 'user', text: content }]); setAsking(true)
     const ctx = `دربارهٔ این آگهی پاسخ بده:\nعنوان: ${item.title}\nقیمت: ${item.price}\nموقعیت: ${item.location}\n${facts.map(f => `${f.label}: ${f.value}`).join('\n')}\nتوضیحات: ${(item.excerpt || '').slice(0, 800)}\n\nسؤال: ${content}`
     try {
-      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'chat', input: ctx }) })
+      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'chat', input: ctx, history }) })
       const d = await r.json()
       setAskMsgs(m => [...m, { role: 'ai', text: d.ok ? d.text : `⚠ ${d.error || 'خطا'}` }])
     } catch { setAskMsgs(m => [...m, { role: 'ai', text: '⚠ خطا در ارتباط' }]) } finally { setAsking(false) }
