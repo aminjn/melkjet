@@ -3,7 +3,8 @@ import { useState, useRef, useEffect } from 'react'
 
 interface Card { id: string; title: string; price: string; location: string; image?: string; url: string; facts: string }
 interface Ad { enabled?: boolean; title?: string; text?: string; imageUrl?: string; linkUrl?: string; cta?: string }
-interface Msg { role: 'user' | 'assistant'; content: string; cards?: Card[]; ad?: Ad }
+interface Source { title: string; url: string; content?: string }
+interface Msg { role: 'user' | 'assistant'; content: string; cards?: Card[]; ad?: Ad; sources?: Source[] }
 
 const DEFAULT_GREETING = 'سلام 👋 من می‌توانم در خرید، فروش، اجاره، تحلیل قیمت و سرمایه‌گذاری کمکت کنم و فایل‌های مناسب را نشانت بدهم. از کجا شروع کنیم؟'
 const DEFAULT_CHIPS = ['خونه زیر ۱۰ میلیارد تو تهران', 'آپارتمان برای اجاره', 'تحلیل قیمت یک محله']
@@ -79,7 +80,7 @@ export default function AIAssistant() {
     try {
       const r = await fetch('/api/assistant/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: content, history }) })
       const d = await r.json().catch(() => ({}))
-      if (d.ok) setMessages(m => [...m, { role: 'assistant', content: d.reply || '', cards: d.cards || [], ad: d.ad }])
+      if (d.ok) setMessages(m => [...m, { role: 'assistant', content: d.reply || '', cards: d.cards || [], ad: d.ad, sources: d.sources || [] }])
       else setMessages(m => [...m, { role: 'assistant', content: `⚠ ${d.error || 'خطا در پاسخ'}` }])
     } catch {
       setMessages(m => [...m, { role: 'assistant', content: '⚠ خطا در ارتباط با سرور' }])
@@ -140,6 +141,16 @@ export default function AIAssistant() {
                         </div>
                       </a>
                     ))}
+                  </div>
+                )}
+                {!!m.sources?.length && (
+                  <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <span style={{ fontSize: 10.5, color: 'var(--faint)', width: '100%' }}>منابع:</span>
+                    {m.sources.slice(0, 5).map((srcItem, si) => {
+                      let host = srcItem.url; try { host = new URL(srcItem.url).hostname.replace(/^www\./, '') } catch {}
+                      return <a key={si} href={srcItem.url} target="_blank" rel="noopener noreferrer" title={srcItem.title}
+                        style={{ fontSize: 10.5, color: 'var(--muted)', textDecoration: 'none', border: '1px solid var(--line)', borderRadius: 999, padding: '3px 9px' }}>{si + 1}. {host}</a>
+                    })}
                   </div>
                 )}
                 {m.ad?.enabled && (m.ad.title || m.ad.text) && (

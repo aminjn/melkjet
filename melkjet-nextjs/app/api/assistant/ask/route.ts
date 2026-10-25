@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminData } from '@/app/lib/admin-store'
 import { aiFor, agentModel, aiActive, agentProvider } from '@/app/lib/gapgpt'
 import { searchAssistantListings, type AssistantFilters, type AssistantCard } from '@/app/lib/assistant-listings'
-import { sttConfigured, ttsConfigured } from '@/app/lib/self-host'
+import { sttConfigured, ttsConfigured, searchConfigured, selfHostSearch, type WebResult } from '@/app/lib/self-host'
 
 const { chatCompleteSafe } = aiFor('دستیارِ عمومیِ ملک‌جت')   // دفترِ مصرفِ AI
 export const maxDuration = 45
@@ -64,20 +64,26 @@ export async function POST(req: NextRequest) {
 
   let reply = ''
   let wantListings = false
+  let wantWeb = false
+  let webQuery = ''
   let filters: AssistantFilters = {}
+  const webOn = searchConfigured()
 
-  // یک فراخوانِ AI: هم تصمیمِ «فایل می‌خواهد؟» + فیلترها، هم متنِ پاسخ.
+  // یک فراخوانِ AI: هم تصمیمِ «فایل می‌خواهد؟»/«وب لازم است؟» + فیلترها، هم متنِ پاسخ.
   if (aiOn) {
     const extractSys = system + '\n\n' +
       'خروجی را «فقط» به‌صورتِ یک JSON بده، بدونِ هیچ متنِ اضافه:\n' +
-      '{"wantListings": true|false, "filters": {"city":"","district":"","deal":"sale|rent|","type":"","budgetMax":0,"rooms":0,"areaMin":0,"areaMax":0}, "reply":"<پاسخِ کوتاهِ فارسی>"}\n' +
+      '{"wantListings": true|false, "wantWeb": true|false, "webQuery":"", "filters": {"city":"","district":"","deal":"sale|rent|","type":"","budgetMax":0,"rooms":0,"areaMin":0,"areaMax":0}, "reply":"<پاسخِ کوتاهِ فارسی>"}\n' +
       'اگر کاربر می‌خواهد فایل/ملک ببیند wantListings=true و reply یک جملهٔ کوتاهِ مقدمه مثل «این چند فایلِ مناسب پیدا کردم:» باشد. ' +
+      (webOn ? 'اگر پاسخ به اطلاعاتِ «روزِ» وب نیاز دارد (خبر، نرخِ امروز، قانونِ جدید، رویدادِ تازه) wantWeb=true و webQuery یک عبارتِ جستجوی کوتاه باشد؛ وگرنه wantWeb=false. ' : 'wantWeb را همیشه false بگذار. ') +
       'budgetMax را به «تومان» بده (۱۰ میلیارد = 10000000000). اگر فیلدی معلوم نیست خالی/صفر بگذار.'
     const out = await chatCompleteSafe(model, [{ role: 'system', content: extractSys }, ...history, { role: 'user', content: message }], { temperature: 0.3, max_tokens: 500 }, provider).catch(() => null)
     if (out) {
       try {
         const j = JSON.parse((out.match(/\{[\s\S]*\}/) || ['{}'])[0])
         wantListings = !!j.wantListings
+        wantWeb = webOn && !!j.wantWeb
+        webQuery = String(j.webQuery || '').trim()
         reply = String(j.reply || '').trim()
         const ff = j.filters || {}
         filters = {
@@ -104,6 +110,20 @@ export async function POST(req: NextRequest) {
   // بودجه را از متن هم تکمیل کن (مدل گاهی عددِ تومان را اشتباه می‌دهد).
   if (!filters.budgetMax) { const bb = parseBudgetToman(message + ' ' + history.map(h => h.content).join(' ')); if (bb) filters.budgetMax = bb }
 
+  // جستجوی وب (گراندینگ): اگر لازم است و سرویس روشن، نتایجِ وب را بگیر و پاسخِ «مستند» بساز.
+  let sources: WebResult[] = []
+  if (wantWeb && !wantListings && aiOn) {
+    try {
+      sources = await selfHostSearch(webQuery || message, 5)
+      if (sources.length) {
+        const ctx = sources.map((r, i) => `[${i + 1}] ${r.title}\n${r.content}\n${r.url}`).join('\n\n')
+        const groundSys = system + '\n\nبر اساسِ «نتایجِ جستجوی وب» زیر پاسخِ کوتاه و دقیقِ فارسی بده. فقط از همین نتایج استفاده کن و اگر جواب در آن‌ها نبود صادقانه بگو نمی‌دانی. عدد/تاریخ را از خودت نساز.'
+        const g = await chatCompleteSafe(model, [{ role: 'system', content: groundSys }, { role: 'user', content: `سؤال: ${message}\n\nنتایجِ جستجو:\n${ctx}` }], { temperature: 0.3, max_tokens: 600 }, provider).catch(() => null)
+        if (g && g.trim()) reply = g.trim()
+      }
+    } catch { /* جستجو شکست خورد → همان پاسخِ معمولی */ }
+  }
+
   let cards: AssistantCard[] = []
   if (wantListings && showListings) {
     cards = await searchAssistantListings(filters, maxResults)
@@ -119,5 +139,5 @@ export async function POST(req: NextRequest) {
     if (turn % every === 0) ad = { enabled: true, title: cfg.ad.title, text: cfg.ad.text, imageUrl: cfg.ad.imageUrl, linkUrl: cfg.ad.linkUrl, cta: cfg.ad.cta || 'بیشتر' }
   }
 
-  return NextResponse.json({ ok: true, reply, cards, ad, degraded: !aiOn && !cards.length }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ ok: true, reply, cards, sources, ad, degraded: !aiOn && !cards.length }, { headers: { 'Cache-Control': 'no-store' } })
 }
