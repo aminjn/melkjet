@@ -5592,7 +5592,97 @@ function APIView() {
         </div>
       </Card>
       <AssistantSettingsPanel />
+      <SelfHostPanel />
     </div>
+  )
+}
+
+/* ─── سرویس‌های AIِ خودِ مالک روی سرورِ GPU (فاز ۳۲۶) ───────────── */
+function SelfHostPanel() {
+  const [open, setOpen] = useState(false)
+  const [s, setS] = useState<any>({})
+  const [msg, setMsg] = useState('')
+  const [test, setTest] = useState<Record<string, any>>({})
+  const [busy, setBusy] = useState('')
+  useEffect(() => { fetch('/api/admin/selfhost').then(r => r.ok ? r.json() : null).then(d => { if (d?.selfHost) setS(d.selfHost) }).catch(() => {}) }, [])
+  const svc = (k: string) => s[k] || {}
+  const setSvc = (k: string, patch: any) => setS((o: any) => ({ ...o, [k]: { ...(o[k] || {}), ...patch } }))
+  const save = async () => {
+    setMsg('در حال ذخیره…')
+    try { const r = await fetch('/api/admin/selfhost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ selfHost: s }) }); const d = await r.json(); if (d.ok) { setS(d.selfHost); setMsg('✓ ذخیره شد') } else setMsg('⚠ خطا') } catch { setMsg('⚠ خطا در ارتباط') }
+    setTimeout(() => setMsg(''), 3000)
+  }
+  const runTest = async (kind: string, extra: any = {}) => {
+    setBusy(kind); setTest(t => ({ ...t, [kind]: null }))
+    try { const r = await fetch('/api/admin/selfhost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ test: kind, ...extra }) }); const d = await r.json(); setTest(t => ({ ...t, [kind]: d })) }
+    catch { setTest(t => ({ ...t, [kind]: { ok: false, error: 'خطا در ارتباط' } })) } finally { setBusy('') }
+  }
+  const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12.5, boxSizing: 'border-box' }
+  const tgl = (k: string) => (
+    <button onClick={() => setSvc(k, { enabled: !svc(k).enabled })} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700, border: svc(k).enabled ? '1px solid var(--gold)' : '1px solid var(--line2)', background: svc(k).enabled ? 'var(--goldDim)' : 'var(--bg2)', color: svc(k).enabled ? 'var(--text)' : 'var(--muted)' }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: svc(k).enabled ? '#3fbf6f' : 'var(--faint)' }} />{svc(k).enabled ? 'روشن' : 'خاموش'}
+    </button>
+  )
+  const testBtn = (k: string, label: string, extra: any = {}) => (
+    <button onClick={() => runTest(k, extra)} disabled={busy === k} style={{ padding: '7px 14px', borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: busy === k ? 0.6 : 1 }}>{busy === k ? 'در حال تست…' : label}</button>
+  )
+  const result = (k: string) => {
+    const t = test[k]; if (!t) return null
+    if (!t.ok) return <div style={{ fontSize: 11.5, color: '#e7674a', marginTop: 6 }}>⚠ {t.error}</div>
+    if (k === 'image' && t.url) return <img src={t.url} alt="" style={{ marginTop: 8, width: 160, height: 160, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--line)' }} />
+    if (k === 'tts' && t.url) return <audio controls src={t.url} style={{ marginTop: 8, width: '100%' }} />
+    if (k === 'video' && t.url) return <video controls src={t.url} style={{ marginTop: 8, width: 220, borderRadius: 10 }} />
+    if (k === 'search' && t.results) return <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>{t.results.map((r: any, i: number) => <a key={i} href={r.url} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)' }}>{r.title || r.url}</a>)}</div>
+    return <div style={{ fontSize: 11.5, color: '#3fbf6f', marginTop: 6 }}>✓ موفق</div>
+  }
+  const section = (k: string, title: string, hint: string, fields: React.ReactNode, testUI?: React.ReactNode) => (
+    <div style={{ border: '1px solid var(--line2)', borderRadius: 12, padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{title}</div>{tgl(k)}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 8 }}>{hint}</div>
+      <input value={svc(k).baseUrl || ''} onChange={e => setSvc(k, { baseUrl: e.target.value })} placeholder="http://127.0.0.1:8097" dir="ltr" style={inp} />
+      {fields}
+      {testUI}
+    </div>
+  )
+  return (
+    <Card>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+        <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text)' }}>🖥 سرویس‌های AIِ خودی (سرورِ GPU: تصویر/ویدئو/گفتار/جستجو)</div>
+        <span style={{ color: 'var(--muted)', fontSize: 18 }}>{open ? '−' : '+'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>آدرسِ هر سرویس را از تونلِ محلیِ سرورِ GPU بده (مثلِ <b dir="ltr">http://127.0.0.1:8097</b>)، روشن کن و «تست» بزن. وقتی روشن باشد، همان‌جا که سایت به تصویر/ویدئو/گفتار/جستجو نیاز دارد از سرورِ خودت استفاده می‌شود — نه گپ.</div>
+          {section('image', '🎨 ساخت تصویر (img_server)', 'POST به {آدرس}{مسیر} با {prompt,neg,width,height} و خروجیِ PNG. وقتی روشن باشد، همهٔ تصویرسازیِ سایت (کاور مقاله، استودیو…) از این می‌آید.',
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input value={svc('image').path || ''} onChange={e => setSvc('image', { path: e.target.value })} placeholder="/generate" dir="ltr" style={{ ...inp, flex: 1 }} />
+              <input type="number" value={svc('image').width || ''} onChange={e => setSvc('image', { width: Number(e.target.value) })} placeholder="1024" style={{ ...inp, width: 90 }} />
+              <input type="number" value={svc('image').height || ''} onChange={e => setSvc('image', { height: Number(e.target.value) })} placeholder="1024" style={{ ...inp, width: 90 }} />
+            </div>,
+            <div style={{ marginTop: 8 }}>{testBtn('image', '🎨 تستِ تصویر')}{result('image')}</div>)}
+          {section('video', '🎬 ساخت ویدئو (video_server /i2v)', 'POST به {آدرس}{مسیر} با {image,prompt} و خروجیِ MP4. تستِ کامل از ابزارِ ویدئوِ سایت (ورودی عکس).',
+            <input value={svc('video').path || ''} onChange={e => setSvc('video', { path: e.target.value })} placeholder="/i2v" dir="ltr" style={{ ...inp, marginTop: 8 }} />,
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--faint)' }}>تستِ i2v نیاز به یک عکسِ ورودی دارد؛ از ابزارِ ویدئوِ سایت تست کن.</div>)}
+          {section('stt', '🎙 گفتار→متن (whisper، سازگار با OpenAI)', 'POST {آدرس}/v1/audio/transcriptions. برای پیامِ صوتی در دستیار/ربات استفاده می‌شود.',
+            <input value={svc('stt').model || ''} onChange={e => setSvc('stt', { model: e.target.value })} placeholder="whisper-1 / whisper-fa" dir="ltr" style={{ ...inp, marginTop: 8 }} />,
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--faint)' }}>تست: یک پیامِ صوتی در دستیار/ربات بفرست.</div>)}
+          {section('tts', '🔊 متن→گفتار (piper، سازگار با OpenAI)', 'POST {آدرس}/v1/audio/speech با {model,input,voice}. برای خواندنِ پاسخ/آگهی با صدا.',
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input value={svc('tts').model || ''} onChange={e => setSvc('tts', { model: e.target.value })} placeholder="tts-1 / piper-fa" dir="ltr" style={{ ...inp, flex: 1 }} />
+              <input value={svc('tts').voice || ''} onChange={e => setSvc('tts', { voice: e.target.value })} placeholder="fa" dir="ltr" style={{ ...inp, width: 120 }} />
+            </div>,
+            <div style={{ marginTop: 8 }}>{testBtn('tts', '🔊 تستِ صدا')}{result('tts')}</div>)}
+          {section('search', '🌐 جستجوی وب (SearXNG)', 'GET {آدرس}/search?format=json&q=… برای گراندکردنِ دستیار به وبِ زنده.', null,
+            <div style={{ marginTop: 8 }}>{testBtn('search', '🌐 تستِ جستجو')}{result('search')}</div>)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={save} style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>ذخیرهٔ سرویس‌ها</button>
+            {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#3fbf6f' : 'var(--gold)' }}>{msg}</span>}
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }
 

@@ -154,6 +154,15 @@ export interface AdminData {
   // یک تنظیمِ جدید بگذار تا مدلِ خودِ من ملاک باشد».) خالی = اولین مدلِ تخصیص‌دادهٔ ایجنت‌ها، بعد gpt-4o-mini.
   defaultModel?: string
   defaultProvider?: string
+  // فاز ۳۲۶ — سرویس‌های AIِ خودِ مالک روی سرورِ GPU (تونلِ محلی): تصویر/ویدئو/STT/TTS/جستجوی وب.
+  // همه opt-in؛ تا baseUrl ندهی و روشن نکنی، هیچ رفتاری عوض نمی‌شود. (نوعِ کامل در self-host.ts)
+  selfHost?: {
+    image?: { enabled?: boolean; baseUrl?: string; path?: string; width?: number; height?: number }
+    video?: { enabled?: boolean; baseUrl?: string; path?: string }
+    stt?: { enabled?: boolean; baseUrl?: string; model?: string }
+    tts?: { enabled?: boolean; baseUrl?: string; model?: string; voice?: string }
+    search?: { enabled?: boolean; baseUrl?: string }
+  }
   // فاز ۳۲۴ — دستیارِ عمومیِ سایت (ویجتِ شناور): تنظیماتِ سوپرادمین + تبلیغ (مثلِ «نورا»).
   assistant?: {
     enabled?: boolean           // روشن/خاموشِ کلِ ویجت (پیش‌فرض روشن)

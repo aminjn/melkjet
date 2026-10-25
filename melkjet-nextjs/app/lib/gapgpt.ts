@@ -2,6 +2,7 @@ import { getAdminData } from './admin-store'
 import { recordAiUse, callerSrcOf, noteModelResult, modelDown } from './ai-usage-store'   // فاز ۵۴: دفترِ جزءبه‌جزِ مصرفِ AI
 import { DEFAULT_GAP_BASE } from './ai-agents'
 import { shecanRequest } from './shecan-https'
+import { imageConfigured, selfHostImage } from './self-host'   // فاز ۳۲۶ — سرورِ تصویرِ خودیِ مالک
 
 // تنظیماتِ یک provider را برمی‌گرداند. اگر providerId داده شده و موجود باشد، همان؛ وگرنه
 // ارائه‌دهندهٔ پیش‌فرض (گپ = gapgpt). شناسه‌های 'gap'/'default' هم به پیش‌فرض اشاره می‌کنند.
@@ -326,7 +327,14 @@ export async function chatCompleteUsage(model: string, messages: { role: string;
 }
 
 export async function generateImage(model: string, prompt: string, size = '1024x1024', provider?: string, src?: string): Promise<string> {
-  if (!aiActive(src || callerSrcOf(new Error().stack), provider, 'image')) throw new AiOffError()
+  const src326 = src || callerSrcOf(new Error().stack)
+  if (!aiActive(src326, provider, 'image')) throw new AiOffError()
+  // فاز ۳۲۶ — سرورِ تصویرِ خودیِ مالک (img_server) اولویت دارد؛ گپ فقط وقتی تنظیم نشده.
+  if (imageConfigured()) {
+    const [w, h] = String(size).split('x').map(n => parseInt(n, 10) || 1024)
+    try { const u = await selfHostImage(prompt, { width: w, height: h }); recordAiUse({ src: src326, model: 'self-host:image', kind: 'image', tokens: 0, ok: true, ms: 0 }).catch(() => {}); return u }
+    catch (e) { recordAiUse({ src: src326, model: 'self-host:image', kind: 'image', tokens: 0, ok: false, ms: 0, err: (e as any)?.message || String(e) }).catch(() => {}); throw e }
+  }
   const { base, key } = cfg(provider)
   const res = await gapHttp(`${base}/images/generations`, {
     method: 'POST',
