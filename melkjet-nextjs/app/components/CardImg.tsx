@@ -1,15 +1,10 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { previewSrc } from '@/app/lib/img-preview'
 
-// تصویرِ کارتِ آگهی (فاز ۲۸۳): آدرسِ remote (divarcdn و هر http/https) مستقیم لود
-// می‌شود — CDNِ دیوار سریع و content-addressed است؛ گلوگاه بهینه‌سازِ /_next/image
-// بود که روی همان سرورِ ۴هسته‌ایِ اسکرپ/AI هر عکس را بارِ اول دانلود و encode
-// می‌کرد (فیدبکِ کاربر: بازشدنِ چند‌دقیقه‌ایِ عکس‌های جست‌وجو). مسیرهای محلی
-// (شروع با /، مثل /api/media آپلودهای بزرگِ کاربران) همچنان از previewSrc
-// می‌گذرند، با بازگشتِ خودکار به آدرسِ اصلی اگر بهینه‌ساز خطا داد؛ خرابی یک‌بار
-// در sessionStorage ثبت می‌شود تا بقیهٔ کارت‌ها در همان نشست مستقیم بگیرند.
-const OPT_OFF_KEY = 'mj_img_opt_off'
+// تصویرِ کارتِ آگهی: remote (divarcdn) اول مستقیم (سریع — فاز ۲۸۳)، و اگر divar هات‌لینک را
+// بلاک کرد → بازگشتِ خودکار به /_next/image (سرور خودش عکس را می‌گیرد). محلی (/api/media) اول
+// بهینه‌ساز، بعد مستقیم. بدونِ طوفانِ بهینه‌ساز چون مسیرِ سریع همچنان اول است.
 
 export default function CardImg({ src, alt, eager, priority, w, style }: {
   src: string
@@ -19,21 +14,20 @@ export default function CardImg({ src, alt, eager, priority, w, style }: {
   w?: 384 | 640
   style?: React.CSSProperties
 }) {
-  const [direct, setDirect] = useState(false)
-  useEffect(() => {
-    try { if (sessionStorage.getItem(OPT_OFF_KEY) === '1') setDirect(true) } catch { /* SSR/بدون storage */ }
-  }, [])
-  // remote → مستقیم؛ فقط مسیرِ محلی از بهینه‌ساز می‌گذرد (برای remote چون url === src
-  // است، گاردِ onError هم هیچ‌وقت flag نمی‌نویسد — بدونِ side-effect)
+  // فاز ۳۲۷ — ریشهٔ «خیلی از آگهی‌ها عکس ندارند»: divar هات‌لینکِ مستقیم از دامنهٔ ما را بلاک می‌کند،
+  // و onErrorِ قبلی برای remote «هیچ‌کاری» نمی‌کرد (چون url===src) → عکسِ شکسته می‌ماند. حالا:
+  //   remote → اول مستقیم (سریع)، اگر شکست خورد → /_next/image (سرور خودش از divar می‌گیرد).
+  //   محلی  → اول بهینه‌ساز، اگر شکست خورد → مستقیم.
+  // مسیرِ سریع اول است؛ fallback فقط وقتی لازم شد (بدونِ طوفانِ بهینه‌ساز که فاز ۲۸۳ حذفش کرد).
+  const [fallback, setFallback] = useState(false)
   const remote = /^https?:\/\//i.test(src)
-  const url = direct || remote ? src : previewSrc(src, w || 640)
+  const optimized = previewSrc(src, w || 640) || src
+  const primary = remote ? src : optimized
+  const secondary = remote ? optimized : src
+  const url = fallback ? secondary : primary
   return (
     <img src={url} alt={alt} loading={eager ? 'eager' : 'lazy'} fetchPriority={priority} decoding="async"
-      onError={() => {
-        if (direct || url === src) return
-        try { sessionStorage.setItem(OPT_OFF_KEY, '1') } catch { /* حالت خصوصی مرورگر */ }
-        setDirect(true)
-      }}
+      onError={() => { if (!fallback && secondary !== primary) setFallback(true) }}
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', ...style }} />
   )
 }

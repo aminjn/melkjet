@@ -1,6 +1,18 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { previewSrc } from '@/app/lib/img-preview'
 import { markSeen } from '@/app/lib/seen-store'
+
+// فاز ۳۲۷ — عکسِ آگهی: ریشهٔ «خیلی از آگهی‌ها عکس ندارند» این بود که گالری مستقیم URLِ divarcdn
+// را در مرورگر لود می‌کرد و divar هات‌لینک را از دامنهٔ ما بلاک می‌کند → آیکونِ شکسته. این کامپوننت
+// عکس را از /_next/image می‌گیرد (سرور خودش از divar می‌گیرد، بدونِ مشکلِ هات‌لینک)، و اگر آن هم
+// جواب نداد، به URLِ مستقیم برمی‌گردد (یک‌بار، بدونِ حلقه).
+function RemoteImg({ src, w = 1080, ...rest }: { src: string; w?: 384 | 640 | 1080 } & React.ImgHTMLAttributes<HTMLImageElement>) {
+  return <img
+    src={previewSrc(src, w, 75) || src}
+    onError={e => { const el = e.currentTarget; if (el.getAttribute('data-raw') !== '1' && src) { el.setAttribute('data-raw', '1'); el.src = src } }}
+    {...rest} />
+}
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import PropertyMap from '@/app/components/PropertyMap'
@@ -353,7 +365,7 @@ export default function PropertyClient({ id, initial, originality, initialEnrich
                   <div ref={stripRef} className="mjp-strip" onScroll={() => { const el = stripRef.current; if (el) setActiveImg(galleryIndexFromScroll(el.scrollLeft, el.clientWidth, images.length)) }}
                     style={{ position: 'absolute', inset: 0, display: 'flex', overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory', overscrollBehaviorX: 'contain', scrollbarWidth: 'none' }}>
                     {images.map((src, i) => (
-                      <img key={i} src={src} alt={i === 0 ? item.title : ''} loading={i === 0 ? undefined : 'lazy'} onClick={() => { setActiveImg(i); setLightbox(true) }}
+                      <RemoteImg key={i} src={src} w={1080} alt={i === 0 ? item.title : ''} loading={i === 0 ? undefined : 'lazy'} onClick={() => { setActiveImg(i); setLightbox(true) }}
                         style={{ flex: '0 0 100%', width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in', scrollSnapAlign: 'start', scrollSnapStop: 'always', filter: dealStatus ? 'grayscale(0.5) brightness(0.72)' : 'none' }} />
                     ))}
                   </div>
@@ -385,7 +397,7 @@ export default function PropertyClient({ id, initial, originality, initialEnrich
               </div>
               {[1, 2].map((i, k) => (
                 <div key={i} onClick={() => { if (images[i]) { setActiveImg(i); setLightbox(true) } }} style={{ position: 'relative', background: 'var(--surface)', cursor: 'pointer', overflow: 'hidden' }}>
-                  {images[i] ? <img src={images[i]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, opacity: 0.1 }}>🏠</div>}
+                  {images[i] ? <RemoteImg src={images[i]} w={384} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, opacity: 0.1 }}>🏠</div>}
                   {k === 1 && images.length > 3 && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>+{toFa(images.length - 3)} عکس</div>}
                 </div>
               ))}
@@ -394,7 +406,7 @@ export default function PropertyClient({ id, initial, originality, initialEnrich
               <div className="mjp-thumbs" style={{ display: 'flex', gap: 10, marginTop: 10, overflowX: 'auto', paddingBottom: 4 }}>
                 {images.map((src, i) => (
                   <button key={i} onClick={() => setActiveImg(i)} style={{ flexShrink: 0, width: 84, height: 58, borderRadius: 10, padding: 0, cursor: 'pointer', overflow: 'hidden', border: `2px solid ${i === activeImg ? 'var(--gold)' : 'transparent'}` }}>
-                    <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <RemoteImg src={src} w={384} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </button>
                 ))}
               </div>
@@ -404,7 +416,7 @@ export default function PropertyClient({ id, initial, originality, initialEnrich
           {/* فاز ۲۰۱ — نمایشگرِ تمام‌صفحهٔ عکس‌ها (کلیک روی عکس = بزرگ‌دیدن؛ ← → ورق، Escape/بیرون = بستن) */}
           {lightbox && images.length > 0 && (
             <div onClick={() => setLightbox(false)} style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.93)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <img src={images[activeImg]} alt={item.title} onClick={e => e.stopPropagation()} style={{ maxWidth: '94vw', maxHeight: '88vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 20px 80px rgba(0,0,0,0.8)' }} />
+              <RemoteImg src={images[activeImg]} w={1080} alt={item.title} onClick={e => e.stopPropagation()} style={{ maxWidth: '94vw', maxHeight: '88vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 20px 80px rgba(0,0,0,0.8)' }} />
               <button onClick={() => setLightbox(false)} aria-label="بستن" style={{ position: 'absolute', top: 16, left: 16, width: 44, height: 44, borderRadius: 12, border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 20, cursor: 'pointer' }}>✕</button>
               {images.length > 1 && (
                 <>
@@ -640,7 +652,7 @@ export default function PropertyClient({ id, initial, originality, initialEnrich
                       return (
                       <Link key={s.id} href={`/property/${s.id}`} style={{ textDecoration: 'none', ...card, padding: 0, overflow: 'hidden', display: 'block' }}>
                         <div style={{ height: 110, background: 'var(--bg2)', position: 'relative' }}>
-                          {s.image && <img src={s.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: sd ? 'grayscale(0.5) brightness(0.72)' : 'none' }} />}
+                          {s.image && <RemoteImg src={s.image} w={384} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: sd ? 'grayscale(0.5) brightness(0.72)' : 'none' }} />}
                           {sd && <span style={{ position: 'absolute', top: 8, right: 8, background: sd === 'sold' ? 'rgba(231,74,74,0.94)' : 'rgba(74,144,231,0.94)', color: '#fff', fontWeight: 800, fontSize: 10.5, padding: '3px 8px', borderRadius: 7 }}>{sd === 'sold' ? 'فروخته شد' : 'اجاره رفت'}</span>}
                           {s.matchPct != null && !sd && <span style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(20,18,15,0.82)', color: 'var(--gold)', fontWeight: 800, fontSize: 10.5, padding: '3px 8px', borderRadius: 7 }}>{s.matchPct.toLocaleString('fa-IR')}٪ مشابه</span>}
                         </div>
