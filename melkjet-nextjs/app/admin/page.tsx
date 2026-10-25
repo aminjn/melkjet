@@ -5292,9 +5292,12 @@ function APIView() {
   const testConn = async () => {
     setTestMsg('در حال تست…')
     try {
-      const r = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'gpt-4o-mini' }) })
+      // مدلِ واقعی را تست کن (نه نامِ هاردکد): مدلِ ایجنتِ محتوا/چت، وگرنه اولین مدلِ زندهٔ درگاه.
+      const tm = assign['content']?.text || assign['chat']?.text || models[0] || 'gpt-4o-mini'
+      const tp = assign['content']?.textProvider || assign['chat']?.textProvider || ''
+      const r = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: tm, provider: tp }) })
       const d = await r.json()
-      setTestMsg(d.ok ? `✓ اتصال موفق — پاسخ: «${d.text}»` : `✕ خطا: ${d.error}`)
+      setTestMsg(d.ok ? `✓ اتصال موفق (${tm}) — پاسخ: «${d.text}»` : `✕ خطا: ${d.error}`)
     } catch { setTestMsg('✕ خطا در ارتباط') }
   }
   // تستِ واقعیِ تولید تصویر با مدلِ StudioAgent (یا gpt-image-1) — برای راستی‌آزماییِ پلان/۳بعدی
