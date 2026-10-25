@@ -378,14 +378,13 @@ export async function buildAgencyRoster(
   // مسیر: پنل → API و مدل‌های AI → افزودنِ ارائه‌دهنده (baseUrl+کلید) + تخصیصِ مدل + روشن‌کردنِ بخشِ روستر.
   // (AI_NAMING بالاتر محاسبه شد — پیش از فازِ ML.)
   let aiMap: Record<number, string> = {}
-  const askedByAi = new Set<number>()   // ادهایی که qwen واقعاً دربارهٔ آن‌ها نظر داد (کش‌شده یا در تکهٔ کامل‌شده)
   if (AI_NAMING && opts.useAI !== false) {
     // فاز ۱۹۶ (فیدبک: «شناساییِ AI را دوبار انجام داده، خواندنِ فهرست را ۴ بار») — نامِ AI هم مثلِ متن
     // در کشِ ازسرگیری می‌ماند؛ پاسِ بعدی فقط ردیف‌های نپرسیده را می‌پرسد، نه ۴۵ فراخوانِ تکراری.
     const pending: { idx: number; row: (typeof rows)[number] }[] = []
     rows.forEach((r, idx) => {
       const cachedName = opts.cached?.[r.post.token]?.name
-      if (cachedName !== undefined) { aiMap[idx] = cachedName; askedByAi.add(idx) }
+      if (cachedName !== undefined) aiMap[idx] = cachedName
       // AIِ روشن = «حرفِ آخر»: همهٔ ادهای کش‌نشده به AI می‌روند، نه فقط resolvedنشده‌ها. چون
       // واژه‌نامهٔ آموخته (resolved) از پنجرهٔ خرابِ بی‌مدل آلوده شده بود («جهانگرد»ِ ۲۵فایلی)،
       // اگر resolvedها را از AI معاف کنیم آلودگی باقی می‌مانَد. qwen روی سرورِ خودِ مالک است (رایگان).
@@ -405,7 +404,7 @@ export async function buildAgencyRoster(
         Object.assign(aiMap, got)
         emptyStreak = Object.keys(got).length === 0 ? emptyStreak + 1 : 0
         // چک‌پوینتِ نام‌ها: پرسیده‌شده = ذخیره (نبودِ نام هم با '' ذخیره می‌شود تا دوباره پرسیده نشود)
-        for (const p2 of slice) { askedByAi.add(p2.idx); try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '' }) } catch {} }
+        for (const p2 of slice) { try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '' }) } catch {} }
       } catch { emptyStreak++ }
       try { opts.onCluster?.(chunkNo, chunksTotal) } catch {}
       if (emptyStreak >= 3) { console.log('[roster] AI returned nothing 3 chunks in a row — skipping rest (heuristic continues)'); break }
@@ -450,11 +449,13 @@ export async function buildAgencyRoster(
     // («تهاتربااپارتمان»، «چت دیوار») پر می‌کردند و هر سینک آشغال را بازتولید می‌کرد.
     // تعمیمِ واژه‌نامه به آگهی‌های بی‌امضا همچنان پایین‌تر انجام می‌شود، ولی فقط
     // برای مشاورِ «تثبیت‌شده در همین آژانس» — که همان رفتارِ درست است.
-    // فاز ۳۲۳ — با AI روشن، qwen «حرفِ آخر» است: برای ادی که qwen دربارهٔ آن نظر داد، اگر نامی
-    // نداد یعنی «این آگهی امضای مشاور ندارد» → بی‌نام (خودِ آژانس)، نه بازگشت به حدسِ heuristic که
-    // آشغال می‌سازد («جهانگرد/درکنارش/امین‌ترین»). فقط ادهایی که qwen اصلاً به آن‌ها نرسید (بودجه/
-    // قطعِ سه‌تکه) تورِ ایمنیِ heuristic می‌گیرند تا یک اختلالِ گذرای AI کلِ آژانس را بی‌نام نکند.
-    const chosen = AI_NAMING ? (askedByAi.has(idx) ? ai : (ai || cand[0])) : (ai || cand[0])
+    // فاز ۳۲۳ب — تعادل (فیدبک: «qwen خیلی‌ها را بی‌نام کرد و درصد افتاد؛ مدل انگار نمی‌فهمد»):
+    // qwen3.8-27b در این استخراج ضعیف است و اغلب خالی برمی‌گرداند، پس «qwenِ تنها» پوشش را می‌کشت.
+    // راهِ درست: qwen اولویت دارد، ولی heuristic (استخراجِ امضا) جای خالی را پر می‌کند تا پوشش بالا
+    // بماند — دقیقاً مثلِ قبل. تفاوتِ کلیدی با قبل: «واژه‌نامهٔ آموختهٔ تاریخی» و «یادگیری» با AI روشن
+    // خاموش‌اند (پایین‌تر)، و همین بود که آشغال را «چسبان» می‌کرد (حذفِ خوشه، وزنِ آموخته را پاک
+    // نمی‌کرد و سینکِ بعد بازتولید می‌شد). پس پوشش حفظ می‌شود، بدونِ برگشتِ آشغالِ قدیمی.
+    const chosen = ai || cand[0]
     if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); unnamedIdx.push(idx); return }
     const k = keyOf(chosen)
     // «سیگنالِ قوی» = نامِ آموختهٔ تثبیت‌شده در موضعِ امضا، یا توافقِ مستقلِ AI و heuristic.
@@ -521,7 +522,10 @@ export async function buildAgencyRoster(
   // گذشته («فلاحی») هرگز نمی‌تواند آگهی بگیرد، چون هیچ امضایی در این آژانس ندارد.
   // این جایگزینِ اصولیِ آن دو درِ پشتیِ حذف‌شده است: قدرتِ واژه‌نامه حفظ می‌شود، بی‌آنکه
   // بتواند از هیچ، مشاور بسازد.
-  if (!AI_NAMING && unnamedIdx.length && clusters.size) {
+  // فاز ۳۲۳ب — این پاس حتی با AI روشن اجرا می‌شود: فقط به خوشه‌های «همین اجرا» (qwen/trusted) تعمیم
+  // می‌دهد، نه واژه‌نامهٔ تاریخیِ آلوده — پس آشغالِ قدیمی برنمی‌گردد ولی پوشش بالا می‌رود (آگهیِ بی‌امضای
+  // مشاوری که در همین آژانس امضای دیگری دارد، به او می‌چسبد). درخواستِ مالک: «درصدِ تشخیص باید بالا باشد».
+  if (unnamedIdx.length && clusters.size) {
     const established = [...clusters.values()].filter(c => strongKeys.has(c.key) || c.tokens.length >= 2)
     const claimed: number[] = []
     for (const idx of unnamedIdx) {
