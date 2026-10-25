@@ -16,6 +16,11 @@ export default function AIAssistant() {
   const [greeting, setGreeting] = useState(DEFAULT_GREETING)
   const [chips, setChips] = useState<string[]>(DEFAULT_CHIPS)
   const [enabled, setEnabled] = useState(true)
+  const [voice, setVoice] = useState<{ stt?: boolean; tts?: boolean }>({})
+  const [recording, setRecording] = useState(false)
+  const [speakingId, setSpeakingId] = useState(-1)
+  const recRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
   const loadedCfg = useRef(false)
 
@@ -29,8 +34,40 @@ export default function AIAssistant() {
       if (d.enabled === false) setEnabled(false)
       if (d.greeting) setGreeting(d.greeting)
       if (Array.isArray(d.chips) && d.chips.length) setChips(d.chips)
+      if (d.voice) setVoice(d.voice)
     }).catch(() => {})
   }, [open])
+
+  // ضبطِ صدا → STT → ارسالِ متن (میکروفون). فقط وقتی سرویسِ STT روشن باشد.
+  const toggleRec = async () => {
+    if (recording) { recRef.current?.stop(); return }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream); chunksRef.current = []
+      mr.ondataavailable = e => { if (e.data.size) chunksRef.current.push(e.data) }
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop()); setRecording(false)
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' }); if (!blob.size) return
+        try {
+          const fd = new FormData(); fd.append('audio', blob, 'voice.webm')
+          const r = await fetch('/api/assistant/voice', { method: 'POST', body: fd }); const d = await r.json()
+          if (d.ok && d.text) send(d.text)
+        } catch { /* سکوت */ }
+      }
+      recRef.current = mr; mr.start(); setRecording(true)
+    } catch { /* دسترسی به میکروفون رد شد */ }
+  }
+  // خواندنِ پاسخ با صدا (TTS).
+  const speak = async (i: number, text: string) => {
+    if (speakingId === i) { setSpeakingId(-1); return }
+    setSpeakingId(i)
+    try {
+      const r = await fetch('/api/assistant/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
+      const d = await r.json()
+      if (d.ok && d.url) { const a = new Audio(d.url); a.onended = () => setSpeakingId(-1); a.onerror = () => setSpeakingId(-1); a.play().catch(() => setSpeakingId(-1)) }
+      else setSpeakingId(-1)
+    } catch { setSpeakingId(-1) }
+  }
 
   const send = async (text?: string) => {
     const content = (text ?? msg).trim()
@@ -82,7 +119,11 @@ export default function AIAssistant() {
             )}
             {messages.map((m, i) => (
               <div key={i}>
-                <div style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-start' : 'flex-end', marginTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, justifyContent: m.role === 'user' ? 'flex-start' : 'flex-end', marginTop: 12 }}>
+                  {m.role === 'assistant' && voice.tts && m.content && !m.content.startsWith('⚠') && (
+                    <button onClick={() => speak(i, m.content)} aria-label="خواندن با صدا" title="خواندن با صدا"
+                      style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 8, border: '1px solid var(--line)', background: speakingId === i ? 'var(--goldDim)' : 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}>{speakingId === i ? '⏹' : '🔊'}</button>
+                  )}
                   <div style={{ maxWidth: '85%', background: m.role === 'user' ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'var(--bg2)', color: m.role === 'user' ? '#16140f' : 'var(--text)', borderRadius: m.role === 'user' ? '13px 13px 4px 13px' : '13px 13px 13px 4px', padding: '10px 13px', fontSize: 13.5, lineHeight: 1.85, whiteSpace: 'pre-wrap' }}>{m.content}</div>
                 </div>
                 {!!m.cards?.length && (
@@ -121,7 +162,11 @@ export default function AIAssistant() {
           {enabled && (
             <div style={{ padding: '12px 18px 18px', flexShrink: 0 }}>
               <div style={{ display: 'flex', gap: 8, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 13, padding: '8px 8px 8px 14px', alignItems: 'center' }}>
-                <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') send() }} placeholder="پیامت را بنویس…"
+                {voice.stt && (
+                  <button onClick={toggleRec} aria-label="پیامِ صوتی" title={recording ? 'توقفِ ضبط' : 'پیامِ صوتی'}
+                    style={{ width: 34, height: 34, flexShrink: 0, border: 'none', borderRadius: 9, background: recording ? '#e7674a' : 'transparent', color: recording ? '#fff' : 'var(--muted)', cursor: 'pointer', fontSize: 16, transition: '.2s' }}>🎙</button>
+                )}
+                <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') send() }} placeholder={recording ? 'در حال شنیدن…' : 'پیامت را بنویس…'}
                   style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13.5 }} />
                 <button onClick={() => send()} disabled={sending} style={{ width: 34, height: 34, border: 'none', borderRadius: 9, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', cursor: 'pointer', fontWeight: 800, opacity: sending ? 0.6 : 1 }}>↑</button>
               </div>

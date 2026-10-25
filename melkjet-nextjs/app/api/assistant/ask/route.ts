@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminData } from '@/app/lib/admin-store'
 import { aiFor, agentModel, aiActive, agentProvider } from '@/app/lib/gapgpt'
 import { searchAssistantListings, type AssistantFilters, type AssistantCard } from '@/app/lib/assistant-listings'
+import { sttConfigured, ttsConfigured } from '@/app/lib/self-host'
 
 const { chatCompleteSafe } = aiFor('دستیارِ عمومیِ ملک‌جت')   // دفترِ مصرفِ AI
 export const maxDuration = 45
@@ -32,13 +33,14 @@ function regexFilters(text: string): { want: boolean; filters: AssistantFilters 
   return { want, filters }
 }
 
-// پیکربندیِ عمومیِ ویجت (خوش‌آمد/دکمه‌ها/روشن‌بودن) — بدونِ هیچ دادهٔ حساس.
+// پیکربندیِ عمومیِ ویجت (خوش‌آمد/دکمه‌ها/روشن‌بودن + در دسترس‌بودنِ صدا) — بدونِ هیچ دادهٔ حساس.
 export async function GET() {
   const cfg = getAdminData().assistant || {}
   return NextResponse.json({
     enabled: cfg.enabled !== false,
     greeting: cfg.greeting || '',
     chips: Array.isArray(cfg.chips) ? cfg.chips.slice(0, 6) : [],
+    voice: { stt: sttConfigured(), tts: ttsConfigured() },   // دکمهٔ میکروفون/بلندگو فقط وقتی سرویسِ خودی روشن باشد
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
