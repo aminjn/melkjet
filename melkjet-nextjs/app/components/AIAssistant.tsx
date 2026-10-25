@@ -9,6 +9,19 @@ interface Msg { role: 'user' | 'assistant'; content: string; cards?: Card[]; ad?
 const DEFAULT_GREETING = 'سلام 👋 من می‌توانم در خرید، فروش، اجاره، تحلیل قیمت و سرمایه‌گذاری کمکت کنم و فایل‌های مناسب را نشانت بدهم. از کجا شروع کنیم؟'
 const DEFAULT_CHIPS = ['خونه زیر ۱۰ میلیارد تو تهران', 'آپارتمان برای اجاره', 'تحلیل قیمت یک محله']
 
+// آگاهیِ صفحه‌ای: عنوان + نشانی + متنِ اصلیِ صفحهٔ جاری تا دستیار به سؤالِ «همین صفحه» جواب دهد.
+function readPageContext(): { path: string; title: string; text: string } | undefined {
+  if (typeof document === 'undefined') return undefined
+  try {
+    const path = location.pathname + location.search
+    const title = (document.querySelector('h1')?.textContent || document.title || '').replace(/\s+/g, ' ').trim().slice(0, 200)
+    const main = (document.querySelector('.mj-article-body, article, main') as HTMLElement | null)
+    const raw = main?.innerText || document.body?.innerText || ''
+    const text = raw.replace(/\s+/g, ' ').trim().slice(0, 2500)
+    return { path, title, text }
+  } catch { return undefined }
+}
+
 export default function AIAssistant() {
   const [open, setOpen] = useState(false)
   const [msg, setMsg] = useState('')
@@ -78,7 +91,7 @@ export default function AIAssistant() {
     setMessages(m => [...m, { role: 'user', content }])
     setSending(true)
     try {
-      const r = await fetch('/api/assistant/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: content, history }) })
+      const r = await fetch('/api/assistant/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: content, history, pageContext: readPageContext() }) })
       const d = await r.json().catch(() => ({}))
       if (d.ok) setMessages(m => [...m, { role: 'assistant', content: d.reply || '', cards: d.cards || [], ad: d.ad, sources: d.sources || [] }])
       else setMessages(m => [...m, { role: 'assistant', content: `⚠ ${d.error || 'خطا در پاسخ'}` }])

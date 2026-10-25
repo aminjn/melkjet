@@ -55,10 +55,21 @@ export async function POST(req: NextRequest) {
     ? b.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && m?.content).map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 2000) })).slice(-8)
     : []
 
+  // آگاهیِ صفحه‌ای: اگر کلاینت متنِ صفحهٔ جاری را فرستاده، در پرامپت می‌نشیند تا دستیار به
+  // سؤالِ «این صفحه/مقاله/ملک» از روی محتوای واقعیِ همان صفحه جواب دهد (نه از حدس).
+  const pc = b?.pageContext || {}
+  const pcTitle = String(pc.title || '').replace(/\s+/g, ' ').trim().slice(0, 200)
+  const pcPath = String(pc.path || '').slice(0, 200)
+  const pcText = String(pc.text || '').replace(/\s+/g, ' ').trim().slice(0, 2500)
+  const pageNote = (pcTitle || pcText)
+    ? `\n\n[صفحهٔ فعلیِ کاربر]\nعنوان: ${pcTitle}\nنشانی: ${pcPath}\nمتنِ صفحه: ${pcText}\n`
+      + 'اگر سؤالِ کاربر دربارهٔ «همین صفحه/مقاله/ملک/محتوا» بود، پاسخ را از روی همین متنِ صفحه بده، نه از حدس. اگر جواب در متنِ صفحه نبود، صادقانه بگو.'
+    : ''
+
   const model = agentModel('chat', 'text') || agentModel('content', 'text')
   const provider = agentProvider('chat', 'text') || agentProvider('content', 'text')
   const aiOn = !!model && aiActive('assistant', provider)   // aiActive خودش aiEnabled + aiAreas['assistant'] + کلید را چک می‌کند
-  const system = (cfg.systemPrompt && cfg.systemPrompt.trim()) || DEFAULT_SYSTEM
+  const system = ((cfg.systemPrompt && cfg.systemPrompt.trim()) || DEFAULT_SYSTEM) + pageNote
   const showListings = cfg.showListings !== false
   const maxResults = Math.max(1, Math.min(Number(cfg.maxResults) || 4, 8))
 

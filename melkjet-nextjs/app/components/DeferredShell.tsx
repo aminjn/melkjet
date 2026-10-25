@@ -16,6 +16,7 @@ const SupportLauncher = dynamic(() => import('./SupportLauncher'), { ssr: false 
 const LegalAssistant = dynamic(() => import('./LegalAssistant'), { ssr: false })
 const PWAInstall = dynamic(() => import('./PWAInstall'), { ssr: false })
 const BizPicker = dynamic(() => import('./BizPicker'), { ssr: false })   // فاز ۱۷۱ — انتخابِ کسب‌وکار بعد از ورود
+const AIAssistant = dynamic(() => import('./AIAssistant'), { ssr: false })   // فاز ۳۳۰ — دستیارِ سراسریِ صفحه‌آگاه (همهٔ صفحات)
 
 export default function DeferredShell() {
   const [on, setOn] = useState(false)
@@ -43,6 +44,7 @@ export default function DeferredShell() {
       <CompareBar />
       <SupportLauncher />
       <LegalAssistant />
+      <AIAssistant />
       <PWAInstall />
     </>
   )

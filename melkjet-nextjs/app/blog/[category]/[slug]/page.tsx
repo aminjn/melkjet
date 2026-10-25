@@ -81,11 +81,20 @@ export default async function BlogArticle({ params }: { params: Promise<{ catego
     try { const o = await marketOverview(); if (o.totalSaleListings > 0 && o.cityAvg > 0) market = o } catch {}
   }
 
-  // مقالاتِ مرتبطِ واقعی: هم‌دسته، به‌جز خودِ مقاله.
+  // مقالاتِ مرتبطِ واقعی: اول هم‌دسته، بعد اشتراکِ برچسب، بعد تازه‌ترین‌ها — تا همیشه پر شود
+  // (قبلاً فقط هم‌دسته بود و اگر مقالهٔ هم‌دسته نبود، «مرتبط» خالی می‌ماند).
   let related: { title: string; href: string; cat: string; min: number }[] = []
   try {
-    related = (await listItems('article', { publicOnly: true }))
-      .filter(x => x.id !== a.id && x.category === a.category)
+    const all = (await listItems('article', { publicOnly: true }))
+      .filter(x => x.id !== a.id && x.meta?.cmsStatus !== 'draft' && x.meta?.cmsStatus !== 'scheduled')
+    const tagSet = new Set((a.tags || []).map(t => String(t)))
+    const sameCat = all.filter(x => x.category === a.category)
+    const byTag = all.filter(x => x.category !== a.category && (x.tags || []).some(t => tagSet.has(String(t))))
+    const rest = all.filter(x => x.category !== a.category && !(x.tags || []).some(t => tagSet.has(String(t))))
+      .sort((x, y) => (y.scrapedAt || 0) - (x.scrapedAt || 0))
+    const seen = new Set<string>()
+    related = [...sameCat, ...byTag, ...rest]
+      .filter(x => (seen.has(x.id) ? false : (seen.add(x.id), true)))
       .slice(0, 3)
       .map(x => {
         const xm = (x.meta || {}) as Record<string, string>
@@ -186,7 +195,7 @@ export default async function BlogArticle({ params }: { params: Promise<{ catego
 
           {tldr.length > 0 && (
             <div style={{ ...card, borderColor: 'var(--goldDim)', padding: '16px 18px', marginBottom: 22 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>✦ خلاصهٔ مقاله (TL;DR)</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>✦ خلاصهٔ مقاله</div>
               <ul style={{ margin: 0, paddingInlineStart: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {tldr.map((s, i) => <li key={i} style={{ fontSize: 13.5, lineHeight: 1.9 }}>{s}</li>)}
               </ul>

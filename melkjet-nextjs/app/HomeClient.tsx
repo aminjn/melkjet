@@ -13,7 +13,6 @@ import PromoSpotlight from './components/PromoSpotlight'
 import HeroSearch from './components/home/HeroSearch'
 import FaqAccordion from './components/home/FaqAccordion'
 import HomeBanner from './components/home/HomeBanner'
-import HomeAssistant from './components/home/HomeAssistant'
 import ReosFeed from './components/ReosFeed'
 import { gradientFor, initialsFor, type ContentItem } from './lib/content-display'
 import { listingHref } from './lib/listing-url'
@@ -503,7 +502,7 @@ export default function HomeClient({ initial, heroImage = '', heroImageDay = '' 
       </main>
 
       <Footer />
-      <HomeAssistant />
+      {/* دستیار حالا سراسری است (DeferredShell) — روی همهٔ صفحات، صفحه‌آگاه. این‌جا حذف شد تا دوتا نشود. */}
     </div>
   )
 }

@@ -7864,7 +7864,7 @@ function SiteView() {
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>بخش‌های هوشمندِ صفحهٔ مقاله — خاموش کنی اصلاً رندر نمی‌شود. تبلیغاتِ مقاله از منوی «تبلیغات بنری» (با هدف‌گیریِ دسته یا تک‌مقاله) تنظیم می‌شود؛ اگر بنری تعریف نشده باشد هیچ‌چیزی نمایش داده نمی‌شود.</div>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 8 }}>
           <input type="checkbox" checked={cfg?.blog?.tldr !== false} onChange={async e => { const v = e.target.checked; setCfg(cfg ? { ...cfg, blog: { ...cfg.blog, tldr: v } } : cfg); await post({ action: 'save', blog: { tldr: v } }, '✓ ذخیره شد') }} style={{ accentColor: 'var(--gold)' }} />
-          <span>خلاصهٔ مقاله (TL;DR) بالای متن — از خلاصه/توضیحِ متایِ خودِ مقاله</span>
+          <span>خلاصهٔ مقاله بالای متن — از خلاصه/توضیحِ متایِ خودِ مقاله</span>
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
           <input type="checkbox" checked={cfg?.blog?.market !== false} onChange={async e => { const v = e.target.checked; setCfg(cfg ? { ...cfg, blog: { ...cfg.blog, market: v } } : cfg); await post({ action: 'save', blog: { market: v } }, '✓ ذخیره شد') }} style={{ accentColor: 'var(--gold)' }} />
