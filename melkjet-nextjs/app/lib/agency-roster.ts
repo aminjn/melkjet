@@ -1,5 +1,5 @@
 import { fetchDivarProfileTokens, fetchDivarPost, divarProfileSlug, type BrandPost } from './divar-post'
-import { aiFor, resolveAgent } from './gapgpt'
+import { aiFor, resolveAgent, aiActive } from './gapgpt'
 import { nameProbSync, NAME_THRESHOLD, corpusCount } from './roster-name-model'
 import { bestName, hasSparse as hasSparseModel } from './roster-ner'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
@@ -363,11 +363,13 @@ export async function buildAgencyRoster(
   // فاز ۱۹۴ (فیدبک: «کلاً گیر کرده») — این فاز تا ۴۵ فراخوانِ AI دارد و قبلاً بی‌صدا بود؛ حالا:
   // پیشرفتِ per-chunk + اگر ۳ تکهٔ پیاپی هیچ نامی نداد (AI مرده/کلیدِ خراب) بقیه skip می‌شود
   // (heuristic + نام‌های آموخته‌شده کار را ادامه می‌دهند) + سقفِ ۸ دقیقه برای کلِ فاز.
-  // فاز ۲۹۷خ — «فقط ماشین‌لرنینگ»: به‌دستورِ صریحِ مالک، شناساییِ نام کاملاً ML-only شد
-  // (مثلِ ممیزیِ نظرات، فاز ۲۹۷ک). سهمیهٔ گپ منفی بود و فازِ AI فقط ۴۵ خطای ۴۰۳ تولید می‌کرد
-  // و هر سینک را کُند می‌کرد. مدلِ خلوت (۹۵٪) + قواعدِ امضا + واژه‌نامهٔ آموخته کار را می‌کنند.
-  // برگرداندن = AI_NAMING را true کن (و گپ را شارژ کن). flagِ per-scrapeِ useAI دست‌نخورده مانده.
-  const AI_NAMING = false
+  // فاز ۳۲۲ — AIِ نام‌گذاری دوباره «قابلِ روشن‌کردن از پنل» شد (بدونِ دیپلوی): مالک می‌تواند مدلِ
+  // AIِ خودش را (رویِ سرورِ خودش، سازگار با OpenAI) وصل کند. روشن می‌شود اگر: (۱) اتصالِ AI روشن و
+  // بخشِ «نام‌گذاریِ مشاور (روستر)» فعال باشد، (۲) به ایجنتِ محتوا/چت مدلی تخصیص داده شده باشد.
+  // اگر هیچ‌کدام تنظیم نشده بود، دقیقاً مثلِ قبل ML-only می‌مانَد (aiCanonical خودش map خالی می‌دهد).
+  // مسیر: پنل → API و مدل‌های AI → افزودنِ ارائه‌دهنده (baseUrl+کلید) + تخصیصِ مدل + روشن‌کردنِ بخشِ روستر.
+  const { model: _aiM, provider: _aiP } = resolveAgent([['content', 'text'], ['chat', 'text']])
+  const AI_NAMING = !!_aiM && aiActive('roster', _aiP)
   let aiMap: Record<number, string> = {}
   if (AI_NAMING && opts.useAI !== false) {
     // فاز ۱۹۶ (فیدبک: «شناساییِ AI را دوبار انجام داده، خواندنِ فهرست را ۴ بار») — نامِ AI هم مثلِ متن
