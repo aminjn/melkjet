@@ -5604,6 +5604,8 @@ function SelfHostPanel() {
   const [msg, setMsg] = useState('')
   const [test, setTest] = useState<Record<string, any>>({})
   const [busy, setBusy] = useState('')
+  const [vidImg, setVidImg] = useState('')       // عکسِ ورودیِ ویدئو (i2v)
+  const [vidPrompt, setVidPrompt] = useState('')
   useEffect(() => { fetch('/api/admin/selfhost').then(r => r.ok ? r.json() : null).then(d => { if (d?.selfHost) setS(d.selfHost) }).catch(() => {}) }, [])
   const svc = (k: string) => s[k] || {}
   const setSvc = (k: string, patch: any) => setS((o: any) => ({ ...o, [k]: { ...(o[k] || {}), ...patch } }))
@@ -5662,9 +5664,13 @@ function SelfHostPanel() {
               <input type="number" value={svc('image').height || ''} onChange={e => setSvc('image', { height: Number(e.target.value) })} placeholder="1024" style={{ ...inp, width: 90 }} />
             </div>,
             <div style={{ marginTop: 8 }}>{testBtn('image', '🎨 تستِ تصویر')}{result('image')}</div>)}
-          {section('video', '🎬 ساخت ویدئو (video_server /i2v)', 'POST به {آدرس}{مسیر} با {image,prompt} و خروجیِ MP4. تستِ کامل از ابزارِ ویدئوِ سایت (ورودی عکس).',
+          {section('video', '🎬 ساخت ویدئو (video_server /i2v)', 'POST به {آدرس}{مسیر} با {image,prompt} و خروجیِ MP4. عکسِ ورودی بده تا یک ویدئوی کوتاه بسازد.',
             <input value={svc('video').path || ''} onChange={e => setSvc('video', { path: e.target.value })} placeholder="/i2v" dir="ltr" style={{ ...inp, marginTop: 8 }} />,
-            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--faint)' }}>تستِ i2v نیاز به یک عکسِ ورودی دارد؛ از ابزارِ ویدئوِ سایت تست کن.</div>)}
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input value={vidImg} onChange={e => setVidImg(e.target.value)} placeholder="آدرسِ عکسِ ورودی (http… یا /api/media/…)" dir="ltr" style={inp} />
+              <input value={vidPrompt} onChange={e => setVidPrompt(e.target.value)} placeholder="توضیحِ حرکت/صحنه (اختیاری)" style={inp} />
+              <div>{testBtn('video', '🎬 ساخت و تستِ ویدئو', { image: vidImg, prompt: vidPrompt })}{result('video')}</div>
+            </div>)}
           {section('stt', '🎙 گفتار→متن (whisper، سازگار با OpenAI)', 'POST {آدرس}/v1/audio/transcriptions. برای پیامِ صوتی در دستیار/ربات استفاده می‌شود.',
             <input value={svc('stt').model || ''} onChange={e => setSvc('stt', { model: e.target.value })} placeholder="whisper-1 / whisper-fa" dir="ltr" style={{ ...inp, marginTop: 8 }} />,
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--faint)' }}>تست: یک پیامِ صوتی در دستیار/ربات بفرست.</div>)}
