@@ -15,3 +15,11 @@ export function previewSrc(url: string | undefined, w: 384 | 640 | 1080 = 640, q
   if (!DIVAR_CDN.test(url) && !LOCAL_MEDIA.test(url)) return url
   return `/_next/image?url=${encodeURIComponent(url)}&w=${w}&q=${q}`
 }
+
+// فاز ۳۲۷ — placeholderِ تمیز به‌جای آیکونِ شکستهٔ مرورگر وقتی عکسِ آگهی مرده/حذف شده
+// (اقلیتِ آگهی‌هایی که عکسشان روی divarcdn پاک شده و کپیِ محلی ندارند). SVGِ درون‌خطیِ خانه،
+// هم‌رنگِ برند — همیشه بدونِ درخواستِ شبکه لود می‌شود و هرگز خطا نمی‌دهد (ضدِ حلقهٔ onError).
+export const IMG_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="450"><rect width="600" height="450" fill="#2b2824"/>' +
+  '<g fill="none" stroke="#c9a84c" stroke-width="12" stroke-linejoin="round" opacity="0.28">' +
+  '<path d="M300 150 L430 258 L430 338 L170 338 L170 258 Z"/><path d="M262 338 L262 288 L338 288 L338 338"/></g></svg>')

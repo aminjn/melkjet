@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { previewSrc } from '@/app/lib/img-preview'
+import { previewSrc, IMG_PLACEHOLDER } from '@/app/lib/img-preview'
 
 // تصویرِ کارتِ آگهی: remote (divarcdn) اول مستقیم (سریع — فاز ۲۸۳)، و اگر divar هات‌لینک را
 // بلاک کرد → بازگشتِ خودکار به /_next/image (سرور خودش عکس را می‌گیرد). محلی (/api/media) اول
@@ -19,15 +19,16 @@ export default function CardImg({ src, alt, eager, priority, w, style }: {
   //   remote → اول مستقیم (سریع)، اگر شکست خورد → /_next/image (سرور خودش از divar می‌گیرد).
   //   محلی  → اول بهینه‌ساز، اگر شکست خورد → مستقیم.
   // مسیرِ سریع اول است؛ fallback فقط وقتی لازم شد (بدونِ طوفانِ بهینه‌ساز که فاز ۲۸۳ حذفش کرد).
-  const [fallback, setFallback] = useState(false)
+  // و اگر هر دو مسیر شکست خورد (عکسِ divar حذف شده) → placeholderِ تمیز، نه آیکونِ شکسته.
   const remote = /^https?:\/\//i.test(src)
   const optimized = previewSrc(src, w || 640) || src
   const primary = remote ? src : optimized
   const secondary = remote ? optimized : src
-  const url = fallback ? secondary : primary
+  const chain = !src ? [IMG_PLACEHOLDER] : secondary !== primary ? [primary, secondary, IMG_PLACEHOLDER] : [primary, IMG_PLACEHOLDER]
+  const [i, setI] = useState(0)
   return (
-    <img src={url} alt={alt} loading={eager ? 'eager' : 'lazy'} fetchPriority={priority} decoding="async"
-      onError={() => { if (!fallback && secondary !== primary) setFallback(true) }}
+    <img src={chain[Math.min(i, chain.length - 1)]} alt={alt} loading={eager ? 'eager' : 'lazy'} fetchPriority={priority} decoding="async"
+      onError={() => setI(x => x + 1)}
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', ...style }} />
   )
 }

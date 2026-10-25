@@ -1,17 +1,15 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { previewSrc } from '@/app/lib/img-preview'
+import { previewSrc, IMG_PLACEHOLDER } from '@/app/lib/img-preview'
 import { markSeen } from '@/app/lib/seen-store'
 
-// فاز ۳۲۷ — عکسِ آگهی: ریشهٔ «خیلی از آگهی‌ها عکس ندارند» این بود که گالری مستقیم URLِ divarcdn
-// را در مرورگر لود می‌کرد و divar هات‌لینک را از دامنهٔ ما بلاک می‌کند → آیکونِ شکسته. این کامپوننت
-// عکس را از /_next/image می‌گیرد (سرور خودش از divar می‌گیرد، بدونِ مشکلِ هات‌لینک)، و اگر آن هم
-// جواب نداد، به URLِ مستقیم برمی‌گردد (یک‌بار، بدونِ حلقه).
+// فاز ۳۲۷ — عکسِ آگهی: اول از /_next/image (سرور خودش از divar می‌گیرد)، اگر نشد مستقیم، و اگر
+// عکس واقعاً مرده بود (روی divar حذف شده) → placeholderِ تمیز به‌جای آیکونِ شکستهٔ مرورگر.
 function RemoteImg({ src, w = 1080, ...rest }: { src: string; w?: 384 | 640 | 1080 } & React.ImgHTMLAttributes<HTMLImageElement>) {
-  return <img
-    src={previewSrc(src, w, 75) || src}
-    onError={e => { const el = e.currentTarget; if (el.getAttribute('data-raw') !== '1' && src) { el.setAttribute('data-raw', '1'); el.src = src } }}
-    {...rest} />
+  const opt = previewSrc(src, w, 75) || src
+  const chain = !src ? [IMG_PLACEHOLDER] : opt !== src ? [opt, src, IMG_PLACEHOLDER] : [src, IMG_PLACEHOLDER]
+  const [i, setI] = useState(0)
+  return <img src={chain[Math.min(i, chain.length - 1)]} onError={() => setI(x => x + 1)} {...rest} />
 }
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
