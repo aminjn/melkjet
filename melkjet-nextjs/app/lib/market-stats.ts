@@ -72,9 +72,12 @@ function agg(vals: number[]) {
 // Stats for one neighbourhood (+ monthly trend) for the sale market.
 export async function neighbourhoodStats(city: string, district: string) {
   // نرمال‌سازیِ نام (مثلِ normCity): «جنت‌آباد»، «جنت آباد» و «جنتاباد» یکی شمرده می‌شوند تا
-  // تفاوتِ نیم‌فاصله/فاصله/ی‌و‌ک مانعِ یافتنِ آمارِ محله نشود. شهر لنگور است: رکوردِ بی‌شهر رد نمی‌شود.
+  // تفاوتِ نیم‌فاصله/فاصله/ی‌و‌ک مانعِ یافتنِ آمار نشود. و محلهٔ «مادر» زیرمحله‌هایش را هم می‌گیرد:
+  // «شهران» → «شهران شمالی/جنوبی» (محله در داده اغلب زیربخشی ذخیره شده). فقط یک‌طرفه (مادر⊇فرزند)
+  // تا «شهران شمالی» به‌اشتباه کلِ «شهران» را نکشد. شهر لنگور است: رکوردِ بی‌شهر رد نمی‌شود.
   const nd = normCity(district), nc = normCity(city)
-  const recs = (await records()).filter(r => (!district || normCity(r.district) === nd) && (!city || !r.city || normCity(r.city) === nc))
+  const matchDist = (rd: string) => { const n = normCity(rd); return !!n && (n === nd || (nd.length >= 3 && n.includes(nd))) }
+  const recs = (await records()).filter(r => (!district || matchDist(r.district)) && (!city || !r.city || normCity(r.city) === nc))
   const base = agg(recs.map(r => r.ppm))
   if (!base) return null
   // monthly trend (last 12 months by scrape date)
