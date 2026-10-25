@@ -64,9 +64,10 @@ export function toCard(it: Item): AssistantCard {
 function matchScore(it: Item, f: AssistantFilters): number {
   const m = it.meta || {}
   const hay = norm(`${it.title} ${it.location} ${m['شهر']} ${m['محله']} ${m['نوع ملک']}`)
+  const haySp = hay.replace(/\s+/g, '')   // بدونِ فاصله: «جنت آباد» با «جنت‌آباد شمالی» هم می‌خورد
   let score = 0, want = 0
   if (f.city) { want++; if (hay.includes(norm(f.city))) score++ }
-  if (f.district) { want++; if (hay.includes(norm(f.district))) score++ }
+  if (f.district) { want++; if (haySp.includes(norm(f.district).replace(/\s+/g, ''))) score++ }
   if (f.type) { want++; if (hay.includes(norm(f.type))) score++ }
   if (f.deal) { want++; const d = dealOf(it); if ((f.deal === 'sale') === (d === 'sale')) score++ }
   if (f.budgetMax && dealOf(it) === 'sale') { want++; const p = parseFaNum(it.price); if (p && p <= f.budgetMax * 1.12) score += p <= f.budgetMax ? 1 : 0.5 }
