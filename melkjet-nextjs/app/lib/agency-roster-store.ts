@@ -610,9 +610,26 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, retryPending: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
-    const freshByKey = new Map(roster.advisors.map(a => [a.key, a]))
     const recs = [...scrape.advisors]
+    // فاز ۳۲۳ — ضدِ «دوتاشدنِ مشاورِ graduateشده» (مثلِ «جهانگرد»ِ حساب‌دار + «جهانگرد»ِ ۲۵فایلیِ تازه):
+    // اگر کلیدِ خوشهٔ تازه با هیچ رکوردی دقیق یکی نیست ولی نامش با «دقیقاً یک» رکوردِ حساب‌دار
+    // سازگار است (نامِ کوتاه/کاملِ همان شخص: «جهانگرد» ↔ «علی جهانگرد»)، کلیدِ خوشه به کلیدِ همان
+    // حساب نگاشت می‌شود تا فایل‌ها به حسابِ موجود بروند، نه رکوردِ تکراری. فقط برای حساب‌دارها و
+    // تنها وقتی یک میزبانِ سازگار باشد (همان محافظهٔ nameCompatible که جای دیگر هم به‌کار می‌رود).
+    const gradRecs = recs.filter(r => r.phone)
     for (const a of roster.advisors) {
+      if (recs.some(r => r.key === a.key)) continue
+      const hosts = gradRecs.filter(r => nameCompatible(r.name, a.name))
+      if (hosts.length === 1) a.key = hosts[0].key
+    }
+    // freshByKey با ادغامِ خوشه‌هایی که پس از نگاشت هم‌کلید شدند (وگرنه Map فقط آخری را نگه می‌داشت).
+    const freshByKey = new Map<string, (typeof roster.advisors)[number]>()
+    for (const a of roster.advisors) {
+      const ex = freshByKey.get(a.key)
+      if (ex) { ex.tokens = [...ex.tokens, ...a.tokens]; ex.posts = [...(ex.posts || []), ...(a.posts || [])] }
+      else freshByKey.set(a.key, { ...a, tokens: [...a.tokens], posts: [...(a.posts || [])] })
+    }
+    for (const a of freshByKey.values()) {
       let rec = recs.find(r => r.key === a.key)
       if (!rec) { rec = { key: a.key, name: a.name, owner: `adv:${scrape.slug}:${a.key}`, listingCount: 0 }; recs.push(rec) }
       else if (!rec.phone && a.name) rec.name = a.name

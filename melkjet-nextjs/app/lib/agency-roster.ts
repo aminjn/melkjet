@@ -348,12 +348,20 @@ export async function buildAgencyRoster(
   // حذف می‌کند. با هر اجرا مشاورهای پایدار تثبیت می‌شوند → فراخوانِ AI کم و کمتر می‌شود.
   // فاز ۲۷۵ — واژه‌نامهٔ آموخته یک‌بار در هر پروسه از اسم‌های آشغالِ گذشته پاک می‌شود (خودترمیمی؛
   // نسخهٔ زندهٔ تولید «لوکیشن/منطقه/دوخواب/…» را با وزنِ بالا یاد گرفته بود و هر اجرا بازتولید می‌کرد).
-  if (!lexiconPruned) { lexiconPruned = true; try { const p = await pruneLearned(); if (p.length) console.log(`[roster] ML lexicon pruned: ${p.length} junk names (${p.slice(0, 8).join('، ')})`) } catch {} }
+  // فاز ۳۲۳ — «ماشین‌لرنینگ از حلقه خارج می‌شود وقتی AIِ خودِ مالک روشن است».
+  // فیدبکِ مالک: «دری‌وری‌ها را پاک می‌کنم، همگام می‌کنم، دوباره برمی‌گردند — ماشین‌لرنینگ هنوز
+  // تو کار هست». ریشه: نامِ آشغال (چه از heuristic چه از AI) با learnName وزن می‌گرفت و سینکِ
+  // بعد «پیش از» qwen از واژه‌نامهٔ آموخته (resolved) بازتولید می‌شد؛ حذفِ رکورد، وزنِ آموخته را
+  // پاک نمی‌کرد. حالا با AI روشن: نه resolved، نه lex، نه یادگیری — qwen تنها مرجع است.
+  const { model: _aiM, provider: _aiP } = resolveAgent([['content', 'text'], ['chat', 'text']])
+  const AI_NAMING = !!_aiM && aiActive('roster', _aiP)
+  if (!AI_NAMING && !lexiconPruned) { lexiconPruned = true; try { const p = await pruneLearned(); if (p.length) console.log(`[roster] ML lexicon pruned: ${p.length} junk names (${p.slice(0, 8).join('، ')})`) } catch {} }
   // نام‌های آموخته هم از همان دروازهٔ اعتبار رد می‌شوند (اگر prune به هر دلیل نرسیده باشد).
-  const learned = (await knownNames(1)).filter(l => !!strictName(l.name))   // تطبیقِ موضعِ امضا (گیت‌شده با candKeys)
-  const trusted = learned.filter(l => l.weight >= 2)  // فقط تثبیت‌شده‌ها مجازند AI را short-circuit کنند
+  // با AI روشن خالی می‌مانند تا واژه‌نامهٔ آلوده روی تصمیم اثر نگذارد.
+  const learned = AI_NAMING ? [] : (await knownNames(1)).filter(l => !!strictName(l.name))   // تطبیقِ موضعِ امضا (گیت‌شده با candKeys)
+  const trusted = AI_NAMING ? [] : learned.filter(l => l.weight >= 2)  // فقط تثبیت‌شده‌ها مجازند AI را short-circuit کنند
   const resolved: Record<number, string> = {}
-  rows.forEach((r, idx) => {
+  if (!AI_NAMING) rows.forEach((r, idx) => {
     // نامِ آموخته هرجای متن پذیرفته می‌شود جز آن‌جا که توکنِ آدرسِ همین آگهی است.
     const m = validName(lexiconMatch(`${r.title}\n${r.desc}`, trusted), name, r.addr)
     if (m) resolved[idx] = m
@@ -368,16 +376,16 @@ export async function buildAgencyRoster(
   // بخشِ «نام‌گذاریِ مشاور (روستر)» فعال باشد، (۲) به ایجنتِ محتوا/چت مدلی تخصیص داده شده باشد.
   // اگر هیچ‌کدام تنظیم نشده بود، دقیقاً مثلِ قبل ML-only می‌مانَد (aiCanonical خودش map خالی می‌دهد).
   // مسیر: پنل → API و مدل‌های AI → افزودنِ ارائه‌دهنده (baseUrl+کلید) + تخصیصِ مدل + روشن‌کردنِ بخشِ روستر.
-  const { model: _aiM, provider: _aiP } = resolveAgent([['content', 'text'], ['chat', 'text']])
-  const AI_NAMING = !!_aiM && aiActive('roster', _aiP)
+  // (AI_NAMING بالاتر محاسبه شد — پیش از فازِ ML.)
   let aiMap: Record<number, string> = {}
+  const askedByAi = new Set<number>()   // ادهایی که qwen واقعاً دربارهٔ آن‌ها نظر داد (کش‌شده یا در تکهٔ کامل‌شده)
   if (AI_NAMING && opts.useAI !== false) {
     // فاز ۱۹۶ (فیدبک: «شناساییِ AI را دوبار انجام داده، خواندنِ فهرست را ۴ بار») — نامِ AI هم مثلِ متن
     // در کشِ ازسرگیری می‌ماند؛ پاسِ بعدی فقط ردیف‌های نپرسیده را می‌پرسد، نه ۴۵ فراخوانِ تکراری.
     const pending: { idx: number; row: (typeof rows)[number] }[] = []
     rows.forEach((r, idx) => {
       const cachedName = opts.cached?.[r.post.token]?.name
-      if (cachedName !== undefined) aiMap[idx] = cachedName
+      if (cachedName !== undefined) { aiMap[idx] = cachedName; askedByAi.add(idx) }
       // AIِ روشن = «حرفِ آخر»: همهٔ ادهای کش‌نشده به AI می‌روند، نه فقط resolvedنشده‌ها. چون
       // واژه‌نامهٔ آموخته (resolved) از پنجرهٔ خرابِ بی‌مدل آلوده شده بود («جهانگرد»ِ ۲۵فایلی)،
       // اگر resolvedها را از AI معاف کنیم آلودگی باقی می‌مانَد. qwen روی سرورِ خودِ مالک است (رایگان).
@@ -397,7 +405,7 @@ export async function buildAgencyRoster(
         Object.assign(aiMap, got)
         emptyStreak = Object.keys(got).length === 0 ? emptyStreak + 1 : 0
         // چک‌پوینتِ نام‌ها: پرسیده‌شده = ذخیره (نبودِ نام هم با '' ذخیره می‌شود تا دوباره پرسیده نشود)
-        for (const p2 of slice) { try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '' }) } catch {} }
+        for (const p2 of slice) { askedByAi.add(p2.idx); try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '' }) } catch {} }
       } catch { emptyStreak++ }
       try { opts.onCluster?.(chunkNo, chunksTotal) } catch {}
       if (emptyStreak >= 3) { console.log('[roster] AI returned nothing 3 chunks in a row — skipping rest (heuristic continues)'); break }
@@ -442,7 +450,11 @@ export async function buildAgencyRoster(
     // («تهاتربااپارتمان»، «چت دیوار») پر می‌کردند و هر سینک آشغال را بازتولید می‌کرد.
     // تعمیمِ واژه‌نامه به آگهی‌های بی‌امضا همچنان پایین‌تر انجام می‌شود، ولی فقط
     // برای مشاورِ «تثبیت‌شده در همین آژانس» — که همان رفتارِ درست است.
-    const chosen = ai || cand[0]
+    // فاز ۳۲۳ — با AI روشن، qwen «حرفِ آخر» است: برای ادی که qwen دربارهٔ آن نظر داد، اگر نامی
+    // نداد یعنی «این آگهی امضای مشاور ندارد» → بی‌نام (خودِ آژانس)، نه بازگشت به حدسِ heuristic که
+    // آشغال می‌سازد («جهانگرد/درکنارش/امین‌ترین»). فقط ادهایی که qwen اصلاً به آن‌ها نرسید (بودجه/
+    // قطعِ سه‌تکه) تورِ ایمنیِ heuristic می‌گیرند تا یک اختلالِ گذرای AI کلِ آژانس را بی‌نام نکند.
+    const chosen = AI_NAMING ? (askedByAi.has(idx) ? ai : (ai || cand[0])) : (ai || cand[0])
     if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); unnamedIdx.push(idx); return }
     const k = keyOf(chosen)
     // «سیگنالِ قوی» = نامِ آموختهٔ تثبیت‌شده در موضعِ امضا، یا توافقِ مستقلِ AI و heuristic.
@@ -509,7 +521,7 @@ export async function buildAgencyRoster(
   // گذشته («فلاحی») هرگز نمی‌تواند آگهی بگیرد، چون هیچ امضایی در این آژانس ندارد.
   // این جایگزینِ اصولیِ آن دو درِ پشتیِ حذف‌شده است: قدرتِ واژه‌نامه حفظ می‌شود، بی‌آنکه
   // بتواند از هیچ، مشاور بسازد.
-  if (unnamedIdx.length && clusters.size) {
+  if (!AI_NAMING && unnamedIdx.length && clusters.size) {
     const established = [...clusters.values()].filter(c => strongKeys.has(c.key) || c.tokens.length >= 2)
     const claimed: number[] = []
     for (const idx of unnamedIdx) {
@@ -534,7 +546,9 @@ export async function buildAgencyRoster(
   // فقط از خوشه‌های «بازمانده و تازه‌استخراج‌شدهٔ این اجرا» یاد بگیر، با وزنِ برابرِ تعدادِ فایل:
   // مشاورِ واقعی که چند آگهی امضا کرده سریع به آستانهٔ اعتماد (وزن≥۲) می‌رسد و دفعهٔ بعد بدونِ
   // AI شناخته می‌شود؛ حدسِ تک‌فایلیِ فیلترشده اصلاً یاد گرفته نمی‌شود (نه آلودگی، نه خودتقویتیِ lexicon).
-  for (const c of clusters.values()) {
+  // با AI روشن اصلاً یاد نمی‌گیریم: qwen هر سینک از نو تصمیم می‌گیرد، و یادگیری همان حلقه‌ای بود
+  // که نامِ آشغال را «چسبان» می‌کرد (وزن می‌گرفت و سینکِ بعد بازتولید می‌شد).
+  if (!AI_NAMING) for (const c of clusters.values()) {
     if (!freshKeys.has(c.key)) continue   // پژواکِ صرفِ lexicon وزن نمی‌گیرد (از خودتقویتی جلوگیری می‌کند)
     try { await learnName(c.name, 'ai', fileCount.get(c.key) || 1) } catch {}
   }
