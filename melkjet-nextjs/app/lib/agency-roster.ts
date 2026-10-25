@@ -3,7 +3,7 @@ import { aiFor, resolveAgent } from './gapgpt'
 import { nameProbSync, NAME_THRESHOLD, corpusCount } from './roster-name-model'
 import { bestName, hasSparse as hasSparseModel } from './roster-ner'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
-import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord, nameRuleWhitelistRaw } from './agency-name-lexicon'
+import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord, nameRuleWhitelistRaw, FIRST_NAMES } from './agency-name-lexicon'
 import { loadNameRules } from './roster-name-rules'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
@@ -78,6 +78,18 @@ export function signatureTrusted(title: string, desc: string, agencyName = ''): 
   return !!validName(ner.name, agencyName, undefined, { trustPerson: true })
 }
 
+// خطی که پس از حذفِ اموجی/القاب «دقیقاً دو واژه» است و واژهٔ اول نامِ کوچکِ شناخته‌شده —
+// یعنی «نامِ کوچک + نام‌خانوادگی»ِ تنها روی خطِ خودش. بسیار پراطمینان؛ بک‌استاپِ سکوتِ مدل.
+function firstNameFullLine(raw: string, agencyName: string, banned: Set<string>): string {
+  for (const line of deEmoji(raw).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)) {
+    const ws = line.split(/\s+/).filter(Boolean).filter(w => !TITLES.has(keyOf(w)))
+    if (ws.length !== 2 || !FIRST_NAMES.has(keyOf(ws[0]))) continue
+    const v = validName(ws.join(' '), agencyName, banned)
+    if (v && v.split(/\s+/).filter(Boolean).length === 2) return v
+  }
+  return ''
+}
+
 export function extractSignature(title: string, desc: string, agencyName = ''): string[] {
   // مسیرِ اصلی: برچسب‌زنِ توکن (roster-ner). روی دادهٔ کنارگذاشته ۸۷.۹٪ درست بود.
   // الگوهای زیر فقط وقتی اجرا می‌شوند که مدل بارگذاری نشده باشد — پس در تولید
@@ -118,7 +130,14 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
     // «شهرِ تک‌کلمه‌ای» عبور می‌کند: «خانم شهریار»/«شهریار هستم» واقعاً شخص‌اند. فاز ۳۲۱: banned
     // (آدرس/«Xِ شما») فقط به حدسِ مدل (بی‌trust) اعمال می‌شود — نامِ قطعیِ شخص از آن هم معاف است.
     const v = ner ? validName(ner.name, agencyName, ner.trust ? undefined : banned, { trustPerson: !!ner.trust }) : ''
-    if (!v) return []
+    if (!v) {
+      // بک‌استاپِ دقتِ‌بالا وقتی مدل ساکت است: خطی که «دقیقاً <نامِ کوچکِ شناخته‌شده> <نامِ خانوادگی>»
+      // است (مثلِ «✅ سالار عباسی» روی خطِ خودش) نامِ قطعی است و مدلِ ناقص نباید از دستش بدهد.
+      // بسیار سخت‌گیر (توکنِ اول باید نامِ کوچکِ شناخته‌شده باشد) تا نوفه نسازد.
+      const fn = firstNameFullLine(raw, agencyName, banned)
+      if (fn) return [fn]
+      return []
+    }
     // فاز ۲۹۷ت — کیس‌استادیِ شاهان: حدسِ مدل («تمیز»، «سخت»، «همراهتان») بدونِ هیچ
     // دروازهٔ دومی پذیرفته می‌شد و با ۲ فایل مشاورِ جعلی می‌ساخت، درحالی‌که مسیرِ regex
     // همهٔ کاندیداها را از nameProbSync می‌گذرانْد. حالا حدسِ «خالصِ» مدل هم از همان
