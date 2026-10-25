@@ -38,11 +38,13 @@ export default function LegalAssistant() {
   const send = async (text?: string) => {
     const content = (text ?? msg).trim()
     if (!content || sending) return
+    // تاریخچهٔ گفتگو تا دستیار حقوقی رشتهٔ پرسش‌های پیاپی را گم نکند.
+    const history = messages.map(m => ({ role: m.role, content: m.content }))
     setMsg('')
     setMessages(m => [...m, { role: 'user', content }])
     setSending(true)
     try {
-      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'chat', input: `به‌عنوان مشاور حقوقی املاک پاسخ بده: ${content}` }) })
+      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'chat', input: `به‌عنوان مشاور حقوقی املاک پاسخ بده: ${content}`, history }) })
       const d = await r.json().catch(() => ({}))
       setMessages(m => [...m, { role: 'assistant', content: d.ok && d.text ? d.text : `⚠ ${d.error || 'خطا در پاسخ'}` }])
     } catch {
