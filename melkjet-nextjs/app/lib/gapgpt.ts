@@ -248,6 +248,14 @@ export async function fetchGapSitePricing(): Promise<{ list: ApiModelPrice[]; no
   return { list: [...out.values()], note: tried.join(' · ') }
 }
 
+// فاز ۳۲۸ — مدل‌های «استدلالی» (qwen3) پیش‌فرض «فکر» می‌کنند و بیشترِ max_tokens را صرفِ
+// reasoning می‌کنند → با max_tokensِ کوچکِ ما content خالی می‌مانَد (ریشهٔ «خطا در ارتباط» مقاله و…).
+// برای سرورِ محلیِ خودِ مالک (vLLM روی http://) حالتِ فکر را خاموش می‌کنیم تا جواب مستقیم و سریع
+// بیاید و توکن هدر نرود. گپ/OpenAI (https) این پارامتر را نمی‌گیرند، پس فقط برای http اعمال می‌شود.
+function thinkOff(base: string): Record<string, unknown> {
+  return /^http:\/\//i.test(base) ? { chat_template_kwargs: { enable_thinking: false } } : {}
+}
+
 export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string; timeoutMs?: number } = {}, provider?: string): Promise<string> {
   // فاز ۵۷: src صریح مقدم است — در بیلدِ پروداکشن stack مسیرِ app/ را ندارد و «ناشناخته» می‌شد
   const src54 = opts.src || callerSrcOf(new Error().stack), t54 = Date.now()
@@ -257,7 +265,7 @@ export async function chatComplete(model: string, messages: { role: string; cont
     const res = await gapHttp(`${base}/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
-      body: JSON.stringify({ model, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens }),
+      body: JSON.stringify({ model, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens, ...thinkOff(base) }),
     }, Math.max(5000, opts.timeoutMs || 90000))
     if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
     const d = JSON.parse(res.body)
@@ -303,7 +311,7 @@ async function chatCompleteRaw(model: string, messages: { role: string; content:
     const res = await gapHttp(`${base}/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
-      body: JSON.stringify({ model: m, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens }),
+      body: JSON.stringify({ model: m, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens, ...thinkOff(base) }),
     }, 90000)
     if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
     const d = JSON.parse(res.body)
