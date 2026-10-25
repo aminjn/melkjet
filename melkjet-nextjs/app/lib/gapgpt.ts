@@ -77,6 +77,12 @@ export function resolveAgent(prefs: [string, 'text' | 'image'][]): { model?: str
 // (shecanRequest) so a reset/broken /etc/resolv.conf can no longer cause
 // "fetch failed". If that path fails for any reason, fall back to plain fetch.
 async function gapHttp(url: string, init: { method: string; headers: Record<string, string>; body?: string }, timeout = 90000): Promise<{ status: number; body: string }> {
+  // endpointِ غیرِ-TLS (http://) مثلِ مدلِ محلیِ خودِ کاربر (vLLM روی تونلِ SSH): shecan فقط HTTPSِ
+  // دامنه‌داری است (پورتِ ۴۴۳ + DNS)، پس مستقیم fetch می‌کنیم — نه تلاشِ بیهودهٔ HTTPS، نه پراکسی.
+  if (/^http:\/\//i.test(url)) {
+    const r = await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: AbortSignal.timeout(timeout) })
+    return { status: r.status, body: await r.text() }
+  }
   try {
     return await shecanRequest(url, { method: init.method, headers: init.headers, body: init.body, timeout })
   } catch (e) {
