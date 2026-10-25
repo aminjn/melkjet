@@ -5574,7 +5574,84 @@ function APIView() {
           ))}
         </div>
       </Card>
+      <AssistantSettingsPanel />
     </div>
+  )
+}
+
+/* ─── دستیارِ عمومیِ سایت: تنظیمات + تبلیغ (فاز ۳۲۴) ───────────── */
+function AssistantSettingsPanel() {
+  const [open, setOpen] = useState(false)
+  const [a, setA] = useState<any>({ enabled: true, showListings: true, maxResults: 4, chips: [], ad: { enabled: false, everyTurns: 3 } })
+  const [msg, setMsg] = useState('')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    fetch('/api/admin/assistant').then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.assistant) setA({ enabled: d.assistant.enabled !== false, showListings: d.assistant.showListings !== false, maxResults: d.assistant.maxResults || 4, greeting: d.assistant.greeting || '', systemPrompt: d.assistant.systemPrompt || '', chips: d.assistant.chips || [], ad: { enabled: !!d.assistant.ad?.enabled, title: d.assistant.ad?.title || '', text: d.assistant.ad?.text || '', imageUrl: d.assistant.ad?.imageUrl || '', linkUrl: d.assistant.ad?.linkUrl || '', cta: d.assistant.ad?.cta || '', everyTurns: d.assistant.ad?.everyTurns || 3 } })
+    }).catch(() => {})
+  }, [])
+  const save = async () => {
+    setSaving(true); setMsg('')
+    try {
+      const body = { ...a, chips: Array.isArray(a.chips) ? a.chips.join('\n') : a.chips }
+      const r = await fetch('/api/admin/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      setMsg(r.ok ? '✓ ذخیره شد' : '⚠ خطا در ذخیره')
+    } catch { setMsg('⚠ خطا در ارتباط') } finally { setSaving(false); setTimeout(() => setMsg(''), 3000) }
+  }
+  const setAd = (patch: any) => setA((s: any) => ({ ...s, ad: { ...s.ad, ...patch } }))
+  const inp: React.CSSProperties = { width: '100%', padding: '9px 11px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 5 }
+  const toggle = (on: boolean, fn: () => void, text: string) => (
+    <button onClick={fn} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, border: on ? '1px solid var(--gold)' : '1px solid var(--line2)', background: on ? 'var(--goldDim)' : 'var(--bg2)', color: on ? 'var(--text)' : 'var(--muted)' }}>
+      <span style={{ width: 9, height: 9, borderRadius: '50%', background: on ? '#3fbf6f' : 'var(--faint)' }} />{text}
+    </button>
+  )
+  return (
+    <Card>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+        <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text)' }}>✦ دستیارِ هوشمندِ سایت (ویجت + تبلیغ)</div>
+        <span style={{ color: 'var(--muted)', fontSize: 18 }}>{open ? '−' : '+'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>دستیارِ شناورِ عمومیِ سایت. می‌تواند فایل‌های واقعیِ سایت را جستجو و نشان دهد. مدلِ متنش از همین صفحه (ChatAgent یا ContentAgent) و روشن‌بودنش از «سوییچِ بخش‌ها → دستیار و چت» می‌آید.</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {toggle(a.enabled !== false, () => setA((s: any) => ({ ...s, enabled: !(s.enabled !== false) })), a.enabled !== false ? 'ویجت روشن' : 'ویجت خاموش')}
+            {toggle(a.showListings !== false, () => setA((s: any) => ({ ...s, showListings: !(s.showListings !== false) })), 'نمایشِ فایل‌های سایت')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--muted)' }}>سقفِ کارت:
+              <input type="number" min={1} max={8} value={a.maxResults || 4} onChange={e => setA((s: any) => ({ ...s, maxResults: Number(e.target.value) }))} style={{ ...inp, width: 60, padding: '6px 8px' }} />
+            </div>
+          </div>
+          <div><label style={lbl}>جملهٔ خوش‌آمد (خالی = پیش‌فرض)</label><input value={a.greeting || ''} onChange={e => setA((s: any) => ({ ...s, greeting: e.target.value }))} style={inp} placeholder="سلام 👋 …" /></div>
+          <div><label style={lbl}>دکمه‌های پیشنهادی (هر خط یکی)</label><textarea value={Array.isArray(a.chips) ? a.chips.join('\n') : (a.chips || '')} onChange={e => setA((s: any) => ({ ...s, chips: e.target.value.split('\n') }))} style={{ ...inp, minHeight: 64, resize: 'vertical' }} placeholder={'خونه زیر ۱۰ میلیارد تو تهران\nآپارتمان برای اجاره'} /></div>
+          <div><label style={lbl}>پرامپتِ سیستم (خالی = پیش‌فرضِ ضدِتوهم)</label><textarea value={a.systemPrompt || ''} onChange={e => setA((s: any) => ({ ...s, systemPrompt: e.target.value }))} style={{ ...inp, minHeight: 64, resize: 'vertical' }} placeholder="تو دستیار ملک‌جت هستی…" /></div>
+
+          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>📣 تبلیغ درونِ دستیار (مثلِ معرفیِ «نورا»)</div>
+              {toggle(!!a.ad?.enabled, () => setAd({ enabled: !a.ad?.enabled }), a.ad?.enabled ? 'روشن' : 'خاموش')}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div><label style={lbl}>عنوانِ تبلیغ</label><input value={a.ad?.title || ''} onChange={e => setAd({ title: e.target.value })} style={inp} placeholder="دستیارِ شخصیِ نورا" /></div>
+              <div><label style={lbl}>متنِ کوتاه</label><input value={a.ad?.text || ''} onChange={e => setAd({ text: e.target.value })} style={inp} placeholder="دستیارِ هوشمندِ شخصی‌ات را امتحان کن" /></div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}><label style={lbl}>لینک</label><input value={a.ad?.linkUrl || ''} onChange={e => setAd({ linkUrl: e.target.value })} style={inp} placeholder="https://…" dir="ltr" /></div>
+                <div style={{ width: 120 }}><label style={lbl}>متنِ دکمه</label><input value={a.ad?.cta || ''} onChange={e => setAd({ cta: e.target.value })} style={inp} placeholder="بیشتر" /></div>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}><label style={lbl}>آدرسِ عکس (اختیاری)</label><input value={a.ad?.imageUrl || ''} onChange={e => setAd({ imageUrl: e.target.value })} style={inp} placeholder="https://…" dir="ltr" /></div>
+                <div style={{ width: 140 }}><label style={lbl}>هر چند پاسخ یک‌بار</label><input type="number" min={1} max={20} value={a.ad?.everyTurns || 3} onChange={e => setAd({ everyTurns: Number(e.target.value) })} style={inp} /></div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={save} disabled={saving} style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>{saving ? 'در حال ذخیره…' : 'ذخیره'}</button>
+            {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#3fbf6f' : '#e7674a' }}>{msg}</span>}
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }
 

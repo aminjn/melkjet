@@ -149,6 +149,24 @@ export interface AdminData {
   // (غنی‌سازی/ممیزی/روستر/محتوا/تصویر/دستیار/تکراری/سایر) — نبودنِ کلید یا false = آن بخش خاموش.
   aiEnabled?: boolean
   aiAreas?: Record<string, boolean>
+  // فاز ۳۲۴ — دستیارِ عمومیِ سایت (ویجتِ شناور): تنظیماتِ سوپرادمین + تبلیغ (مثلِ «نورا»).
+  assistant?: {
+    enabled?: boolean           // روشن/خاموشِ کلِ ویجت (پیش‌فرض روشن)
+    greeting?: string           // جملهٔ خوش‌آمدِ اولِ گفتگو (خالی = پیش‌فرض)
+    systemPrompt?: string       // جایگزینِ پرامپتِ سیستم (خالی = پیش‌فرض)
+    chips?: string[]            // دکمه‌های پیشنهادی
+    showListings?: boolean      // اجازهٔ جستجو و نمایشِ فایل‌های واقعیِ سایت (پیش‌فرض روشن)
+    maxResults?: number         // سقفِ کارت‌های آگهی (پیش‌فرض ۴)
+    ad?: {                      // کارتِ تبلیغ درونِ دستیار (مثلِ معرفیِ دستیارِ شخصیِ نورا)
+      enabled?: boolean
+      title?: string
+      text?: string
+      imageUrl?: string
+      linkUrl?: string
+      cta?: string              // متنِ دکمه (پیش‌فرض «بیشتر»)
+      everyTurns?: number       // هر چند پاسخ یک‌بار نشان داده شود (پیش‌فرض ۳؛ ۰/۱ = همیشه)
+    }
+  }
 }
 
 export function getAdminData(): AdminData {
