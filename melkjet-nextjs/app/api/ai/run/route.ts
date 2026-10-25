@@ -16,10 +16,25 @@ const SYSTEMS: Record<string, string> = {
   negotiation: 'تو مشاور مذاکرهٔ ملکی هستی. راهکار و جملات مذاکره پیشنهاد بده. فارسی و عملی.',
 }
 
+// تاریخچهٔ گفتگو را امن می‌کند: فقط نقش‌های user/assistant، محدودِ طول، سقفِ ۱۰ پیامِ آخر.
+// بدونِ این، هر فراخوان تک‌نوبتی بود و مدل همیشه «از خطِ اول» شروع می‌کرد (دستیارِ عمومی).
+function sanitizeHistory(h: unknown): { role: 'user' | 'assistant'; content: string }[] {
+  if (!Array.isArray(h)) return []
+  return h
+    .map((m: any) => {
+      const role = m?.role === 'assistant' ? 'assistant' : m?.role === 'user' ? 'user' : null
+      const content = (m?.content ?? m?.text ?? '').toString().trim().slice(0, 4000)
+      return role && content ? { role, content } : null
+    })
+    .filter((m): m is { role: 'user' | 'assistant'; content: string } => !!m)
+    .slice(-10)
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const agent: string = body.agent || 'chat'
   const input: string = (body.input || '').toString().slice(0, 8000)
+  const history = sanitizeHistory(body.history)
   const wantImage: boolean = !!body.image
   if (!input.trim()) return NextResponse.json({ error: 'ورودی خالی است' }, { status: 400 })
 
@@ -35,8 +50,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const system = SYSTEMS[agent] || SYSTEMS.chat
+    // تاریخچه (اگر فرستاده شده) بینِ system و پیامِ تازه می‌آید تا گفتگو ادامه‌دار بماند.
     const { text, tokens } = await chatCompleteUsage(textModel, [
       { role: 'system', content: system },
+      ...history,
       { role: 'user', content: input },
     ])
     // هر فراخوانیِ AI = یک «عملیات» (کسرِ ثابت و قابل‌فهم برای کاربر). tokens صرفاً برای لاگ.
