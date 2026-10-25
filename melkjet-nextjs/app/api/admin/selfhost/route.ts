@@ -5,7 +5,7 @@ import { logAudit } from '@/app/lib/audit-store'
 import { selfHostImage, selfHostSearch, selfHostSpeak, selfHostVideo } from '@/app/lib/self-host'
 
 export const runtime = 'nodejs'
-export const maxDuration = 300
+export const maxDuration = 600
 
 // سرویس‌های AIِ خودِ مالک (GPU): تصویر/ویدئو/STT/TTS/جستجو — تنظیم + تستِ واقعی. فقط سوپرادمین/staff.
 async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) ? s : null }
@@ -38,14 +38,15 @@ export async function POST(req: NextRequest) {
   // ذخیرهٔ تنظیمات (ادغام با موجود؛ فقط کلیدهای فرستاده‌شده).
   const cur = getAdminData().selfHost || {}
   const inp = b.selfHost || {}
+  // apiKey در هر سرویس حفظ می‌شود (هدرِ X-Media-Keyِ دروازه).
   const merge = (k: string, extra: (o: any) => any) => {
     if (!(k in inp)) return (cur as any)[k]
     const o = inp[k] || {}
-    return { enabled: !!o.enabled, baseUrl: str(o.baseUrl, 300), ...extra(o) }
+    return { enabled: !!o.enabled, baseUrl: str(o.baseUrl, 300), apiKey: str(o.apiKey, 200), ...extra(o) }
   }
   const selfHost = {
-    image: merge('image', (o: any) => ({ path: str(o.path, 120) || '/generate', width: num(o.width) || 1024, height: num(o.height) || 1024 })),
-    video: merge('video', (o: any) => ({ path: str(o.path, 120) || '/i2v' })),
+    image: merge('image', (o: any) => ({ path: str(o.path, 120) || '/img/generate', width: num(o.width) || 1024, height: num(o.height) || 1024, steps: num(o.steps) || 20 })),
+    video: merge('video', (o: any) => ({ path: str(o.path, 120) || '/vid/i2v' })),
     stt: merge('stt', (o: any) => ({ model: str(o.model, 80) })),
     tts: merge('tts', (o: any) => ({ model: str(o.model, 80), voice: str(o.voice, 80) })),
     search: merge('search', (_o: any) => ({})),

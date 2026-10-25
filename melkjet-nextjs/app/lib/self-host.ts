@@ -5,15 +5,18 @@ import { saveMedia } from './media-store'
 import { getAdminData } from './admin-store'
 
 export type SelfHostKind = 'image' | 'video' | 'stt' | 'tts' | 'search'
+// apiKey (اختیاری): اگر سرویس‌ها پشتِ «دروازهٔ رسانه» باشند، کلید در هدرِ X-Media-Key می‌رود.
 export interface SelfHostCfg {
-  image?: { enabled?: boolean; baseUrl?: string; path?: string; width?: number; height?: number; steps?: number; timeoutSec?: number }   // img_server (Qwen-Image): POST /generate {prompt,negative,ratio,steps} → PNG
-  video?: { enabled?: boolean; baseUrl?: string; path?: string }                                     // video_server: POST /i2v → MP4
-  stt?: { enabled?: boolean; baseUrl?: string; model?: string }                                       // whisper (سازگار با OpenAI /v1/audio/transcriptions)
-  tts?: { enabled?: boolean; baseUrl?: string; model?: string; voice?: string }                       // piper (سازگار با OpenAI /v1/audio/speech)
-  search?: { enabled?: boolean; baseUrl?: string }                                                    // SearXNG: GET /search?q=&format=json
+  image?: { enabled?: boolean; baseUrl?: string; path?: string; width?: number; height?: number; steps?: number; timeoutSec?: number; apiKey?: string }   // دروازه: POST /img/generate {prompt,negative,ratio,steps} → PNG
+  video?: { enabled?: boolean; baseUrl?: string; path?: string; apiKey?: string }                      // دروازه: POST /vid/i2v (multipart: file,prompt,quality,steps) → MP4
+  stt?: { enabled?: boolean; baseUrl?: string; model?: string; apiKey?: string }                        // whisper (سازگار با OpenAI /v1/audio/transcriptions)
+  tts?: { enabled?: boolean; baseUrl?: string; model?: string; voice?: string; apiKey?: string }        // piper (سازگار با OpenAI /v1/audio/speech)
+  search?: { enabled?: boolean; baseUrl?: string; apiKey?: string }                                     // SearXNG: GET /search?q=&format=json
 }
 
 const trim = (u?: string) => String(u || '').replace(/\/+$/, '')
+// هدرِ احرازِ دروازهٔ رسانه (اگر کلید تنظیم شده باشد). دروازه با 401 جواب می‌دهد اگر کلید نباشد/غلط باشد.
+const keyHdr = (c: any): Record<string, string> => (c && c.apiKey ? { 'X-Media-Key': String(c.apiKey) } : {})
 export function selfHost(): SelfHostCfg { return getAdminData().selfHost || {} }
 function on<K extends SelfHostKind>(k: K): NonNullable<SelfHostCfg[K]> | null {
   const c = selfHost()[k] as any
@@ -46,13 +49,13 @@ function ratioFromWH(w: number, h: number): string {
 // (FastAPI فیلدهای اضافه را نادیده می‌گیرد).
 export async function selfHostImage(prompt: string, opts: { neg?: string; width?: number; height?: number; steps?: number } = {}): Promise<string> {
   const c = on('image'); if (!c) throw new Error('سرورِ تصویرِ خودی تنظیم/روشن نیست')
-  const url = trim(c.baseUrl) + (c.path || '/generate')
+  const url = trim(c.baseUrl) + (c.path || '/img/generate')
   const w = opts.width || c.width || 1024, h = opts.height || c.height || 1024
   const neg = opts.neg || ' '
-  // steps پیش‌فرضِ خودِ سرور ۳۰ است؛ پایین‌تر می‌فرستیم تا با offloadِ لایه‌به‌لایه (کُند) زمانِ تولید
-  // قابل‌تحمل بماند. مهلت را بلند می‌گیریم چون sequential offload می‌تواند چند دقیقه طول بکشد.
+  // steps پیش‌فرضِ سرور ۳۰ است؛ ۲۰ می‌فرستیم (طبقِ سندِ دروازه ~۴۶ث روی ۱۳۲۸). مهلت بلند چون
+  // بارِ اولِ بعد از بیکاری، ~۲۵ث بارگذاریِ مدل هم اضافه می‌شود.
   const steps = opts.steps || c.steps || 20
-  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...keyHdr(c) },
     body: JSON.stringify({ prompt, negative: neg, neg, ratio: ratioFromWH(w, h), width: w, height: h, steps }),
     signal: T((c.timeoutSec || 600) * 1000) })
   if (!r.ok) throw new Error(`سرورِ تصویر HTTP ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
@@ -79,12 +82,14 @@ function imageToBuffer(image: string): Buffer {
 // + فیلدهای فرمِ prompt/quality/steps/frames/fps، و خروجیِ MP4ِ خام.
 export async function selfHostVideo(image: string, opts: { prompt?: string; quality?: 'fast' | 'quality' } = {}): Promise<string> {
   const c = on('video'); if (!c) throw new Error('سرورِ ویدئوِ خودی تنظیم/روشن نیست')
-  const url = trim(c.baseUrl) + (c.path || '/i2v')
+  const url = trim(c.baseUrl) + (c.path || '/vid/i2v')
   const fd = new FormData()
   fd.append('file', new Blob([new Uint8Array(imageToBuffer(image))], { type: 'image/png' }), 'src.png')
   fd.append('prompt', opts.prompt || '')
   fd.append('quality', opts.quality || 'fast')
-  const r = await fetch(url, { method: 'POST', body: fd, signal: T(300000) })
+  fd.append('steps', '20')
+  // ویدئو خیلی کندتر است (چند دقیقه)؛ دروازه تا ۱۸۰۰ث صبر می‌کند — مهلتِ کلاینت هم بلند.
+  const r = await fetch(url, { method: 'POST', body: fd, headers: keyHdr(c), signal: T(1800000) })
   if (!r.ok) throw new Error(`سرورِ ویدئو HTTP ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
   const ct = r.headers.get('content-type') || ''
   if (ct.includes('application/json')) { const d = await r.json().catch(() => ({} as any)); if (d.url) return String(d.url); const b64 = d.video || d.b64; if (b64) return `/api/media/${saveMedia(Buffer.from(String(b64).replace(/^data:[^,]+,/, ''), 'base64'), 'video/mp4', 'ai-vid').id}`; throw new Error('پاسخِ JSONِ ویدئو، ویدئویی نداشت') }
@@ -99,7 +104,7 @@ export async function selfHostTranscribe(audio: Buffer, filename = 'audio.webm')
   const fd = new FormData()
   fd.append('file', new Blob([new Uint8Array(audio)]), filename)
   fd.append('model', c.model || 'whisper-1')
-  const r = await fetch(url, { method: 'POST', body: fd, signal: T(120000) })
+  const r = await fetch(url, { method: 'POST', body: fd, headers: keyHdr(c), signal: T(120000) })
   if (!r.ok) throw new Error(`سرورِ STT HTTP ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
   const d = await r.json().catch(() => ({} as any))
   return String(d.text || d.transcription || '').trim()
@@ -109,7 +114,7 @@ export async function selfHostTranscribe(audio: Buffer, filename = 'audio.webm')
 export async function selfHostSpeak(text: string): Promise<string> {
   const c = on('tts'); if (!c) throw new Error('سرورِ تبدیلِ متن به گفتار تنظیم/روشن نیست')
   const url = trim(c.baseUrl) + '/v1/audio/speech'
-  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...keyHdr(c) },
     body: JSON.stringify({ model: c.model || 'tts-1', input: text.slice(0, 4000), voice: c.voice || 'fa' }), signal: T(120000) })
   if (!r.ok) throw new Error(`سرورِ TTS HTTP ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
   const ct = r.headers.get('content-type') || ''
@@ -122,7 +127,7 @@ export interface WebResult { title: string; url: string; content: string }
 export async function selfHostSearch(query: string, max = 6): Promise<WebResult[]> {
   const c = on('search'); if (!c) throw new Error('سرورِ جستجوی وب تنظیم/روشن نیست')
   const url = trim(c.baseUrl) + '/search?format=json&q=' + encodeURIComponent(query)
-  const r = await fetch(url, { headers: { accept: 'application/json' }, signal: T(30000) })
+  const r = await fetch(url, { headers: { accept: 'application/json', ...keyHdr(c) }, signal: T(30000) })
   if (!r.ok) throw new Error(`سرورِ جستجو HTTP ${r.status}`)
   const d = await r.json().catch(() => ({} as any))
   const rows: any[] = Array.isArray(d.results) ? d.results : []

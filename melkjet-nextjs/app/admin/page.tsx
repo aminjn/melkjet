@@ -5643,7 +5643,8 @@ function SelfHostPanel() {
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{title}</div>{tgl(k)}
       </div>
       <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 8 }}>{hint}</div>
-      <input value={svc(k).baseUrl || ''} onChange={e => setSvc(k, { baseUrl: e.target.value })} placeholder="http://127.0.0.1:8097" dir="ltr" style={inp} />
+      <input value={svc(k).baseUrl || ''} onChange={e => setSvc(k, { baseUrl: e.target.value })} placeholder="آدرسِ دروازه، مثلِ http://127.0.0.1:8443" dir="ltr" style={inp} />
+      <input value={svc(k).apiKey || ''} onChange={e => setSvc(k, { apiKey: e.target.value })} placeholder="کلیدِ X-Media-Key (اگر پشتِ دروازه است)" dir="ltr" style={{ ...inp, marginTop: 8 }} />
       {fields}
       {testUI}
     </div>
@@ -5657,15 +5658,16 @@ function SelfHostPanel() {
       {open && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>آدرسِ هر سرویس را از تونلِ محلیِ سرورِ GPU بده (مثلِ <b dir="ltr">http://127.0.0.1:8097</b>)، روشن کن و «تست» بزن. وقتی روشن باشد، همان‌جا که سایت به تصویر/ویدئو/گفتار/جستجو نیاز دارد از سرورِ خودت استفاده می‌شود — نه گپ.</div>
-          {section('image', '🎨 ساخت تصویر (img_server)', 'POST به {آدرس}{مسیر} با {prompt,neg,width,height} و خروجیِ PNG. وقتی روشن باشد، همهٔ تصویرسازیِ سایت (کاور مقاله، استودیو…) از این می‌آید.',
+          {section('image', '🎨 ساخت تصویر (Qwen-Image)', 'POST به {آدرس}{مسیر} با {prompt,ratio,steps} و خروجیِ PNG. مسیرِ دروازه: /img/generate. وقتی روشن باشد، همهٔ تصویرسازیِ سایت (کاور مقاله، استودیو…) از این می‌آید. steps=۲۰ ≈ ۴۶ ثانیه.',
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input value={svc('image').path || ''} onChange={e => setSvc('image', { path: e.target.value })} placeholder="/generate" dir="ltr" style={{ ...inp, flex: 1 }} />
-              <input type="number" value={svc('image').width || ''} onChange={e => setSvc('image', { width: Number(e.target.value) })} placeholder="1024" style={{ ...inp, width: 90 }} />
-              <input type="number" value={svc('image').height || ''} onChange={e => setSvc('image', { height: Number(e.target.value) })} placeholder="1024" style={{ ...inp, width: 90 }} />
+              <input value={svc('image').path || ''} onChange={e => setSvc('image', { path: e.target.value })} placeholder="/img/generate" dir="ltr" style={{ ...inp, flex: 1 }} />
+              <input type="number" value={svc('image').steps || ''} onChange={e => setSvc('image', { steps: Number(e.target.value) })} placeholder="steps ۲۰" style={{ ...inp, width: 90 }} />
+              <input type="number" value={svc('image').width || ''} onChange={e => setSvc('image', { width: Number(e.target.value) })} placeholder="1024" style={{ ...inp, width: 80 }} />
+              <input type="number" value={svc('image').height || ''} onChange={e => setSvc('image', { height: Number(e.target.value) })} placeholder="1024" style={{ ...inp, width: 80 }} />
             </div>,
             <div style={{ marginTop: 8 }}>{testBtn('image', '🎨 تستِ تصویر')}{result('image')}</div>)}
-          {section('video', '🎬 ساخت ویدئو (video_server /i2v)', 'POST به {آدرس}{مسیر} با {image,prompt} و خروجیِ MP4. عکسِ ورودی بده تا یک ویدئوی کوتاه بسازد.',
-            <input value={svc('video').path || ''} onChange={e => setSvc('video', { path: e.target.value })} placeholder="/i2v" dir="ltr" style={{ ...inp, marginTop: 8 }} />,
+          {section('video', '🎬 ساخت ویدئو (Wan /i2v)', 'POST به {آدرس}{مسیر} به‌صورتِ multipart با عکسِ ورودی و خروجیِ MP4. مسیرِ دروازه: /vid/i2v. چند دقیقه طول می‌کشد.',
+            <input value={svc('video').path || ''} onChange={e => setSvc('video', { path: e.target.value })} placeholder="/vid/i2v" dir="ltr" style={{ ...inp, marginTop: 8 }} />,
             <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <input value={vidImg} onChange={e => setVidImg(e.target.value)} placeholder="آدرسِ عکسِ ورودی (http… یا /api/media/…)" dir="ltr" style={inp} />
               <input value={vidPrompt} onChange={e => setVidPrompt(e.target.value)} placeholder="توضیحِ حرکت/صحنه (اختیاری)" style={inp} />
