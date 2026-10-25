@@ -6,7 +6,7 @@ import { getAdminData } from './admin-store'
 
 export type SelfHostKind = 'image' | 'video' | 'stt' | 'tts' | 'search'
 export interface SelfHostCfg {
-  image?: { enabled?: boolean; baseUrl?: string; path?: string; width?: number; height?: number }   // img_server: POST /generate {prompt,neg,width,height} → PNG
+  image?: { enabled?: boolean; baseUrl?: string; path?: string; width?: number; height?: number; steps?: number; timeoutSec?: number }   // img_server (Qwen-Image): POST /generate {prompt,negative,ratio,steps} → PNG
   video?: { enabled?: boolean; baseUrl?: string; path?: string }                                     // video_server: POST /i2v → MP4
   stt?: { enabled?: boolean; baseUrl?: string; model?: string }                                       // whisper (سازگار با OpenAI /v1/audio/transcriptions)
   tts?: { enabled?: boolean; baseUrl?: string; model?: string; voice?: string }                       // piper (سازگار با OpenAI /v1/audio/speech)
@@ -44,13 +44,17 @@ function ratioFromWH(w: number, h: number): string {
 // سرورِ واقعیِ مالک (`/root/img_server.py`): POST /generate با {prompt, negative, ratio, steps, cfg}
 // و خروجیِ PNGِ خام. فیلدهای width/height/neg را هم می‌فرستیم تا با سرورهای دیگر هم سازگار بماند
 // (FastAPI فیلدهای اضافه را نادیده می‌گیرد).
-export async function selfHostImage(prompt: string, opts: { neg?: string; width?: number; height?: number } = {}): Promise<string> {
+export async function selfHostImage(prompt: string, opts: { neg?: string; width?: number; height?: number; steps?: number } = {}): Promise<string> {
   const c = on('image'); if (!c) throw new Error('سرورِ تصویرِ خودی تنظیم/روشن نیست')
   const url = trim(c.baseUrl) + (c.path || '/generate')
   const w = opts.width || c.width || 1024, h = opts.height || c.height || 1024
   const neg = opts.neg || ' '
+  // steps پیش‌فرضِ خودِ سرور ۳۰ است؛ پایین‌تر می‌فرستیم تا با offloadِ لایه‌به‌لایه (کُند) زمانِ تولید
+  // قابل‌تحمل بماند. مهلت را بلند می‌گیریم چون sequential offload می‌تواند چند دقیقه طول بکشد.
+  const steps = opts.steps || c.steps || 20
   const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ prompt, negative: neg, neg, ratio: ratioFromWH(w, h), width: w, height: h }), signal: T(180000) })
+    body: JSON.stringify({ prompt, negative: neg, neg, ratio: ratioFromWH(w, h), width: w, height: h, steps }),
+    signal: T((c.timeoutSec || 600) * 1000) })
   if (!r.ok) throw new Error(`سرورِ تصویر HTTP ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
   const ct = r.headers.get('content-type') || ''
   if (ct.includes('application/json')) {
