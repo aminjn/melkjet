@@ -66,7 +66,7 @@ function bedsFromItem(it: ContentItem): string {
 
 export default function HomeClient({ initial, heroImage = '', heroImageDay = '' }: { initial: HomeData; heroImage?: string; heroImageDay?: string }) {
   // دادهٔ اولیه از سرور می‌آید (SSR با محتوا).
-  const { listings, advisorItems, promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight, sysStats } = initial
+  const { listings, advisorItems, articles, promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight, sysStats } = initial
 
   // Prepend promoted items to a listing array, dedup by id.
   const withPromoted = (promo: ContentItem[], normal: ContentItem[]): ContentItem[] => {
@@ -337,6 +337,33 @@ export default function HomeClient({ initial, heroImage = '', heroImageDay = '' 
                 <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{o.title}</div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{o.location}</div>
                 <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--gold)', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>{o.price}</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+      )}
+
+      {/* BLOG — تازه‌ترین مقالاتِ مجله (فاز ۳۲۹: بلاگ روی صفحهٔ اصلی) */}
+      {(articles || []).length > 0 && (
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px clamp(48px,6vw,80px)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
+          <div><div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}><IconSvg name="article" size={14} /> مجلهٔ ملک‌جت</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>تازه‌ترین مقالات و راهنما</h2></div>
+          <Link href="/blog" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>همهٔ مقالات <IconSvg name="arrowLeft" size={13} /></Link>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 18 }}>
+          {articles.map(a => (
+            <Link key={a.id} href={a.url || '/blog'} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', transition: 'transform .16s, box-shadow .16s, border-color .16s' }} className="mjh-card">
+              <div style={{ position: 'relative', height: 160, overflow: 'hidden', background: a.image ? '#0b0e14' : gradientFor(a.title) }}>
+                {a.image
+                  ? <img src={a.image} alt={a.title} loading="lazy" decoding="async" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.85)', fontSize: 34, fontWeight: 800 }}>{initialsFor(a.title)}</div>}
+              </div>
+              <div style={{ padding: '16px 18px' }}>
+                {a.category && <div style={{ display: 'inline-block', fontSize: 11.5, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>{a.category}</div>}
+                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', lineHeight: 1.6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.title}</div>
+                {a.excerpt && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8, lineHeight: 1.85, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.excerpt}</div>}
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, fontSize: 12.5, fontWeight: 700, color: 'var(--gold)' }}>خواندن مقاله <IconSvg name="arrowLeft" size={13} /></div>
               </div>
             </Link>
           ))}

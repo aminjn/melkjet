@@ -50,12 +50,13 @@ const MENUS: Menu[] = [
     { ic: 'bank', label: 'بانک و بیمه', desc: 'وام و پوشش', href: '/directory?category=بیمه' },
     { ic: 'doc', label: 'دفترخانه', desc: 'سند و انتقال', href: '/directory?category=دفترخانه' },
   ] },
+  // «مجله» — لینکِ مستقیمِ سطحِ بالا (قبلاً داخلِ منوی «ابزار هوشمند» دفن شده بود و دیده نمی‌شد).
+  { label: 'مجله', href: '/blog' },
   { label: 'ابزار هوشمند', items: [
     { ic: 'crown', label: 'امپراتوریِ ملکی', desc: 'مسیرِ رشدِ سرمایه با دارایی‌های واقعی', href: '/empire' },
     { ic: 'bars', label: 'تحلیل بازار', desc: 'کلان‌داده و پیش‌بینی', href: '/market' },
     { ic: 'ruler', label: 'پلان و مدل سه‌بعدی', desc: 'ساخت پلان از عکس', href: '/plan-ai' },
     { ic: 'spark', label: 'دستیار و موتور مذاکره AI', desc: 'مشاوره و استراتژی', href: '/plan-ai' },
-    { ic: 'article', label: 'بلاگ و مقالات', desc: 'محتوای آموزشی', href: '/blog' },
     { ic: 'star', label: 'پلن‌ها و اشتراک', desc: 'عضویت متخصصان', href: '/pricing' },
   ] },
 ]

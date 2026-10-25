@@ -4,6 +4,7 @@
 
 import { listItems, getItemById } from './scraper-store'
 import { listingHref } from './listing-url'
+import { categorySlugForName } from './blog-taxonomy'
 import { listActive, listAllActive, slotOf } from './promotion-store'
 import { catalogStats } from './catalog-store'
 import { listPublicShops } from './materials-store'
@@ -40,6 +41,26 @@ async function publicListFull(type: 'listing' | 'directory'): Promise<ContentIte
   items = items.filter(i => !(i.type === 'article' && i.meta?.cmsStatus === 'draft'))
   items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.scrapedAt - a.scrapedAt)
   return items.map(toContent)
+}
+
+// تازه‌ترین مقالاتِ منتشرشدهٔ بلاگ — «لاغر» (بدونِ بدنهٔ مقاله که در فیلدِ excerpt ذخیره شده و
+// می‌تواند چندصدکیلوبایت باشد؛ در پیلودِ صفحهٔ اصلی هرگز نباید برود). فاز ۳۲۹: بلاگ روی صفحهٔ اصلی.
+async function publicArticles(): Promise<ContentItem[]> {
+  let items: any[] = await listItems('article', { publicOnly: true })
+  items = items.filter(i => i.meta?.cmsStatus !== 'draft' && i.meta?.cmsStatus !== 'scheduled')
+  items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.scrapedAt - a.scrapedAt)
+  return items.slice(0, 8).map(it => {
+    const m = it.meta || {}
+    const raw = m.metaDescription || m.summary || it.excerpt || ''
+    const excerpt = String(raw).replace(/<[^>]+>/g, ' ').replace(/[#*_>`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140)
+    const image = it.image && !String(it.image).startsWith('data:') ? it.image : undefined
+    return {
+      id: it.id, sourceName: m.author || it.sourceName || 'تحریریه ملک‌جت', type: 'article',
+      category: it.category, title: it.title, image, excerpt,
+      url: `/blog/${categorySlugForName(it.category)}/${m.slug || it.id}`,
+      scrapedAt: it.scrapedAt, status: it.status || 'approved',
+    } as ContentItem
+  })
 }
 
 async function promoItems(slot: string): Promise<ContentItem[]> {
@@ -80,7 +101,7 @@ async function buildSpotlight(): Promise<SpotlightItem[]> {
 }
 
 export interface HomeData {
-  listings: ContentItem[]; advisorItems: ContentItem[]
+  listings: ContentItem[]; advisorItems: ContentItem[]; articles: ContentItem[]
   promoFeatured: ContentItem[]; promoInvest: ContentItem[]; promoAdvisors: ContentItem[]; promoTrending: ContentItem[]
   spotlight: SpotlightItem[]
   sysStats: { listings: number; advisors: number; products: number; shops: number; builders: number }
@@ -92,9 +113,10 @@ const safe = <T>(p: Promise<T[]>): Promise<T[]> => p.catch(() => [] as T[])
 async function compute(): Promise<HomeData> {
   // تسویهٔ تنبلِ مزایده‌ها — صفحهٔ اصلی پربازدید است، پس مزایده بدونِ کرون خودش بسته می‌شود.
   try { const { ensurePromoPricing } = await import('./promo-pricing-store'); await ensurePromoPricing(); const { resolveDue } = await import('./auction-store'); await resolveDue() } catch {}
-  const [listingsAll, advisorsAll, promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight] = await Promise.all([
+  const [listingsAll, advisorsAll, articles, promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight] = await Promise.all([
     safe(publicListFull('listing')),
     safe(publicListFull('directory')),
+    safe(publicArticles()),
     safe(promoItems('home_featured')),
     safe(promoItems('home_invest')),
     safe(promoItems('home_advisors')),
@@ -121,6 +143,7 @@ async function compute(): Promise<HomeData> {
   return {
     listings: listingsAll.slice(0, 12),
     advisorItems: advisorsAll.slice(0, 6),
+    articles: articles.slice(0, 6),
     promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight, sysStats,
   }
 }
