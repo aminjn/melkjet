@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { mdToHtml } from '@/app/lib/markdown'
+import { looseJson } from '@/app/lib/ai-json'
 import RichEditor from '@/app/components/RichEditor'
 import ImageUpload from '@/app/components/ImageUpload'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
@@ -138,8 +139,9 @@ export default function ArticleEditor({ compact, author }: { compact?: boolean; 
     try {
       const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'content', input: `از این متن یک «توضیح متا» سئو حداکثر ۱۵۵ کاراکتر و یک «چکیدهٔ» دو جمله‌ای بساز. فقط JSON: {"meta":"...","excerpt":"..."}\n\n${plain.slice(0, 2000)}` }) })
       const d = await r.json()
-      let t = d.text || ''; const mm = t.match(/\{[\s\S]*\}/); if (mm) t = mm[0]
-      const j = JSON.parse(t)
+      if (!d.ok || !d.text) { setMsg('⚠ ' + (d.error || 'خطا')); return }
+      const j = looseJson<{ meta?: string; excerpt?: string }>(d.text)
+      if (!j) { setMsg('⚠ خروجیِ مدل قابلِ‌خواندن نبود — دوباره بزن'); return }
       setF(p => ({ ...p, metaDescription: (j.meta || p.metaDescription).slice(0, 160), excerpt: j.excerpt || p.excerpt }))
       setMsg('✓ چکیده و توضیح متا ساخته شد')
     } catch { setMsg('⚠ خطا در ساخت متا') } finally { setBusy('') }

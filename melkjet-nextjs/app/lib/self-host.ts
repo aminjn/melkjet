@@ -31,12 +31,26 @@ const mimeFromCT = (ct: string, fallback = 'image/png') =>
   : ct.includes('mp4') ? 'video/mp4' : ct.includes('webm') ? 'video/webm'
   : ct.includes('mpeg') || ct.includes('mp3') ? 'audio/mpeg' : ct.includes('wav') ? 'audio/wav' : fallback
 
-// ── تصویر (img_server) ── خروجی: URLِ محلیِ /api/media/<id>
+// نسبتِ ابعاد از عرض/ارتفاع (قراردادِ img_serverِ Qwen-Image که به‌جای width/height، ratio می‌گیرد).
+function ratioFromWH(w: number, h: number): string {
+  const r = w / h
+  const table: [string, number][] = [['1:1', 1], ['16:9', 16 / 9], ['9:16', 9 / 16], ['4:3', 4 / 3], ['3:4', 3 / 4], ['3:2', 3 / 2]]
+  let best = '1:1', bd = Infinity
+  for (const [name, val] of table) { const d = Math.abs(r - val); if (d < bd) { bd = d; best = name } }
+  return best
+}
+
+// ── تصویر (img_server، Qwen-Image) ── خروجی: URLِ محلیِ /api/media/<id>
+// سرورِ واقعیِ مالک (`/root/img_server.py`): POST /generate با {prompt, negative, ratio, steps, cfg}
+// و خروجیِ PNGِ خام. فیلدهای width/height/neg را هم می‌فرستیم تا با سرورهای دیگر هم سازگار بماند
+// (FastAPI فیلدهای اضافه را نادیده می‌گیرد).
 export async function selfHostImage(prompt: string, opts: { neg?: string; width?: number; height?: number } = {}): Promise<string> {
   const c = on('image'); if (!c) throw new Error('سرورِ تصویرِ خودی تنظیم/روشن نیست')
   const url = trim(c.baseUrl) + (c.path || '/generate')
+  const w = opts.width || c.width || 1024, h = opts.height || c.height || 1024
+  const neg = opts.neg || ' '
   const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ prompt, neg: opts.neg || '', width: opts.width || c.width || 1024, height: opts.height || c.height || 1024 }), signal: T(180000) })
+    body: JSON.stringify({ prompt, negative: neg, neg, ratio: ratioFromWH(w, h), width: w, height: h }), signal: T(180000) })
   if (!r.ok) throw new Error(`سرورِ تصویر HTTP ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
   const ct = r.headers.get('content-type') || ''
   if (ct.includes('application/json')) {
@@ -51,12 +65,22 @@ export async function selfHostImage(prompt: string, opts: { neg?: string; width?
   return `/api/media/${saveMedia(buf, mimeFromCT(ct, 'image/png'), 'ai-img').id}`
 }
 
-// ── ویدئو (video_server /i2v) ── ورودیِ عکس (data URL یا URLِ محلی) → MP4 → /api/media/<id>
-export async function selfHostVideo(image: string, opts: { prompt?: string } = {}): Promise<string> {
+// data URL یا base64ِ خام → Buffer (برای آپلودِ multipart).
+function imageToBuffer(image: string): Buffer {
+  return Buffer.from(String(image).replace(/^data:[^,]+,/, ''), 'base64')
+}
+
+// ── ویدئو (video_server /i2v، Wan) ── ورودیِ عکس → MP4 → /api/media/<id>
+// سرورِ واقعیِ مالک (`/root/video_server.py`): POST /i2v به‌صورتِ multipart با فیلدِ `file` (عکس)
+// + فیلدهای فرمِ prompt/quality/steps/frames/fps، و خروجیِ MP4ِ خام.
+export async function selfHostVideo(image: string, opts: { prompt?: string; quality?: 'fast' | 'quality' } = {}): Promise<string> {
   const c = on('video'); if (!c) throw new Error('سرورِ ویدئوِ خودی تنظیم/روشن نیست')
   const url = trim(c.baseUrl) + (c.path || '/i2v')
-  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ image, prompt: opts.prompt || '' }), signal: T(300000) })
+  const fd = new FormData()
+  fd.append('file', new Blob([new Uint8Array(imageToBuffer(image))], { type: 'image/png' }), 'src.png')
+  fd.append('prompt', opts.prompt || '')
+  fd.append('quality', opts.quality || 'fast')
+  const r = await fetch(url, { method: 'POST', body: fd, signal: T(300000) })
   if (!r.ok) throw new Error(`سرورِ ویدئو HTTP ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
   const ct = r.headers.get('content-type') || ''
   if (ct.includes('application/json')) { const d = await r.json().catch(() => ({} as any)); if (d.url) return String(d.url); const b64 = d.video || d.b64; if (b64) return `/api/media/${saveMedia(Buffer.from(String(b64).replace(/^data:[^,]+,/, ''), 'base64'), 'video/mp4', 'ai-vid').id}`; throw new Error('پاسخِ JSONِ ویدئو، ویدئویی نداشت') }
