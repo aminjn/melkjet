@@ -207,12 +207,16 @@ const KNOWN_AREAS = new Set<string>([
   'توانیر', 'ولیعصر', 'آجودانیه', 'هروی', 'بنی‌هاشم', 'ایرانشهر', 'گاندی', 'آرژانتین', 'نیلوفر',
 ].map(keyOf))
 // آیا این توکن می‌تواند نامِ خانوادگی باشد؟ (فارسی ۲+، نه کلیدواژه/فعل/نویز/مکان/واژهٔ ملکی)
+// پسوندهای نام‌خانوادگی که «به‌تنهایی» نام نیستند: «علی‌پور» گاهی «علی پور» نوشته می‌شود و
+// «پور» تنها مشاورِ جعلی می‌ساخت (بازخوردِ کاربر: «قبلِ پور فامیلیِ شخص است»).
+const BARE_SUFFIX = new Set(['پور', 'زاده', 'نژاد', 'یان', 'فرد', 'منش', 'نیا', 'مند', 'خواه', 'طلب', 'بخش'].map(keyOf))
 function surnameOk(w: string): boolean {
   if (!w || w.length < 2) return false
   if (!/^[ء-ی‌]+$/.test(w)) return false
   if (KEYW.test(w) || VERBISH.test(w) || LABELED_REJECT.test(w) || isNoiseWord(w)) return false
   const k = keyOf(w)
   if (NONNAME_STOP.has(k) || PLACE_WORDS.has(k) || PLACE_SUFFIX.test(w)) return false
+  if (BARE_SUFFIX.has(k)) return false                             // «پور»/«زاده»ِ تنها، نه نام
   return true
 }
 // نامِ لنگرخورده به «نامِ کوچکِ شناخته‌شده» یا «عنوان (آقای/خانم/…)» — فارغ از جداکننده.
@@ -271,7 +275,8 @@ export function gazetteerName(desc: string): string | null {
           // نامِ کوچکِ شناخته‌شده + خانوادگی: «منطقه علی رضایی»؛ وگرنه همان یک واژه.
           if (FIRST_NAMES.has(keyOf(a)) && b && surnameOk(b) && !FIRST_NAMES.has(keyOf(b)) && !KNOWN_AREAS.has(keyOf(b))) return `${a} ${b}`
           // تک‌کلمه: «منطقه طلایی/تهران» از حدسِ ناحیه‌ای نباید شخص شود (برخلافِ عنوانِ «خانم شهریار»).
-          if (!SOLO_NEVER_NAME.has(keyOf(a))) return a
+          // «منطقه شمس آباد» ⇒ «شمس» نه — اگر واژهٔ بعد پسوندِ مکانی باشد («آباد/شهر…») این یک محله است.
+          if (!SOLO_NEVER_NAME.has(keyOf(a)) && !(b && PLACE_SUFFIX.test(b))) return a
         }
       }
     }
@@ -282,7 +287,10 @@ export function gazetteerName(desc: string): string | null {
     // می‌افتاد. دروازه: *آخرین* توکنِ خط (نه هر توکنی — تا «مشاور امین و مورد اعتماد شما» که
     // آخرش «شما»ست نامِ جعلی نسازد) پس از نقش، surnameOk و نه محلهٔ شناخته‌شده. نامِ خودِ آژانس
     // را گاردِ پایین‌دستِ validName (a.includes) می‌گیرد؛ واژهٔ آدرس را banned.
-    if (roleIdx >= 0 && toks.length - 1 > roleIdx) {
+    // «منطقه <محلهٔ شناخته‌شده> <X>» = زنجیرهٔ مکان (نه نام): «منطقه هروی ریحانی» ⇒ «ریحانی» نه،
+    // چون «منطقه هروی» یک عبارتِ مکانی است و توکنِ بعدش ادامهٔ مکان است (نامِ واقعی در خطِ بعد).
+    const hasAreaChain = toks.some((w, i) => AREA_LEAD.has(keyOf(w)) && i + 1 < toks.length && KNOWN_AREAS.has(keyOf(toks[i + 1])))
+    if (roleIdx >= 0 && toks.length - 1 > roleIdx && !hasAreaChain) {
       const last = toks[toks.length - 1], lk = keyOf(last)
       if (surnameOk(last) && !KNOWN_AREAS.has(lk)) {
         const prev = toks[toks.length - 2]
