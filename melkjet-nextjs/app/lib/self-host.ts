@@ -47,11 +47,14 @@ function ratioFromWH(w: number, h: number): string {
 // سرورِ واقعیِ مالک (`/root/img_server.py`): POST /generate با {prompt, negative, ratio, steps, cfg}
 // و خروجیِ PNGِ خام. فیلدهای width/height/neg را هم می‌فرستیم تا با سرورهای دیگر هم سازگار بماند
 // (FastAPI فیلدهای اضافه را نادیده می‌گیرد).
+// negativeِ پیش‌فرض: جلوی «متنِ دری‌وری» (مدلِ تصویر سعی می‌کند متن بنویسد و فارسی/عربی را خراب
+// می‌نویسد) و افتِ کیفیت را می‌گیرد. فاز ۳۳۰.
+const DEFAULT_NEG = 'text, words, letters, numbers, writing, typography, caption, label, watermark, signature, logo, blurry, low quality, distorted, deformed, ugly, lowres, jpeg artifacts, oversaturated'
 export async function selfHostImage(prompt: string, opts: { neg?: string; width?: number; height?: number; steps?: number } = {}): Promise<string> {
   const c = on('image'); if (!c) throw new Error('سرورِ تصویرِ خودی تنظیم/روشن نیست')
   const url = trim(c.baseUrl) + (c.path || '/img/generate')
   const w = opts.width || c.width || 1024, h = opts.height || c.height || 1024
-  const neg = opts.neg || ' '
+  const neg = opts.neg || DEFAULT_NEG
   // steps پیش‌فرضِ سرور ۳۰ است؛ ۲۰ می‌فرستیم (طبقِ سندِ دروازه ~۴۶ث روی ۱۳۲۸). مهلت بلند چون
   // بارِ اولِ بعد از بیکاری، ~۲۵ث بارگذاریِ مدل هم اضافه می‌شود.
   const steps = opts.steps || c.steps || 20

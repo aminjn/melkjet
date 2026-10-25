@@ -334,13 +334,13 @@ export async function chatCompleteUsage(model: string, messages: { role: string;
   catch (e) { if (model !== fb) return await chatCompleteRaw(fb, messages, opts, provider); throw e }
 }
 
-export async function generateImage(model: string, prompt: string, size = '1024x1024', provider?: string, src?: string): Promise<string> {
+export async function generateImage(model: string, prompt: string, size = '1024x1024', provider?: string, src?: string, opts?: { neg?: string; steps?: number }): Promise<string> {
   const src326 = src || callerSrcOf(new Error().stack)
   if (!aiActive(src326, provider, 'image')) throw new AiOffError()
   // فاز ۳۲۶ — سرورِ تصویرِ خودیِ مالک (img_server) اولویت دارد؛ گپ فقط وقتی تنظیم نشده.
   if (imageConfigured()) {
     const [w, h] = String(size).split('x').map(n => parseInt(n, 10) || 1024)
-    try { const u = await selfHostImage(prompt, { width: w, height: h }); recordAiUse({ src: src326, model: 'self-host:image', kind: 'image', tokens: 0, ok: true, ms: 0 }).catch(() => {}); return u }
+    try { const u = await selfHostImage(prompt, { width: w, height: h, neg: opts?.neg, steps: opts?.steps }); recordAiUse({ src: src326, model: 'self-host:image', kind: 'image', tokens: 0, ok: true, ms: 0 }).catch(() => {}); return u }
     catch (e) { recordAiUse({ src: src326, model: 'self-host:image', kind: 'image', tokens: 0, ok: false, ms: 0, err: (e as any)?.message || String(e) }).catch(() => {}); throw e }
   }
   const { base, key } = cfg(provider)
@@ -429,8 +429,8 @@ export function aiFor(src: string) {
       chatVision(model, prompt, images, { ...opts, src }, provider),
     chatVisionSafe: (model: string | undefined, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}, provider?: string) =>
       chatVisionSafe(model, prompt, images, { ...opts, src }, provider),
-    generateImage: (model: string, prompt: string, size = '1024x1024', provider?: string) =>
-      generateImage(model, prompt, size, provider, src),
+    generateImage: (model: string, prompt: string, size = '1024x1024', provider?: string, opts?: { neg?: string; steps?: number }) =>
+      generateImage(model, prompt, size, provider, src, opts),
     generateImageSafe: (model: string | undefined, prompt: string, size = '1024x1024', provider?: string) =>
       generateImageSafe(model, prompt, size, provider, src),
   }
