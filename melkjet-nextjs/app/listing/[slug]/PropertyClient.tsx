@@ -18,6 +18,7 @@ import PromoBadge from '@/app/components/PromoBadge'
 import CompareButton from '@/app/components/CompareButton'
 import LikeHeart, { useFav } from '@/app/components/home/LikeHeart'
 import ReosTwinCard from '@/app/components/ReosTwinCard'
+import BannerSlot from '@/app/components/BannerSlot'
 import { openAuth } from '@/app/components/AuthModal'
 import { listingAgeLabel, isFreshListing } from '@/app/lib/fa-time'
 import { dealOf } from '@/app/lib/listing-filter'
@@ -640,6 +641,9 @@ export default function PropertyClient({ id, initial, originality, initialEnrich
               )}
 
               <ReosTwinCard propertyId={id} />
+
+              {/* فاز ۳۳۱ — جایگاهِ تبلیغِ صفحهٔ آگهی (اگر بنری تعریف نشده باشد چیزی رندر نمی‌شود) */}
+              <div style={{ margin: '4px 0' }}><BannerSlot placement="listing" /></div>
 
               {similar.length > 0 && (
                 <div>

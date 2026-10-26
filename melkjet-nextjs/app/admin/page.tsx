@@ -7991,7 +7991,7 @@ function AdsView() {
   const add = async () => { if (!f.title.trim() || !f.image.trim()) return; await fetch('/api/admin/banners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); setF({ title: '', image: '', link: '', placement: 'home', articleCategory: '', articleSlug: '' }); load() }
   const patch = async (id: string, p: any) => { await fetch('/api/admin/banners', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...p }) }); load() }
   const del = async (id: string) => { if (!confirm('این بنر حذف شود؟')) return; await fetch(`/api/admin/banners?id=${id}`, { method: 'DELETE' }); load() }
-  const PL: Record<string, string> = { home: 'صفحهٔ خانه', search: 'جستجو', sidebar: 'ساید‌بار', article: 'مقالات' }
+  const PL: Record<string, string> = { home: 'صفحهٔ خانه (بالا)', homeMid: 'صفحهٔ خانه (میانه)', search: 'نتایجِ جستجو', listing: 'صفحهٔ آگهی (ملک)', directory: 'دایرکتوری/متخصصان', blogIndex: 'فهرستِ مجله', sidebar: 'ساید‌بارِ مقاله', article: 'داخلِ مقاله' }
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   return (
     <div style={{ animation: 'fade .35s ease' }}>

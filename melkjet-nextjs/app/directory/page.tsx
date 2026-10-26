@@ -5,6 +5,7 @@
 // معامله از آگهی‌های فروخته/اجاره‌رفتهٔ خودِ متخصص، عضویت از تاریخِ واقعیِ ثبت‌نام، پروژه از پرشین‌سازه.
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import BannerSlot from '@/app/components/BannerSlot'
 import PageHeader from '@/app/components/PageHeader'
 import RevealContact from '@/app/components/RevealContact'
 import PromoBadge from '@/app/components/PromoBadge'
@@ -223,6 +224,8 @@ export default function DirectoryPage() {
 
         {/* نتایج */}
         <section style={{ minWidth: 0 }}>
+          {/* جایگاهِ تبلیغِ دایرکتوری/متخصصان (فاز ۳۳۱) — نبودِ بنر = هیچ */}
+          <div style={{ marginBottom: 16 }}><BannerSlot placement="directory" /></div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
             <h2 style={{ fontSize: '1.08rem', fontWeight: 800, color: 'var(--text)', margin: 0 }}>
               {loading ? 'در حال بارگذاری…' : <><span style={{ color: 'var(--goldText)' }}>{fa(filteredProfessionals.length)}</span> {catLabelOf(activeCategory)} فعال</>}

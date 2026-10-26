@@ -5,6 +5,6 @@ import dynamic from 'next/dynamic'
 // اصلی حالا سروری است.
 const BannerSlot = dynamic(() => import('../BannerSlot'), { ssr: false })
 
-export default function HomeBanner() {
-  return <BannerSlot placement="home" />
+export default function HomeBanner({ placement = 'home' }: { placement?: string }) {
+  return <BannerSlot placement={placement} />
 }

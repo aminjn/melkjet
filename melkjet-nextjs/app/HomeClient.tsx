@@ -343,6 +343,11 @@ export default function HomeClient({ initial, heroImage = '', heroImageDay = '' 
       </section>
       )}
 
+      {/* بنرِ تبلیغِ میانهٔ صفحهٔ اصلی (فاز ۳۳۱) — نبودِ بنر = هیچ */}
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px clamp(20px,3vw,32px)' }}>
+        <HomeBanner placement="homeMid" />
+      </section>
+
       {/* BLOG — تازه‌ترین مقالاتِ مجله (فاز ۳۲۹: بلاگ روی صفحهٔ اصلی) */}
       {(articles || []).length > 0 && (
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px clamp(48px,6vw,80px)' }}>

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import PageHeader from '@/app/components/PageHeader'
 import Footer from '@/app/components/Footer'
+import BannerSlot from '@/app/components/BannerSlot'
 import { fetchContent, gradientFor } from '@/app/lib/content-display'
 import { categorySlugForName } from '@/app/lib/blog-taxonomy'
 
@@ -137,6 +138,8 @@ export default function BlogClient({ initial }: { initial: BlogIndexData }) {
       </header>
 
       <main style={{ maxWidth: 1180, margin: '0 auto', padding: '24px 18px 70px' }}>
+        {/* جایگاهِ تبلیغِ فهرستِ مجله (فاز ۳۳۱) — نبودِ بنر = هیچ */}
+        <div style={{ marginBottom: 18 }}><BannerSlot placement="blogIndex" /></div>
         {booting ? <div style={{ color: 'var(--muted)', padding: '40px 0', textAlign: 'center' }}>در حال بارگذاری…</div>
           : shown.length === 0 ? (
             <div style={{ padding: '48px 0', textAlign: 'center' }}>

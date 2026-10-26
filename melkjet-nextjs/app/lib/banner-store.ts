@@ -6,7 +6,8 @@ import { randomBytes } from 'crypto'
 // Mirrors the persistence style of crm-store.ts.
 const DATA_FILE = join(process.cwd(), '.banner-data.json')
 
-export type Placement = 'home' | 'search' | 'sidebar' | 'article'
+// فاز ۳۳۱ — جایگاه‌های تبلیغِ بیشتر در کلِ سایت (همه از همان پنلِ «تبلیغات بنری» مدیریت می‌شوند).
+export type Placement = 'home' | 'homeMid' | 'search' | 'sidebar' | 'article' | 'listing' | 'directory' | 'blogIndex'
 
 export interface Banner {
   id: string
@@ -38,7 +39,7 @@ function save(db: DB) {
   writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8')
 }
 
-const PLACEMENTS: Placement[] = ['home', 'search', 'sidebar', 'article']
+const PLACEMENTS: Placement[] = ['home', 'homeMid', 'search', 'sidebar', 'article', 'listing', 'directory', 'blogIndex']
 function normPlacement(p: unknown): Placement {
   return PLACEMENTS.includes(p as Placement) ? (p as Placement) : 'home'
 }
