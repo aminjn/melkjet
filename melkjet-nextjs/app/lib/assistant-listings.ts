@@ -82,6 +82,8 @@ function hardPass(it: Item, f: AssistantFilters): boolean {
   const hay = norm(`${it.title} ${it.location} ${it.meta?.['شهر']} ${it.meta?.['محله']} ${it.meta?.['نوع ملک']}`)
   if (f.city && !hay.includes(norm(f.city))) return false
   if (f.type && !hay.includes(norm(f.type))) return false
+  // محله فیلترِ سخت است (بی‌فاصله + مادر⊇فرزند): «جنت‌آباد» هرگز «دبستان» را نشان ندهد.
+  if (f.district) { const sp = hay.replace(/\s+/g, ''); if (!sp.includes(norm(f.district).replace(/\s+/g, ''))) return false }
   // بودجه: فقط سقفِ سخت وقتی خرید و قیمتِ معلوم (با ۱۲٪ ارفاق)؛ آگهیِ بی‌قیمت رد نمی‌شود.
   if (f.deal === 'sale' && f.budgetMax && dealOf(it) === 'sale') { const p = parseFaNum(it.price); if (p && p > f.budgetMax * 1.12) return false }
   return true
