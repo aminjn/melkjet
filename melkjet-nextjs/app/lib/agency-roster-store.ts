@@ -1094,6 +1094,52 @@ export function nameCompatible(a: string, b: string): boolean {
   return true
 }
 
+// فاز ۳۳۶ب — پاک‌سازیِ نامِ مشاورانِ «ذخیره‌شده» با قوانینِ تازه، بدونِ دیوار و بدونِ انتقالِ آگهی.
+// از RowCache دوباره خوشه‌بندی می‌کند (نام‌های AIِ کش‌شده + heuristicِ تازه، پس نه دیوار نه qwenِ تازه)،
+// و فقط «نامِ نمایشیِ» خوشه‌های ungraduated را تصحیح می‌کند: خوشه‌ای که با قوانینِ تازه دیگر ساخته
+// نمی‌شود (مثلِ «خوش/جیحون» خیابان) حذف، و خوشه‌ای که نامش عوض شده («خوش هاشمی»→«هاشمی») rename
+// می‌شود. حساب‌دار (phone) و در-صفِ ساختِ حساب (graduating) هرگز دست نمی‌خورند. انتقال/آزادسازیِ
+// آگهی‌ها کارِ سینکِ واقعیِ بعدی است (این‌جا فقط نامِ پنل تمیز می‌شود).
+export async function recleanNames(id: string, apply: boolean): Promise<{ ok: boolean; skipped?: string; removed: string[]; renamed: { from: string; to: string }[] }> {
+  const scrape = await getScrapeRow(id)
+  if (!scrape) return { ok: false, skipped: 'اسکرپ یافت نشد', removed: [], renamed: [] }
+  const rc = await loadRowCache(id)
+  const tokens = Object.keys(rc).filter(t => rc[t]?.desc)
+  if (!tokens.length) return { ok: false, skipped: 'کشِ متنی خالی — نیازِ سینک از دیوار', removed: [], renamed: [] }
+  const { buildAgencyRoster } = await import('./agency-roster')
+  const pinnedKeys = (scrape.advisors || []).filter(a => a.phone).map(a => a.key)
+  const roster = await buildAgencyRoster(scrape.slug, {
+    useAI: scrape.useAI, cached: rc, pinnedKeys,
+    f: {
+      profileTokens: (async () => ({ posts: tokens.map(t => ({ token: t })), name: scrape.agencyName || '', reason: '' })) as any,
+      post: (async () => ({ title: '', description: '' })) as any,
+    },
+  })
+  if (!roster.ok) return { ok: false, skipped: roster.error || 'خوشه‌بندی ناموفق', removed: [], renamed: [] }
+  const recs = [...(scrape.advisors || [])]
+  // نگاشتِ کلیدِ خوشهٔ تازه به حساب‌دارِ هم‌نام (مثلِ سینک) تا rename درست بماند.
+  const gradRecs = recs.filter(r => r.phone)
+  for (const a of roster.advisors) {
+    if (recs.some(r => r.key === a.key)) continue
+    const hosts = gradRecs.filter(r => nameCompatible(r.name, a.name))
+    if (hosts.length === 1) a.key = hosts[0].key
+  }
+  const freshName = new Map<string, string>()
+  const freshTokens = new Map<string, string[]>()
+  for (const a of roster.advisors) { if (!freshName.has(a.key)) { freshName.set(a.key, a.name); freshTokens.set(a.key, a.tokens) } }
+  const removed: string[] = []
+  const renamed: { from: string; to: string }[] = []
+  for (let i = recs.length - 1; i >= 0; i--) {
+    const r = recs[i]
+    if (r.phone || r.graduating) continue                       // حساب‌دار/در-صف دست‌نخورده
+    if (!freshName.has(r.key)) { removed.push(r.name); recs.splice(i, 1); continue }
+    const fn = freshName.get(r.key)!
+    if (fn && fn !== r.name) { renamed.push({ from: r.name, to: fn }); r.name = fn; r.tokens = (freshTokens.get(r.key) || []).slice(0, 100) }
+  }
+  if (apply && (removed.length || renamed.length)) await patchScrape(id, { advisors: recs })
+  return { ok: true, removed, renamed }
+}
+
 export interface PhoneConflict { id: string; slug: string; key: string; name: string }
 
 /** آیا این شماره به مشاورِ دیگری با نامِ ناسازگار تعلق دارد؟ */
