@@ -2475,7 +2475,7 @@ function AgencyRosterPanel() {
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<string>('')
   const [phones, setPhones] = useState<Record<string, string>>({})
-  const [settings, setSettings] = useState<{ autoSync: boolean; startHour: number; endHour: number }>({ autoSync: true, startHour: 0, endHour: 6 })
+  const [settings, setSettings] = useState<{ autoSync: boolean; startHour: number; endHour: number }>({ autoSync: true, startHour: 0, endHour: 0 })
   const [setMsgTxt, setSetMsg] = useState('')
   const fa = (n: any) => (Number(n) || 0).toLocaleString('fa-IR')
   const faHour = (h: number) => `${fa(h)}:۰۰`
@@ -2668,6 +2668,11 @@ function AgencyRosterPanel() {
             {setMsgTxt && <span style={{ fontSize: 12, color: 'var(--gold)', marginInlineStart: 6 }}>{setMsgTxt}</span>}
           </div>
         </div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.7 }}>
+          {settings.startHour === settings.endHour
+            ? '🟢 حالت: تمامِ شبانه‌روز (۲۴ساعته) — کلِ روز تلاش می‌شود تا هر آژانس سینک شود.'
+            : 'اگر «از» و «تا» را برابر بگذاری (مثلاً ۰ و ۰) = تمامِ شبانه‌روز. برای سینکِ سریع‌ترِ همهٔ آژانس‌ها همین توصیه می‌شود.'}
+        </div>
         <p style={{ fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.9, margin: '8px 0 0' }}>
           این <b>پیش‌فرض</b> برای آژانس‌هایی است که زمان‌بندیِ اختصاصی ندارند. هر آژانس می‌تواند زیرِ کارتِ خودش بازهٔ جداگانه بگذارد. همگام‌سازیِ خودکار فقط در بازه (به وقتِ ایران) اجرا می‌شود تا روزها ترافیک و دیوار درگیر نشوند — آژانس‌ها یکی‌یکی در صف می‌روند. دکمهٔ «🔄 همگام‌سازی الان» همیشه و بی‌درنگ کار می‌کند و به بازه وابسته نیست.
         </p>
@@ -2750,7 +2755,7 @@ function AgencyRosterPanel() {
               )}
               <span style={{ color: 'var(--faint)' }}>{s.lastTotal != null ? `${fa(s.lastTotal)} آگهی · ${fa(s.lastUnnamed || 0)} بی‌نام` : 'هنوز همگام نشده'}</span>
               <button onClick={() => setSchedOpen(schedOpen === s.id ? '' : s.id)} style={{ marginInlineStart: 'auto', background: 'transparent', border: '1px solid var(--line2)', borderRadius: 999, padding: '4px 10px', color: 'var(--muted)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
-                🕛 {eff(s, 'autoSync') ? <span dir="ltr">{faHour(eff(s, 'startHour'))}–{faHour(eff(s, 'endHour'))}</span> : 'خودکار خاموش'}
+                🕛 {eff(s, 'autoSync') ? (eff(s, 'startHour') === eff(s, 'endHour') ? '۲۴ساعته' : <span dir="ltr">{faHour(eff(s, 'startHour'))}–{faHour(eff(s, 'endHour'))}</span>) : 'خودکار خاموش'}
                 {(s.autoSync !== undefined || s.startHour !== undefined || s.endHour !== undefined) && <span style={{ color: 'var(--gold)' }}> ●</span>}
               </button>
             </div>

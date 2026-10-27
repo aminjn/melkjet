@@ -78,7 +78,9 @@ export interface RosterSettings {
   startHour: number   // ساعتِ شروعِ پنجره (به وقتِ ایران، ۰..۲۳)
   endHour: number     // ساعتِ پایانِ پنجره (به وقتِ ایران، ۰..۲۳) — می‌تواند از نیمه‌شب رد شود
 }
-const DEFAULT_SETTINGS: RosterSettings = { autoSync: true, startHour: 0, endHour: 6 } // ۱۲ شب تا ۶ صبح
+// فاز ۳۳۴ — پنجرهٔ سینکِ «تمامِ شبانه‌روز» (startHour===endHour ⇒ inSyncWindow همیشه true).
+// قبلاً ۰–۶ بود و با ۱۳۲ آژانسِ سریال هر آژانس ~هر ۲ شب سینک می‌شد؛ حالا کلِ روز تلاش می‌کند.
+const DEFAULT_SETTINGS: RosterSettings = { autoSync: true, startHour: 0, endHour: 0 } // ۲۴ساعته
 interface DB { scrapes: Record<string, RosterScrape>; settings?: RosterSettings; graduateQueue?: GradJob[] }
 
 const FILE = join(process.cwd(), '.agency-roster-data.json')
@@ -353,8 +355,10 @@ export async function listDueRosters(now: number): Promise<RosterScrape[]> {
     if (!inSyncWindow(hour, startHour, endHour)) return false   // خارج از پنجرهٔ همین اسکرپ (فقط تازه‌سازی)
     // فاز ۳۰۳ط — تلاشِ دوبارهٔ گذرای زمان‌بندی‌شده: «در پنجره» فوری دوباره تلاش کن (نه وسطِ روز).
     if (s.retryPending) return true
-    // «daily» = یک‌بار در هر بازشدنِ پنجرهٔ شبانه (حتی اگر روز دستی سینک شده باشد، شب باز می‌گیرد).
-    if (s.schedule === 'daily') return s.lastRun < windowOpenedAt(now, startHour)
+    // «daily» = تا وقتی «سینکِ موفق» برای امروز نداشته، سررسیده بماند و تلاش کند (نه فقط «تلاشِ
+    // امروز»). فاز ۳۳۴ — مبنا lastOkAt شد نه lastRun: اگر تلاش شد ولی موفق نشد، باز هم due می‌ماند
+    // تا «اینقدر تلاش شود که سینک شود». سقفِ runAttempts (۸) جلوِ حلقهٔ بی‌پایانِ خطای واقعی را می‌گیرد.
+    if (s.schedule === 'daily') return (s.lastOkAt || 0) < windowOpenedAt(now, startHour)
     // «6h» = هر ۶ ساعت درونِ پنجره.
     return now - s.lastRun >= PERIOD['6h']
   })
