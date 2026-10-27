@@ -224,7 +224,11 @@ const KNOWN_AREAS = new Set<string>([
   'شوش', 'مولوی', 'خراسان', 'دولاب', 'کهریزک', 'چیتگر', 'وردآورد', 'شهرزیبا', 'فیض', 'فردوس',
   'المپیک', 'آپادانا', 'اکباتان', 'فاطمی', 'جمالزاده', 'کارگر', 'انقلاب', 'بهارستان', 'گمنام',
   'توانیر', 'ولیعصر', 'آجودانیه', 'هروی', 'بنی‌هاشم', 'ایرانشهر', 'گاندی', 'آرژانتین', 'نیلوفر',
+  'شمیران', 'شمیرانات', 'فرمانیه', 'جماران', 'تجریش',   // فاز ۳۳۵ — «منطقه شمیران/فرمانیه <X>» = زنجیرهٔ مکان
 ].map(keyOf))
+// فاز ۳۳۵ — «واژهٔ ناحیه‌ای» برای دروازه‌های گازِتیر: محله‌های KNOWN_AREAS + PLACE_WORDS (غرب/ونک/
+// نیاوران/فرمانیه/…). تا «منطقه فرمانیه عسگریان» زنجیرهٔ مکان شمرده شود و توکنِ بعدش نام نگیرد.
+const isAreaWord = (k: string) => KNOWN_AREAS.has(k) || PLACE_WORDS.has(k)
 // آیا این توکن می‌تواند نامِ خانوادگی باشد؟ (فارسی ۲+، نه کلیدواژه/فعل/نویز/مکان/واژهٔ ملکی)
 // پسوندهای نام‌خانوادگی که «به‌تنهایی» نام نیستند: «علی‌پور» گاهی «علی پور» نوشته می‌شود و
 // «پور» تنها مشاورِ جعلی می‌ساخت (بازخوردِ کاربر: «قبلِ پور فامیلیِ شخص است»).
@@ -290,13 +294,27 @@ export function gazetteerName(desc: string): string | null {
       const areaIdx = toks.findIndex((w, i) => i > roleIdx && AREA_LEAD.has(keyOf(w)))
       if (areaIdx > roleIdx && areaIdx + 1 < toks.length) {
         const a = toks[areaIdx + 1], b = toks[areaIdx + 2]
-        if (surnameOk(a) && !KNOWN_AREAS.has(keyOf(a))) {
+        if (surnameOk(a) && !isAreaWord(keyOf(a))) {
           // نامِ کوچکِ شناخته‌شده + خانوادگی: «منطقه علی رضایی»؛ وگرنه همان یک واژه.
-          if (FIRST_NAMES.has(keyOf(a)) && b && surnameOk(b) && !FIRST_NAMES.has(keyOf(b)) && !KNOWN_AREAS.has(keyOf(b))) return `${a} ${b}`
+          if (FIRST_NAMES.has(keyOf(a)) && b && surnameOk(b) && !FIRST_NAMES.has(keyOf(b)) && !isAreaWord(keyOf(b))) return `${a} ${b}`
           // تک‌کلمه: «منطقه طلایی/تهران» از حدسِ ناحیه‌ای نباید شخص شود (برخلافِ عنوانِ «خانم شهریار»).
           // «منطقه شمس آباد» ⇒ «شمس» نه — اگر واژهٔ بعد پسوندِ مکانی باشد («آباد/شهر…») این یک محله است.
           if (!SOLO_NEVER_NAME.has(keyOf(a)) && !(b && PLACE_SUFFIX.test(b))) return a
         }
+      }
+    }
+    // (د) «… : نام» در انتهای خط (معرفیِ صریحِ شخص بعد از دونقطه) — پیش از ب۴ تا نامِ کاملِ پس از
+    // دونقطه بر «آخرین توکنِ خط» مقدم باشد: «مشاور … منطقه یک : انصار احمدی» ⇒ «انصار احمدی» نه «یک»
+    // (نمونهٔ زندهٔ کاربر). فاز ۳۳۵ — تا دو واژه پس از دونقطه گرفته می‌شود (نامِ کوچک + خانوادگی).
+    // قبلاً این قانون «پس از» ب۴ بود، پس ب۴ «آخرین توکن» را زودتر برمی‌داشت.
+    {
+      const mcol = scan[L].match(/[:：]\s*([ء-ی‌]{2,}(?:\s+[ء-ی‌]{2,})?)\s*$/)
+      if (mcol) {
+        const cw = mcol[1].replace(/‌/g, ' ').split(/\s+/).filter(w => w.length >= 2)
+        const okw = (w: string) => surnameOk(w) && !isAreaWord(keyOf(w)) && !SOLO_NEVER_NAME.has(keyOf(w))
+        if (cw.length === 2 && okw(cw[0]) && okw(cw[1])) return `${cw[0]} ${cw[1]}`
+        const w = cw[cw.length - 1] || '', wk = keyOf(w)
+        if (w.length >= 3 && okw(w) && (FIRST_NAMES.has(wk) || SUFFIX.test(w) || surnameStrong(w))) return w
       }
     }
     // (ب۴) فاز ۳۲۱ — نامِ «تنها»ی پایانِ خطِ امضا پس از کلیدواژهٔ نقش، فارغ از جداکننده:
@@ -308,23 +326,15 @@ export function gazetteerName(desc: string): string | null {
     // را گاردِ پایین‌دستِ validName (a.includes) می‌گیرد؛ واژهٔ آدرس را banned.
     // «منطقه <محلهٔ شناخته‌شده> <X>» = زنجیرهٔ مکان (نه نام): «منطقه هروی ریحانی» ⇒ «ریحانی» نه،
     // چون «منطقه هروی» یک عبارتِ مکانی است و توکنِ بعدش ادامهٔ مکان است (نامِ واقعی در خطِ بعد).
-    const hasAreaChain = toks.some((w, i) => AREA_LEAD.has(keyOf(w)) && i + 1 < toks.length && KNOWN_AREAS.has(keyOf(toks[i + 1])))
+    const hasAreaChain = toks.some((w, i) => AREA_LEAD.has(keyOf(w)) && i + 1 < toks.length && isAreaWord(keyOf(toks[i + 1])))
     if (roleIdx >= 0 && toks.length - 1 > roleIdx && !hasAreaChain) {
       const last = toks[toks.length - 1], lk = keyOf(last)
-      if (surnameOk(last) && !KNOWN_AREAS.has(lk)) {
+      if (surnameOk(last) && !isAreaWord(lk)) {
         const prev = toks[toks.length - 2]
         if (prev && toks.length - 2 > roleIdx && FIRST_NAMES.has(keyOf(prev)) && surnameOk(prev) && !FIRST_NAMES.has(lk)) return `${prev} ${last}`
         // تک‌کلمه: نامِ کوچکِ شناخته‌شده، یا پسوندِ خانوادگی، یا خطِ «نقش + دقیقاً یک واژهٔ کوتاه».
         if (!SOLO_NEVER_NAME.has(lk) && (FIRST_NAMES.has(lk) || SUFFIX.test(last) || surnameStrong(last) || (toks.length - 1 === roleIdx + 1 && last.length <= 3))) return last
       }
-    }
-    // (د) «… : فامیل» در انتهای خط (معرفیِ بی‌کلیدواژه): «در کنارتان هستیم: فریدمهر»، «ارادتمند شما: مقصودی».
-    // فاز ۳۲۱ — از surnameStrong (فقط پسوندِ مرکب) به «شکلِ نام» (پسوندِ «ی»/نامِ کوچک) شل شد تا
-    // «مقصودی» هم بیاید؛ محله/واژهٔ عام با surnameOk + KNOWN_AREAS رد می‌شوند.
-    const mcol = scan[L].match(/[:：]\s*([ء-ی‌]{3,})\s*$/)
-    if (mcol) {
-      const w = mcol[1].replace(/‌/g, '').trim(), wk = keyOf(w)
-      if (surnameOk(w) && !KNOWN_AREAS.has(wk) && !SOLO_NEVER_NAME.has(wk) && (FIRST_NAMES.has(wk) || SUFFIX.test(w) || surnameStrong(w))) return w
     }
     // (ج) فاز ۲۹۸م — برچسب روی یک خط، نام روی خطِ بعد: «کارشناس ملکی شما ؛ \n احمد باغبانی».
     // بسیار رایج است و مدل آن را از دست می‌داد (و به‌جایش نامِ مکان از آدرس را می‌گرفت، مثلِ
