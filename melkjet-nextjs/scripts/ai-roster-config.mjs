@@ -68,6 +68,17 @@ if (!QWEN_BASE || !QWEN_MODEL) {
   console.error('❌ برای --apply باید QWEN_BASE و QWEN_MODEL داده شوند (QWEN_KEY اختیاری).')
   process.exit(1)
 }
+// نگهبانِ مقادیرِ نمونه/نامعتبر (ریشهٔ یک خرابیِ واقعی: اجرا با PORT/«نامِ-دقیقِ-مدل»ِ نمونه،
+// کانفیگِ سالم را رونویسی کرد). baseUrl باید URLِ واقعی باشد و هیچ‌کدام placeholder نباشند.
+try { new URL(QWEN_BASE + '/chat/completions') } catch {
+  console.error(`❌ QWEN_BASE یک URLِ معتبر نیست: ${QWEN_BASE} — مثال: http://127.0.0.1:8010/v1`)
+  process.exit(1)
+}
+const bad = (s) => /PORT|نام|<|>|placeholder|example/i.test(s)
+if (bad(QWEN_BASE) || bad(QWEN_MODEL)) {
+  console.error('❌ به‌نظر مقدارِ نمونه داده‌ای (PORT/«نامِ-دقیقِ-مدل»/…). مقادیرِ واقعیِ سرورِ خودت را بگذار؛ هیچ تغییری اعمال نشد.')
+  process.exit(1)
+}
 
 // ۱) provider «qwen» + تخصیصِ مدل به content + روشن‌کردنِ AI و بخشِ روستر
 const next = { ...a }
