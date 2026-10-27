@@ -129,7 +129,11 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
     // فاز ۲۹۸ی۳ — نامِ برآمده از سیگنالِ قطعیِ شخص (عنوان/برچسب/معرفیِ خود، ner.trust) از بانِ
     // «شهرِ تک‌کلمه‌ای» عبور می‌کند: «خانم شهریار»/«شهریار هستم» واقعاً شخص‌اند. فاز ۳۲۱: banned
     // (آدرس/«Xِ شما») فقط به حدسِ مدل (بی‌trust) اعمال می‌شود — نامِ قطعیِ شخص از آن هم معاف است.
-    const v = ner ? validName(ner.name, agencyName, ner.trust ? undefined : banned, { trustPerson: !!ner.trust }) : ''
+    // فاز ۳۳۶ — حدسِ گازِتیر (trust قوی، یا ضعیفِ gaz) از بانِ آدرس معاف است: خودِ گازِتیر نشانهٔ
+    // آدرس را در بافتِ نقش می‌شناسد و «منطقه فراهانی» را نامِ مشاور می‌گیرد (نه آدرس). ولی حدسِ ضعیف
+    // trustPerson نمی‌گیرد (SOLO_NEVER سرِ جا) و چون p<0.97 است از دروازهٔ nameProb هم می‌گذرد.
+    const banFree = !!(ner && (ner.trust || ner.gaz))
+    const v = ner ? validName(ner.name, agencyName, banFree ? undefined : banned, { trustPerson: !!ner.trust }) : ''
     if (!v) {
       // بک‌استاپِ دقتِ‌بالا وقتی مدل ساکت است: خطی که «دقیقاً <نامِ کوچکِ شناخته‌شده> <نامِ خانوادگی>»
       // است (مثلِ «✅ سالار عباسی» روی خطِ خودش) نامِ قطعی است و مدلِ ناقص نباید از دستش بدهد.
