@@ -8379,6 +8379,17 @@ export default function SuperAdminPage() {
     ? sections.map(g => ({ ...g, items: g.items.filter(i => staffOnly.includes(i.id)) })).filter(g => g.items.length > 0)
     : sections
   const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
+  // فاز ۳۳۳ — اعلانات: زنگِ ادمین حالا دراپ‌داونِ «در انتظارِ توجه» دارد (قبلاً تزئینی بود).
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifs, setNotifs] = useState<{ type: string; text: string; count: number; view: string }[]>([])
+  const [notifTotal, setNotifTotal] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const load = () => fetch('/api/admin/alerts', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (alive && d) { setNotifs(d.alerts || []); setNotifTotal(d.total || 0) } }).catch(() => {})
+    load()
+    const t = setInterval(load, 60_000)
+    return () => { alive = false; clearInterval(t) }
+  }, [])
   // پشتیبانی از /admin?view=… (مثلاً ریدایرکتِ /reos-admin) — بدونِ شکستنِ لینک‌های قدیمی.
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('view') as View | null
@@ -8573,11 +8584,29 @@ export default function SuperAdminPage() {
             <span style={{ fontSize: 12.5, fontWeight: 700, color: '#5fd98a' }}>همه سیستم‌ها عملیاتی</span>
           </div>
 
-          {/* Notification bell */}
-          <button style={{ position: 'relative', background: 'transparent', border: '1px solid var(--line2)', borderRadius: 10, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--muted)', fontSize: 16 }}>
-            🔔
-            <span style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: '50%', background: '#e7674a', border: '2px solid var(--navbg)' }} />
-          </button>
+          {/* Notification bell — دراپ‌داونِ «در انتظارِ توجه» (فاز ۳۳۳) */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setNotifOpen(o => !o)} title="اعلانات" style={{ position: 'relative', background: notifOpen ? 'var(--bg2)' : 'transparent', border: '1px solid var(--line2)', borderRadius: 10, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--muted)', fontSize: 16 }}>
+              🔔
+              {notifTotal > 0 && <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 999, background: '#e7674a', color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--navbg)' }}>{notifTotal > 99 ? '۹۹+' : notifTotal.toLocaleString('fa-IR')}</span>}
+            </button>
+            {notifOpen && (
+              <>
+                <div onClick={() => setNotifOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
+                <div style={{ position: 'absolute', top: 46, insetInlineEnd: 0, zIndex: 100, width: 'min(320px, calc(100vw - 32px))', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 14, boxShadow: '0 18px 44px rgba(0,0,0,.4)', overflow: 'hidden', animation: 'fade .2s both' }}>
+                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)', fontWeight: 800, fontSize: 13.5, color: 'var(--text)' }}>اعلانات {notifTotal > 0 && <span style={{ color: '#e7674a' }}>({notifTotal.toLocaleString('fa-IR')})</span>}</div>
+                  {notifs.length === 0
+                    ? <div style={{ padding: '22px 14px', textAlign: 'center', fontSize: 12.5, color: 'var(--muted)' }}>چیزی در انتظارِ توجه نیست ✓</div>
+                    : notifs.map(a => (
+                        <button key={a.type} onClick={() => { setActive(a.view as View); setNotifOpen(false) }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', textAlign: 'start', padding: '11px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--line)', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text)' }}>
+                          <span style={{ fontSize: 12.8 }}>{a.text}</span>
+                          <span style={{ flexShrink: 0, minWidth: 22, textAlign: 'center', fontSize: 11.5, fontWeight: 800, color: '#e7674a', background: 'rgba(231,103,74,.12)', border: '1px solid rgba(231,103,74,.3)', borderRadius: 999, padding: '2px 8px' }}>{a.count.toLocaleString('fa-IR')}</span>
+                        </button>
+                      ))}
+                </div>
+              </>
+            )}
+          </div>
         </header>
 
         {/* Scrollable content */}
