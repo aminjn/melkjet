@@ -34,7 +34,13 @@ export default function ServicesSlider({
       <style>{`
         .mjs-srv-row{scrollbar-width:none}
         .mjs-srv-row::-webkit-scrollbar{display:none}
-        .mjs-srv-card{transition:transform .22s ease, box-shadow .22s ease}
+        .mjs-srv-card{transition:transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s ease}
+        .mjs-srv-plain::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,transparent 40%,color-mix(in srgb,${primary} 12%,transparent));transform:translateY(100%);transition:transform .55s cubic-bezier(.16,1,.3,1)}
+        .mjs-srv-plain:hover::before{transform:none}
+        .mjs-srv-no{transition:-webkit-text-stroke-color .4s ease, transform .5s cubic-bezier(.16,1,.3,1)}
+        .mjs-srv-plain:hover .mjs-srv-no{-webkit-text-stroke-color:${primary};transform:translateY(-4px)}
+        .mjs-srv-ic{transition:transform .5s cubic-bezier(.16,1,.3,1)}
+        .mjs-srv-plain:hover .mjs-srv-ic{transform:rotate(-8deg) scale(1.06)}
         .mjs-srv-card:hover{transform:translateY(-5px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-srv-arrow{transition:transform .18s ease, opacity .18s ease}
         .mjs-srv-arrow:hover{transform:translateY(-2px);opacity:.92}
@@ -60,23 +66,28 @@ export default function ServicesSlider({
           {items.map((s, i) => {
             const Card: any = s.href ? 'a' : 'div'
             return (
-            <Card key={i} {...(s.href ? { href: s.href } : {})} className="mjs-srv-card" style={{
+            <Card key={i} {...(s.href ? { href: s.href } : {})} className={`mjs-srv-card mjs-card${s.image ? '' : ' mjs-srv-plain'}`} style={{
               flex: `0 0 ${cardWidth}`, minWidth: 230, scrollSnapAlign: 'start',
-              background: 'var(--mjs-surface)', border: '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)', borderRadius: 18,
-              padding: s.image ? '0 0 22px' : '34px 22px', textAlign: 'center', boxShadow: CARD_SHADOW,
-              textDecoration: 'none', overflow: 'hidden', display: 'block',
+              background: 'var(--mjs-surface)', border: '1px solid color-mix(in srgb, var(--mjs-text) 11%, transparent)', borderRadius: 22,
+              padding: s.image ? '0 0 22px' : '30px 26px 28px', textAlign: s.image ? 'center' : 'right', boxShadow: CARD_SHADOW,
+              textDecoration: 'none', overflow: 'hidden', display: 'block', position: 'relative', isolation: 'isolate',
             }}>
               {s.image ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={s.image} alt={s.title || ''} loading="lazy" style={{ width: '100%', height: 170, objectFit: 'cover', display: 'block', marginBottom: 18 }} />
               ) : (
-                <div style={{
-                  width: 72, height: 72, borderRadius: '50%', margin: '0 auto 18px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 32, color: primary, background: `${primary}1f`,
-                }}>{s.icon}</div>
+                // پوستهٔ نسلِ ۲ — به‌جای دایرهٔ آیکنِ وسطِ کارت (امضای قالب): آیکنِ کوچکِ گرادیانی در شروع +
+                // شمارهٔ بزرگِ توخالی در گوشه که با هاور رنگ می‌گیرد.
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 26 }}>
+                  <span className="mjs-srv-ic" style={{
+                    width: 52, height: 52, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 24, color: '#fff', background: `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 60%, var(--mjs-secondary)))`,
+                    boxShadow: `0 12px 26px -12px ${primary}`,
+                  }}>{s.icon}</span>
+                  <span className="mjs-srv-no" aria-hidden style={{ fontSize: 46, fontWeight: 900, lineHeight: .9, letterSpacing: '-2px', color: 'transparent', WebkitTextStroke: '1.2px color-mix(in srgb, var(--mjs-text) 28%, transparent)' }}>{(i + 1).toLocaleString('fa-IR', { minimumIntegerDigits: 2 })}</span>
+                </div>
               )}
-              <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--mjs-heading)', marginBottom: 10, padding: s.image ? '0 18px' : 0 }}>{s.title}</div>
+              <div style={{ fontSize: s.image ? 17 : 19, fontWeight: 900, color: 'var(--mjs-heading)', marginBottom: 10, padding: s.image ? '0 18px' : 0, letterSpacing: '-.3px' }}>{s.title}</div>
               <div style={{ fontSize: 14, color: 'var(--mjs-text)', lineHeight: 1.9, padding: s.image ? '0 18px' : 0 }}>{s.desc}</div>
               {s.href ? <div style={{ marginTop: 12, fontSize: 13, fontWeight: 800, color: primary }}>مشاهدهٔ پروژه ←</div> : null}
             </Card>

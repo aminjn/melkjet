@@ -18,6 +18,7 @@ import { sealPhone, phoneMask } from '@/app/lib/phone-token'
 import Beacon from './Beacon'
 import { Fragment } from 'react'
 import { getSiteStats } from '@/app/lib/site-stats-store'
+import SiteMotion from './SiteMotion'
 
 // Public renderer for builder-published sites living at melkjet.com/{slug}.
 // Existing static single-segment routes (search, owner, ...) take precedence;
@@ -108,11 +109,11 @@ function SectionHeading({ children, primary, center, light, sub }: {
   return (
     <div style={{ marginBottom: 'clamp(28px,4vw,44px)', textAlign: center ? 'center' : 'right' }}>
       <h2 style={{
-        fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 900, letterSpacing: '-0.6px',
-        color: light ? '#fff' : INK, margin: 0, lineHeight: 1.25,
+        fontSize: 'clamp(28px,4.4vw,46px)', fontWeight: 900, letterSpacing: '-1.2px',
+        color: light ? '#fff' : INK, margin: 0, lineHeight: 1.2,
       }}>{children}</h2>
-      <div style={{
-        height: 4, width: 68, borderRadius: 999,
+      <div className="mjs-h-line" style={{
+        height: 4, width: 88, borderRadius: 999,
         background: `linear-gradient(90deg, ${primary}, color-mix(in srgb, ${primary} 25%, transparent))`,
         boxShadow: `0 2px 14px -2px ${primary}99`,
         margin: center ? '14px auto 0' : '14px 0 0',
@@ -140,162 +141,209 @@ type HeroExtras = {
   // فاز ۲۹۷ق۳ — عکس‌های واقعیِ خودِ سایت (گالری/کارت‌های پروژه): هیروی بی‌عکس به‌جای
   // گرادیانِ خالی، اسلایدشوی سینماییِ همین عکس‌ها می‌شود (الگوی قالب‌های Shopify).
   heroImages?: string[]
+  // پوستهٔ نسلِ ۲ — دادهٔ واقعیِ کارتِ پروفایلِ هیرو: نامِ برند و عنوانِ خدماتِ خودِ سایت.
+  brand?: string
+  highlights?: string[]
 }
 
 function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: string; extras?: HeroExtras }) {
   const props = p(block)
-  const align = props.align === 'right' ? 'right' : 'center'
+  // پوستهٔ نسلِ ۲ — چیدمانِ «ادیتوریال»: متن در سمتِ شروع (راست) و ستونِ تصویری کنارش؛ «همه‌چیز وسطِ صفحه»
+  // امضای قالب‌های پیش‌ساخته بود. فقط align='center'ِ صریح وسط‌چین می‌ماند.
+  const alignPref = props.align === 'center' ? 'center' : 'right'
   const textColor = props.textColor || '#fff'
   const overlay: 'dark' | 'light' | 'none' =
     props.overlay === 'light' ? 'light' : props.overlay === 'none' ? 'none' : 'dark'
-  const tall = props.height === 'tall'
 
-  // منبعِ تصاویرِ اسلایدشو (اگر ≥۲ باشد یک لایهٔ پس‌زمینهٔ کلاینت با محو-تدریجی رندر می‌شود).
   const ownImages: string[] = Array.isArray(props.images) ? props.images.filter(Boolean) : []
-  // پس‌زمینهٔ ثابت: image → props.bg → گرادیانِ تم.
   const image: string = typeof props.image === 'string' ? props.image.trim() : ''
-  // فاز ۲۹۷ق۳ — هیروی بی‌عکسِ سایتِ عکس‌دار: اسلایدشو از عکس‌های واقعیِ خودش.
   const autoImages = (!image && ownImages.length < 2 && (extras?.heroImages?.length || 0) >= 2)
     ? extras!.heroImages! : null
   const images = ownImages.length >= 2 ? ownImages : (autoImages || ownImages)
   const useSlider = images.length >= 2
-  const baseBg = image
-    ? `url(${image})`
-    : (props.bg || 'linear-gradient(135deg, var(--mjs-primary), var(--mjs-secondary) 70%)')
-
-  // گرادیانِ روکش برای خوانایی، بسته به overlay.
   const overlayGrad =
-    overlay === 'dark'
-      ? 'linear-gradient(180deg, rgba(12,9,6,.38), rgba(12,9,6,.70))'
-      : overlay === 'light'
-        ? 'linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.55))'
-        : ''
+    overlay === 'dark' ? 'linear-gradient(180deg, rgba(10,8,6,.30), rgba(10,8,6,.72))'
+      : overlay === 'light' ? 'linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.55))' : ''
+  // پس‌زمینهٔ عکس‌دارِ دستیِ کاربر (bg با url) محترم است؛ گرادیانِ تختِ پیش‌فرضِ قالب نه.
+  const bgImage = /url\(/.test(String(props.bg || '')) ? String(props.bg) : ''
+  // بی‌عکس: «شفقِ» متحرک از رنگ‌های خودِ برند روی زمینهٔ تیرهٔ تم (به‌جای گرادیانِ تختِ قالبی)
+  const aurora = !useSlider && !image && !bgImage
 
-  // وقتی اسلایدر فعال است، روکش داخلِ HeroSlider اعمال می‌شود؛ پس‌زمینهٔ section خنثی می‌ماند.
-  const sectionBg = useSlider
-    ? 'var(--mjs-secondary)'
-    : (overlayGrad ? `${overlayGrad}, ${baseBg}` : baseBg)
-
-  const minHeight = tall ? 'clamp(440px,80vh,720px)' : undefined
-  const padY = tall ? 'clamp(96px,16vw,160px)' : 'clamp(72px,13vw,140px)'
+  // ستونِ تصویری: پرترهٔ واقعی (عکسِ بلوکِ درباره) یا کارتِ پروفایلِ شیشه‌ای از خدماتِ واقعیِ خودِ سایت.
+  const highlights = (extras?.highlights || []).slice(0, 4)
+  const visual: 'portrait' | 'card' | null = extras?.avatar ? 'portrait' : highlights.length >= 2 ? 'card' : null
+  // قالب‌ها هیرو را صریحاً center ذخیره کرده‌اند؛ در چیدمانِ دوستونه متن همیشه از راست شروع می‌شود.
+  const align = visual ? 'right' : alignPref
+  const words = String(props.heading || '').trim().split(/\s+/).filter(Boolean)
+  const gradLast = overlay !== 'light' && words.length >= 3
+  const brand = (extras?.brand || '').trim()
+  const fa = (n: number) => n.toLocaleString('fa-IR')
 
   return (
     <section id="hero" style={{
-      position: 'relative', background: sectionBg, backgroundSize: 'cover', backgroundPosition: 'center',
-      padding: `${padY} clamp(20px,5vw,24px)`, direction: 'rtl', overflow: 'hidden',
-      minHeight, display: 'flex', alignItems: 'center',
+      position: 'relative', direction: 'rtl', overflow: 'hidden', isolation: 'isolate',
+      background: 'var(--mjs-secondary)',
+      padding: 'clamp(84px,12vw,132px) clamp(20px,5vw,32px) clamp(96px,12vw,140px)',
+      minHeight: 'clamp(560px,88vh,880px)', display: 'flex', alignItems: 'center',
     }}>
-      {useSlider ? <HeroSlider images={images} overlay={overlay} interval={5000} /> : null}
-      {/* فاز ۲۹۷ق — عمقِ بصری: دو هالهٔ نرمِ رنگِ تم با شناوریِ آرام، بدونِ مزاحمت برای خوانایی */}
-      <div aria-hidden className="mjs-hero-glow" style={{
-        position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
-        background: `radial-gradient(420px 320px at 12% 18%, ${primary}30, transparent 70%), radial-gradient(520px 380px at 88% 86%, ${primary}22, transparent 70%)`,
-      }} />
-      <div style={{
-        position: 'relative', zIndex: 1,
-        maxWidth: 1000, margin: '0 auto', width: '100%', textAlign: align as any,
-        display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start',
-      }}>
-        {/* فاز ۲۹۷ق — ردیفِ پروفایلی: آواتارِ واقعی (از بلوکِ درباره) کنارِ نام — حسِ صفحهٔ شخصیِ معتبر */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 'clamp(18px,3.5vw,32px)', flexWrap: 'wrap',
-          justifyContent: align === 'center' ? 'center' : 'flex-start',
-          flexDirection: align === 'center' ? 'column' : 'row',
-          width: '100%',
-        }}>
-          {extras?.avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={extras.avatar} alt="" style={{
-              width: 'clamp(92px,13vw,128px)', height: 'clamp(92px,13vw,128px)', borderRadius: 26,
-              objectFit: 'cover', objectPosition: 'top', flexShrink: 0,
-              border: '3px solid rgba(255,255,255,.85)', boxShadow: '0 18px 44px -16px rgba(0,0,0,.55)',
-            }} />
-          ) : null}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start', minWidth: 0 }}>
-            {/* فاز ۲۹۶و/۲۹۷و — نشانِ هیرو: ترتیبِ eyebrow → badge → متنِ قدیمی. رشتهٔ خالی = حذف.
-                فاز ۲۹۷ق — + نشانِ «تاییدشده در ملک‌جت» (واقعی: این سایت از ملک‌جت منتشر شده). */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: align === 'center' ? 'center' : 'flex-start', marginBottom: 20 }}>
-              {(() => {
-                const badge297 = props.eyebrow !== undefined ? String(props.eyebrow).trim()
-                  : props.badge !== undefined ? String(props.badge).trim() : 'املاک و مستغلات'
-                return badge297 ? (
-                  <span className="mjs-hero-badge" style={{
-                    display: 'inline-block', fontSize: 13, fontWeight: 700, color: textColor,
-                    background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.22)',
-                    padding: '7px 16px', borderRadius: 999, backdropFilter: 'blur(4px)',
-                  }}>{badge297}</span>
-                ) : null
-              })()}
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800,
-                color: '#aef0c3', background: 'rgba(37,170,92,.22)', border: '1px solid rgba(110,224,152,.38)',
-                padding: '7px 14px', borderRadius: 999, backdropFilter: 'blur(4px)',
-              }}>✓ تاییدشده در ملک‌جت</span>
-            </div>
-            <h1 className="mjs-hero-h1" style={{
-              fontSize: 'clamp(32px,6vw,60px)', fontWeight: 900, color: textColor,
-              margin: 0, marginBottom: 18, letterSpacing: '-1px', lineHeight: 1.15, maxWidth: 900,
-            }}>{props.heading}</h1>
-            {props.subheading ? (
-              <p style={{
-                fontSize: 'clamp(15px,2vw,19px)', color: textColor, opacity: .82,
-                margin: 0, marginBottom: 30, maxWidth: 620, lineHeight: 1.9,
-              }}>{props.subheading}</p>
-            ) : null}
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: align === 'center' ? 'center' : 'flex-start' }}>
-              {props.buttonText ? (
-                <a href={props.buttonLink || '#'} className="mjs-btn" style={{
-                  display: 'inline-block', padding: '15px 38px', background: btnBg(primary), borderRadius: 999,
-                  fontSize: 16, fontWeight: 800, color: '#fff', textDecoration: 'none',
-                  boxShadow: `0 16px 40px -14px ${primary}`,
-                }}>{props.buttonText}</a>
-              ) : null}
-              {/* دکمهٔ دومِ «تماس» فقط وقتی CTAی اصلی خودش به تماس نمی‌رود */}
-              {extras?.contactHref && extras.contactHref !== (props.buttonLink || '') ? (
-                <a href={extras.contactHref} className="mjs-btn" style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8, padding: '15px 30px',
-                  background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.32)',
-                  borderRadius: 999, fontSize: 15.5, fontWeight: 800, color: textColor,
-                  textDecoration: 'none', backdropFilter: 'blur(4px)',
-                }}>☎ تماس</a>
-              ) : null}
-            </div>
+      {/* لایهٔ پس‌زمینه (پارالاکس با اسکرول) */}
+      <div className="mjs-hero-par" aria-hidden style={{ position: 'absolute', inset: '-8% 0 -8% 0', zIndex: 0, willChange: 'transform' }}>
+        {useSlider ? <HeroSlider images={images} overlay={overlay} interval={5000} />
+          : image ? <div style={{ position: 'absolute', inset: 0, background: `${overlayGrad ? overlayGrad + ', ' : ''}url(${image}) center/cover` }} />
+            : bgImage ? <div style={{ position: 'absolute', inset: 0, background: `${overlayGrad ? overlayGrad + ', ' : ''}${bgImage}`, backgroundSize: 'cover', backgroundPosition: 'center' }} /> : null}
+        {aurora ? (
+          <div className="mjs-aurora" style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: `radial-gradient(120% 90% at 85% 0%, color-mix(in srgb, ${primary} 26%, var(--mjs-secondary)), var(--mjs-secondary) 62%)` }}>
+            <i style={{ position: 'absolute', width: '62vmax', height: '62vmax', top: '-28%', right: '-12%', borderRadius: '50%', filter: 'blur(70px)', opacity: .55, background: `radial-gradient(circle, ${primary}, transparent 64%)` }} />
+            <i style={{ position: 'absolute', width: '48vmax', height: '48vmax', bottom: '-30%', left: '-10%', borderRadius: '50%', filter: 'blur(80px)', opacity: .42, background: `radial-gradient(circle, color-mix(in srgb, ${primary} 45%, #7b6cff), transparent 66%)` }} />
+            <i style={{ position: 'absolute', width: '34vmax', height: '34vmax', top: '30%', left: '28%', borderRadius: '50%', filter: 'blur(90px)', opacity: .28, background: `radial-gradient(circle, color-mix(in srgb, ${primary} 35%, #fff), transparent 66%)` }} />
           </div>
+        ) : null}
+      </div>
+      {/* شبکهٔ ظریف + محوشدن به زمینهٔ صفحه در پایین (پیوستگی با بخشِ بعد) */}
+      <div aria-hidden style={{
+        position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', opacity: aurora ? .5 : .22,
+        backgroundImage: 'linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px)',
+        backgroundSize: '64px 64px',
+        WebkitMaskImage: 'radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 75%)',
+        maskImage: 'radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 75%)',
+      }} />
+      <div aria-hidden style={{ position: 'absolute', insetInline: 0, bottom: 0, height: 120, zIndex: 0, pointerEvents: 'none', background: 'linear-gradient(180deg, transparent, color-mix(in srgb, var(--mjs-secondary) 60%, transparent))' }} />
+
+      <div className="mjs-hero-grid" style={{
+        position: 'relative', zIndex: 2, maxWidth: 1180, margin: '0 auto', width: '100%',
+        display: 'grid', gridTemplateColumns: visual ? 'minmax(0,1.15fr) minmax(0,.85fr)' : '1fr',
+        gap: 'clamp(36px,5vw,72px)', alignItems: 'center',
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start', textAlign: align as any, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: align === 'center' ? 'center' : 'flex-start', marginBottom: 22 }}>
+            {(() => {
+              const badge297 = props.eyebrow !== undefined ? String(props.eyebrow).trim()
+                : props.badge !== undefined ? String(props.badge).trim() : 'املاک و مستغلات'
+              return badge297 ? (
+                <span className="mjs-hero-badge" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: textColor,
+                  background: 'rgba(255,255,255,.10)', border: '1px solid rgba(255,255,255,.20)',
+                  padding: '7px 16px 7px 14px', borderRadius: 999, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: primary, boxShadow: `0 0 0 4px ${primary}40` }} />{badge297}</span>
+              ) : null
+            })()}
+            {visual !== 'card' ? (
+              <span className="mjs-hero-badge" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800,
+                color: '#aef0c3', background: 'rgba(37,170,92,.20)', border: '1px solid rgba(110,224,152,.36)',
+                padding: '7px 14px', borderRadius: 999, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+              }}>✓ تاییدشده در ملک‌جت</span>
+            ) : null}
+          </div>
+          <h1 className="mjs-hero-h1" style={{
+            fontSize: 'clamp(36px,6.4vw,74px)', fontWeight: 900, color: textColor,
+            margin: '0 0 22px', letterSpacing: '-1.8px', lineHeight: 1.12, maxWidth: 820,
+          }}>
+            {words.map((w, i) => (
+              <Fragment key={i}>
+                <span className={`mjs-w${gradLast && i === words.length - 1 ? ' mjs-grad-word' : ''}`} style={{ ['--i' as any]: i }}>{w}</span>{i < words.length - 1 ? ' ' : ''}
+              </Fragment>
+            ))}
+          </h1>
+          {props.subheading ? (
+            <p className="mjs-hero-sub" style={{
+              fontSize: 'clamp(15.5px,1.9vw,19.5px)', color: textColor, opacity: .8,
+              margin: '0 0 34px', maxWidth: 600, lineHeight: 1.95,
+            }}>{props.subheading}</p>
+          ) : null}
+          <div className="mjs-hero-ctas" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: align === 'center' ? 'center' : 'flex-start' }}>
+            {props.buttonText ? (
+              <a href={props.buttonLink || '#'} className="mjs-btn" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', background: btnBg(primary), borderRadius: 999,
+                fontSize: 16, fontWeight: 800, color: '#fff', textDecoration: 'none',
+                boxShadow: `0 18px 44px -14px ${primary}, inset 0 1px 0 rgba(255,255,255,.25)`,
+              }}>{props.buttonText}<span aria-hidden style={{ fontSize: 18, lineHeight: 1 }}>←</span></a>
+            ) : null}
+            {extras?.contactHref && extras.contactHref !== (props.buttonLink || '') ? (
+              <a href={extras.contactHref} className="mjs-btn" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '16px 28px',
+                background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.28)',
+                borderRadius: 999, fontSize: 15.5, fontWeight: 800, color: textColor,
+                textDecoration: 'none', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+              }}>☎ تماس</a>
+            ) : null}
+          </div>
+
+          {/* کارتِ اعتماد — فقط اعدادِ واقعی (بازدیدِ کل، نظراتِ تاییدشده، سالِ عضویت) */}
+          {extras?.showStats ? (() => {
+            const cells: { value: string; label: string; count?: boolean }[] = []
+            if (extras.views > 0) cells.push({ value: fa(extras.views), label: 'بازدیدِ صفحه', count: true })
+            if (extras.reviewsCount > 0) cells.push({ value: (Math.round(extras.reviewsAvg * 10) / 10).toLocaleString('fa-IR') + ' ★', label: `${fa(extras.reviewsCount)} نظرِ مشتری` })
+            if (extras.memberYear) cells.push({ value: extras.memberYear, label: 'عضوِ ملک‌جت از' })
+            if (cells.length === 0) return null
+            return (
+              <div className="mjs-hero-trust" style={{
+                display: 'flex', marginTop: 'clamp(34px,5vw,52px)', gap: 'clamp(18px,4vw,40px)', flexWrap: 'wrap',
+                alignSelf: align === 'center' ? 'center' : 'flex-start',
+              }}>
+                {cells.map((c, i) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingInlineStart: i > 0 ? 'clamp(18px,4vw,40px)' : 0, borderInlineStart: i > 0 ? '1px solid rgba(255,255,255,.16)' : 'none' }}>
+                    <span {...(c.count ? { 'data-count': '' } : {})} style={{ fontSize: 'clamp(24px,3vw,32px)', fontWeight: 900, color: '#fff', letterSpacing: '-.6px', lineHeight: 1 }}>{c.value}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'rgba(255,255,255,.62)', whiteSpace: 'nowrap' }}>{c.label}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          })() : null}
         </div>
 
-        {/* فاز ۲۹۷ق — کارتِ اعتمادِ شناور (الگوی پلتفرم‌های تخصصی): فقط اعدادِ واقعی.
-            بازدیدِ کل از آمارِ خودِ سایت، میانگینِ نظراتِ تاییدشده، سالِ عضویت. فقط صفحهٔ خانه. */}
-        {extras?.showStats ? (() => {
-          const fa = (n: number) => n.toLocaleString('fa-IR')
-          const cells: { icon: string; value: string; label: string }[] = []
-          if (extras.views > 0) cells.push({ icon: '👁', value: fa(extras.views), label: 'بازدیدِ صفحه' })
-          if (extras.reviewsCount > 0) cells.push({ icon: '★', value: (Math.round(extras.reviewsAvg * 10) / 10).toLocaleString('fa-IR'), label: `${fa(extras.reviewsCount)} نظرِ مشتری` })
-          if (extras.memberYear) cells.push({ icon: '✓', value: extras.memberYear, label: 'عضوِ ملک‌جت' })
-          if (cells.length === 0) return null
-          return (
-            <div className="mjs-hero-trust" style={{
-              display: 'flex', marginTop: 'clamp(30px,5vw,44px)', width: '100%', maxWidth: 580,
-              alignSelf: align === 'center' ? 'center' : 'flex-start',
-              background: 'rgba(10,8,5,.38)', backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,.16)', borderRadius: 20, padding: '18px 8px',
-              boxShadow: '0 24px 60px -30px rgba(0,0,0,.7)',
+        {visual === 'portrait' ? (
+          <div className="mjs-hero-visual mjs-hero-portrait" style={{ position: 'relative', justifySelf: 'center', width: '100%', maxWidth: 420 }}>
+            <div aria-hidden style={{ position: 'absolute', inset: '8% -6% -6% 8%', borderRadius: 36, background: `linear-gradient(135deg, ${primary}, transparent 70%)`, opacity: .55, filter: 'blur(2px)' }} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={extras!.avatar} alt={brand} style={{ position: 'relative', width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', objectPosition: 'top', borderRadius: 32, border: '1px solid rgba(255,255,255,.28)', boxShadow: '0 40px 90px -40px rgba(0,0,0,.85)' }} />
+            <span className="mjs-float" style={{ position: 'absolute', bottom: '8%', right: '-6%', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderRadius: 16, background: 'rgba(255,255,255,.92)', color: '#15301f', fontSize: 13, fontWeight: 800, boxShadow: '0 20px 44px -18px rgba(0,0,0,.6)' }}>
+              <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#22a55a', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>✓</span>تاییدشده در ملک‌جت
+            </span>
+            {extras!.reviewsCount > 0 ? (
+              <span className="mjs-float-2" style={{ position: 'absolute', top: '9%', left: '-7%', padding: '10px 14px', borderRadius: 16, background: 'rgba(12,10,8,.72)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,.18)', color: '#fff', fontSize: 13, fontWeight: 800, boxShadow: '0 20px 44px -18px rgba(0,0,0,.6)' }}>
+                <span style={{ color: '#ffcf4a' }}>★</span> {(Math.round(extras!.reviewsAvg * 10) / 10).toLocaleString('fa-IR')} <span style={{ opacity: .65, fontWeight: 600 }}>از {fa(extras!.reviewsCount)} نظر</span>
+              </span>
+            ) : null}
+          </div>
+        ) : visual === 'card' ? (
+          <div className="mjs-hero-visual mjs-hero-card" style={{ position: 'relative', justifySelf: 'center', width: '100%', maxWidth: 420, perspective: 1400 }}>
+            <div className="mjs-float" style={{
+              position: 'relative', borderRadius: 28, padding: 'clamp(22px,3vw,30px)',
+              background: 'linear-gradient(160deg, rgba(255,255,255,.16), rgba(255,255,255,.05))',
+              border: '1px solid rgba(255,255,255,.22)', backdropFilter: 'blur(18px) saturate(1.4)', WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
+              boxShadow: '0 50px 100px -50px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.28)',
+              transform: 'rotateY(-9deg) rotateX(4deg)', transformStyle: 'preserve-3d', color: '#fff',
             }}>
-              {cells.map((c, i) => (
-                <div key={i} style={{
-                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: '2px 8px',
-                  borderInlineStart: i > 0 ? '1px solid rgba(255,255,255,.12)' : 'none', minWidth: 0,
-                }}>
-                  <span style={{
-                    width: 38, height: 38, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 17, color: primary, background: `${primary}2b`, border: `1px solid ${primary}55`,
-                  }}>{c.icon}</span>
-                  <span style={{ fontSize: 'clamp(19px,2.6vw,24px)', fontWeight: 900, color: '#fff', letterSpacing: '-.5px', lineHeight: 1 }}>{c.value}</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(255,255,255,.68)', whiteSpace: 'nowrap' }}>{c.label}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
+                <span style={{ width: 54, height: 54, borderRadius: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 900, background: btnBg(primary), boxShadow: `0 14px 30px -12px ${primary}` }}>{(brand || 'م').charAt(0)}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 16.5, fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{brand}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#aef0c3', marginTop: 3 }}>✓ تاییدشده در ملک‌جت</div>
                 </div>
-              ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {highlights.map((h, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 14, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.10)', fontSize: 14, fontWeight: 700 }}>
+                    <span style={{ width: 26, height: 26, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff', background: `${primary}55`, border: `1px solid ${primary}88` }}>✓</span>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h}</span>
+                  </div>
+                ))}
+              </div>
+              {extras?.contactHref ? (
+                <a href={extras.contactHref} style={{ marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderRadius: 14, background: '#fff', color: '#15110b', fontSize: 14, fontWeight: 900, textDecoration: 'none' }}>
+                  گفت‌وگو با ما<span aria-hidden>←</span>
+                </a>
+              ) : null}
             </div>
-          )
-        })() : null}
+            <span className="mjs-float-2" aria-hidden style={{ position: 'absolute', top: -18, left: -14, width: 74, height: 74, borderRadius: 22, background: `linear-gradient(135deg, ${primary}, transparent)`, opacity: .7, filter: 'blur(1px)' }} />
+          </div>
+        ) : null}
+      </div>
+
+      {/* نشانهٔ اسکرول */}
+      <div className="mjs-cue" aria-hidden style={{ position: 'absolute', bottom: 22, left: '50%', transform: 'translateX(-50%)', zIndex: 2, width: 26, height: 42, borderRadius: 999, border: '1.5px solid rgba(255,255,255,.4)', display: 'flex', justifyContent: 'center', paddingTop: 8 }}>
+        <i style={{ display: 'block', width: 4, height: 8, borderRadius: 4, background: '#fff' }} />
       </div>
     </section>
   )
@@ -363,6 +411,8 @@ async function ListingsBlock({ block, primary, ownerName, ownerPhone, slug }: { 
   const sliderItems = items.map(it => ({
     id: it.id, title: it.title, location: it.location, price: it.price, image: it.image, category: (it.category || '').trim(),
   }))
+  // پوستهٔ نسلِ ۲ — بخشِ خالی روی سایتِ منتشرشده رندر نمی‌شود (جعبهٔ «هنوز … نداریم» امضای قالبِ پیش‌ساخته بود).
+  if (items.length === 0) return null
   return (
     <section id="listings" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -391,6 +441,8 @@ async function BlogBlock({ block, primary, ownerName, slug: siteSlug }: { block:
 
   // فقط مقاله‌های واقعیِ منتشرشدهٔ مالک — هیچ دادهٔ نمونه. در نبودِ مقاله، حالتِ خالی.
   const items = await ownerArticles(ownerName, n)
+  // پوستهٔ نسلِ ۲ — بخشِ خالی روی سایتِ منتشرشده رندر نمی‌شود (جعبهٔ «هنوز … نداریم» امضای قالبِ پیش‌ساخته بود).
+  if (items.length === 0) return null
   return (
     <section id="blog" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -510,12 +562,7 @@ function ServicesBlock({ block, primary }: { block: SiteBlock; primary: string }
   return (
     <section id="services" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <SectionHeading primary={primary} center>{props.heading}</SectionHeading>
-        {items.length > 0 && (
-          <div style={{ textAlign: 'center', color: MUTED, fontSize: 13, marginTop: -10, marginBottom: 24 }}>
-            {items.length.toLocaleString('fa-IR')} مورد · {perSlide.toLocaleString('fa-IR')} در هر نما
-          </div>
-        )}
+        <SectionHeading primary={primary}>{props.heading}</SectionHeading>
         <ServicesSlider items={items} perSlide={perSlide} primary={primary} />
       </div>
     </section>
@@ -535,7 +582,14 @@ function AboutBlock({ block, primary }: { block: SiteBlock; primary: string }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={props.image} alt="" style={{ flex: '1 1 340px', width: '100%', maxWidth: 440, height: 320, objectFit: 'cover', borderRadius: 22, boxShadow: CARD_SHADOW }} />
         ) : (
-          <div style={{ flex: '1 1 340px', width: '100%', maxWidth: 440, height: 320, background: 'linear-gradient(135deg,var(--mjs-primary),var(--mjs-secondary))', borderRadius: 22, boxShadow: CARD_SHADOW }} />
+          // پوستهٔ نسلِ ۲ — بی‌عکس: ترکیبِ «مونوگرام» (حرفِ اولِ تیتر در حلقه‌های متحرکِ برند) به‌جای
+          // جعبهٔ گرادیانیِ خالی که آشکارا جای‌خالیِ قالب بود.
+          <div aria-hidden style={{ flex: '1 1 340px', width: '100%', maxWidth: 440, height: 340, position: 'relative', borderRadius: 28, overflow: 'hidden', background: `radial-gradient(120% 100% at 80% 0%, color-mix(in srgb, ${primary} 30%, var(--mjs-secondary)), var(--mjs-secondary) 70%)`, boxShadow: CARD_SHADOW, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {[220, 300, 380].map((d, i) => (
+              <span key={d} className={i % 2 ? 'mjs-float-2' : 'mjs-float'} style={{ position: 'absolute', width: d, height: d, borderRadius: '50%', border: `1px solid ${primary}${['66', '40', '22'][i]}` }} />
+            ))}
+            <span style={{ position: 'relative', fontSize: 132, fontWeight: 900, lineHeight: 1, background: `linear-gradient(160deg, #fff, ${primary})`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{String(props.heading || 'م').replace(/^درباره(ٔ|ی)?\s*/, '').trim().charAt(0) || 'م'}</span>
+          </div>
         )}
       </div>
     </section>
@@ -557,26 +611,23 @@ function statIcon(label: string): string {
 function StatsBlock({ block, primary }: { block: SiteBlock; primary: string }) {
   const props = p(block)
   const items: any[] = Array.isArray(props.items) ? props.items : []
+  if (!items.length) return null
+  // پوستهٔ نسلِ ۲ — باندِ تیرهٔ برند با عددهای بزرگِ گرادیانی که از صفر شمرده می‌شوند (SiteMotion)؛
+  // کاشی‌های سفیدِ ایموجی‌دار حسِ قالبِ آماده می‌داد. ریتمِ تیره/روشن هم صفحه را از یکنواختی درمی‌آورد.
   return (
-    <section style={{ background: `linear-gradient(135deg, ${primary}12, ${primary}05)`, padding: 'clamp(48px,7vw,80px) clamp(20px,5vw,24px)', direction: 'rtl' }}>
-      <div className="mjs-grid-4" style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 18 }}>
-        {items.map((s, i) => {
-          const label = String(s?.label || '')
-          return (
-            <div key={i} className="mjs-card" style={{
-              background: 'var(--mjs-bg)', border: BORDER, borderRadius: 20,
-              padding: '26px 18px', textAlign: 'center', boxShadow: CARD_SHADOW,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-            }}>
-              <span style={{
-                width: 50, height: 50, borderRadius: 15, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 23, background: `${primary}16`, border: `1px solid ${primary}30`,
-              }}>{statIcon(label)}</span>
-              <div style={{ fontSize: 'clamp(30px,4.2vw,40px)', fontWeight: 900, color: primary, letterSpacing: '-1px', lineHeight: 1.1 }}>{s.value}</div>
-              <div style={{ fontSize: 14, color: MUTED, fontWeight: 700 }}>{label}</div>
-            </div>
-          )
-        })}
+    <section style={{ position: 'relative', overflow: 'hidden', background: 'var(--mjs-secondary)', padding: 'clamp(64px,9vw,104px) clamp(20px,5vw,24px)', direction: 'rtl' }}>
+      <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: `radial-gradient(600px 280px at 85% 0%, ${primary}38, transparent 70%), radial-gradient(500px 260px at 10% 100%, ${primary}24, transparent 70%)` }} />
+      <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: .35, backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px)', backgroundSize: '120px 100%' }} />
+      <div className="mjs-stats-grid" style={{ position: 'relative', maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: `repeat(${Math.min(items.length, 4)},minmax(0,1fr))`, gap: 0 }}>
+        {items.map((s, i) => (
+          <div key={i} className="mjs-stat" style={{
+            padding: 'clamp(14px,2.4vw,22px) clamp(14px,2.6vw,28px)', textAlign: 'right',
+            borderInlineStart: i > 0 ? '1px solid rgba(255,255,255,.14)' : 'none',
+          }}>
+            <div data-count="" className="mjs-stat-num" style={{ fontSize: 'clamp(40px,5.6vw,64px)', fontWeight: 900, letterSpacing: '-2px', lineHeight: 1.05 }}>{s.value}</div>
+            <div style={{ fontSize: 'clamp(13.5px,1.5vw,15px)', color: 'rgba(255,255,255,.66)', fontWeight: 700, marginTop: 10 }}>{String(s?.label || '')}</div>
+          </div>
+        ))}
       </div>
     </section>
   )
@@ -587,11 +638,13 @@ function GalleryBlock({ block, primary }: { block: SiteBlock; primary: string })
   const imgs: string[] = Array.isArray(props.images) ? props.images.filter(Boolean) : []
   const total = Math.max(1, Math.min(48, Number(props.total) || 9))
   const perSlide = Math.max(1, Math.min(6, Number(props.perSlide) || 3))
+  // پوستهٔ نسلِ ۲ — بخشِ خالی روی سایتِ منتشرشده رندر نمی‌شود (جعبهٔ «هنوز … نداریم» امضای قالبِ پیش‌ساخته بود).
+  if (imgs.length === 0) return null
   return (
     <section id="gallery" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
-        <GallerySlider images={imgs.slice(0, total)} perSlide={perSlide} primary={primary} placeholders={total} />
+        <GallerySlider images={imgs.slice(0, total)} perSlide={perSlide} primary={primary} />
       </div>
     </section>
   )
@@ -614,6 +667,25 @@ function TestimonialsBlock({ block, primary, ownerPhone, slug }: { block: SiteBl
     : []
   // دستی‌ها اول، سپس واقعی‌ها.
   const quotes: Quote[] = [...manual, ...real]
+
+  // پوستهٔ نسلِ ۲ — بدونِ هیچ نظری: چیدمانِ دوستونه (دعوت + فرم) به‌جای یک فرمِ تنهای وسطِ بخشِ خالی.
+  if (quotes.length === 0) {
+    if (!(allowSubmit && slug)) return null
+    return (
+      <section id="reviews" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
+        <div className="mjs-about" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', gap: 'clamp(28px,5vw,64px)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 320px', position: 'relative' }}>
+            <div aria-hidden style={{ position: 'absolute', top: -40, right: -8, fontSize: 180, lineHeight: 1, fontWeight: 900, color: `${primary}1c`, pointerEvents: 'none' }}>”</div>
+            <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+            <p style={{ fontSize: 'clamp(15px,1.7vw,17px)', lineHeight: 2.1, color: 'var(--mjs-text)', margin: 0, maxWidth: 440 }}>
+              تجربهٔ همکاری با ما را بنویسید — نظرِ شما پس از تأیید این‌جا منتشر می‌شود و به دیگران در انتخاب کمک می‌کند.
+            </p>
+          </div>
+          <div style={{ flex: '1 1 360px', minWidth: 0 }}><ReviewForm slug={slug} primary={primary} /></div>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section id="reviews" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
@@ -660,16 +732,19 @@ function CtaBlock({ block, primary }: { block: SiteBlock; primary: string }) {
         position: 'absolute', inset: 0, pointerEvents: 'none',
         background: `radial-gradient(460px 300px at 85% 15%, ${primary}33, transparent 70%), radial-gradient(420px 300px at 10% 90%, rgba(255,255,255,.10), transparent 70%)`,
       }} />
+      {/* پوستهٔ نسلِ ۲ — لبهٔ درخشانِ چرخان (conic + @property) دورِ پنل؛ مرورگرِ بی‌پشتیبان: لبهٔ ثابت */}
+      <div className="mjs-glow-border" style={{ position: 'relative', maxWidth: 824, margin: '0 auto', padding: 2, borderRadius: 32, background: `conic-gradient(from var(--mjs-a, 0deg), transparent 0deg, ${primary} 70deg, #fff 110deg, transparent 170deg, transparent 360deg)` }}>
       <div style={{
         position: 'relative', maxWidth: 820, margin: '0 auto',
-        background: 'rgba(12,9,6,.30)', backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255,255,255,.16)', borderRadius: 30,
+        background: 'color-mix(in srgb, var(--mjs-secondary) 88%, transparent)', backdropFilter: 'blur(10px)',
+        border: '1px solid rgba(255,255,255,.10)', borderRadius: 30,
         padding: 'clamp(36px,6vw,60px) clamp(22px,5vw,48px)',
         boxShadow: '0 34px 90px -40px rgba(0,0,0,.75)',
       }}>
         <h2 style={{ fontSize: 'clamp(26px,4vw,40px)', fontWeight: 900, color: '#fff', margin: '0 0 14px', letterSpacing: '-0.8px', lineHeight: 1.25 }}>{props.heading}</h2>
         {props.subheading ? <p style={{ fontSize: 'clamp(15px,2vw,18px)', color: 'rgba(255,255,255,0.78)', margin: '0 0 34px', lineHeight: 1.9 }}>{props.subheading}</p> : null}
         {props.buttonText ? <a href={props.buttonLink || '#'} className="mjs-btn" style={{ display: 'inline-block', padding: '15px 42px', background: '#fff', borderRadius: 999, fontSize: 16, fontWeight: 800, color: '#15110b', textDecoration: 'none', boxShadow: '0 18px 44px -16px rgba(0,0,0,.65)' }}>{props.buttonText}</a> : null}
+      </div>
       </div>
     </section>
   )
@@ -830,8 +905,10 @@ function FooterBlock({ block, primary, ownerName, slug }: { block: SiteBlock; pr
           ) : null}
         </div>
 
+        {/* پوستهٔ نسلِ ۲ — نامِ برند به‌صورتِ واژهٔ غول‌پیکرِ توخالی (امضای سایت‌های مدرن) */}
+        <div aria-hidden style={{ fontSize: 'clamp(54px,13vw,170px)', fontWeight: 900, lineHeight: .95, letterSpacing: '-4px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', margin: '12px 0 20px', color: 'transparent', WebkitTextStroke: `1px color-mix(in srgb, ${primary} 45%, transparent)`, backgroundImage: `linear-gradient(180deg, color-mix(in srgb, ${primary} 22%, transparent), transparent 85%)`, WebkitBackgroundClip: 'text', backgroundClip: 'text' }}>{brand}</div>
         <div style={{ borderTop: '1px solid rgba(255,255,255,.10)', paddingTop: 22, textAlign: 'center' }}>
-          <span style={{ fontSize: 12.5, color: '#7a7062' }}>{copyright}</span>
+          <span style={{ fontSize: 12.5, color: '#8a8070' }}>{copyright}</span>
         </div>
       </div>
     </footer>
@@ -912,6 +989,8 @@ async function TeamBlock({ block, primary, ownerPhone, slug }: { block: SiteBloc
   const sel = Array.isArray(props.members) ? (props.members as string[]) : null
   let people = ownerPhone ? await getTeamMembers(ownerPhone) : []
   if (sel) people = people.filter(m => sel.includes(m.phone))
+  // پوستهٔ نسلِ ۲ — بخشِ خالی روی سایتِ منتشرشده رندر نمی‌شود (جعبهٔ «هنوز … نداریم» امضای قالبِ پیش‌ساخته بود).
+  if (people.length === 0) return null
   return (
     <section id="team" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -935,6 +1014,8 @@ async function CatalogBlock({ block, primary, ownerPhone, slug: siteSlug }: { bl
   const data = ownerPhone ? await shopProductsOf(ownerPhone) : null
   const count = Math.max(3, Math.min(24, Number(props.count) || 12))
   const products = (data?.products || []).slice(0, count)
+  // پوستهٔ نسلِ ۲ — بخشِ خالی روی سایتِ منتشرشده رندر نمی‌شود (جعبهٔ «هنوز … نداریم» امضای قالبِ پیش‌ساخته بود).
+  if (products.length === 0) return null
   const fa = (n: number) => n.toLocaleString('fa-IR')
   const money = (t: number) => t >= 1e9 ? `${fa(Math.round(t / 1e8) / 10)} میلیارد` : t >= 1e6 ? `${fa(Math.round(t / 1e5) / 10)} میلیون` : fa(t)
   return (
@@ -1013,6 +1094,25 @@ const SECTION_ANCHORS: Record<string, { id: string; label: string }> = {
   catalog: { id: 'catalog', label: 'محصولات' }, pricelist: { id: 'pricelist', label: 'نرخِ روز' },
   testimonials: { id: 'reviews', label: 'نظرات' }, contact: { id: 'contact', label: 'تماس' },
 }
+// پوستهٔ نسلِ ۲ — نوارِ متحرکِ خدماتِ واقعیِ سایت زیرِ هیرو (الگوی سایت‌های مدرنِ Framer/Webflow).
+// محتوا دوبار پشتِ هم تا حلقه بی‌درز باشد؛ جهتِ ltr فقط برای حرکت، متن‌ها همچنان فارسی.
+function Marquee({ items, primary }: { items: string[]; primary: string }) {
+  const row = (k: string) => (
+    <div key={k} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }} aria-hidden={k === 'b'}>
+      {items.map((t, i) => (
+        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 'clamp(18px,3vw,34px)', paddingInline: 'clamp(9px,1.5vw,17px)', fontSize: 'clamp(17px,2.4vw,26px)', fontWeight: 900, letterSpacing: '-.4px', whiteSpace: 'nowrap', color: i % 2 ? 'transparent' : 'var(--mjs-heading)', WebkitTextStroke: i % 2 ? '1.2px color-mix(in srgb, var(--mjs-heading) 55%, transparent)' : undefined }}>
+          {t}<span style={{ color: primary, fontSize: '0.7em', WebkitTextStroke: 0 }}>✦</span>
+        </span>
+      ))}
+    </div>
+  )
+  return (
+    <div className="mjs-marquee" style={{ direction: 'ltr', overflow: 'hidden', background: 'var(--mjs-bg)', borderBottom: '1px solid color-mix(in srgb, var(--mjs-text) 10%, transparent)', padding: 'clamp(16px,2.4vw,24px) 0', WebkitMaskImage: 'linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)', maskImage: 'linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)' }}>
+      <div className="mjs-marquee-track" style={{ display: 'flex', width: 'max-content', direction: 'rtl' }}>{row('a')}{row('b')}</div>
+    </div>
+  )
+}
+
 function SectionNav({ page, primary }: { page: SitePage; primary: string }) {
   const items: { id: string; label: string }[] = []
   for (const b of page.blocks) {
@@ -1143,12 +1243,12 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
       <style>{`
         /* ناوبریِ موبایلِ ملک‌جت روی سایتِ منتشرشده دیده نشود — هر سایت منوی خودش را دارد. */
         .mj-bottom-nav{display:none !important}
+        /* دستیارِ ✦ِ خودِ ملک‌جت روی سایتِ شخصیِ کاربر جایی ندارد (شلوغی + حسِ «سایتِ قالبی») */
+        .mj-ai-btn{display:none !important}
         .mjs-card{transition:transform .22s ease, box-shadow .22s ease}
         .mjs-card:hover{transform:translateY(-5px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-btn{transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease}
         .mjs-btn:hover{transform:translateY(-2px);opacity:.94}
-        .mjs-navlink{transition:background .18s ease, color .18s ease}
-        .mjs-navlink:hover{background:${primary}1f;color:${primary}}
         .mjs-flink{transition:color .18s ease, padding .18s ease}
         .mjs-flink:hover{color:${primary};padding-right:5px}
         .mjs-fsocial{transition:transform .18s ease, background .18s ease, color .18s ease, border-color .18s ease}
@@ -1166,22 +1266,68 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
         .mjs-subnav-link{transition:background .18s ease, color .18s ease, border-color .18s ease}
         .mjs-subnav-link:hover{background:${primary}1a;color:${primary};border-color:${primary}55}
         @media(max-width:680px){.mjs-contact-grid{grid-template-columns:1fr !important}}
-        /* فاز ۲۹۷ق۲ — حرکت و عمق (مثلِ سایت‌های مدرن): ورودِ نرمِ هیرو، شناوریِ هاله‌ها،
-           و ظاهرشدنِ سکشن‌ها هنگامِ اسکرول (فقط مرورگرهای پشتیبان؛ بقیه ثابتِ سالم). */
+        /* ═══ پوستهٔ نسلِ ۲ — حرکت و جزئیات (همهٔ سایت‌ها، بدونِ بازسازی) ═══
+           ظاهرشدنِ بخش‌ها دیگر با animation-timeline نیست (سافاریِ آیفون نداشت ← سایتِ بی‌حرکت)؛
+           SiteMotion با IntersectionObserver کلاسِ mjs-in می‌دهد. پنهان‌بودنِ پیش از ورود فقط زیرِ
+           html.mjs-js است ← بدونِ JS (خزنده/سئو) محتوا کامل دیده می‌شود. ورود با animation و
+           fill=backwards تا transformِ هاورِ کارت‌ها بعدِ ورود آزاد بماند. */
         @keyframes mjsUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+        @keyframes mjsRise{from{opacity:0;transform:translate3d(0,38px,0) scale(.975)}to{opacity:1;transform:none}}
+        @keyframes mjsMask{from{opacity:0;clip-path:inset(0 0 100% 0);transform:translateY(.45em)}to{opacity:1;clip-path:inset(-25% -5% -25% -5%);transform:none}}
+        @keyframes mjsWord{from{opacity:0;transform:translateY(.7em) rotate(2deg);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
         @keyframes mjsGlowFloat{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(0,-16px,0) scale(1.04)}}
+        @keyframes mjsAurora1{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(12%,8%) scale(1.15)}66%{transform:translate(-6%,14%) scale(.92)}}
+        @keyframes mjsAurora2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-14%,-10%) scale(1.2)}}
+        @keyframes mjsFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+        @keyframes mjsMarquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+        @keyframes mjsCue{0%{transform:translateY(0);opacity:0}30%{opacity:1}100%{transform:translateY(12px);opacity:0}}
+        @keyframes mjsSpin{to{--mjs-a:360deg}}
+        @property --mjs-a{syntax:'<angle>';inherits:false;initial-value:0deg}
+        .mjs-progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:300;transform:scaleX(0);transform-origin:100% 50%;background:linear-gradient(270deg,${primary},color-mix(in srgb,${primary} 40%,#fff));pointer-events:none}
         @media (prefers-reduced-motion: no-preference){
+          html.mjs-js [data-r]:not(.mjs-in){opacity:0}
+          html.mjs-js [data-r].mjs-in{animation:mjsRise .95s cubic-bezier(.16,1,.3,1) var(--d,0s) backwards}
+          html.mjs-js [data-r="mask"].mjs-in{animation-name:mjsMask;animation-duration:1.05s}
+          .mjs-w{display:inline-block;animation:mjsWord .9s cubic-bezier(.16,1,.3,1) calc(var(--i) * 75ms + .12s) backwards}
           .mjs-hero-badge{animation:mjsUp .55s cubic-bezier(.2,.7,.2,1) both}
-          .mjs-hero-h1{animation:mjsUp .7s .06s cubic-bezier(.2,.7,.2,1) both}
-          .mjs-hero-trust{animation:mjsUp .8s .16s cubic-bezier(.2,.7,.2,1) both}
+          .mjs-hero-sub{animation:mjsUp .8s .45s cubic-bezier(.2,.7,.2,1) both}
+          .mjs-hero-ctas{animation:mjsUp .8s .6s cubic-bezier(.2,.7,.2,1) both}
+          .mjs-hero-trust{animation:mjsUp .8s .75s cubic-bezier(.2,.7,.2,1) both}
+          .mjs-hero-visual{animation:mjsRise 1.2s .3s cubic-bezier(.16,1,.3,1) both}
           .mjs-hero-glow{animation:mjsGlowFloat 11s ease-in-out infinite}
-          @supports (animation-timeline: view()){
-            main.mjs-site-main>section:not(:first-of-type){
-              animation:mjsUp .8s cubic-bezier(.2,.7,.2,1) both;
-              animation-timeline:view();animation-range:entry 0% entry 32%;
-            }
-          }
+          .mjs-aurora>i:nth-child(1){animation:mjsAurora1 18s ease-in-out infinite}
+          .mjs-aurora>i:nth-child(2){animation:mjsAurora2 22s ease-in-out infinite}
+          .mjs-aurora>i:nth-child(3){animation:mjsAurora1 26s ease-in-out infinite reverse}
+          .mjs-float{animation:mjsFloat 6s ease-in-out infinite}
+          .mjs-float-2{animation:mjsFloat 7.5s 1.2s ease-in-out infinite}
+          .mjs-marquee-track{animation:mjsMarquee 38s linear infinite}
+          .mjs-cue i{animation:mjsCue 1.8s ease-in-out infinite}
+          .mjs-glow-border{animation:mjsSpin 7s linear infinite}
         }
+        .mjs-marquee:hover .mjs-marquee-track{animation-play-state:paused}
+        /* خطِ زیرِ تیترِ بخش‌ها با ورود «کشیده» می‌شود */
+        .mjs-h-line{transform-origin:100% 50%;transition:transform 1.1s .25s cubic-bezier(.16,1,.3,1)}
+        html.mjs-js [data-r="mask"]:not(.mjs-in)+.mjs-h-line{transform:scaleX(0)}
+        /* نورِ دنبال‌کنندهٔ نشانگر روی کارت‌ها + لبهٔ درخشان */
+        @media (hover:hover){
+          .mjs-card,.mjs-slide-card,.mjsl-card{position:relative}
+          .mjs-card::after,.mjs-slide-card::after,.mjsl-card::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .35s ease;background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,${primary} 16%,transparent),transparent 62%);z-index:1}
+          .mjs-card:hover::after,.mjs-slide-card:hover::after,.mjsl-card:hover::after{opacity:1}
+          .mjs-card:hover,.mjs-slide-card:hover{box-shadow:0 28px 60px -28px rgba(20,16,10,.6),0 0 0 1px color-mix(in srgb,${primary} 35%,transparent) !important}
+        }
+        /* دکمه‌ها: برقِ عبوری روی هاور */
+        .mjs-btn{position:relative;overflow:hidden;isolation:isolate}
+        .mjs-btn::after{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.38) 50%,transparent 70%);transform:translateX(120%);transition:transform .8s cubic-bezier(.16,1,.3,1)}
+        .mjs-btn:hover::after{transform:translateX(-120%)}
+        /* هدر: با اسکرول فشرده‌تر و شیشه‌ای‌تر */
+        .mjs-nav{transition:background .3s ease, box-shadow .3s ease}
+        .mjs-nav>div{transition:min-height .3s ease}
+        main.mjs-scrolled .mjs-nav{background:color-mix(in srgb,var(--mjs-bg) 78%,transparent) !important;box-shadow:0 14px 40px -28px rgba(20,16,10,.8) !important}
+        main.mjs-scrolled .mjs-nav>div{min-height:58px !important}
+        .mjs-stat-num{background:linear-gradient(135deg,#fff,color-mix(in srgb,${primary} 55%,#fff));-webkit-background-clip:text;background-clip:text;color:transparent}
+        .mjs-grad-word{background:linear-gradient(100deg,color-mix(in srgb,${primary} 55%,#fff),${primary} 60%,color-mix(in srgb,${primary} 70%,#fff));-webkit-background-clip:text;background-clip:text;color:transparent}
+        @media(max-width:899px){.mjs-hero-grid{grid-template-columns:1fr !important}.mjs-hero-visual{max-width:440px;margin-inline:auto;width:100%}}
+        @media(max-width:640px){#hero{min-height:auto !important;padding-top:64px !important;padding-bottom:72px !important}.mjs-hero-card{display:none !important}.mjs-hero-visual.mjs-hero-portrait{max-width:300px}.mjs-cue{display:none !important}}
         /* فاز ۲۹۷ط — منوی پایینِ موبایل فقط زیرِ ۷۲۰px دیده می‌شود؛ جا برای آن ته صفحه باز می‌شود */
         @media(max-width:719px){
           .mjs-bottom-bar{display:flex !important}
@@ -1189,12 +1335,16 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
         }
         @media(max-width:680px){
           .mjs-grid-3,.mjs-grid-4{grid-template-columns:1fr !important}
+          .mjs-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;row-gap:22px !important}
+          .mjs-stat{border-inline-start:none !important}
           .mjs-search-row{flex-direction:column !important}
           .mjs-contact-fields{grid-template-columns:1fr !important}
           .mjs-about{flex-direction:column !important}
           .mjs-footer-grid{grid-template-columns:1fr !important}
         }
       `}</style>
+      <div className="mjs-progress" aria-hidden />
+      <SiteMotion />
       <NavBar brand={site.title} items={menuPages(site)} currentSlug={currentSlug || ''} siteSlug={site.slug} primary={primary} />
       {children}
       {footerBlocks.map(block => renderBlock(block, primary, site.ownerName, site.owner, site.slug))}
@@ -1223,7 +1373,8 @@ export async function SiteShell({ site, page }: { site: Site; page: SitePage }) 
     for (const b of pg?.blocks || []) if (b.type === 'about') { const im = String((b.props as any)?.image || '').trim(); if (im) return im }
     return ''
   }
-  const avatar = aboutImgOf(page) || aboutImgOf(home)
+  // پرترهٔ هیرو: عکسِ بلوکِ «درباره» از صفحهٔ فعلی، خانه، یا هر صفحهٔ دیگرِ سایت (معمولاً صفحهٔ «درباره ما»).
+  const avatar = aboutImgOf(page) || aboutImgOf(home) || site.pages.map(aboutImgOf).find(Boolean) || ''
   // فاز ۲۹۷ق۳ — عکس‌های واقعیِ خودِ سایت برای هیروی سینمایی: گالری + کارت‌های پروژه (services با image).
   const heroImages: string[] = []
   const seenImg = new Set<string>()
@@ -1239,6 +1390,14 @@ export async function SiteShell({ site, page }: { site: Site; page: SitePage }) 
     }
     if (heroImages.length >= 5) break
   }
+  // پوستهٔ نسلِ ۲ — عنوانِ خدماتِ واقعیِ خودِ سایت: کارتِ پروفایلِ هیرو + نوارِ متحرکِ زیرِ هیرو.
+  const highlights: string[] = []
+  for (const pg of [page, home]) for (const b of pg?.blocks || []) {
+    if (b.type !== 'services') continue
+    for (const it of (Array.isArray((b.props as any)?.items) ? (b.props as any).items : [])) {
+      const t = String(it?.title || '').trim(); if (t && !highlights.includes(t)) highlights.push(t)
+    }
+  }
   const contactHref = page.blocks.some(b => b.type === 'contact')
     ? '#contact'
     : site.pages.some(pg => pg.slug === 'contact') ? `/${encodeURIComponent(site.slug)}/contact` : ''
@@ -1247,6 +1406,8 @@ export async function SiteShell({ site, page }: { site: Site; page: SitePage }) 
     avatar, views, reviewsCount, reviewsAvg, memberYear, contactHref,
     showStats: page.slug === 'home' || page === home,
     heroImages: heroImages.slice(0, 5),
+    brand: site.ownerName || site.title,
+    highlights,
   }
 
   const heroIdx = page.blocks.findIndex(b => b.type === 'hero')
@@ -1257,6 +1418,7 @@ export async function SiteShell({ site, page }: { site: Site; page: SitePage }) 
       {page.blocks.map((block, i) => (
         <Fragment key={block.id}>
           {renderBlock(block, primary, site.ownerName, site.owner, site.slug, extras)}
+          {i === heroIdx && highlights.length >= 3 ? <Marquee items={highlights} primary={primary} /> : null}
           {i === heroIdx ? <SectionNav page={page} primary={primary} /> : null}
         </Fragment>
       ))}

@@ -39,8 +39,10 @@ export default function NavBar({
         }
         .mjs-nav-panel{overflow:hidden;max-height:0;opacity:0;transition:max-height .26s ease, opacity .2s ease}
         .mjs-nav-panel.open{max-height:80vh;opacity:1}
-        .mjs-navlink{transition:background .18s ease, color .18s ease}
-        .mjs-navlink:hover{background:${primary}1f;color:${primary}}
+        .mjs-navlink{transition:color .18s ease}
+        .mjs-navlink::after{content:'';position:absolute;right:14px;left:14px;bottom:4px;height:2px;border-radius:2px;background:${primary};transform:scaleX(0);transform-origin:100% 50%;transition:transform .35s cubic-bezier(.16,1,.3,1)}
+        .mjs-navlink:hover{color:${primary}}
+        .mjs-navlink:hover::after,.mjs-navlink.on::after{transform:scaleX(1)}
       `}</style>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 18, minHeight: 64 }}>
@@ -57,19 +59,30 @@ export default function NavBar({
         </a>
 
         {/* آیتم‌های افقیِ دسکتاپ */}
-        <div className="mjs-nav-inline" style={{ alignItems: 'center', gap: 4, flex: '1 1 auto', justifyContent: 'flex-start' }}>
-          {items.map(it => {
+        {/* پوستهٔ نسلِ ۲ — صفحهٔ فعال با خطِ زیرینِ برند (نه قرصِ توپُرِ قالبی)؛ «تماس» دکمهٔ اصلیِ انتهای نوار. */}
+        <div className="mjs-nav-inline" style={{ alignItems: 'center', gap: 2, flex: '1 1 auto', justifyContent: 'flex-start' }}>
+          {items.filter(it => it.slug !== 'contact').map(it => {
             const active = it.slug === currentSlug
             return (
-              <a key={it.slug} href={hrefOf(it)} className="mjs-navlink" style={{
-                fontSize: 14, fontWeight: active ? 800 : 600, textDecoration: 'none', whiteSpace: 'nowrap',
-                color: active ? '#fff' : 'var(--mjs-text)',
-                background: active ? primary : 'transparent',
-                padding: '9px 16px', borderRadius: 10,
+              <a key={it.slug} href={hrefOf(it)} className={`mjs-navlink${active ? ' on' : ''}`} style={{
+                fontSize: 14.5, fontWeight: active ? 800 : 600, textDecoration: 'none', whiteSpace: 'nowrap',
+                color: active ? 'var(--mjs-heading)' : 'var(--mjs-text)',
+                padding: '10px 14px', borderRadius: 10, position: 'relative',
               }}>{it.label}</a>
             )
           })}
         </div>
+        {(() => {
+          const c = items.find(it => it.slug === 'contact')
+          return c ? (
+            <a href={hrefOf(c)} className="mjs-nav-inline mjs-btn" style={{
+              alignItems: 'center', gap: 8, flex: '0 0 auto', padding: '11px 20px', borderRadius: 999,
+              fontSize: 14, fontWeight: 800, color: '#fff', textDecoration: 'none', whiteSpace: 'nowrap',
+              background: `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 70%, var(--mjs-secondary)))`,
+              boxShadow: `0 10px 24px -12px ${primary}`,
+            }}>{c.label}<span aria-hidden>←</span></a>
+          ) : null
+        })()}
 
         {/* دکمهٔ همبرگری موبایل */}
         <button
