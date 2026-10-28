@@ -1163,7 +1163,7 @@ export async function phoneConflicts(): Promise<{ phone: string; legit: boolean;
 }
 
 /** ویرایشِ مشاور بدونِ حذف‌وساخت — حذف سابقهٔ فایل‌ها را از بین می‌برد. */
-export async function editAdvisor(id: string, key: string, patch: { name?: string; phone?: string }): Promise<{ ok: boolean; error?: string; moved?: number }> {
+export async function editAdvisor(id: string, key: string, patch: { name?: string; phone?: string }): Promise<{ ok: boolean; error?: string; moved?: number; queued?: boolean }> {
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد' }
   const rec = scrape.advisors.find(a => a.key === key)
@@ -1175,6 +1175,19 @@ export async function editAdvisor(id: string, key: string, patch: { name?: strin
     if (newPhone && !/^0\d{10}$/.test(newPhone)) return { ok: false, error: 'شمارهٔ معتبر نیست (۱۱ رقم، با ۰ شروع شود)' }
   }
   const oldPhone = rec.phone || ''
+  // فاز ۳۳۶ز — باگِ زنده: تعیینِ شمارهٔ «اولِ» یک مشاورِ بدونِ‌حساب از راهِ «ویرایش» فقط ردیف را
+  // به‌روز می‌کرد (phone/owner) ولی نه حساب می‌ساخت و نه آگهی‌ها را منتقل/منتشر می‌کرد — چون انتقالِ
+  // فایل فقط وقتی oldPhone وجود داشت اجرا می‌شد، و adminUpdate حسابِ تازه نمی‌سازد. نتیجه: مشاور در
+  // «کاربران» نمی‌آمد و آگهی‌هایش دیده نمی‌شد. درست: شمارهٔ اول = «ساختِ حساب» (graduate) که حساب را
+  // می‌سازد + آگهی‌ها را منتقل و منتشر می‌کند (همان مسیرِ تست‌شدهٔ دکمهٔ «ساخت حساب»).
+  if (newPhone && !oldPhone) {
+    // اگر نام هم همراهِ شماره آمده، اول روی ردیف بنشان تا حسابِ ساخته‌شده نامِ درست بگیرد.
+    if (patch.name != null && patch.name.trim() && patch.name.trim() !== rec.name) {
+      await patchScrape(id, { advisors: scrape.advisors.map(a => a.key !== key ? a : { ...a, name: patch.name!.trim() }) } as any)
+    }
+    const g = await enqueueGraduate(id, key, newPhone, 'advisor')
+    return g.ok ? { ok: true, queued: true, moved: 0 } : { ok: false, error: g.error }
+  }
   let moved = 0
   if (newPhone !== undefined && oldPhone && newPhone !== oldPhone) {
     try {
