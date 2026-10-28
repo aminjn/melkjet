@@ -15,11 +15,13 @@ import TileBase from '@/app/components/TileBase'
 import NeighborhoodPicker from '@/app/components/NeighborhoodPicker'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 import { readLoc } from '@/app/components/LocationDetector'
-import { readCity } from '@/app/components/CitySelector'
+import { readCity, writeCity } from '@/app/components/CitySelector'
+import { canonCity } from '@/app/lib/city-name'
 import { openAuth } from '@/app/components/AuthModal'
 import { PROPERTY_KINDS } from '@/app/lib/taxonomy'
 import { listingHref } from '@/app/lib/listing-url'
 import { hoodPartOf, trustedMapCenter } from '@/app/lib/map-pins'
+import { parsePoly, encodePoly, canonSpecQs, specLabel, hoodMatch, type LatLng } from '@/app/lib/search-query'
 // فاز ۲۰۴: استخراج/فیلترِ آگهی حالا در کتابخانهٔ مشترکِ listing-search است —
 // همان منطقی که /api/map/clusters روی کلِ استخر اجرا می‌کند (نقشه و کارت‌ها هم‌زبان).
 import { parseQuery, deriveListing, effectiveFiltersOf, matchesListing } from '@/app/lib/listing-search'
@@ -141,6 +143,10 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const [pricedOnly, setPricedOnly] = useState(searchParams.get('priced') === '1')
   const [photoOnly, setPhotoOnly] = useState(searchParams.get('photo') === '1')
   const [advertiser, setAdvertiser] = useState<string>(searchParams.get('adv') || '')
+  // فاز د — «محدوده را روی نقشه بکش» (زیلو/رایت‌موو): چندضلعی در URL (poly) تا قابلِ اشتراک و ذخیره باشد.
+  // شناسه‌های درونِ محدوده را سرور (همان موتورِ نقشه) می‌دهد تا کارت‌ها و پین‌ها دقیقاً یکی باشند.
+  const [poly, setPoly] = useState<LatLng[] | null>(() => parsePoly(searchParams.get('poly')))
+  const [polyIds, setPolyIds] = useState<Set<string> | null>(null)
   // «جدیدترین» قدیمی (که در واقع سالِ ساخت را مرتب می‌کرد) به «جدیدترین آگهی» نگاشت می‌شود.
   const [sortBy, setSortBy] = useState(() => { const v = searchParams.get('sort') || 'پیشنهاد ملک‌جت'; return v === 'جدیدترین' ? 'جدیدترین آگهی' : v })
   const [hood, setHood] = useState(searchParams.get('hood') || '')   // فیلترِ محله (انتخابِ کاربر)
@@ -154,6 +160,9 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [selectedCity, setSelectedCity] = useState(initialCity)
   useEffect(() => {
+    // فاز د — شهرِ داخلِ URL (لینکِ جستجوی ذخیره‌شده) کوکی را هم‌سو می‌کند تا انتخابگرِ هدر و نتایج یکی باشند.
+    const urlCity = canonCity(searchParams.get('city'))
+    if (urlCity && urlCity !== readCity()) writeCity(urlCity)
     const upd = () => {
       const l = readLoc()
       setUserArea(l?.neighborhood || '')
@@ -214,7 +223,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   }, [selectedCity, dealType, fresh180])
 
   // با هر تغییرِ نتیجه‌ها از اول ۲۴ تا؛ نگهبانِ انتهای لیست خودکار ۲۴ تای بعدی را می‌آورد
-  useEffect(() => { setVisN(24) }, [dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, searchTerm, selectedCity, pricedOnly, photoOnly, advertiser, sortBy])
+  useEffect(() => { setVisN(24) }, [dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, searchTerm, selectedCity, pricedOnly, photoOnly, advertiser, sortBy, poly])
   // فاز ۱۷۸ (فیدبک: «۲۵ تا نشان می‌دهد و بقیه گیر می‌کند») — observer با effectِ یک‌باره وصل می‌شد
   // ولی نگهبانِ انتهای لیست آن لحظه هنوز رندر نشده بود (داده نیامده بود) → هرگز وصل نمی‌شد.
   // callback-ref هر بار که نگهبان واقعاً در DOM بیاید/برود، observer را وصل/قطع می‌کند.
@@ -250,13 +259,14 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       if (pricedOnly) p.set('priced', '1')
       if (photoOnly) p.set('photo', '1')
       if (advertiser) p.set('adv', advertiser)
+      if (poly) p.set('poly', encodePoly(poly))
       if (sortBy !== 'پیشنهاد ملک‌جت') p.set('sort', sortBy)
       if (nearMe) p.set('near', '1')
       const qs = p.toString()
       try { window.history.replaceState(null, '', '/search' + (qs ? `?${qs}` : '')) } catch { /* URL sync اختیاری */ }
     }, 250)
     return () => clearTimeout(t)
-  }, [searchTerm, dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, hood, sortBy, nearMe, pricedOnly, photoOnly, advertiser])
+  }, [searchTerm, dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, hood, sortBy, nearMe, pricedOnly, photoOnly, advertiser, poly])
   // 🧠 فاز ۱۸۹ — رویدادِ جستجو بالاخره ثبت می‌شود (ML هرگز رفتارِ جستجو را نمی‌دید و کوئستِ «جستجو بزن»
   // غیرقابلِ‌انجام بود): جستجوی معنادار بعدِ آرام‌شدنِ تایپ، هر امضای یکتا فقط یک‌بار در این بازدید.
   const searchedSigs = useRef<Set<string>>(new Set())
@@ -284,7 +294,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     (dealType !== 'خرید' ? 1 : 0) + (kind ? 1 : 0) + (beds !== 'همه' ? 1 : 0) +
     (priceMin > 0 ? 1 : 0) + (priceMax < PRICE_MAX ? 1 : 0) + (areaMin > 0 ? 1 : 0) + (areaMax > 0 ? 1 : 0) +
     (floorMin > 0 ? 1 : 0) + (yearMin > 0 ? 1 : 0) + checkedAmenities.length +
-    (pricedOnly ? 1 : 0) + (photoOnly ? 1 : 0) + (advertiser ? 1 : 0)
+    (pricedOnly ? 1 : 0) + (photoOnly ? 1 : 0) + (advertiser ? 1 : 0) + (poly ? 1 : 0)
 
   // فاز ۲۰۴: همان منطقِ مشترکِ listing-search (فیلترِ دستی اولویت دارد، وگرنه تشخیصِ متن؛
   // predicate عیناً همان فاز ۱۷۷/۱۵۱) — سرورِ نقشه هم دقیقاً همین را روی کلِ استخر اجرا می‌کند.
@@ -296,8 +306,8 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       areaMin, areaMax, floorMin, yearMin, amenities: checkedAmenities,
       pricedOnly, photoOnly, advertiser,
     })
-    return properties.filter(p => matchesListing(p, eff))
-  }, [properties, dealType, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, pricedOnly, photoOnly, advertiser])
+    return properties.filter(p => matchesListing(p, eff) && (!polyIds || polyIds.has(p.id)))
+  }, [properties, dealType, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, pricedOnly, photoOnly, advertiser, polyIds])
 
   // ─── فیلترِ هوشمندِ مکان ──────────────────────────────────────────────────
   // شهر = فیلترِ قطعی (اگر آگهی نبود، خالی نشان می‌دهد؛ هیچ‌وقت آگهیِ شهرِ دیگر را نشان نمی‌دهد).
@@ -321,7 +331,9 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     // دیگر هرگز نتیجه را کم نمی‌کند — فقط در مرتب‌سازی اولویت می‌گیرد (پایین‌تر).
     const area = hood
     const hard = !!hood
-    const inArea = (p: PropertyT) => area ? areaMatch(p.location, area) : true
+    // فاز د — محلهٔ انتخابی با hoodMatchِ مشترک (مرزِ واژه: «ونک» دیگر آگهی‌های «پونک» را نشان نمی‌دهد) —
+    // همان تابعی که نقشه و هشدارِ آگهیِ جدید می‌زنند. areaMatch فقط برای «محلهٔ GPSِ کاربر» (رتبه‌بندیِ نرم) ماند.
+    const inArea = (p: PropertyT) => area ? hoodMatch(p.location, area, city) : true
     // «نزدیکِ من» فعال است وقتی: GPS داریم، شهرِ انتخابی با شهرِ کاربر یکی است،
     // کاربر محله/مکانِ خاصی نخواسته، و خودش خاموشش نکرده.
     const gpsCityOk = !city || !userCity || norm(city) === norm(userCity) || norm(userCity).includes(norm(city)) || norm(city).includes(norm(userCity))
@@ -451,8 +463,18 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     if (pricedOnly) p.set('priced', '1')
     if (photoOnly) p.set('photo', '1')
     if (advertiser) p.set('adv', advertiser)
+    // فاز د — محله و محدودهٔ رسم‌شده هم به نقشه می‌روند (قبلاً نقشه محلهٔ انتخابی را نادیده می‌گرفت).
+    if (hood) p.set('hood', hood)
+    if (poly) p.set('poly', encodePoly(poly))
     return p.toString()
-  }, [dealType, selectedCity, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, pricedOnly, photoOnly, advertiser])
+  }, [dealType, selectedCity, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, pricedOnly, photoOnly, advertiser, hood, poly])
+  // شناسه‌های درونِ محدوده — مستقل از باز بودنِ نقشه (در موبایل نقشه بسته است ولی فهرست باید فیلتر شود).
+  useEffect(() => {
+    if (!poly) { setPolyIds(null); return }
+    let alive = true
+    fetch(`/api/map/clusters?${mapQuery}&zoom=12`).then(r => r.ok ? r.json() : null).then(d => { if (alive && d?.ok) setPolyIds(new Set<string>((d.polyIds || []).map(String))) }).catch(() => {})
+    return () => { alive = false }
+  }, [poly, mapQuery])
 
   // نمای اولیهٔ جایگزین وقتی سرور هیچ نقطه‌ای ندارد (شهرِ بی‌آگهی): مرکزِ geocodeشدهٔ شهر/محله
   const mapView = useMemo(() => (mapCenter ? { center: mapCenter, zoom: 13 } : null), [mapCenter])
@@ -469,7 +491,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     return c
   }, [parsed])
 
-  const resetFilters = () => { setKind(''); setBeds('همه'); setPriceMin(0); setPriceMax(PRICE_MAX); setAreaMin(0); setAreaMax(0); setFloorMin(0); setYearMin(0); setCheckedAmenities([]); setHood(''); setPricedOnly(false); setPhotoOnly(false); setAdvertiser('') }
+  const resetFilters = () => { setKind(''); setBeds('همه'); setPriceMin(0); setPriceMax(PRICE_MAX); setAreaMin(0); setAreaMax(0); setFloorMin(0); setYearMin(0); setCheckedAmenities([]); setHood(''); setPricedOnly(false); setPhotoOnly(false); setAdvertiser(''); setPoly(null) }
 
   const selInput: React.CSSProperties = { height: 36, padding: '0 10px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }
   const lab: React.CSSProperties = { fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 600 }
@@ -647,7 +669,14 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
           {/* روی موبایل نقشه پیش‌فرض نشان داده نمی‌شود (فضای آگهی‌ها را نمی‌گیرد)؛ با دکمهٔ
               شناورِ «نقشه» به‌صورتِ تمام‌صفحه باز می‌شود — مثلِ دیوار. */}
           {/* «آگهی جدید اومد خبرم کن» */}
-          <NotifyBar count={shownProperties.length} criteria={{ city: selectedCity, area: mapArea || prefArea, deal: (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'), kind: kind || parsed.kind || '', priceMax: priceMax < PRICE_MAX ? priceMax : (parsed.budgetMax || 0) }} />
+          {poly && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', marginBottom: 12, borderRadius: 12, border: '1px solid var(--gold)', background: 'var(--goldDim)', fontSize: 12.5, fontWeight: 700 }}>
+              <IconSvg name="ruler" size={15} color="var(--gold)" />
+              <span style={{ flex: 1 }}>فقط آگهی‌های داخلِ محدوده‌ای که روی نقشه کشیدی{polyIds ? ` — ${toPersianDigits(polyIds.size)} مورد` : '…'}</span>
+              <button onClick={() => setPoly(null)} style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✕ حذفِ محدوده</button>
+            </div>
+          )}
+          <NotifyBar qs={mapQuery} count={shownProperties.length} criteria={{ city: selectedCity, area: mapArea || prefArea, deal: (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'), kind: kind || parsed.kind || '', priceMax: priceMax < PRICE_MAX ? priceMax : (parsed.budgetMax || 0) }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--goldText)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span>{poolTotal > properties.length ? <> از <span style={{ fontWeight: 700 }}>{toPersianDigits(poolTotal)}</span></> : null} ملک پیدا شد{selectedCity ? <span style={{ color: 'var(--muted)' }}> · {selectedCity}</span> : ''}</div>
             <div style={{ fontSize: 13, color: 'var(--muted)' }}>مرتب‌سازی: <span style={{ color: 'var(--text)' }}>{sortBy}</span></div>
@@ -744,7 +773,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
         {/* نقشهٔ واقعیِ نشان — فقط دسکتاپ (کنارِ نتایج، چسبان) */}
         <div className="map-panel mjs-map" style={{ position: 'sticky', top: 88, height: 'calc(100vh - 108px)', paddingTop: 20, paddingRight: 12 }}>
           <style>{`@media (max-width: 768px) { .map-panel { display: none !important; } }`}</style>
-          <SearchMap view={mapView} query={mapQuery} city={mapArea || selectedCity || userArea} cityKey={selectedCity} />
+          <SearchMap view={mapView} query={mapQuery} city={mapArea || selectedCity || userArea} cityKey={selectedCity} poly={poly} onPoly={setPoly} />
         </div>
       </main>
 
@@ -760,7 +789,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       {mapOpenMobile && (
         <div className="mjs-mapfull" style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'var(--bg)', display: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, padding: 8 }}>
-            <SearchMap view={mapView} query={mapQuery} city={mapArea || selectedCity || userArea} cityKey={selectedCity} />
+            <SearchMap view={mapView} query={mapQuery} city={mapArea || selectedCity || userArea} cityKey={selectedCity} poly={poly} onPoly={setPoly} />
           </div>
           <button onClick={() => setMapOpenMobile(false)}
             style={{ position: 'fixed', bottom: 84, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'flex', alignItems: 'center', gap: 7, padding: '11px 22px', borderRadius: 999, border: 'none', background: '#e7674a', color: '#fff', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.6)', cursor: 'pointer' }}>
@@ -774,8 +803,11 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
 
 // «آگهی جدید اومد خبرم کن» — ذخیرهٔ جستجو + خبرِ آگهیِ جدید در گفتگوها و پیامک
 type Criteria = { city: string; area: string; deal: 'sale' | 'rent' | 'presale'; kind: string; priceMax: number }
-function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
-  const sig = [criteria.city || '', criteria.area || '', criteria.deal, criteria.kind || '', criteria.priceMax || 0].join('|')
+// فاز د — هشدار حالا «کلِ» جستجوی جاری را ذخیره می‌کند (qs = همان mapQuery: همهٔ فیلترها + محله + محدودهٔ نقشه)،
+// نه فقط شهر/محله/نوع/سقفِ قیمت. امضا با سرور یکی است (canonSpecQs) تا وضعیتِ روشن/خاموش درست خوانده شود.
+function NotifyBar({ count, criteria, qs }: { count: number; criteria: Criteria; qs: string }) {
+  const sig = 'q:' + canonSpecQs(new URLSearchParams(qs))
+  const label = specLabel(new URLSearchParams(qs))
   const [on, setOn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -791,7 +823,7 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
     setBusy(true); setMsg(''); setMsgOk(false)
     const next = !on
     try {
-      const r = await fetch('/api/saved-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: next ? 'add' : 'remove', city: criteria.city, area: criteria.area, deal: criteria.deal, kind: criteria.kind, priceMax: criteria.priceMax, label: [criteria.area, criteria.city].filter(Boolean).join('، ') }) })
+      const r = await fetch('/api/saved-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: next ? 'add' : 'remove', qs, city: criteria.city, area: criteria.area, deal: criteria.deal, kind: criteria.kind, priceMax: criteria.priceMax }) })
       const d = await r.json()
       if (r.status === 401) { setMsg('برای فعال‌کردنِ هشدار وارد شوید…'); openAuth('برای دریافتِ هشدارِ آگهیِ جدید وارد شوید'); return }
       if (d.ok) {
@@ -809,7 +841,7 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
         <IconSvg name="bell" size={18} color="var(--gold)" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 800 }}>آگهی جدید اومد خبرم کن</div>
-          <div className="mjs-notify-desc" style={{ fontSize: 11.5, color: 'var(--muted)' }}>{count > 0 ? `${count.toLocaleString('fa-IR')} ملک در این محدوده — ` : ''}با آمدنِ آگهیِ جدید، در گفتگوها و پیامک خبرت می‌کنیم.</div>
+          <div className="mjs-notify-desc" style={{ fontSize: 11.5, color: 'var(--muted)' }}>{label} — {count > 0 ? `${count.toLocaleString('fa-IR')} ملکِ فعلی؛ ` : ''}آگهیِ جدیدِ مطابق را با نوتیفیکیشن، گفتگو و پیامک خبر می‌دهیم.</div>
         </div>
         <button onClick={toggle} disabled={busy} aria-label="اعلانِ آگهیِ جدید" style={{ position: 'relative', width: 48, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer', background: on ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'var(--line2)', transition: 'background .2s', flexShrink: 0, opacity: busy ? 0.6 : 1 }}>
           <span style={{ position: 'absolute', top: 3, insetInlineStart: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', transition: 'inset-inline-start .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
@@ -841,8 +873,12 @@ const clampZoom = (z: number) => Math.max(9, Math.min(18, z))
 // نقشهٔ تعاملیِ نشان (زوم + جابه‌جایی) با پین‌های قیمتِ آگهی‌ها — مثلِ دیوار
 type MapView = { center: { lat: number; lng: number }; zoom: number } | null
 type MapData = { clusters: { lat: number; lng: number; count: number }[]; singles: { id: string; lat: number; lng: number; deal: string; priceNum: number }[]; total: number }
-function SearchMap({ view, query, city, cityKey }: { view: MapView; query: string; city: string; cityKey: string }) {
+function SearchMap({ view, query, city, cityKey, poly, onPoly }: { view: MapView; query: string; city: string; cityKey: string; poly: LatLng[] | null; onPoly: (p: LatLng[] | null) => void }) {
   const ref = useRef<HTMLDivElement>(null)
+  // فاز د — حالتِ «کشیدنِ محدوده»: درگ به‌جای جابه‌جاییِ نقشه، مسیر می‌کشد؛ رها کردن = بستنِ چندضلعی.
+  const [drawing, setDrawing] = useState(false)
+  const [path, setPath] = useState<{ x: number; y: number }[]>([])
+  const pathRef = useRef<{ x: number; y: number }[] | null>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [iv, setIv] = useState<MapView>(view)
   const [off, setOff] = useState({ x: 0, y: 0 })
@@ -939,14 +975,31 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
     const t = 'touches' in e ? e.touches[0] : (e as React.MouseEvent)
     return { x: t.clientX, y: t.clientY }
   }
-  const onDown = (e: React.MouseEvent | React.TouchEvent) => { const p = pt(e); drag.current = { x: p.x, y: p.y, moved: false }; movedRef.current = false; setActive(null) }
+  // مختصاتِ صفحه → فضای `size` (نقشه با همان نسبت کوچک شده) → lat/lng
+  const toSize = (p: { x: number; y: number }) => { const r = ref.current!.getBoundingClientRect(); return { x: ((p.x - r.left) / r.width) * size.w, y: ((p.y - r.top) / r.height) * size.h } }
+  const sizeToLL = (q: { x: number; y: number }) => { const pc = project(iv!.center.lat, iv!.center.lng, iv!.zoom); return unproject(pc.x + q.x - size.w / 2, pc.y + q.y - size.h / 2, iv!.zoom) }
+  const finishDraw = () => {
+    const pts = pathRef.current || []; pathRef.current = null
+    if (pts.length >= 6 && iv) { touched.current = true; onPoly(pts.map(sizeToLL)) }
+    setPath([]); setDrawing(false)
+  }
+  const onDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if (drawing && iv && size.w) { const q = toSize(pt(e)); pathRef.current = [q]; setPath([q]); return }
+    const p = pt(e); drag.current = { x: p.x, y: p.y, moved: false }; movedRef.current = false; setActive(null)
+  }
   const onMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (pathRef.current) {
+      const q = toSize(pt(e)), last = pathRef.current[pathRef.current.length - 1]
+      if (Math.hypot(q.x - last.x, q.y - last.y) > 4) { pathRef.current = [...pathRef.current, q]; setPath(pathRef.current) }
+      return
+    }
     if (!drag.current) return
     const p = pt(e); const dx = p.x - drag.current.x, dy = p.y - drag.current.y
     if (Math.abs(dx) + Math.abs(dy) > 3) { drag.current.moved = true; movedRef.current = true }
     setOff({ x: dx, y: dy })
   }
   const onUp = () => {
+    if (pathRef.current) { finishDraw(); return }
     if (!drag.current || !iv) { drag.current = null; setOff({ x: 0, y: 0 }); return }
     const { moved } = drag.current
     const o = off; drag.current = null
@@ -957,10 +1010,15 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
     setIv({ center: nc, zoom: iv.zoom }); setOff({ x: 0, y: 0 })
   }
   const zoomBy = (d: number) => { touched.current = true; setIv(v => v ? { center: v.center, zoom: clampZoom(v.zoom + d) } : v) }
+  const polyXY = useMemo(() => {
+    if (!poly || !iv || !size.w) return ''
+    const pc = project(iv.center.lat, iv.center.lng, iv.zoom)
+    return poly.map(q => { const pp = project(q.lat, q.lng, iv.zoom); return `${(size.w / 2 + pp.x - pc.x).toFixed(1)},${(size.h / 2 + pp.y - pc.y).toFixed(1)}` }).join(' ')
+  }, [poly, iv, size])
 
   return (
     <div ref={ref} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
-      style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)', cursor: drag.current ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none' }}>
+      style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)', cursor: drawing ? 'crosshair' : drag.current ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none' }}>
       <div style={{ position: 'absolute', inset: 0, transform: `translate(${off.x}px,${off.y}px)` }}>
         {ready && !err ? (
           <TileBase lat={iv!.center.lat} lng={iv!.center.lng} zoom={iv!.zoom} w={size.w} h={size.h} />
@@ -968,6 +1026,13 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 24, lineHeight: 1.9 }}>
             {err ? 'نقشه در دسترس نیست — «سامانهٔ نقشه» در ادمین → اتصال‌ها را بررسی کن.' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}
           </div>
+        )}
+        {/* محدودهٔ رسم‌شده (و مسیرِ در حالِ کشیدن) — هم‌مختصاتِ پین‌ها، پس با جابه‌جاییِ نقشه همراه است */}
+        {ready && (polyXY || path.length > 1) && (
+          <svg viewBox={`0 0 ${size.w} ${size.h}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 8 }}>
+            {polyXY && !path.length && <polygon points={polyXY} fill="rgba(217,173,62,.16)" stroke="#D9AD3E" strokeWidth={2.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {path.length > 1 && <polyline points={path.map(q => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(' ')} fill="rgba(217,173,62,.10)" stroke="#D9AD3E" strokeWidth={3} strokeDasharray="7 5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+          </svg>
         )}
         {/* حباب‌های شمارش (خوشه) و پین‌های قیمت */}
         {clusters.map(p => {
@@ -993,6 +1058,24 @@ function SearchMap({ view, query, city, cityKey }: { view: MapView; query: strin
         })}
       </div>
 
+      {/* فاز د — کشیدنِ محدوده */}
+      {ready && (
+        <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, zIndex: 30, whiteSpace: 'nowrap' }} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
+          {drawing ? (
+            <>
+              <span style={{ padding: '9px 14px', borderRadius: 999, background: 'rgba(10,9,8,0.88)', color: '#f0ede6', fontSize: 12.5, fontWeight: 700, border: '1px solid var(--gold)' }}>دورِ منطقهٔ دلخواه را بکش و رها کن</span>
+              <button onClick={() => { pathRef.current = null; setPath([]); setDrawing(false) }} style={{ padding: '9px 14px', borderRadius: 999, border: '1px solid var(--line2)', background: 'rgba(10,9,8,0.88)', color: '#f0ede6', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>لغو</button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setDrawing(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 999, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 6px 18px -6px rgba(0,0,0,.6)' }}>
+                <IconSvg name="ruler" size={15} /> {poly ? 'کشیدنِ دوباره' : 'کشیدنِ محدوده'}
+              </button>
+              {poly && <button onClick={() => onPoly(null)} style={{ padding: '9px 14px', borderRadius: 999, border: '1px solid var(--line2)', background: 'rgba(10,9,8,0.88)', color: '#f0ede6', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✕ حذفِ محدوده</button>}
+            </>
+          )}
+        </div>
+      )}
       {/* کنترلِ زوم */}
       <div style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 6, zIndex: 30 }}>
         {[['+', 1], ['−', -1]].map(([s, d]) => (

@@ -13,6 +13,7 @@ import ReosAgentChat from '@/app/components/ReosAgentChat'
 import EmpireCard from '@/app/components/EmpireCard'
 import IdentityVerify from '@/app/components/IdentityVerify'
 import { FA_DIGITS, faDigit } from '@/app/lib/digits'
+import { specToSearchHref } from '@/app/lib/search-query'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -693,19 +694,12 @@ export default function BuyerPage() {
 
           {/* ─── SEARCHES ─── */}
           {view === 'searches' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ ...card, padding: 18 }}>
-              {sectionTitle('ذخیرهٔ جستجوی جدید')}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عبارت جستجو</label><input value={newSearch.query} onChange={e => setNewSearch({ ...newSearch, query: e.target.value })} placeholder="مثلاً آپارتمان ۲ خوابه شمال تهران" style={inputStyle} /></div>
-                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={newSearch.area} onChange={e => setNewSearch({ ...newSearch, area: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>حداکثر قیمت (تومان)</label><NumberInput value={newSearch.priceMax} onChange={v => setNewSearch({ ...newSearch, priceMax: v })} style={inputStyle} /></div>
-                <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 0' }}><input type="checkbox" checked={newSearch.alerts} onChange={e => setNewSearch({ ...newSearch, alerts: e.target.checked })} /> هشدار</label>
-                <button disabled={busy || !newSearch.query.trim()} onClick={async () => { if (await post({ action: 'addSearch', query: newSearch.query.trim(), area: newSearch.area, priceMax: Number(newSearch.priceMax) || undefined, alerts: newSearch.alerts })) setNewSearch({ query: '', ptype: '', area: '', priceMax: '', alerts: true }) }} style={{ padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>ذخیره</button>
-              </div>
-            </div>
-            <div style={{ ...card, padding: 18 }}>
-              {sectionTitle('جستجوهای ذخیره‌شده')}
-              {searches.length ? searches.map(s => (
+            {/* فاز د — این‌جا قبلاً فهرستِ جدای buyer-store بود که «🔔 هشدار فعال»ش به هیچ هشداری وصل نبود (اجراکنندهٔ
+                هشدار فقط saved-search-store را می‌خواند). حالا همان هشدارهای واقعیِ صفحهٔ جستجو. */}
+            <AlertSearches />
+            {searches.length > 0 && <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('یادداشت‌های جستجوی قدیمی (بدونِ هشدار)')}
+              {searches.map(s => (
                 <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700 }}>{s.query}</div>
@@ -713,11 +707,11 @@ export default function BuyerPage() {
                       {s.area && <span>📍 {s.area}</span>}{s.priceMax ? <span>تا {money(s.priceMax)}</span> : null}
                     </div>
                   </div>
-                  <button onClick={() => post({ action: 'toggleSearchAlerts', id: s.id })} style={{ ...actionBtn, color: s.alerts ? 'var(--gold)' : 'var(--muted)', borderColor: s.alerts ? 'var(--gold)' : 'var(--line)' }}>{s.alerts ? '🔔 هشدار فعال' : '🔕 هشدار خاموش'}</button>
+                  <a href={'/search?q=' + encodeURIComponent([s.query, s.area].filter(Boolean).join(' '))} style={{ ...actionBtn, textDecoration: 'none', color: 'var(--gold)' }}>باز کردن</a>
                   <button onClick={() => post({ action: 'deleteSearch', id: s.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
                 </div>
-              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>جستجوی ذخیره‌شده‌ای نداری.</div>}
-            </div>
+              ))}
+            </div>}
           </div>}
 
           {/* ─── VIEWINGS ─── */}
@@ -906,3 +900,42 @@ export default function BuyerPage() {
     </div>
   )
 }
+
+// فاز د — هشدارهای واقعیِ «آگهی جدید اومد خبرم کن» (saved-search-store): باز کردنِ همان جستجو با همهٔ
+// فیلترها/محدوده، و حذف. ساختِ هشدار از خودِ صفحهٔ جستجو است (فیلترها را بچین → کلیدِ هشدار).
+function AlertSearches() {
+  const [list, setList] = useState<{ id: string; label: string; qs?: string; city?: string; area?: string; deal: string; kind?: string; createdAt: number }[] | null>(null)
+  const load = () => fetch('/api/saved-search', { cache: 'no-store' }).then(r => r.ok ? r.json() : { searches: [] }).then(d => setList(d.searches || [])).catch(() => setList([]))
+  useEffect(() => { load() }, [])
+  const hrefOf = (s: { qs?: string; city?: string; area?: string; deal: string; kind?: string }) => {
+    if (s.qs) return specToSearchHref(s.qs)
+    const p = new URLSearchParams()
+    if (s.deal && s.deal !== 'sale') p.set('type', s.deal)
+    if (s.city) p.set('city', s.city)
+    if (s.area) p.set('hood', s.area)
+    if (s.kind) p.set('kind', s.kind)
+    return '/search?' + p.toString()
+  }
+  const del = async (id: string) => { await fetch('/api/saved-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'removeId', id }) }).catch(() => {}); load() }
+  return (
+    <div style={{ ...card, padding: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 15, fontWeight: 800, flex: 1 }}>🔔 هشدارهای آگهیِ جدید</div>
+        <a href="/search" style={{ padding: '8px 14px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 12.5, textDecoration: 'none' }}>+ هشدارِ تازه از صفحهٔ جستجو</a>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>در صفحهٔ جستجو فیلترها را بچین (یا روی نقشه محدوده بکش) و کلیدِ «آگهی جدید اومد خبرم کن» را روشن کن — هر آگهیِ تازهٔ مطابق را با نوتیفیکیشن، گفتگو و پیامک خبر می‌دهیم.</div>
+      {list === null ? <div style={{ color: 'var(--faint)', fontSize: 13 }}>در حالِ بارگذاری…</div>
+        : list.length ? list.map(s => (
+          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.7 }}>{s.label}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>از {new Date(s.createdAt).toLocaleDateString('fa-IR')}</div>
+            </div>
+            <a href={hrefOf(s)} style={{ ...actionBtn, textDecoration: 'none', color: 'var(--gold)', borderColor: 'var(--gold)' }}>دیدنِ نتایج</a>
+            <button onClick={() => del(s.id)} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+          </div>
+        )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>هنوز هشداری نساخته‌ای.</div>}
+    </div>
+  )
+}
+

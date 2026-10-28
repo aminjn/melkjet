@@ -7,6 +7,9 @@ import { getAdminData } from './admin-store'
 import { shecanRequest } from './shecan-https'
 import { PROPERTY_KINDS } from './taxonomy'
 import { matchesLocationName } from './location-match'
+import { deriveListing, cityMatch, type DerivedListing } from './listing-search'
+import { specFromParams, matchesSpec, pointInPoly, specToSearchHref } from './search-query'
+import { hoodCentroidsOf, resolveMapPoints } from './map-cluster'
 import { dealOf } from './listing-filter'
 import { listForPhone, removeByEndpoint } from './push-store'
 import { sendPush } from './web-push'
@@ -28,7 +31,27 @@ function itemKind(it: any): string {
   return ''
 }
 
-function matches(s: SavedSearch, it: any): boolean {
+// فاز د — جستجوی «کامل» (qs): همان موتورِ فهرست/نقشه (search-query) — خواب/متراژ/امکانات/محله/محدودهٔ
+// رسم‌شده دیگر نادیده گرفته نمی‌شوند. محدوده مختصات لازم دارد: مختصاتِ خودِ آگهی، وگرنه مرکزِ محله‌اش
+// (عینِ پینِ نقشه — resolveMapPoints)؛ آگهیِ بی‌جا روی نقشه درونِ محدوده حساب نمی‌شود.
+type Ctx = { derivedAll?: DerivedListing[]; centroids: Map<string, Record<string, { lat: number; lng: number }>>; items: any[] }
+function matchesSpecItem(s: SavedSearch, it: any, ctx: Ctx): boolean {
+  const spec = specFromParams(new URLSearchParams(s.qs || ''))
+  const d = deriveListing(it)
+  if (!matchesSpec(d, spec)) return false
+  if (!spec.poly) return true
+  let cen = ctx.centroids.get(spec.city)
+  if (!cen) {
+    ctx.derivedAll ||= ctx.items.map(deriveListing)
+    cen = hoodCentroidsOf(spec.city ? ctx.derivedAll.filter(x => cityMatch(x.location, spec.city)) : ctx.derivedAll, spec.city)
+    ctx.centroids.set(spec.city, cen)
+  }
+  const pt = resolveMapPoints([d], spec.city, cen)[0]
+  return !!pt && pointInPoly(pt.lat, pt.lng, spec.poly)
+}
+
+function matches(s: SavedSearch, it: any, ctx: Ctx): boolean {
+  if (s.qs) return matchesSpecItem(s, it, ctx)
   if (itemDeal(it) !== s.deal) return false
   // فاز ۲۲۵: زیررشته «ونک» را به «پونک» و «ری» را به «شهریار» می‌رساند — هشدارِ پیامکیِ غلط؛ مرزِ واژه‌ای
   const rawLoc = it.location || ''
@@ -76,13 +99,14 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
   const searches = await listAll()
   if (!searches.length) return { searches: 0, notified: 0 }
   const items = await listItems('listing', { publicOnly: true })   // مرتب بر اساسِ scrapedAt نزولی
+  const ctx: Ctx = { centroids: new Map(), items }
   let notified = 0
   const smsFor = new Map<string, string>()   // شماره → برچسبِ نخستین جستجوی منطبق
   for (const s of searches) {
     const fresh: any[] = []
     for (const it of items) {
       if (it.scrapedAt <= s.lastCheck) break   // چون نزولی است، بقیه قدیمی‌ترند
-      if (matches(s, it)) fresh.push(it)
+      if (matches(s, it, ctx)) fresh.push(it)
       if (fresh.length >= 10) break
     }
     if (fresh.length) {
@@ -91,6 +115,7 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
         const txt = `🏠 آگهیِ جدید مطابقِ جستجوی شما${s.label ? ` (${s.label})` : ''}:\n«${it.title}»\n${it.price ? it.price + ' تومان\n' : ''}مشاهده: melkjet.com${listingHref(it.id, it.title, it.location)}`
         try { await pushSystemMessage(s.owner, name, txt) } catch {}
       }
+      if (s.qs && fresh.length > 1) { try { await pushSystemMessage(s.owner, name, `همهٔ نتایجِ این جستجو: melkjet.com${specToSearchHref(s.qs)}`) } catch {} }
       // پیامک «به ازای هر کاربر» جمع می‌شود، نه به ازای هر جستجو: کاربرِ حادثه دو جستجوی
       // عیناً تکراری داشت، پس یک آگهیِ تازه هم‌زمان چند پیامک می‌فرستاد.
       if (!smsFor.has(s.owner)) smsFor.set(s.owner, s.label || '')

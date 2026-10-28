@@ -18,6 +18,9 @@ export interface SavedSearch {
   deal: 'sale' | 'rent' | 'presale'
   kind?: string
   priceMax?: number      // میلیارد تومان
+  // فاز د — مشخصاتِ «کامل» جستجو (کوئری‌استرینگِ کانونیِ search-query: خواب/متراژ/امکانات/محله/محدودهٔ
+  // رسم‌شده/…). وقتی هست، هشدار دقیقاً با همان موتورِ فهرست/نقشه تطبیق می‌دهد؛ فیلدهای بالا فقط برای سازگاری.
+  qs?: string
   createdAt: number
   lastCheck: number
 }
@@ -33,7 +36,8 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
-export function sigOf(c: { city?: string; area?: string; deal: string; kind?: string; priceMax?: number }) {
+export function sigOf(c: { city?: string; area?: string; deal: string; kind?: string; priceMax?: number; qs?: string }) {
+  if (c.qs) return 'q:' + c.qs
   return [c.city || '', c.area || '', c.deal, c.kind || '', c.priceMax || 0].join('|')
 }
 
@@ -41,12 +45,12 @@ export async function listForOwner(owner: string): Promise<SavedSearch[]> {
   return (await load()).searches.filter(s => s.owner === owner).sort((a, b) => b.createdAt - a.createdAt)
 }
 
-export async function addSearch(owner: string, c: { city?: string; area?: string; deal: 'sale' | 'rent' | 'presale'; kind?: string; priceMax?: number; label?: string }): Promise<SavedSearch> {
+export async function addSearch(owner: string, c: { city?: string; area?: string; deal: 'sale' | 'rent' | 'presale'; kind?: string; priceMax?: number; label?: string; qs?: string }): Promise<SavedSearch> {
   return mutate((db) => {
     const sig = sigOf(c)
     let s = db.searches.find(x => x.owner === owner && x.sig === sig)
     if (s) return s
-    s = { id: id(), owner, sig, label: c.label || [c.area, c.city].filter(Boolean).join('، ') || 'جستجوی من', city: c.city, area: c.area, deal: c.deal, kind: c.kind, priceMax: c.priceMax, createdAt: Date.now(), lastCheck: Date.now() }
+    s = { id: id(), owner, sig, label: c.label || [c.area, c.city].filter(Boolean).join('، ') || 'جستجوی من', city: c.city, area: c.area, deal: c.deal, kind: c.kind, priceMax: c.priceMax, ...(c.qs ? { qs: c.qs } : {}), createdAt: Date.now(), lastCheck: Date.now() }
     db.searches.unshift(s)
     return s
   })

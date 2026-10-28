@@ -32,7 +32,7 @@ const ssrPool = swrValue<ContentItem[]>(async () => {
   return items.slice(0, 60).map(slimListing) as unknown as ContentItem[]
 }, { ttlMs: 30_000, maxStaleMs: 300_000 })
 
-export default async function SearchPage() {
+export default async function SearchPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   let initial: ContentItem[] = []
   try {
     initial = await ssrPool.get()
@@ -50,5 +50,7 @@ export default async function SearchPage() {
     }
   } catch { /* کوکیِ خراب → بدونِ فیلترِ شهر */ }
 
+  // فاز د — لینکِ «جستجوی ذخیره‌شده» شهرش را در URL دارد؛ بر کوکی مقدم است (کلاینت کوکی را هم هم‌سو می‌کند).
+  try { const u = (await searchParams).city; const uc = canonCity(Array.isArray(u) ? u[0] : u); if (uc) initialCity = uc } catch {}
   return <Suspense fallback={null}><SearchClient initial={initial} initialCity={initialCity} /></Suspense>
 }

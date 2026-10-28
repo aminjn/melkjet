@@ -1,7 +1,7 @@
-import { canonCity } from '@/app/lib/city-name'
 import { NextRequest, NextResponse } from 'next/server'
 import { listItemsStable } from '@/app/lib/scraper-store'
-import { deriveListing, effectiveFiltersOf, matchesListing, cityMatch, type DerivedListing } from '@/app/lib/listing-search'
+import { deriveListing, cityMatch, type DerivedListing } from '@/app/lib/listing-search'
+import { specFromParams, matchesSpec, pointInPoly } from '@/app/lib/search-query'
 import { hoodCentroidsOf, resolveMapPoints, clusterMapPoints, parseBBox } from '@/app/lib/map-cluster'
 import { pinBoundsView } from '@/app/lib/map-pins'
 
@@ -16,22 +16,9 @@ let deriveCache: { src: unknown; derived: DerivedListing[] } | null = null
 
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
-  const city = canonCity(sp.get('city'))
-  const eff = effectiveFiltersOf({
-    tab: sp.get('deal') || 'sale',
-    q: sp.get('q') || '',
-    kind: sp.get('kind') || '',
-    bedsLabel: sp.get('beds') || 'همه',
-    priceMin: Number(sp.get('pmin')) || 0,
-    priceMax: Number(sp.get('pmax')) || 0,   // ≤۰ = بدونِ سقف (کلاینت pmax را فقط زیرِ سقف می‌فرستد)
-    areaMin: Number(sp.get('amin')) || 0,
-    areaMax: Number(sp.get('amax')) || 0,
-    floorMin: Number(sp.get('fmin')) || 0,
-    yearMin: Number(sp.get('ymin')) || 0,
-    amenities: (sp.get('amen') || '').split('،').filter(Boolean),
-    // فاز ۳۳۷ب — همان فیلترهای تازهٔ لیست، تا نقشه و لیست هماهنگ بمانند.
-    pricedOnly: sp.get('priced') === '1', photoOnly: sp.get('photo') === '1', advertiser: sp.get('adv') || '',
-  })
+  // فاز د — فیلترها + محله + محدودهٔ رسم‌شده از منبعِ مشترکِ search-query (همان که هشدارِ آگهیِ جدید می‌خواند).
+  const spec = specFromParams(sp)
+  const city = spec.city
 
   // فاز ۲۳۲: listItems هر بار آرایهٔ نو می‌ساخت → این کشِ ref هرگز hit نمی‌شد (۱۲هزار regex در هر
   // درخواستِ نقشه). نسخهٔ مرجع-پایدار در هر نسلِ داده همان آرایه را می‌دهد → derive یک‌بار در نسل.
@@ -40,18 +27,22 @@ export async function GET(req: NextRequest) {
   const derived = deriveCache.derived
 
   const inCity = city ? derived.filter(d => cityMatch(d.location, city)) : derived
-  const matched = inCity.filter(d => matchesListing(d, eff))
+  const matched = inCity.filter(d => matchesSpec(d, spec))
   // مرکزِ محله‌ها از کلِ آگهی‌های مختصات‌دارِ شهر (مستقل از فیلترها → پایدار)
   const centroids = hoodCentroidsOf(inCity, city)
-  const points = resolveMapPoints(matched, city, centroids)
+  let points = resolveMapPoints(matched, city, centroids)
+  // محدودهٔ رسم‌شده: فقط نقطه‌های درونِ چندضلعی. شناسه‌ها به فهرستِ کلاینت برمی‌گردند تا کارت‌ها هم
+  // دقیقاً همان‌ها باشند (آگهیِ بی‌مختصات و بی‌مرکزِ محله، جایی روی نقشه ندارد → بیرون حساب می‌شود).
+  const poly = spec.poly
+  if (poly) points = points.filter(p => pointInPoly(p.lat, p.lng, poly))
 
   const bbox = parseBBox(sp.get('bbox') || '')
   let zoom = Number(sp.get('zoom')) || 0
   let view: { center: { lat: number; lng: number }; zoom: number } | null = null
   if (!bbox || !zoom) {
-    view = pinBoundsView(points)
+    view = pinBoundsView(poly && !points.length ? poly : points)
     zoom = zoom || view?.zoom || 12
   }
   const { total, clusters, singles } = clusterMapPoints(points, zoom, bbox)
-  return NextResponse.json({ ok: true, total, matched: matched.length, clusters, singles, view })
+  return NextResponse.json({ ok: true, total, matched: poly ? points.length : matched.length, clusters, singles, view, ...(poly ? { polyIds: points.slice(0, 5000).map(p => p.id) } : {}) })
 }
