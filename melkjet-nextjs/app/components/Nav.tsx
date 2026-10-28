@@ -122,7 +122,7 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
           borderBottom: scrolled ? '1px solid var(--hero-nav-line)' : '1px solid transparent',
           boxShadow: scrolled ? '0 6px 24px -14px rgba(0,0,0,.6)' : undefined, transition: 'background .25s, border-color .25s' }
       : { position: 'sticky', top: 0, zIndex: 50, background: 'linear-gradient(var(--navbg),var(--navbg)), var(--bg)', borderBottom: '1px solid var(--line2)', boxShadow: '0 6px 24px -14px rgba(0,0,0,.45)' }}>
-      <nav style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', height: 64, display: 'flex', alignItems: 'center', gap: 18 }}>
+      <nav className="mj-nav-row" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', height: 64, display: 'flex', alignItems: 'center', gap: 18 }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'var(--text)', flexShrink: 0 }}>
           {/* ری‌برندِ ۲۹۸ی۵ — لوگومارکِ «M» طلایی همیشه نمایش داده می‌شود (برندِ ذخیره‌شدهٔ قدیمیِ
               پنلِ ادمین دیگر override نمی‌کند؛ لوگوی واحدِ وکتور، تیز در هر اندازه). */}

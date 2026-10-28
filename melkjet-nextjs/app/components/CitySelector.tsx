@@ -123,14 +123,14 @@ export default function CitySelector({ onHero = false }: { onHero?: boolean } = 
   const pick = (c: string) => { setCity(c); writeCity(c); setOpen(false); setQ('') }
 
   return (
-    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+    <div ref={ref} className="mj-city-sel" style={{ position: 'relative', flexShrink: 0 }}>
       <button onClick={() => setOpen(o => !o)} title="انتخاب شهر" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px', borderRadius: 11,
         ...(onHero
           ? { border: `1px solid ${city ? 'rgba(247,222,146,.55)' : 'rgba(243,237,224,.34)'}`, background: 'rgba(255,255,255,.08)', color: city ? '#f5d982' : 'rgba(243,237,224,.9)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }
           : { border: `1px solid ${city ? 'var(--gold)' : 'var(--line2)'}`, background: city ? 'var(--goldDim)' : 'var(--surface)', color: city ? 'var(--gold)' : 'var(--muted)' }),
         cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
         <IconSvg name="pin" size={14} color="var(--gold)" />
-        <span>{city || 'انتخاب شهر'}</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{city || 'انتخاب شهر'}</span>
         <span style={{ display: 'flex', opacity: .75 }}><IconSvg name="chevronDown" size={11} /></span>
       </button>
       {/* فاز ۳۲۰ — شیشه‌ای «همه‌جا» (نه فقط هیرو)، تم‌آگاه با --hero-nav-pop-*. */}

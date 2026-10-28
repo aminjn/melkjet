@@ -233,11 +233,13 @@ body {
 .mjs-map-mobile{display:none}
 @media(max-width:1040px){.mjs-map{display:none!important}.mjs-grid{grid-template-columns:1fr!important}.mjs-navlinks{display:none!important}.mjs-mapbtn{display:inline-flex!important}.mjs-mapfull{display:block!important}}
 /* موبایل: هدرِ جستجو جمع‌وجورتر تا آگهی‌ها زودتر دیده شوند */
+.mjs-only-sm{display:none}
 @media(max-width:640px){
   .mjs-cards{grid-template-columns:1fr!important}
   .mjs-filterbar{flex-wrap:wrap!important;padding:10px 14px!important;gap:8px!important}
   .mjs-quickbar{padding:0 14px 10px!important}
   .mjs-hide-sm{display:none!important}          /* مرتب‌سازی و «نزدیکِ من» روی موبایل پنهان — به فیلترها منتقل */
+  .mjs-only-sm{display:flex!important}           /* فاز ۳۳۷ب — مرتب‌سازیِ داخلِ پنلِ فیلتر، فقط موبایل */
   .mjs-grid{padding-bottom:96px!important}        /* تا آخرین کارت پشتِ دکمهٔ نقشه/تب‌بار نرود */
   .mjs-notify-desc{display:none!important}        /* نوارِ خبرده روی موبایل فقط یک خط */
 }
@@ -514,3 +516,6 @@ html.light .mj-logo-dark { display: none; }
 /* فاز ۲۹۸ی — کارتِ محصولیِ پروفایلِ عمومی: بالاآمدنِ نرم روی hover */
 .mjpp-card{transition:transform .22s ease, box-shadow .22s ease}
 .mjpp-card:hover{transform:translateY(-3px);box-shadow:0 18px 40px -22px rgba(0,0,0,.5)}
+
+/* نوارِ بالا در موبایل: لوگو+شهر+منو با gap ۱۸ و padding ۲۰ از ۳۹۰px بیرون می‌زد (اسکرولِ افقیِ /search) */
+@media(max-width:520px){.mj-nav-row{gap:8px!important;padding:0 12px!important}.mj-city-sel{flex-shrink:1!important;min-width:0!important}.mj-city-sel>button{max-width:100%;overflow:hidden}}

@@ -43,6 +43,14 @@ function pinPrice(deal: string, priceB: number): string {
 
 const AMENITY_FILTER = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'مبله', 'روف گاردن', 'استخر', 'لابی', 'نوساز']
 const PRICE_MAX = 500 // «بدون سقف»
+// فاز ۳۳۷ب — مرتب‌سازی‌های هم‌تراز با رقبا (Zillow/کیلید): تازه‌ترین آگهی، قیمتِ هر متر، متراژ، نوسازی.
+// قیمتِ هر متر: priceNum به «میلیارد» است → به میلیون/میلیارد برای خوانایی.
+const perMeterLabel = (priceBn: number, area: number) => {
+  const m = priceBn * 1000 / area   // میلیون تومان
+  return m >= 1000 ? `${(m / 1000).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} میلیارد` : `${Math.round(m).toLocaleString('fa-IR')} میلیون`
+}
+const SORT_OPTS = ['پیشنهاد ملک‌جت', 'جدیدترین آگهی', 'ارزان‌ترین', 'گران‌ترین', 'ارزان‌ترین هر متر', 'بزرگ‌ترین متراژ', 'نوسازترین']
+const chip = (on: boolean): React.CSSProperties => ({ padding: '6px 13px', borderRadius: 9, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontSize: 13, fontWeight: on ? 700 : 500, fontFamily: 'inherit' })
 // گزینه‌های آمادهٔ فیلتر (دراپ‌داون — کاربر تایپ نمی‌کند)
 // چیپِ نوعِ ملک در نوارِ ساختاریافتهٔ همیشه‌جلوی‌چشم.
 function chipStyle(active: boolean): React.CSSProperties {
@@ -129,7 +137,12 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const [floorMin, setFloorMin] = useState(Number(searchParams.get('fmin')) || 0)
   const [yearMin, setYearMin] = useState(Number(searchParams.get('ymin')) || 0)
   const [checkedAmenities, setCheckedAmenities] = useState<string[]>((searchParams.get('amen') || '').split('،').filter(Boolean))
-  const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'پیشنهاد ملک‌جت')
+  // فاز ۳۳۷ب — فیلترهای هم‌تراز با رقبا (کیلید/دیوار/Zillow): فقط قیمت‌دار، فقط عکس‌دار، آگهی‌دهنده.
+  const [pricedOnly, setPricedOnly] = useState(searchParams.get('priced') === '1')
+  const [photoOnly, setPhotoOnly] = useState(searchParams.get('photo') === '1')
+  const [advertiser, setAdvertiser] = useState<string>(searchParams.get('adv') || '')
+  // «جدیدترین» قدیمی (که در واقع سالِ ساخت را مرتب می‌کرد) به «جدیدترین آگهی» نگاشت می‌شود.
+  const [sortBy, setSortBy] = useState(() => { const v = searchParams.get('sort') || 'پیشنهاد ملک‌جت'; return v === 'جدیدترین' ? 'جدیدترین آگهی' : v })
   const [hood, setHood] = useState(searchParams.get('hood') || '')   // فیلترِ محله (انتخابِ کاربر)
   // فاز ۱۵۱ (فیدبک: «رفرش می‌کنم می‌رود توی یک محله، ۴ تا آگهی»): «نزدیکِ من» دیگر پیش‌فرض روشن نیست —
   // موقعیت/سوابق فقط با انتخابِ صریحِ کاربر فیلتر می‌کند؛ وگرنه صرفاً مرتب‌سازی.
@@ -201,7 +214,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   }, [selectedCity, dealType, fresh180])
 
   // با هر تغییرِ نتیجه‌ها از اول ۲۴ تا؛ نگهبانِ انتهای لیست خودکار ۲۴ تای بعدی را می‌آورد
-  useEffect(() => { setVisN(24) }, [dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, searchTerm, selectedCity])
+  useEffect(() => { setVisN(24) }, [dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, searchTerm, selectedCity, pricedOnly, photoOnly, advertiser, sortBy])
   // فاز ۱۷۸ (فیدبک: «۲۵ تا نشان می‌دهد و بقیه گیر می‌کند») — observer با effectِ یک‌باره وصل می‌شد
   // ولی نگهبانِ انتهای لیست آن لحظه هنوز رندر نشده بود (داده نیامده بود) → هرگز وصل نمی‌شد.
   // callback-ref هر بار که نگهبان واقعاً در DOM بیاید/برود، observer را وصل/قطع می‌کند.
@@ -234,13 +247,16 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       if (yearMin > 0) p.set('ymin', String(yearMin))
       if (checkedAmenities.length) p.set('amen', checkedAmenities.join('،'))
       if (hood) p.set('hood', hood)
+      if (pricedOnly) p.set('priced', '1')
+      if (photoOnly) p.set('photo', '1')
+      if (advertiser) p.set('adv', advertiser)
       if (sortBy !== 'پیشنهاد ملک‌جت') p.set('sort', sortBy)
       if (nearMe) p.set('near', '1')
       const qs = p.toString()
       try { window.history.replaceState(null, '', '/search' + (qs ? `?${qs}` : '')) } catch { /* URL sync اختیاری */ }
     }, 250)
     return () => clearTimeout(t)
-  }, [searchTerm, dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, hood, sortBy, nearMe])
+  }, [searchTerm, dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, hood, sortBy, nearMe, pricedOnly, photoOnly, advertiser])
   // 🧠 فاز ۱۸۹ — رویدادِ جستجو بالاخره ثبت می‌شود (ML هرگز رفتارِ جستجو را نمی‌دید و کوئستِ «جستجو بزن»
   // غیرقابلِ‌انجام بود): جستجوی معنادار بعدِ آرام‌شدنِ تایپ، هر امضای یکتا فقط یک‌بار در این بازدید.
   const searchedSigs = useRef<Set<string>>(new Set())
@@ -267,7 +283,8 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
   const activeFilterCount =
     (dealType !== 'خرید' ? 1 : 0) + (kind ? 1 : 0) + (beds !== 'همه' ? 1 : 0) +
     (priceMin > 0 ? 1 : 0) + (priceMax < PRICE_MAX ? 1 : 0) + (areaMin > 0 ? 1 : 0) + (areaMax > 0 ? 1 : 0) +
-    (floorMin > 0 ? 1 : 0) + (yearMin > 0 ? 1 : 0) + checkedAmenities.length
+    (floorMin > 0 ? 1 : 0) + (yearMin > 0 ? 1 : 0) + checkedAmenities.length +
+    (pricedOnly ? 1 : 0) + (photoOnly ? 1 : 0) + (advertiser ? 1 : 0)
 
   // فاز ۲۰۴: همان منطقِ مشترکِ listing-search (فیلترِ دستی اولویت دارد، وگرنه تشخیصِ متن؛
   // predicate عیناً همان فاز ۱۷۷/۱۵۱) — سرورِ نقشه هم دقیقاً همین را روی کلِ استخر اجرا می‌کند.
@@ -277,9 +294,10 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       tab: tabDeal, q: searchTerm, kind, bedsLabel: beds,
       priceMin, priceMax: priceMax < PRICE_MAX ? priceMax : 0,
       areaMin, areaMax, floorMin, yearMin, amenities: checkedAmenities,
+      pricedOnly, photoOnly, advertiser,
     })
     return properties.filter(p => matchesListing(p, eff))
-  }, [properties, dealType, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities])
+  }, [properties, dealType, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, pricedOnly, photoOnly, advertiser])
 
   // ─── فیلترِ هوشمندِ مکان ──────────────────────────────────────────────────
   // شهر = فیلترِ قطعی (اگر آگهی نبود، خالی نشان می‌دهد؛ هیچ‌وقت آگهیِ شهرِ دیگر را نشان نمی‌دهد).
@@ -348,9 +366,20 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     const ar = prefArea.replace(/‌/g, '').trim()
     const nearby = (p: { location: string }) => ar ? p.location.replace(/‌/g, '').includes(ar) : false
     return [...scoped.list].sort((a, b) => {
+      // فاز ۳۳۷ب — آگهیِ «توافقی» (قیمت ۰) در مرتب‌سازیِ قیمتی همیشه ته، نه اولِ «ارزان‌ترین».
+      const noP = (x: typeof a) => !(x.priceNum > 0)
+      if (sortBy === 'ارزان‌ترین' || sortBy === 'گران‌ترین' || sortBy === 'ارزان‌ترین هر متر') {
+        if (noP(a) !== noP(b)) return noP(a) ? 1 : -1
+      }
       if (sortBy === 'ارزان‌ترین') return a.priceNum - b.priceNum
       if (sortBy === 'گران‌ترین') return b.priceNum - a.priceNum
-      if (sortBy === 'جدیدترین') return (b.yearNum || 0) - (a.yearNum || 0)
+      if (sortBy === 'ارزان‌ترین هر متر') {
+        const pm = (x: typeof a) => (x.priceNum > 0 && x.areaNum > 0) ? x.priceNum / x.areaNum : Infinity
+        return pm(a) - pm(b)
+      }
+      if (sortBy === 'بزرگ‌ترین متراژ') return (b.areaNum || 0) - (a.areaNum || 0)
+      if (sortBy === 'جدیدترین آگهی') return (b.scrapedAt || 0) - (a.scrapedAt || 0)
+      if (sortBy === 'نوسازترین') return (b.yearNum || 0) - (a.yearNum || 0)
       const an = nearby(a), bn = nearby(b)
       if (an !== bn) return an ? -1 : 1
       return b.score - a.score
@@ -419,8 +448,11 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     if (floorMin > 0) p.set('fmin', String(floorMin))
     if (yearMin > 0) p.set('ymin', String(yearMin))
     if (checkedAmenities.length) p.set('amen', checkedAmenities.join('،'))
+    if (pricedOnly) p.set('priced', '1')
+    if (photoOnly) p.set('photo', '1')
+    if (advertiser) p.set('adv', advertiser)
     return p.toString()
-  }, [dealType, selectedCity, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities])
+  }, [dealType, selectedCity, searchTerm, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, pricedOnly, photoOnly, advertiser])
 
   // نمای اولیهٔ جایگزین وقتی سرور هیچ نقطه‌ای ندارد (شهرِ بی‌آگهی): مرکزِ geocodeشدهٔ شهر/محله
   const mapView = useMemo(() => (mapCenter ? { center: mapCenter, zoom: 13 } : null), [mapCenter])
@@ -437,7 +469,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
     return c
   }, [parsed])
 
-  const resetFilters = () => { setKind(''); setBeds('همه'); setPriceMin(0); setPriceMax(PRICE_MAX); setAreaMin(0); setAreaMax(0); setFloorMin(0); setYearMin(0); setCheckedAmenities([]); setHood('') }
+  const resetFilters = () => { setKind(''); setBeds('همه'); setPriceMin(0); setPriceMax(PRICE_MAX); setAreaMin(0); setAreaMax(0); setFloorMin(0); setYearMin(0); setCheckedAmenities([]); setHood(''); setPricedOnly(false); setPhotoOnly(false); setAdvertiser('') }
 
   const selInput: React.CSSProperties = { height: 36, padding: '0 10px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }
   const lab: React.CSSProperties = { fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 600 }
@@ -468,7 +500,7 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
           {/* فاز ۹۳: دکمهٔ «نزدیکِ من» حذف شد — موقعیتِ تشخیصیِ کاربر نادقیق بود و جای غلط نشان می‌داد */}
           <NeighborhoodPicker value={hood} onChange={setHood} city={selectedCity} fallback={hoodOptions.map(o => o.h)} />
           <select aria-label="مرتب‌سازی" className="mjs-hide-sm" value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
-            <option>پیشنهاد ملک‌جت</option><option>ارزان‌ترین</option><option>گران‌ترین</option><option>جدیدترین</option>
+            {SORT_OPTS.map(o => <option key={o}>{o}</option>)}
           </select>
         </div>
 
@@ -576,6 +608,24 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
               </div>
             </div>
 
+            {/* فاز ۳۳۷ب — آگهی‌دهنده (کیلید/دیوار) + نمایش (حذفِ توافقی/بی‌عکس) + مرتب‌سازی برای موبایل.
+                مرتب‌سازیِ نوارِ بالا روی موبایل پنهان است (mjs-hide-sm) و تا امروز هیچ جایگزینی نداشت. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+              <span style={lab}>آگهی‌دهنده:</span>
+              {([['', 'همه'], ['personal', 'شخصی'], ['agency', 'املاک و مشاور']] as const).map(([v, l]) => (
+                <button key={v || 'all'} type="button" onClick={() => setAdvertiser(v)} style={chip(advertiser === v)}>{l}</button>
+              ))}
+              <span style={{ ...lab, marginInlineStart: 8 }}>نمایش:</span>
+              <button type="button" onClick={() => setPricedOnly(x => !x)} style={chip(pricedOnly)}>فقط قیمت‌دار (بدونِ توافقی)</button>
+              <button type="button" onClick={() => setPhotoOnly(x => !x)} style={chip(photoOnly)}>فقط عکس‌دار</button>
+              <label className="mjs-only-sm" style={{ alignItems: 'center', gap: 8 }}>
+                <span style={lab}>مرتب‌سازی:</span>
+                <select aria-label="مرتب‌سازی" value={sortBy} onChange={e => setSortBy(e.target.value)} style={selInput}>
+                  {SORT_OPTS.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </label>
+            </div>
+
             {/* امکانات */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <span style={lab}>امکانات:</span>
@@ -657,7 +707,13 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
                         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}><path d="M6 1a3.5 3.5 0 0 1 3.5 3.5C9.5 7.5 6 11 6 11S2.5 7.5 2.5 4.5A3.5 3.5 0 0 1 6 1z" stroke="currentColor" strokeWidth="1.2" /><circle cx="6" cy="4.5" r="1.2" fill="currentColor" /></svg>
                         {p.location}
                       </div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--goldText)', marginBottom: 10 }}>{p.price}<span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)', marginRight: 4 }}>تومان</span></div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--goldText)', marginBottom: 10, display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                        <span>{p.price}<span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)', marginRight: 4 }}>تومان</span></span>
+                        {/* فاز ۳۳۷ب — قیمتِ هر متر (مثلِ Zillow/کیلید) — فقط فروش، فقط با قیمت و متراژِ واقعی */}
+                        {p.deal === 'sale' && p.priceNum > 0 && p.areaNum > 0 && (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>· متری {perMeterLabel(p.priceNum, p.areaNum)}</span>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 10, borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--muted)' }}>
                         <span>{p.size} م²</span><span aria-hidden="true" style={{ color: 'var(--muted)' }}>·</span>
                         <span>{p.beds} خواب</span><span aria-hidden="true" style={{ color: 'var(--muted)' }}>·</span>

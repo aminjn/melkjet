@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
     floorMin: Number(sp.get('fmin')) || 0,
     yearMin: Number(sp.get('ymin')) || 0,
     amenities: (sp.get('amen') || '').split('،').filter(Boolean),
+    // فاز ۳۳۷ب — همان فیلترهای تازهٔ لیست، تا نقشه و لیست هماهنگ بمانند.
+    pricedOnly: sp.get('priced') === '1', photoOnly: sp.get('photo') === '1', advertiser: sp.get('adv') || '',
   })
 
   // فاز ۲۳۲: listItems هر بار آرایهٔ نو می‌ساخت → این کشِ ref هرگز hit نمی‌شد (۱۲هزار regex در هر

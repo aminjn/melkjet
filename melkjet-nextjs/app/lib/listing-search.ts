@@ -74,8 +74,13 @@ export interface DerivedListing {
   priceNum: number; bedsNum: number | null; areaNum: number; floorNum: number | null; yearNum: number
   kind: string; searchText: string; lat?: number; lng?: number; score: number
   title: string
+  hasPhoto: boolean                       // فاز ۳۳۷ب — فیلترِ «فقط عکس‌دار» (کیلید)
+  advertiser: 'agency' | 'personal'       // فاز ۳۳۷ب — فیلترِ «آگهی‌دهنده» (کیلید/دیوار)
 }
-export function deriveListing(it: { id: string; title: string; price?: string; location?: string; excerpt?: string; category?: string; tags?: string[]; meta?: Record<string, string>; url?: string }): DerivedListing {
+// آگهی‌دهندهٔ «املاک/مشاور» از روی نامِ آگهی‌دهنده (owner/sourceName). نامِ کسب‌وکارِ ملکی تقریباً
+// همیشه یکی از این واژه‌ها را دارد؛ آگهیِ بی‌نام یا با نامِ شخص = «شخصی».
+const AGENCY_RE = /املاک|مشاور|آژانس|مسکن|دپارتمان|کارگزاری|مشاورین|گروه\s*(?:ملکی|مشاور)|real\s*estate|amlak/i
+export function deriveListing(it: { id: string; title: string; price?: string; location?: string; excerpt?: string; category?: string; tags?: string[]; meta?: Record<string, string>; url?: string; image?: string; owner?: string; sourceName?: string }): DerivedListing {
   const h = seedNum(it.id)
   const enTitle = faToEn(it.title)
   const rawPrice = parseFloat(faToEn(it.price || '').replace(/[^\d.]/g, '')) || 0
@@ -90,7 +95,9 @@ export function deriveListing(it: { id: string; title: string; price?: string; l
   const kind = detectKind(`${it.title} ${it.category || ''} ${it.meta?.['نوع ملک'] || ''}`)
   const lat = Number(it.meta?.['__lat']) || undefined
   const lng = Number(it.meta?.['__lng']) || undefined
-  return { id: it.id, deal, location: it.location || 'نامشخص', priceNum, bedsNum, areaNum, floorNum, yearNum, kind, searchText, lat, lng, score: h % 100, title: it.title }
+  const hasPhoto = !!it.image || !!it.meta?.['__gallery']
+  const advertiser: 'agency' | 'personal' = AGENCY_RE.test(`${it.owner || ''} ${it.sourceName || ''}`) ? 'agency' : 'personal'
+  return { id: it.id, deal, location: it.location || 'نامشخص', priceNum, bedsNum, areaNum, floorNum, yearNum, kind, searchText, lat, lng, score: h % 100, title: it.title, hasPhoto, advertiser }
 }
 
 // ─── فیلترِ مؤثر (فیلترِ دستی اولویت دارد، وگرنه تشخیصِ متن) + خودِ فیلتر ───
@@ -98,12 +105,14 @@ export interface EffectiveFilters {
   tab: string; kind: string; beds: number | null
   priceMin: number; budgetMax: number; sizeMin: number; sizeMax: number
   floorMin: number; yearMin: number; amenities: string[]; areaName: string; tokens: string[]
+  pricedOnly: boolean; photoOnly: boolean; advertiser: '' | 'agency' | 'personal'
 }
 /** ورودی‌ها با همان قراردادِ UI: bedsLabel «همه» = بدونِ فیلتر؛ priceMax≤0 = بدونِ سقف. */
 export function effectiveFiltersOf(q: {
   tab: string; q: string; kind: string; bedsLabel: string
   priceMin: number; priceMax: number; areaMin: number; areaMax: number
   floorMin: number; yearMin: number; amenities: string[]
+  pricedOnly?: boolean; photoOnly?: boolean; advertiser?: string
 }): EffectiveFilters {
   const parsed = parseQuery(q.q)
   return {
@@ -117,6 +126,8 @@ export function effectiveFiltersOf(q: {
     floorMin: q.floorMin, yearMin: q.yearMin,
     amenities: Array.from(new Set([...q.amenities, ...parsed.amenities])),
     areaName: parsed.area || '', tokens: parsed.tokens,
+    pricedOnly: !!q.pricedOnly, photoOnly: !!q.photoOnly,
+    advertiser: q.advertiser === 'agency' || q.advertiser === 'personal' ? q.advertiser : '',
   }
 }
 
@@ -131,6 +142,10 @@ export function matchesListing(p: DerivedListing, f: EffectiveFilters): boolean 
   if (f.sizeMax > 0 && p.areaNum > 0 && p.areaNum > f.sizeMax) return false
   if (f.floorMin > 0 && p.floorNum != null && p.floorNum < f.floorMin) return false
   if (f.yearMin > 0 && p.yearNum > 0 && p.yearNum < f.yearMin) return false
+  // فاز ۳۳۷ب — فیلترهای هم‌تراز با رقبا: «فقط قیمت‌دار» (حذفِ توافقی)، «فقط عکس‌دار»، «آگهی‌دهنده».
+  if (f.pricedOnly && !(p.priceNum > 0)) return false
+  if (f.photoOnly && !p.hasPhoto) return false
+  if (f.advertiser && p.advertiser !== f.advertiser) return false
   for (const a of f.amenities) { if (p.searchText.trim() && !p.searchText.includes(a.toLowerCase())) return false }
   if (f.areaName) { const hay = `${p.location} ${p.searchText}`.toLowerCase(); if (!hay.includes(f.areaName.toLowerCase())) return false }
   if (f.tokens.length) {
