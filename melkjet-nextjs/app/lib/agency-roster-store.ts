@@ -1107,12 +1107,17 @@ export async function recleanNames(id: string, apply: boolean): Promise<{ ok: bo
   const scrape = await getScrapeRow(id)
   if (!scrape) return { ok: false, skipped: 'اسکرپ یافت نشد', removed: [], renamed: [] }
   const { validName } = await import('./agency-name-lexicon')
+  const ag = scrape.agencyName || ''
+  // فاز ۳۳۶د — فقط «نوفهٔ قطعی» حذف می‌شود: نامی که حتی با trustPerson هم رد شود (عدد/شعار/نوفه).
+  // شهر/محله‌ای که هم‌نامِ شخص است (شهریار/شمیران) با trustPerson از validName عبور می‌کند، پس
+  // «قطعی» نیست و حذف نمی‌شود (ممکن است از مسیرِ عنوان/برچسب نامِ واقعیِ شخص باشد) — کارِ سینک.
+  const junk = (n: string) => validName(n, ag) === '' && validName(n, ag, undefined, { trustPerson: true }) === ''
   const recs = [...(scrape.advisors || [])]
   const removed: string[] = []
   for (let i = recs.length - 1; i >= 0; i--) {
     const r = recs[i]
     if (r.phone || r.graduating) continue                       // حساب‌دار/در-صف دست‌نخورده
-    if (validName(r.name, scrape.agencyName || '') === '') { removed.push(r.name); recs.splice(i, 1) }
+    if (junk(r.name)) { removed.push(r.name); recs.splice(i, 1) }
   }
   if (apply && removed.length) await patchScrape(id, { advisors: recs })
   return { ok: true, removed, renamed: [] }
