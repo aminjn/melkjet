@@ -1,11 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { IconSvg } from '../GlassIcon'
+import { openAuth } from '../AuthModal'
 
 // دکمهٔ ذخیرهٔ واقعی — به /api/user/prefs وصل است (addFav/removeFav) و رویدادِ REOS ثبت می‌شود؛
 // همان سیگنالی که کوئستِ «۱ آگهی ذخیره کن» و یادگیریِ سلیقهٔ کاربر از آن می‌خوانند.
 // وضعیتِ ذخیره‌ها یک بار در هر صفحه گرفته و بینِ همهٔ قلب‌ها به اشتراک گذاشته می‌شود (نه یک درخواست به‌ازای هر کارت).
 let favsPromise: Promise<Set<string>> | null = null
+if (typeof window !== 'undefined') window.addEventListener('mj-auth-success', () => { favsPromise = null })
 function favsOf(): Promise<Set<string>> {
   if (!favsPromise) {
     favsPromise = fetch('/api/user/prefs')
@@ -22,6 +24,8 @@ export async function toggleFav(listingId: string, next: boolean): Promise<void>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: next ? 'addFav' : 'removeFav', listingId }),
   })
+  // مهمان → پنجرهٔ ورود (بعد از ورود، دوباره بزند). فهرستِ کش‌شده هم ریست تا بعدِ ورود تازه خوانده شود.
+  if (r.status === 401) { favsPromise = null; openAuth('برای ذخیرهٔ آگهی وارد شوید'); throw new Error('login required') }
   if (!r.ok) throw new Error('save failed')
   const set = await favsOf()
   if (next) set.add(listingId); else set.delete(listingId)

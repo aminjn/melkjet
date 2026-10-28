@@ -184,6 +184,13 @@ function PropCard({ p, onRemove }: { p: Saved; onRemove: () => void }) {
 // ════════════════════════════════════════════════════════
 export default function BuyerPage() {
   const [view, setView] = useState<View>('dashboard')
+  // فاز ج — لینکِ مستقیم از هدر («♥ ذخیره‌ها»، «جستجوهای ذخیره‌شده»): /buyer?view=favorites|searches
+  useEffect(() => {
+    try {
+      const v = new URLSearchParams(window.location.search).get('view')
+      if (v && v in VIEW_TITLES) setView(v as View)
+    } catch {}
+  }, [])
   const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
   const [data, setData] = useState<BuyerData | null>(null)
   const [loading, setLoading] = useState(true)

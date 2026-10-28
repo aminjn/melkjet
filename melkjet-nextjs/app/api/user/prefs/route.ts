@@ -14,8 +14,11 @@ async function userId(): Promise<string> {
   return session?.phone || 'guest'
 }
 
+// فاز ج — مهمان‌ها همه زیرِ یک کلیدِ مشترکِ 'guest' بودند: ♥ یک بازدیدکنندهٔ ناشناس برای «همهٔ»
+// مهمان‌ها ذخیره‌شده نشان داده می‌شد. حالا مثلِ رقبا (زیلو/دیوار): ذخیره فقط با ورود؛ مهمان فهرستِ خالی می‌بیند.
 export async function GET() {
   const uid = await userId()
+  if (uid === 'guest') return NextResponse.json({ favorites: [], savedSearches: [] })
   return NextResponse.json(await getPrefs(uid))
 }
 
@@ -23,6 +26,7 @@ export async function POST(req: NextRequest) {
   const uid = await userId()
   const body = await req.json().catch(() => ({}))
   const action = String(body.action || '')
+  if (uid === 'guest') return NextResponse.json({ error: 'برای ذخیره وارد شوید', needLogin: true }, { status: 401 })
 
   switch (action) {
     case 'addFav': {

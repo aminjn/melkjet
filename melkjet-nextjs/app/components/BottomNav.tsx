@@ -1,8 +1,10 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import type React from 'react'
+import { openAuth } from './AuthModal'
 
-const tabs = [
+const tabs: { href: string; label: string; center?: boolean; icon: (on: boolean) => React.ReactNode }[] = [
   {
     href: '/',
     label: 'خانه',
@@ -22,6 +24,19 @@ const tabs = [
       </svg>
     ),
   },
+  // فاز ج — «بازار» (مصالح) و «متخصصین» از تب‌بار رفتند (هر دو در منوی ☰ هستند). «متخصصین» اصلاً به
+  // داشبوردِ /pros (پنلِ مشاور) می‌رفت نه دایرکتوری. جایشان، الگوی همهٔ رقبای ملکی (دیوار/شیپور): دکمهٔ
+  // برجستهٔ «ثبت آگهی» وسط + «من» (پنل/ورود) آخر.
+  {
+    href: '/submit',
+    label: 'ثبت آگهی',
+    center: true,
+    icon: (on: boolean) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16140f" strokeWidth="2.6" strokeLinecap="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+    ),
+  },
   {
     // امپراتوری به‌جای دایرکتوری (خواستهٔ صریح) — دایرکتوری از منوی «متخصصان» در دسترس می‌ماند.
     href: '/empire',
@@ -32,27 +47,6 @@ const tabs = [
         <path d="M5 21V8l4-3v16"/>
         <path d="M9 21V5l6 4v12"/>
         <path d="M15 21V9l4 3v9"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/store',
-    label: 'بازار',
-    icon: (on: boolean) => (
-      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke={on ? 'var(--gold)' : 'var(--muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-        <line x1="3" y1="6" x2="21" y2="6"/>
-        <path d="M16 10a4 4 0 0 1-8 0"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/pros',
-    label: 'متخصصین',
-    icon: (on: boolean) => (
-      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke={on ? 'var(--gold)' : 'var(--muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
       </svg>
     ),
   },
@@ -68,6 +62,13 @@ const PANEL_ROUTES = ['/empire', '/admin', '/agency', '/pros', '/builder', '/mat
 export default function BottomNav() {
   const path = usePathname()
   if (PANEL_ROUTES.some(r => path === r || path.startsWith(r + '/'))) return null
+  const goMe = async () => {
+    try {
+      const d = await fetch('/api/auth/profile').then(r => r.ok ? r.json() : null)
+      if (d?.phone) { window.location.href = d.dash || '/buyer'; return }
+    } catch {}
+    openAuth()
+  }
 
   return (
     <nav
@@ -88,42 +89,24 @@ export default function BottomNav() {
         {tabs.map(tab => {
           const active = tab.href === '/' ? path === '/' : path.startsWith(tab.href)
           return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-                textDecoration: 'none',
-                height: '100%',
-                position: 'relative',
-              }}
-            >
-              {active && (
-                <span style={{
-                  position: 'absolute',
-                  top: 0, left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: 28, height: 2,
-                  borderRadius: '0 0 4px 4px',
-                  background: 'var(--gold)',
-                }} />
+            <Link key={tab.href} href={tab.href} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, textDecoration: 'none', height: '100%', position: 'relative' }}>
+              {active && !tab.center && (
+                <span style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 28, height: 2, borderRadius: '0 0 4px 4px', background: 'var(--gold)' }} />
               )}
-              {tab.icon(active)}
-              <span style={{
-                fontSize: 10,
-                color: active ? 'var(--gold)' : 'var(--muted)',
-                fontWeight: active ? 700 : 400,
-              }}>
-                {tab.label}
-              </span>
+              {tab.center ? (
+                <span style={{ width: 44, height: 34, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', boxShadow: '0 6px 16px -6px rgba(217,173,62,.7)' }}>{tab.icon(active)}</span>
+              ) : tab.icon(active)}
+              <span style={{ fontSize: 10, color: active || tab.center ? 'var(--gold)' : 'var(--muted)', fontWeight: active || tab.center ? 700 : 400 }}>{tab.label}</span>
             </Link>
           )
         })}
+        {/* «من» — واردشده → پنلِ خودش، مهمان → پنجرهٔ ورود (نه صفحهٔ خالیِ «وارد شوید»). */}
+        <button onClick={goMe} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, height: '100%', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 3.6-7 8-7s8 2.8 8 7"/>
+          </svg>
+          <span style={{ fontSize: 10, color: 'var(--muted)' }}>من</span>
+        </button>
       </div>
     </nav>
   )

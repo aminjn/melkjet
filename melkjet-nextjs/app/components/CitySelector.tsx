@@ -125,8 +125,9 @@ export default function CitySelector({ onHero = false }: { onHero?: boolean } = 
   return (
     <div ref={ref} className="mj-city-sel" style={{ position: 'relative', flexShrink: 0 }}>
       <button onClick={() => setOpen(o => !o)} title="انتخاب شهر" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px', borderRadius: 11,
+        // فاز ج — کرمِ ثابت روی آسمانِ روشنِ تمِ روز نامرئی بود؛ حالا توکن‌های تم‌آگاهِ نوارِ هیرو.
         ...(onHero
-          ? { border: `1px solid ${city ? 'rgba(247,222,146,.55)' : 'rgba(243,237,224,.34)'}`, background: 'rgba(255,255,255,.08)', color: city ? '#f5d982' : 'rgba(243,237,224,.9)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }
+          ? { border: `1px solid ${city ? 'var(--gold)' : 'var(--hero-nav-brd)'}`, background: 'rgba(128,128,128,.10)', color: city ? 'var(--gold)' : 'var(--hero-nav-text)', textShadow: 'var(--hero-nav-shadow)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }
           : { border: `1px solid ${city ? 'var(--gold)' : 'var(--line2)'}`, background: city ? 'var(--goldDim)' : 'var(--surface)', color: city ? 'var(--gold)' : 'var(--muted)' }),
         cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
         <IconSvg name="pin" size={14} color="var(--gold)" />

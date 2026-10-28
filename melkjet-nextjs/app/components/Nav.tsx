@@ -16,50 +16,91 @@ const DASH_LABEL: Record<string, string> = {
 }
 
 interface MenuItem { ic: IconName; label: string; desc: string; href: string }
-// منو یا کشویی است (items) یا «لینکِ مستقیم» (href بدونِ items) — مثلِ «فروشگاه‌ها» که یک‌کلیکه باز می‌شود.
-interface Menu { label: string; href?: string; items?: MenuItem[] }
-// منوهای کشویی — همهٔ لینک‌ها به صفحاتِ واقعیِ سایت.
+interface MenuCol { title: string; items: MenuItem[] }
+// منو یا کشویی است (items یا cols) یا «لینکِ مستقیم» (href بدونِ items).
+interface Menu { label: string; href?: string; items?: MenuItem[]; cols?: MenuCol[] }
+const q = (o: Record<string, string>) => '/search?' + Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
+const itemsOf = (m: Menu): MenuItem[] => m.cols ? m.cols.flatMap(c => c.items) : (m.items || [])
+
+// فاز ج (منو/هدر) — ساختار از روی رقبای ملکی (دیوار/شیپور/کیلید/زیلو/رایت‌موو): منوی سطحِ اول بر اساسِ
+// «قصدِ کاربر» است (خرید · اجاره · نوساز · فروش · متخصص · ابزار)، نه بر اساسِ بخش‌های داخلیِ سایت.
+// قبلاً «خرید و اجاره» یکی بود، «فروشگاه‌ها»ی مصالح منوی سطحِ اول بود، و «فروش» (فروشنده) اصلاً مسیری نداشت.
+// همهٔ لینک‌ها به صفحه/فیلترِ واقعی می‌روند (پارامترهای /search: type/kind/sort).
 const MENUS: Menu[] = [
-  { label: 'خرید و اجاره', items: [
-    { ic: 'office', label: 'خرید آپارتمان', desc: 'فروشِ مسکونی', href: '/search?kind=' + encodeURIComponent('آپارتمان') },
-    { ic: 'key', label: 'اجارهٔ آپارتمان', desc: 'رهن و اجارهٔ مسکونی', href: '/search?type=rent&kind=' + encodeURIComponent('آپارتمان') },
-    { ic: 'home', label: 'خرید ویلا و خانه', desc: 'ویلا، خانه، کلنگی', href: '/search?kind=' + encodeURIComponent('ویلا') },
-    { ic: 'store', label: 'اداری و تجاری', desc: 'دفتر، مغازه، تجاری', href: '/search?kind=' + encodeURIComponent('دفتر/اداری') },
-    { ic: 'layers', label: 'پیش‌فروش پروژه‌ها', desc: 'پیش‌فروش تا آمادهٔ تحویل', href: '/search?type=presale' },
-    { ic: 'search', label: 'جستجوی هوشمند (AI)', desc: 'به زبانِ خودت بگو چه می‌خواهی', href: '/search' },
-    { ic: 'plus', label: 'ثبت آگهی', desc: 'فروش یا اجاره ملکِ شما', href: '/submit' },
+  { label: 'خرید', cols: [
+    { title: 'نوعِ ملک', items: [
+      { ic: 'office', label: 'آپارتمان', desc: 'فروشِ آپارتمانِ مسکونی', href: q({ kind: 'آپارتمان' }) },
+      { ic: 'home', label: 'خانه و کلنگی', desc: 'ویلایی، کلنگی، حیاط‌دار', href: q({ kind: 'خانه/کلنگی' }) },
+      { ic: 'home', label: 'ویلا و باغ‌ویلا', desc: 'شمال، حومه، باغ', href: q({ kind: 'ویلا' }) },
+      { ic: 'pin', label: 'زمین', desc: 'زمینِ مسکونی و کشاورزی', href: q({ kind: 'زمین' }) },
+      { ic: 'store', label: 'مغازه و تجاری', desc: 'مغازه، پاساژ، تجاری', href: q({ kind: 'مغازه/تجاری' }) },
+      { ic: 'briefcase', label: 'دفتر و اداری', desc: 'دفترِ کار و اداری', href: q({ kind: 'دفتر/اداری' }) },
+      { ic: 'cabinet', label: 'سوله و انبار', desc: 'صنعتی و انبار', href: q({ kind: 'سوله/انبار' }) },
+    ] },
+    { title: 'راحت‌تر پیدا کن', items: [
+      { ic: 'spark', label: 'جستجوی هوشمند', desc: 'به زبانِ خودت بگو چه می‌خواهی', href: '/search' },
+      { ic: 'clock', label: 'تازه‌ترین آگهی‌ها', desc: 'آگهی‌های امروز و دیروز', href: q({ sort: 'جدیدترین آگهی' }) },
+      { ic: 'chartDown', label: 'ارزان‌ترین هر متر', desc: 'فرصت‌های زیرِ قیمتِ منطقه', href: q({ sort: 'ارزان‌ترین هر متر', priced: '1' }) },
+      { ic: 'compare', label: 'مقایسهٔ ملک‌ها', desc: 'کنارِ هم، ویژگی‌به‌ویژگی', href: '/compare' },
+      { ic: 'map', label: 'قیمتِ محله‌ها', desc: 'میانگینِ متری در هر محله', href: '/locations' },
+    ] },
   ] },
-  { label: 'پروژه‌ها', items: [
-    { ic: 'layers', label: 'دایرکتوری پروژه‌ها', desc: 'پیش‌فروش تا آماده تحویل', href: '/builders' },
-    { ic: 'crane', label: 'سازندگان', desc: 'پروفایل سازندگان', href: '/builders' },
-    { ic: 'bricks', label: 'بازار مصالح', desc: 'همهٔ محصولات + قیمت', href: '/materials-market' },
-    { ic: 'store', label: 'فروشگاه‌های مصالح', desc: 'فروشندگانِ مصالح', href: '/stores' },
-    { ic: 'bars', label: 'نرخِ روزِ مصالح', desc: 'قیمتِ روزِ آهن، سیمان و…', href: '/materials-prices' },
+  { label: 'اجاره', items: [
+    { ic: 'key', label: 'رهن و اجارهٔ آپارتمان', desc: 'ودیعه + اجارهٔ ماهانه', href: q({ type: 'rent', kind: 'آپارتمان' }) },
+    { ic: 'bank', label: 'رهنِ کامل', desc: 'بدونِ اجارهٔ ماهانه', href: q({ type: 'mortgage' }) },
+    { ic: 'home', label: 'اجارهٔ خانه و ویلا', desc: 'ویلایی و حیاط‌دار', href: q({ type: 'rent', kind: 'ویلا' }) },
+    { ic: 'sun', label: 'اجارهٔ روزانه', desc: 'سوئیت و ویلای کوتاه‌مدت', href: q({ type: 'daily' }) },
+    { ic: 'briefcase', label: 'اجارهٔ اداری', desc: 'دفترِ کار', href: q({ type: 'rent', kind: 'دفتر/اداری' }) },
+    { ic: 'store', label: 'اجارهٔ مغازه و تجاری', desc: 'مغازه و غرفه', href: q({ type: 'rent', kind: 'مغازه/تجاری' }) },
   ] },
-  // «فروشگاه‌ها» — لینکِ مستقیم (بدونِ کشویی): یک کلیک → فهرستِ فروشگاه‌ها.
-  { label: 'فروشگاه‌ها', href: '/stores' },
+  { label: 'پروژه‌ها', cols: [
+    { title: 'پروژه‌ها', items: [
+      { ic: 'layers', label: 'پیش‌فروشِ آپارتمان', desc: 'آگهی‌های پیش‌فروش', href: q({ type: 'presale' }) },
+      { ic: 'crane', label: 'پروژه‌ها و سازندگان', desc: 'پروژه‌های در حالِ ساخت', href: '/builders' },
+      { ic: 'trophy', label: 'نوسازترین‌ها', desc: 'تازه‌سازِ آمادهٔ تحویل', href: q({ sort: 'نوسازترین' }) },
+    ] },
+    { title: 'ساخت و مصالح', items: [
+      { ic: 'bricks', label: 'بازارِ مصالح', desc: 'همهٔ محصولات + قیمت', href: '/materials-market' },
+      { ic: 'store', label: 'فروشگاه‌های مصالح', desc: 'فروشندگانِ مصالح', href: '/stores' },
+      { ic: 'bars', label: 'نرخِ روزِ مصالح', desc: 'آهن، سیمان، و…', href: '/materials-prices' },
+    ] },
+  ] },
+  { label: 'فروش', items: [
+    { ic: 'plus', label: 'ثبتِ آگهیِ رایگان', desc: 'فروش یا اجارهٔ ملکِ شما', href: '/submit' },
+    { ic: 'trend', label: 'ملکم چند می‌ارزد؟', desc: 'قیمتِ روز و روندِ بازار', href: '/market' },
+    { ic: 'people', label: 'یک مشاور پیدا کن', desc: 'مشاورانِ املاکِ محله', href: '/directory?category=' + encodeURIComponent('مشاور') },
+    { ic: 'office', label: 'آژانس‌های املاک', desc: 'دفاتر و شعب', href: '/directory?category=' + encodeURIComponent('آژانس') },
+  ] },
   { label: 'متخصصان', items: [
-    { ic: 'people', label: 'مشاوران املاک', desc: 'یافتن مشاور', href: '/directory?category=مشاور' },
-    { ic: 'office', label: 'آژانس‌های املاک', desc: 'دفاتر و شعب', href: '/directory?category=آژانس' },
-    { ic: 'crane', label: 'سازندگان', desc: 'پروژه و پیش‌فروش', href: '/builders' },
-    { ic: 'bricks', label: 'بازار و محصولاتِ مصالح', desc: 'همهٔ محصولات + قیمت', href: '/materials-market' },
-    { ic: 'ruler', label: 'معمار و طراح داخلی', desc: 'طراحی و نظارت', href: '/directory?category=معمار' },
-    { ic: 'tools', label: 'پیمانکار', desc: 'اجرای ساختمان', href: '/directory?category=پیمانکار' },
-    { ic: 'clipboard', label: 'کارشناس رسمی', desc: 'ارزیابی و گزارش', href: '/directory?category=کارشناس' },
-    { ic: 'scale', label: 'دفتر حقوقی', desc: 'قرارداد و دعاوی', href: '/directory?category=حقوقی' },
-    { ic: 'bank', label: 'بانک و بیمه', desc: 'وام و پوشش', href: '/directory?category=بیمه' },
-    { ic: 'doc', label: 'دفترخانه', desc: 'سند و انتقال', href: '/directory?category=دفترخانه' },
+    { ic: 'people', label: 'مشاوران املاک', desc: 'یافتن مشاور', href: '/directory?category=' + encodeURIComponent('مشاور') },
+    { ic: 'office', label: 'آژانس‌های املاک', desc: 'دفاتر و شعب', href: '/directory?category=' + encodeURIComponent('آژانس') },
+    { ic: 'ruler', label: 'معمار و طراح داخلی', desc: 'طراحی و نظارت', href: '/directory?category=' + encodeURIComponent('معمار') },
+    { ic: 'tools', label: 'پیمانکار', desc: 'اجرای ساختمان', href: '/directory?category=' + encodeURIComponent('پیمانکار') },
+    { ic: 'clipboard', label: 'کارشناس رسمی', desc: 'ارزیابی و گزارش', href: '/directory?category=' + encodeURIComponent('کارشناس') },
+    { ic: 'scale', label: 'دفتر حقوقی', desc: 'قرارداد و دعاوی', href: '/directory?category=' + encodeURIComponent('حقوقی') },
+    { ic: 'bank', label: 'بانک و بیمه', desc: 'وام و پوشش', href: '/directory?category=' + encodeURIComponent('بیمه') },
+    { ic: 'doc', label: 'دفترخانه', desc: 'سند و انتقال', href: '/directory?category=' + encodeURIComponent('دفترخانه') },
   ] },
-  // «مجله» — لینکِ مستقیمِ سطحِ بالا (قبلاً داخلِ منوی «ابزار هوشمند» دفن شده بود و دیده نمی‌شد).
-  { label: 'مجله', href: '/blog' },
-  { label: 'ابزار هوشمند', items: [
+  { label: 'مجله و ابزار', items: [
+    { ic: 'article', label: 'مجلهٔ ملک‌جت', desc: 'راهنما، اخبار، تحلیل', href: '/blog' },
+    { ic: 'bars', label: 'تحلیلِ بازار', desc: 'کلان‌داده و پیش‌بینی', href: '/market' },
     { ic: 'crown', label: 'امپراتوریِ ملکی', desc: 'مسیرِ رشدِ سرمایه با دارایی‌های واقعی', href: '/empire' },
-    { ic: 'bars', label: 'تحلیل بازار', desc: 'کلان‌داده و پیش‌بینی', href: '/market' },
-    { ic: 'ruler', label: 'پلان و مدل سه‌بعدی', desc: 'ساخت پلان از عکس', href: '/plan-ai' },
-    { ic: 'spark', label: 'دستیار و موتور مذاکره AI', desc: 'مشاوره و استراتژی', href: '/plan-ai' },
-    { ic: 'star', label: 'پلن‌ها و اشتراک', desc: 'عضویت متخصصان', href: '/pricing' },
+    { ic: 'ruler', label: 'پلان و مدلِ سه‌بعدی', desc: 'ساختِ پلان از عکس', href: '/plan-ai' },
+    { ic: 'star', label: 'پلن‌ها و اشتراک', desc: 'عضویتِ متخصصان', href: '/pricing' },
   ] },
 ]
+
+function DeskItem({ it, onPick }: { it: MenuItem; onPick: () => void }) {
+  return (
+    <Link href={it.href} onClick={onPick} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 11, textDecoration: 'none', color: 'inherit' }} className="mj-menu-item">
+      <GlassIcon name={it.ic} size={36} box={18} tone="theme" />
+      <span style={{ flex: 1 }}>
+        <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--hero-nav-pop-text)' }}>{it.label}</span>
+        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--hero-nav-pop-dim)', marginTop: 2 }}>{it.desc}</span>
+      </span>
+    </Link>
+  )
+}
 
 export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
   // ۸ اکتبر — حالتِ overlay (صفحهٔ اصلی) دو نشانه می‌ساخت: `position: absolute` یعنی با اسکرول
@@ -136,32 +177,34 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
             دکمه‌های اقدام چپ می‌مانند و منو دقیقاً در مرکزِ نوار می‌نشیند. */}
         <div style={{ flex: 1 }} />
         <div className="mj-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 14.5, fontWeight: 600 }}>
-          {MENUS.map(m => m.href && !m.items ? (
+          {MENUS.map(m => m.href && !m.items && !m.cols ? (
             <Link key={m.label} href={m.href} style={{ display: 'flex', alignItems: 'center', padding: '9px 13px', borderRadius: 9, color: navText, textShadow: navShadow, textDecoration: 'none', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>{m.label}</Link>
           ) : (
             <div key={m.label} style={{ position: 'relative' }} onMouseEnter={() => openMenu(m.label)} onMouseLeave={scheduleClose}>
-              <button onClick={() => (open === m.label ? setOpen(null) : openMenu(m.label))} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: open === m.label ? 'var(--text)' : navText, textShadow: open === m.label ? undefined : navShadow, background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>
+              <button onClick={() => (open === m.label ? setOpen(null) : openMenu(m.label))} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: open === m.label ? 'var(--text)' : navText, textShadow: open === m.label ? undefined : navShadow, background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {m.label}<span style={{ display: 'flex', opacity: .75 }}><IconSvg name="chevronDown" size={11} /></span>
               </button>
               {open === m.label && (
                 // ظرفِ بیرونی از لبهٔ دکمه شروع می‌شود (top:100%، بدونِ فاصلهٔ مُرده) و فاصلهٔ بصری را با
                 // paddingTop می‌سازد؛ آن ۸px شفاف ولی قابلِ‌هاور است، پس عبورِ نشانگر منو را نمی‌بندد.
-                <div style={{ position: 'absolute', top: '100%', insetInlineEnd: 0, paddingTop: 8, minWidth: 270, zIndex: 60 }}>
+                <div style={{ position: 'absolute', top: '100%', insetInlineEnd: m.cols ? undefined : 0, insetInlineStart: m.cols ? -12 : undefined, paddingTop: 8, minWidth: m.cols ? m.cols.length * 268 : 270, zIndex: 60 }}>
                   {/* ۸ اکتبر — پنلِ سفیدِ وسطِ یک صفحهٔ تیره بد می‌نشست. روی هیرو شیشه‌ایِ تیره
                       می‌شود (هم‌رنگِ روکشِ خودِ هیرو) و جای دیگر از توکنِ تم می‌گیرد. رنگِ متن هم
                       با همان حالت می‌آید، وگرنه دوباره «متنِ تیره روی شیشهٔ تیره» می‌شد. */}
                   {/* فاز ۳۲۰ — منوی شیشه‌ای «همه‌جا» (نه فقط هیرو): توکن‌های --hero-nav-pop-* تم‌آگاه‌اند
                       (شیشهٔ سفید در روز، آبی‌تیره در شب) و روی هر صفحه‌ای درست می‌نشینند. */}
                   <div style={{ background: 'var(--hero-nav-pop-bg)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', borderRadius: 16, boxShadow: '0 20px 56px -14px rgba(0,0,0,.55), inset 0 1px 0 var(--hero-nav-pop-hi)', padding: 8, maxHeight: '76vh', overflowY: 'auto', backdropFilter: 'blur(26px) saturate(1.5)', WebkitBackdropFilter: 'blur(26px) saturate(1.5)' }}>
-                    {(m.items || []).map(it => (
-                      <Link key={it.label + it.href} href={it.href} onClick={() => setOpen(null)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, textDecoration: 'none', color: 'inherit' }} className="mj-menu-item">
-                        <GlassIcon name={it.ic} size={38} box={19} tone="theme" />
-                        <span style={{ flex: 1 }}>
-                          <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--hero-nav-pop-text)' }}>{it.label}</span>
-                          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--hero-nav-pop-dim)', marginTop: 2 }}>{it.desc}</span>
-                        </span>
-                      </Link>
-                    ))}
+                    {m.cols ? (
+                      // منوی چندستونه (مگامنو) — مثلِ «خرید» در زیلو/رایت‌موو: نوعِ ملک یک ستون، ابزارِ یافتن ستونِ دیگر.
+                      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${m.cols.length}, minmax(0,1fr))`, gap: 6 }}>
+                        {m.cols.map(c => (
+                          <div key={c.title}>
+                            <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--gold)', padding: '8px 12px 4px', letterSpacing: '.2px' }}>{c.title}</div>
+                            {c.items.map(it => <DeskItem key={it.label + it.href} it={it} onPick={() => setOpen(null)} />)}
+                          </div>
+                        ))}
+                      </div>
+                    ) : itemsOf(m).map(it => <DeskItem key={it.label + it.href} it={it} onPick={() => setOpen(null)} />)}
                   </div>
                 </div>
               )}
@@ -171,20 +214,43 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
 
         <div style={{ flex: 1 }} />
 
-        <div className="mj-nav-links mj-login" style={{ display: 'none', alignItems: 'center', gap: 10 }}>
-          <ThemeToggle size={40} onHero={onHero} />
+        <div className="mj-nav-links mj-login" style={{ display: 'none', alignItems: 'center', gap: 8 }}>
+          <span className="mj-theme-slot" style={{ display: 'flex' }}><ThemeToggle size={40} onHero={onHero} /></span>
+          {/* ♥ ذخیره‌ها — استانداردِ همهٔ رقبا (Saved Homes زیلو، «نشان‌ها»ی دیوار). مهمان → ورود. */}
+          <button onClick={() => me ? (window.location.href = '/buyer?view=favorites') : openAuth('برای دیدنِ آگهی‌های ذخیره‌شده وارد شوید')} title="آگهی‌های ذخیره‌شده" aria-label="آگهی‌های ذخیره‌شده"
+            style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 11, border: onHero ? '1px solid var(--hero-nav-brd)' : '1px solid var(--line2)', background: 'transparent', color: navText, cursor: 'pointer' }}>
+            <IconSvg name="heart" size={19} />
+          </button>
           {me ? (
-            <>
-              <button onClick={logout} title="خروج از حساب" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid var(--hero-nav-brd)' : '1px solid var(--line2)', background: 'transparent', color: navDim, textShadow: navShadow, fontFamily: 'inherit', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>خروج</button>
-              {me.dash !== '/buyer' && <Link href="/content" title="مقالاتِ من" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid var(--hero-nav-brd)' : '1px solid var(--line2)', background: 'transparent', color: navText, textShadow: navShadow, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>✎ مقالات</Link>}
-              <Link href={me.dash} style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>{dashLabel}</Link>
-            </>
+            // منوی حساب: به‌جای سه دکمهٔ جدا (خروج/مقالات/پنل) یک دکمه با کشویی — مثلِ آواتارِ حسابِ رقبا.
+            <div style={{ position: 'relative' }} onMouseEnter={() => openMenu('__acct')} onMouseLeave={scheduleClose}>
+              <button onClick={() => (open === '__acct' ? setOpen(null) : openMenu('__acct'))} style={{ padding: '0 12px 0 14px', height: 40, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 11, border: onHero ? '1px solid var(--hero-nav-brd)' : '1px solid var(--line2)', background: open === '__acct' ? 'var(--surface)' : 'transparent', color: open === '__acct' ? 'var(--text)' : navText, textShadow: open === '__acct' ? undefined : navShadow, fontFamily: 'inherit', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
+                {dashLabel}<span style={{ display: 'flex', opacity: .75 }}><IconSvg name="chevronDown" size={11} /></span>
+              </button>
+              {open === '__acct' && (
+                <div style={{ position: 'absolute', top: '100%', insetInlineEnd: 0, paddingTop: 8, minWidth: 220, zIndex: 60 }}>
+                  <div style={{ background: 'var(--hero-nav-pop-bg)', border: '1px solid var(--hero-nav-pop-brd)', color: 'var(--hero-nav-pop-text)', borderRadius: 14, boxShadow: '0 20px 56px -14px rgba(0,0,0,.55), inset 0 1px 0 var(--hero-nav-pop-hi)', padding: 6, backdropFilter: 'blur(26px) saturate(1.5)', WebkitBackdropFilter: 'blur(26px) saturate(1.5)' }}>
+                    {[
+                      { ic: 'dashboard' as IconName, label: dashLabel, href: me.dash },
+                      { ic: 'heart' as IconName, label: 'آگهی‌های ذخیره‌شده', href: '/buyer?view=favorites' },
+                      { ic: 'bell' as IconName, label: 'جستجوهای ذخیره‌شده', href: '/buyer?view=searches' },
+                      ...(me.dash !== '/buyer' ? [{ ic: 'article' as IconName, label: 'مقالاتِ من', href: '/content' }] : []),
+                    ].map(it => (
+                      <Link key={it.href} href={it.href} onClick={() => setOpen(null)} className="mj-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, textDecoration: 'none', color: 'inherit', fontSize: 14, fontWeight: 600 }}>
+                        <span style={{ display: 'flex', color: 'var(--gold)' }}><IconSvg name={it.ic} size={17} /></span>{it.label}
+                      </Link>
+                    ))}
+                    <div style={{ height: 1, background: 'var(--hero-nav-pop-brd)', margin: '4px 6px' }} />
+                    <button onClick={logout} className="mj-menu-item" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, border: 'none', background: 'transparent', color: '#e7674a', fontFamily: 'inherit', cursor: 'pointer', fontSize: 14, fontWeight: 600, textAlign: 'start' }}>⎋ خروج از حساب</button>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
-            <>
-              <button onClick={() => openAuth()} style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid var(--hero-nav-brd)' : '1px solid var(--line2)', background: 'transparent', color: navText, textShadow: navShadow, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600 }}>ورود / ثبت‌نام</button>
-              <Link href="/submit" style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>ثبت آگهی</Link>
-            </>
+            <button onClick={() => openAuth()} style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: onHero ? '1px solid var(--hero-nav-brd)' : '1px solid var(--line2)', background: 'transparent', color: navText, textShadow: navShadow, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600 }}>ورود</button>
           )}
+          {/* «ثبت آگهی» همیشه دیده می‌شود (مهمان و واردشده) — دکمهٔ اصلیِ همهٔ رقبا. */}
+          <Link href="/submit" style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', gap: 5, borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 800, whiteSpace: 'nowrap' }}>+ ثبت آگهی</Link>
         </div>
 
         <div className="mj-nav-mobile-menu" style={{ display: 'none', alignItems: 'center', gap: 10 }}>
@@ -199,15 +265,29 @@ export default function Nav({ overlay = false }: { overlay?: boolean } = {}) {
 
       {/* Mobile drawer with expandable sections */}
       {menuOpen && (
-        <div style={{ background: 'var(--navbg)', borderTop: '1px solid var(--line)', padding: '10px 16px 18px', maxHeight: '80vh', overflowY: 'auto' }}>
-          {MENUS.map(m => m.href && !m.items ? (
+        <div style={{ background: 'linear-gradient(var(--navbg),var(--navbg)), var(--bg)', borderTop: '1px solid var(--line)', padding: '10px 16px 18px', maxHeight: '80vh', overflowY: 'auto', color: 'var(--text)' }}>
+          {/* فاز ج — میان‌برهای اصلی بالای کشو (مثلِ اپِ رقبا): خرید / اجاره / ذخیره‌ها / ثبت آگهی */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, padding: '6px 0 12px' }}>
+            {[
+              { ic: 'home' as IconName, label: 'خرید', href: '/search' },
+              { ic: 'key' as IconName, label: 'اجاره', href: '/search?type=rent' },
+              { ic: 'heart' as IconName, label: 'ذخیره‌ها', href: me ? '/buyer?view=favorites' : '' },
+              { ic: 'plus' as IconName, label: 'ثبت آگهی', href: '/submit' },
+            ].map(t => (
+              <Link key={t.label} href={t.href || '#'} onClick={e => { setMenuOpen(false); if (!t.href) { e.preventDefault(); openAuth('برای دیدنِ آگهی‌های ذخیره‌شده وارد شوید') } }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 4px', borderRadius: 12, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}>
+                <span style={{ display: 'flex', color: 'var(--gold)' }}><IconSvg name={t.ic} size={20} /></span>{t.label}
+              </Link>
+            ))}
+          </div>
+          {MENUS.map(m => m.href && !m.items && !m.cols ? (
             <Link key={m.label} href={m.href} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '13px 12px', borderRadius: 10, color: 'var(--text)', textDecoration: 'none', fontFamily: 'inherit', fontSize: 15, fontWeight: 700 }}>{m.label}</Link>
           ) : (
             <div key={m.label}>
               <button onClick={() => setMobOpen(o => o === m.label ? null : m.label)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 12px', borderRadius: 10, color: 'var(--text)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700 }}>
                 {m.label}<span style={{ fontSize: 11, color: 'var(--muted)' }}>{mobOpen === m.label ? '−' : '+'}</span>
               </button>
-              {mobOpen === m.label && (m.items || []).map(it => (
+              {mobOpen === m.label && itemsOf(m).map(it => (
                 <Link key={it.label + it.href} href={it.href} onClick={() => setMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px 10px 22px', borderRadius: 10, textDecoration: 'none', color: 'inherit' }}>
                   <GlassIcon name={it.ic} size={30} box={16} />
                   <span><span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{it.label}</span><span style={{ display: 'block', fontSize: 11, color: 'var(--muted)' }}>{it.desc}</span></span>
