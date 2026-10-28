@@ -32,8 +32,23 @@ export function saveMedia(buf: Buffer, mime: string, name: string): MediaMeta {
   return meta
 }
 
+// فاز ۳۳۸ — باگِ زنده: «آگهیِ ۲ ساعتِ پیش بدونِ عکس». getMedia فقط به فهرستِ .media-index.json تکیه
+// داشت که (۱) سقفِ ۲۰۰۰ ورودی دارد درحالی‌که .media ~۵۲هزار فایل دارد (کشِ عکس‌ها) — پس هر عکسی که از
+// ۲۰۰۰ ذخیرهٔ اخیر عقب‌تر برود ۴۰۴ می‌شد، و (۲) با ۴ اینستنس read-modify-writeِ بی‌قفل است و آپلودِ
+// هم‌زمانِ چند عکس ورودی‌های هم را پاک می‌کرد. فایلِ عکس روی دیسک سالم بود، فقط «پیدا» نمی‌شد.
+// حالا مرجع خودِ دیسک است (<id>.<پسوند>) — فهرست فقط برای پسوندِ ناشناخته. عکس‌های شکستهٔ
+// قبلی هم بدونِ هیچ مهاجرتی برمی‌گردند. (ضمناً دیگر هر درخواستِ عکس کلِ فهرست را parse نمی‌کند.)
+const MIME_BY_EXT: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', pdf: 'application/pdf', mp3: 'audio/mpeg',
+}
 export function getMedia(id: string): { path: string; mime: string } | null {
-  const m = loadIndex().find(x => x.id === id)
+  if (!/^[A-Za-z0-9_-]{4,64}$/.test(id || '')) return null          // ضدِ path traversal
+  for (const ext of Object.keys(MIME_BY_EXT)) {
+    const p = join(/*turbopackIgnore: true*/ DIR, `${id}.${ext}`)
+    if (existsSync(p)) return { path: p, mime: MIME_BY_EXT[ext] }
+  }
+  const m = loadIndex().find(x => x.id === id)                        // پسوندِ ناشناخته (نادر)
   if (!m) return null
   const p = join(/*turbopackIgnore: true*/ DIR, `${m.id}.${m.ext}`)
   if (!existsSync(p)) return null
