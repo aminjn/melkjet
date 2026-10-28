@@ -1,14 +1,14 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import NeighborhoodPicker from '../NeighborhoodPicker'
 
 // جزیرهٔ تعاملیِ هیروی صفحهٔ اصلی.
 // فاز ۲۹۸ی۵ (ری‌برند): حالتِ glass = پنلِ شیشه‌ایِ موکاپ — جعبهٔ زبانِ طبیعی + فیلترِ برچسب‌دار
 // + دکمهٔ جستجو + نوارِ دستیار با دکمهٔ گردِ ارسال. همه واقعی‌اند و به /search می‌روند.
 // فاز ۳۳۷ (هم‌ترازی با رقبا — دیوار/کیلید/Zillow): «موقعیت» از تکست‌باکسِ آزاد به کَسکِیدِ واقعیِ
 // شهر ← محله ارتقا یافت (CitySelectorِ سراسری در هدر شهر را در کوکی mj_city نگه می‌دارد؛ اینجا
-// محله با NeighborhoodPicker از همان شهر می‌آید)، + انتخابِ سریعِ «حداکثر بودجه».
+// محله با کومبوباکسِ HoodCombo از همان شهر می‌آید)، + انتخابِ سریعِ «حداکثر بودجه».
 
 const KINDS = ['آپارتمان', 'ویلا و خانه', 'زمین و کلنگی', 'دفتر و اداری', 'مغازه و تجاری']
 const DEALS: { l: string; v: string }[] = [
@@ -99,15 +99,8 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
                   {CITIES.map(c => <option key={c} value={c} style={{ color: '#111' }}>{c}</option>)}
                 </select>
               </label>
-              {/* محله — کَسکِیدِ وابسته به شهر (اتوکامپلیت از دیتای جغرافیا). فقط وقتی شهر انتخاب شد. */}
-              <div style={{ ...pill, padding: '0 8px 0 14px' }}>
-                <span style={pillLabel}>محله:</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {city
-                    ? <NeighborhoodPicker value={hood} onChange={setHood} city={city} />
-                    : <span style={{ fontSize: 13, color: 'var(--hsg-label)', opacity: .6 }}>اول شهر را انتخاب کن</span>}
-                </div>
-              </div>
+              {/* محله — کومبوباکسِ بومی، هم‌سبکِ بقیهٔ کادرها؛ لیست با portal (بریده نمی‌شود). */}
+              <HoodCombo city={city} value={hood} onChange={setHood} onEnter={runSearch} pill={pill} pillLabel={pillLabel} inputStyle={{ ...selStyle, cursor: 'text' }} />
               <label style={pill}>
                 <span style={pillLabel}>بودجه:</span>
                 <select value={budget} onChange={e => setBudget(e.target.value)} style={selStyle}>
@@ -143,4 +136,84 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
       </div>
     </div>
   )
+}
+
+// ── کومبوباکسِ محله (فاز ۳۳۷الف۲) ──────────────────────────────────────────────
+// باگِ زنده: NeighborhoodPickerِ عمومی داخلِ کادرِ هیرو (overflow:hidden + backdrop-filter +
+// اسکرولِ افقیِ موبایل) لیستش بریده و نامرئی می‌شد و دکمهٔ سفیدِ جدایش با بقیه یکدست نبود.
+// اینجا تایپ مستقیم در خودِ کادر است و لیست با portal و position:fixed روی body رندر می‌شود.
+let geoCache: any = null
+const normFa = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک')
+function HoodCombo({ city, value, onChange, onEnter, pill, pillLabel, inputStyle }: {
+  city: string; value: string; onChange: (v: string) => void; onEnter: () => void
+  pill: React.CSSProperties; pillLabel: React.CSSProperties; inputStyle: React.CSSProperties
+}) {
+  const [geo, setGeo] = useState<any>(geoCache)
+  const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null)
+  const boxRef = useRef<HTMLLabelElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (geoCache) return
+    fetch('/api/geo').then(r => r.ok ? r.json() : null).then(d => { if (d) { geoCache = d; setGeo(d) } }).catch(() => {})
+  }, [])
+
+  // محله‌های شهرِ انتخابی (بدونِ شهر: همهٔ شهرها — فقط وقتی تایپ شده تا لیست سنگین نشود).
+  const all = useMemo(() => {
+    const set = new Set<string>()
+    const cn = normFa(city)
+    for (const p of (geo?.provinces || [])) for (const c of (p.cities || [])) {
+      const n = normFa(c.name)
+      if (cn && !(n === cn || n.includes(cn) || cn.includes(n))) continue
+      for (const d of (c.districts || [])) for (const h of (d.neighborhoods || [])) if (h) set.add(h)
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'fa'))
+  }, [geo, city])
+  const list = useMemo(() => {
+    const q = normFa(value)
+    if (!q) return city ? all.slice(0, 80) : []
+    return all.filter(h => normFa(h).includes(q)).slice(0, 60)
+  }, [all, value, city])
+
+  const place = () => {
+    const r = boxRef.current?.getBoundingClientRect()
+    if (r) setRect({ top: r.bottom + 6, left: r.left, width: Math.max(r.width, 240) })
+  }
+  useEffect(() => {
+    if (!open) return
+    place()
+    const onMove = () => place()
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (boxRef.current?.contains(t) || listRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    window.addEventListener('scroll', onMove, true); window.addEventListener('resize', onMove)
+    document.addEventListener('mousedown', onDown)
+    return () => { window.removeEventListener('scroll', onMove, true); window.removeEventListener('resize', onMove); document.removeEventListener('mousedown', onDown) }
+  }, [open])
+
+  const pick = (v: string) => { onChange(v); setOpen(false) }
+  const showList = open && rect && (list.length > 0 || !!value)
+
+  return (
+    <label ref={boxRef} style={pill}>
+      <span style={pillLabel}>محله:</span>
+      <input value={value} onChange={e => { onChange(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)}
+        onKeyDown={e => { if (e.key === 'Enter') { setOpen(false); onEnter() } else if (e.key === 'Escape') setOpen(false) }}
+        placeholder={city ? 'همهٔ محله‌ها — تایپ کن…' : 'نامِ محله را تایپ کن…'} style={inputStyle} autoComplete="off" />
+      {value && <button type="button" aria-label="پاک کردنِ محله" onClick={e => { e.preventDefault(); onChange('') }}
+        style={{ flexShrink: 0, border: 'none', background: 'transparent', color: 'var(--hsg-label)', cursor: 'pointer', fontSize: 15, padding: 0, lineHeight: 1 }}>×</button>}
+      {showList && typeof document !== 'undefined' && createPortal(
+        <div ref={listRef} dir="rtl" style={{ position: 'fixed', top: rect!.top, left: rect!.left, width: rect!.width, zIndex: 1000, maxHeight: 300, overflowY: 'auto', padding: 6, background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 16, boxShadow: '0 18px 44px -14px rgba(0,0,0,.45)', fontFamily: 'inherit' }}>
+          {!value && <button type="button" onMouseDown={e => { e.preventDefault(); pick('') }} style={hoodRow(false)}>همهٔ محله‌ها</button>}
+          {list.map(h => <button type="button" key={h} onMouseDown={e => { e.preventDefault(); pick(h) }} style={hoodRow(normFa(h) === normFa(value))}>{h}</button>)}
+          {!list.length && <div style={{ padding: 12, fontSize: 12.5, color: 'var(--faint)', textAlign: 'center' }}>در فهرست نیست — با همین متن جستجو می‌شود</div>}
+        </div>, document.body)}
+    </label>
+  )
+}
+function hoodRow(active: boolean): React.CSSProperties {
+  return { display: 'block', width: '100%', textAlign: 'right', padding: '9px 12px', borderRadius: 10, border: 'none', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--text)', fontSize: 13.5, fontWeight: active ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit' }
 }
