@@ -1,3 +1,4 @@
+import { canonCity } from '@/app/lib/city-name'
 import { NextRequest, NextResponse } from 'next/server'
 import { listItemsStable } from '@/app/lib/scraper-store'
 import { deriveListing, effectiveFiltersOf, matchesListing, cityMatch, type DerivedListing } from '@/app/lib/listing-search'
@@ -15,7 +16,7 @@ let deriveCache: { src: unknown; derived: DerivedListing[] } | null = null
 
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
-  const city = sp.get('city') || ''
+  const city = canonCity(sp.get('city'))
   const eff = effectiveFiltersOf({
     tab: sp.get('deal') || 'sale',
     q: sp.get('q') || '',

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconSvg } from './GlassIcon'
 import { CITIES } from '@/app/lib/taxonomy'
+import { canonCity } from '@/app/lib/city-name'
 
 // انتخابگرِ شهر — در نوارِ بالای همهٔ صفحاتِ پابلیک. شهرِ انتخابی در کوکیِ mj_city می‌ماند.
 // چون محله‌ها در شهرهای مختلف هم‌نام‌اند، اول باید شهر مشخص شود. قابلِ جست‌وجو.
@@ -78,9 +79,16 @@ const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '')
 export function readCity(): string {
   if (typeof document === 'undefined') return ''
   const m = document.cookie.match(/(?:^|; )mj_city=([^;]*)/)
-  if (m) { try { const v = decodeURIComponent(m[1]); if (v) return v } catch {} }
+  if (m) {
+    try {
+      const raw = decodeURIComponent(m[1]), v = canonCity(raw)
+      // خودترمیمی: کوکیِ قدیمیِ «شهر تهران» (از تشخیصِ موقعیت) یک‌بار بازنویسی می‌شود.
+      if (v && v !== raw) document.cookie = `mj_city=${encodeURIComponent(v)};path=/;max-age=${365 * 86400};SameSite=Lax`
+      if (v) return v
+    } catch {}
+  }
   const lm = document.cookie.match(/(?:^|; )mj_loc=([^;]*)/)
-  if (lm) { try { return JSON.parse(decodeURIComponent(lm[1]))?.city || '' } catch {} }
+  if (lm) { try { return canonCity(JSON.parse(decodeURIComponent(lm[1]))?.city) } catch {} }
   return ''
 }
 export function writeCity(city: string) {

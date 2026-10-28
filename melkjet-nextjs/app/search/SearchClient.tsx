@@ -656,9 +656,11 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
           {(loading || shownProperties.length === 0) && (
             <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: 14, lineHeight: 1.9 }}>
               {loading ? 'در حال بارگذاری آگهی‌ها…'
-                : properties.length === 0 ? 'هنوز آگهی‌ای ثبت نشده.'
-                  : selectedCity ? `هنوز آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'} در «${selectedCity}» ثبت نشده است. می‌توانید شهرِ دیگری انتخاب کنید.`
-                    : `هیچ آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'} با این فیلترها پیدا نشد.`}
+                // استخرِ «خالی» با شهرِ انتخابی یعنی همین شهر آگهی ندارد (نه این‌که سایت خالی است) — پیامِ عمومی
+                // اینجا گمراه‌کننده بود (باگِ «شهر تهران»: کلِ سایت خالی به‌نظر می‌رسید).
+                : properties.length === 0 && selectedCity ? `هنوز آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'} در «${selectedCity}» ثبت نشده است. از دکمهٔ شهر (بالای صفحه) شهرِ دیگری انتخاب کنید.`
+                  : properties.length === 0 ? 'هنوز آگهی‌ای ثبت نشده.'
+                    : `هیچ آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'}${selectedCity ? ` در «${selectedCity}»` : ''} با این فیلترها پیدا نشد.`}
             </div>
           )}
 
@@ -749,7 +751,8 @@ export default function SearchClient({ initial, initialCity }: { initial: Conten
       {/* موبایل: دکمهٔ شناورِ «نقشه» (فقط وقتی نقشه بسته است) */}
       {!mapOpenMobile && (
         <button className="mjs-mapbtn" onClick={() => setMapOpenMobile(true)}
-          style={{ position: 'fixed', bottom: 74, left: 14, zIndex: 60, display: 'none', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 999, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.55)', cursor: 'pointer' }}>
+          // وسطِ پایین (الگوی دیوار/زیلو) — قبلاً پایین‌چپ زیرِ دکمهٔ ✦ دستیار می‌رفت و دو دکمه روی هم دیده می‌شد.
+          style={{ position: 'fixed', bottom: 'calc(76px + env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)', zIndex: 60, display: 'none', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 999, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.55)', cursor: 'pointer' }}>
           <IconSvg name="map" size={15} /> نقشه
         </button>
       )}

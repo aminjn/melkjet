@@ -1,3 +1,4 @@
+import { canonCity } from '@/app/lib/city-name'
 import { NextRequest, NextResponse } from 'next/server'
 import { listItems, SourceType } from '@/app/lib/scraper-store'
 import { slimListing } from '@/app/lib/listing-slim'
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(sp.get('limit') || '60', 10) || 60, slim ? 1000 : 200)
   // فاز ۱۵۱ (فیدبک: «کلی ملک هست چرا ۲۸ تا؟»): فیلترِ شهر/نوعِ معامله سمتِ سرور و روی «کلِ» آگهی‌ها
   // اعمال می‌شود، بعد سقف — نه اینکه فقط ۱۰۰۰ تای آخر به کلاینت برود و شهرِ کاربر از آن‌ها فیلتر شود.
-  const cityQ = (sp.get('city') || '').trim()
+  const cityQ = canonCity(sp.get('city'))
   const dealQ = sp.get('deal') || ''
   const cacheKey = `${type || ''}|${category || ''}|${owner}|${slim ? 1 : 0}|${limit}|${cityQ}|${dealQ}`
   const body = await RESP.get(cacheKey, async () => {

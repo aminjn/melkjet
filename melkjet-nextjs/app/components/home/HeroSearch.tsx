@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
+import { canonCity } from '@/app/lib/city-name'
 
 // جزیرهٔ تعاملیِ هیروی صفحهٔ اصلی.
 // فاز ۲۹۸ی۵ (ری‌برند): حالتِ glass = پنلِ شیشه‌ایِ موکاپ — جعبهٔ زبانِ طبیعی + فیلترِ برچسب‌دار
@@ -23,7 +24,7 @@ const BUDGETS: { l: string; v: string }[] = [
   { l: 'تا ۸ میلیارد', v: '8' }, { l: 'تا ۱۲ میلیارد', v: '12' },
   { l: 'تا ۲۰ میلیارد', v: '20' }, { l: 'تا ۴۰ میلیارد', v: '40' },
 ]
-const readCity = () => { try { const m = document.cookie.match(/(?:^|; )mj_city=([^;]*)/); return m ? decodeURIComponent(m[1]) : '' } catch { return '' } }
+const readCity = () => { try { const m = document.cookie.match(/(?:^|; )mj_city=([^;]*)/); return m ? canonCity(decodeURIComponent(m[1])) : '' } catch { return '' } }
 const writeCity = (c: string) => { try { document.cookie = `mj_city=${encodeURIComponent(c)};path=/;max-age=${365 * 86400};SameSite=Lax` } catch {} }
 
 export default function HeroSearch({ examples, glass = false }: { examples: string[]; glass?: boolean }) {

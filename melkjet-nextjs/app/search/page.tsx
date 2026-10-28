@@ -6,6 +6,7 @@ import { slimListing } from '@/app/lib/listing-slim'
 import { swrValue } from '@/app/lib/swr-cache'
 import type { ContentItem } from '@/app/lib/content-display'
 import SearchClient from './SearchClient'
+import { canonCity } from '@/app/lib/city-name'
 
 // فاز ۹۹ — SSR جستجو: ریشهٔ سه ایرادِ قرمزِ Lighthouse (LCP بالا، «LCP request
 // discovery»، main-thread) این بود که صفحه کاملاً کلاینتی بود: HTML خالی → JS →
@@ -42,10 +43,10 @@ export default async function SearchPage() {
   try {
     const jar = await cookies()
     const c = jar.get('mj_city')?.value
-    if (c) initialCity = decodeURIComponent(c)
+    if (c) initialCity = canonCity(decodeURIComponent(c))
     if (!initialCity) {
       const loc = jar.get('mj_loc')?.value
-      if (loc) initialCity = (JSON.parse(decodeURIComponent(loc))?.city as string) || ''
+      if (loc) initialCity = canonCity(JSON.parse(decodeURIComponent(loc))?.city as string)
     }
   } catch { /* کوکیِ خراب → بدونِ فیلترِ شهر */ }
 

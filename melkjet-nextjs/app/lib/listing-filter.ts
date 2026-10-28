@@ -1,4 +1,5 @@
 // فاز ۱۵۱ — منبعِ واحدِ «شهر/نوعِ معامله»ی یک آگهی.
+import { canonCity } from './city-name'
 // جستجو (کلاینت) و /api/content (سرور) باید آگهی را عینِ هم دسته‌بندی کنند، وگرنه شمارِ
 // «N از total» با کارت‌های نمایش‌داده‌شده نمی‌خواند. هر تغییری این‌جا هر دو طرف را با هم می‌برد.
 export type DealKind = 'sale' | 'rent' | 'presale' | 'daily'
@@ -58,7 +59,7 @@ export function dealOf(it: DealFields): DealKind {
 const normCity = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
 
 export function cityMatch(it: { location?: string; meta?: Record<string, string> }, city: string): boolean {
-  const c = normCity(city)
+  const c = normCity(canonCity(city))
   if (!c) return true
   return normCity(it.location || '').includes(c) || normCity(it.meta?.['شهر'] || '').includes(c)
 }

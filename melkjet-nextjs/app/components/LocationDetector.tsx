@@ -1,5 +1,6 @@
 'use client'
 import { useEffect } from 'react'
+import { canonCity } from '@/app/lib/city-name'
 
 // موقعیتِ کاربر را خودکار تشخیص می‌دهد و در کوکیِ mj_loc ذخیره می‌کند (چه لاگین چه نه).
 // فقط بارِ اول (تا وقتی کوکی معتبر است) گرفته می‌شود؛ صفحاتِ پابلیک بر اساس آن مرتب‌سازی می‌کنند.
@@ -8,7 +9,7 @@ export function readLoc(): { city?: string; neighborhood?: string; lat?: number;
   if (typeof document === 'undefined') return null
   const m = document.cookie.match(/(?:^|; )mj_loc=([^;]*)/)
   if (!m) return null
-  try { return JSON.parse(decodeURIComponent(m[1])) } catch { return null }
+  try { const v = JSON.parse(decodeURIComponent(m[1])); if (v && v.city) v.city = canonCity(v.city); return v } catch { return null }
 }
 
 export default function LocationDetector() {
@@ -24,6 +25,7 @@ export default function LocationDetector() {
       try {
         const r = await fetch(`/api/geo/locate?lat=${latitude}&lng=${longitude}`)
         const d = await r.json()
+        d.city = canonCity(d.city)   // «شهر تهران» → «تهران» (وگرنه جستجو صفر آگهی می‌دهد)
         const val = JSON.stringify({ city: d.city || '', neighborhood: d.neighborhood || '', lat: latitude, lng: longitude, at: Date.now() })
         document.cookie = `mj_loc=${encodeURIComponent(val)};path=/;max-age=${365 * 86400};SameSite=Lax`   // فاز ۹۳: یک‌بار دسترسی، یک سال ماندگار
         // بارِ اول: اگر کاربر هنوز شهری انتخاب نکرده، شهرِ تشخیص‌داده‌شده را پیش‌فرض بگذار
