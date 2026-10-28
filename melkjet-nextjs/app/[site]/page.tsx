@@ -144,9 +144,12 @@ type HeroExtras = {
   // پوستهٔ نسلِ ۲ — دادهٔ واقعیِ کارتِ پروفایلِ هیرو: نامِ برند و عنوانِ خدماتِ خودِ سایت.
   brand?: string
   highlights?: string[]
+  // صفحهٔ داخلی (نه خانه): سربرگِ جمع‌وجور با مسیرِ صفحه به‌جای هیروی بزرگِ تکراری.
+  inner?: { homeHref: string; title: string; isContact: boolean }
 }
 
 function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: string; extras?: HeroExtras }) {
+  if (extras?.inner) return <InnerHero block={block} primary={primary} extras={extras} />
   const props = p(block)
   // پوستهٔ نسلِ ۲ — چیدمانِ «ادیتوریال»: متن در سمتِ شروع (راست) و ستونِ تصویری کنارش؛ «همه‌چیز وسطِ صفحه»
   // امضای قالب‌های پیش‌ساخته بود. فقط align='center'ِ صریح وسط‌چین می‌ماند.
@@ -349,6 +352,56 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
   )
 }
 
+// پوستهٔ نسلِ ۲ — سربرگِ صفحه‌های داخلی: همان زبانِ بصریِ هیرو (شفق + شبکه) ولی کوتاه، با مسیرِ صفحه.
+// قبلاً هر صفحه هیروی کاملِ خانه (کارتِ پروفایل، نوارِ متحرک، نشانهٔ اسکرول) را تکرار می‌کرد → همهٔ صفحه‌ها یکی.
+function InnerHero({ block, primary, extras }: { block: SiteBlock; primary: string; extras: HeroExtras }) {
+  const props = p(block)
+  const inner = extras.inner!
+  const textColor = props.textColor || '#fff'
+  const image: string = typeof props.image === 'string' ? props.image.trim() : ''
+  const heading = String(props.heading || inner.title || '').trim()
+  const words = heading.split(/\s+/).filter(Boolean)
+  const btnHref = String(props.buttonLink || '')
+  // روی خودِ صفحهٔ تماس، دکمهٔ «تماس با ما» بی‌معناست (فرم و شماره همین زیر است).
+  const showBtn = !!props.buttonText && !inner.isContact
+  return (
+    <section id="hero" style={{
+      position: 'relative', direction: 'rtl', overflow: 'hidden', isolation: 'isolate', background: 'var(--mjs-secondary)',
+      padding: 'clamp(56px,8vw,96px) clamp(20px,5vw,32px) clamp(48px,7vw,80px)', minHeight: 'clamp(280px,42vh,420px)', display: 'flex', alignItems: 'flex-end',
+    }}>
+      <div className="mjs-hero-par" aria-hidden style={{ position: 'absolute', inset: '-10% 0 -10% 0', zIndex: 0 }}>
+        {image ? <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, rgba(10,8,6,.35), rgba(10,8,6,.78)), url(${image}) center/cover` }} /> : (
+          <div className="mjs-aurora" style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: `radial-gradient(120% 120% at 90% 0%, color-mix(in srgb, ${primary} 24%, var(--mjs-secondary)), var(--mjs-secondary) 60%)` }}>
+            <i style={{ position: 'absolute', width: '50vmax', height: '50vmax', top: '-40%', right: '-10%', borderRadius: '50%', filter: 'blur(70px)', opacity: .5, background: `radial-gradient(circle, ${primary}, transparent 64%)` }} />
+            <i style={{ position: 'absolute', width: '40vmax', height: '40vmax', bottom: '-50%', left: '0%', borderRadius: '50%', filter: 'blur(80px)', opacity: .35, background: `radial-gradient(circle, color-mix(in srgb, ${primary} 45%, #7b6cff), transparent 66%)` }} />
+          </div>
+        )}
+      </div>
+      <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', opacity: .4, backgroundImage: 'linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px)', backgroundSize: '64px 64px', WebkitMaskImage: 'radial-gradient(ellipse 70% 80% at 70% 30%, #000 20%, transparent 75%)', maskImage: 'radial-gradient(ellipse 70% 80% at 70% 30%, #000 20%, transparent 75%)' }} />
+      {/* واژهٔ اولِ تیتر، غول‌پیکر و توخالی در پس‌زمینهٔ سمتِ چپ */}
+      {words[0] ? <div aria-hidden style={{ position: 'absolute', left: '-1%', bottom: '-0.18em', zIndex: 0, fontSize: 'clamp(110px,19vw,260px)', fontWeight: 900, lineHeight: 1, letterSpacing: '-6px', color: 'transparent', WebkitTextStroke: '1px rgba(255,255,255,.10)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{words[0]}</div> : null}
+      <div style={{ position: 'relative', zIndex: 2, maxWidth: 1180, margin: '0 auto', width: '100%' }}>
+        <nav aria-label="مسیر" className="mjs-hero-badge" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,.62)', marginBottom: 18 }}>
+          <a href={inner.homeHref} style={{ color: 'rgba(255,255,255,.62)', textDecoration: 'none' }}>خانه</a>
+          <span aria-hidden style={{ opacity: .5 }}>/</span>
+          <span style={{ color: '#fff' }}>{inner.title}</span>
+        </nav>
+        <h1 style={{ fontSize: 'clamp(34px,5.4vw,62px)', fontWeight: 900, color: textColor, margin: '0 0 14px', letterSpacing: '-1.4px', lineHeight: 1.15, maxWidth: 820 }}>
+          {words.map((w, i) => (
+            <Fragment key={i}><span className={`mjs-w${words.length >= 2 && i === words.length - 1 ? ' mjs-grad-word' : ''}`} style={{ ['--i' as any]: i }}>{w}</span>{i < words.length - 1 ? ' ' : ''}</Fragment>
+          ))}
+        </h1>
+        {props.subheading ? <p className="mjs-hero-sub" style={{ fontSize: 'clamp(15px,1.8vw,18px)', color: textColor, opacity: .78, margin: 0, maxWidth: 620, lineHeight: 1.9 }}>{props.subheading}</p> : null}
+        {showBtn ? (
+          <div className="mjs-hero-ctas" style={{ marginTop: 26 }}>
+            <a href={btnHref || '#'} className="mjs-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '14px 28px', background: btnBg(primary), borderRadius: 999, fontSize: 15, fontWeight: 800, color: '#fff', textDecoration: 'none', boxShadow: `0 16px 36px -14px ${primary}` }}>{props.buttonText}<span aria-hidden>←</span></a>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
 function SearchBlock({ block, primary }: { block: SiteBlock; primary: string }) {
   const props = p(block)
   return (
@@ -544,8 +597,14 @@ async function SearchListBlock({ block, primary, ownerName, ownerPhone, slug }: 
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
         {items.length === 0 ? (
-          <div style={{ background: SURFACE, border: BORDER_DASHED, borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: MUTED, fontSize: 14.5 }}>
-            هنوز آگهی منتشرشده‌ای برای نمایش وجود ندارد.
+          // پوستهٔ نسلِ ۲ — صفحهٔ «فایل‌ها» بی‌آگهی: به‌جای جعبهٔ نقطه‌چینِ «هنوز … نداریم»، دعوت به «سفارشِ فایل»
+          // (رفتارِ واقعیِ مشاور: فایلِ مناسب را خودش پیدا می‌کند) — صفحه خالی نمی‌ماند و مشتری یک اقدام دارد.
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 26, padding: 'clamp(36px,6vw,64px) clamp(22px,5vw,56px)', background: `radial-gradient(90% 120% at 100% 0%, ${primary}22, transparent 60%), ${SURFACE}`, border: BORDER, display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 320px' }}>
+              <div style={{ fontSize: 'clamp(20px,2.6vw,28px)', fontWeight: 900, color: INK, marginBottom: 12, letterSpacing: '-.5px' }}>فایلِ مناسبِ شما را ما پیدا می‌کنیم</div>
+              <p style={{ fontSize: 15, lineHeight: 2, color: 'var(--mjs-text)', margin: 0, maxWidth: 520 }}>فایل‌های جدید به‌زودی این‌جا منتشر می‌شوند. بگویید دنبالِ چه ملکی هستید — منطقه، متراژ و بودجه — تا فایل‌های مناسب را مستقیم برایتان بفرستیم.</p>
+            </div>
+            <a href={slug ? `/${encodeURIComponent(slug)}/contact` : '#contact'} className="mjs-btn" style={{ flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 10, padding: '15px 30px', borderRadius: 999, background: btnBg(primary), color: '#fff', fontSize: 15.5, fontWeight: 800, textDecoration: 'none', boxShadow: `0 16px 36px -14px ${primary}` }}>سفارشِ فایل<span aria-hidden>←</span></a>
           </div>
         ) : (
           <SiteListings items={items} primary={primary} siteSlug={slug || ''} />
@@ -859,7 +918,9 @@ function FooterBlock({ block, primary, ownerName, slug }: { block: SiteBlock; pr
       {/* فاز ۲۹۷ق۲ — خطِ گرادیانیِ جداکننده بالای فوتر */}
       <div aria-hidden style={{ position: 'absolute', top: 0, insetInlineStart: 0, insetInlineEnd: 0, height: 2, background: `linear-gradient(90deg, transparent, ${primary}, transparent)` }} />
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div className="mjs-footer-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr repeat(auto-fit,minmax(160px,1fr))', gap: 'clamp(28px,5vw,44px)', marginBottom: 38, alignItems: 'start' }}>
+        {/* «1.5fr repeat(auto-fit,…)» نامعتبر بود (auto-repeat کنارِ ستونِ fr مجاز نیست) → کلِ قاعده نادیده و فوتر
+            یک‌ستونه می‌شد. شمارِ ستون‌ها صریح: برند + ستون‌های لینک + تماس. */}
+        <div className="mjs-footer-grid" style={{ display: 'grid', gridTemplateColumns: `minmax(0,1.5fr) repeat(${Math.max(1, columns.length + (hasContact ? 1 : 0))}, minmax(0,1fr))`, gap: 'clamp(28px,5vw,44px)', marginBottom: 38, alignItems: 'start' }}>
           {/* برند + توضیح + شبکه‌های اجتماعی */}
           <div>
             <div style={{ fontSize: 22, fontWeight: 900, color: primary, marginBottom: 14, letterSpacing: '-0.4px' }}>{brand}</div>
@@ -1408,6 +1469,7 @@ export async function SiteShell({ site, page }: { site: Site; page: SitePage }) 
     heroImages: heroImages.slice(0, 5),
     brand: site.ownerName || site.title,
     highlights,
+    ...(page !== home && page.slug !== 'home' ? { inner: { homeHref: `/${encodeURIComponent(site.slug)}`, title: (page as any).menuLabel || page.title, isContact: page.slug === 'contact' } } : {}),
   }
 
   const heroIdx = page.blocks.findIndex(b => b.type === 'hero')
@@ -1418,7 +1480,7 @@ export async function SiteShell({ site, page }: { site: Site; page: SitePage }) 
       {page.blocks.map((block, i) => (
         <Fragment key={block.id}>
           {renderBlock(block, primary, site.ownerName, site.owner, site.slug, extras)}
-          {i === heroIdx && highlights.length >= 3 ? <Marquee items={highlights} primary={primary} /> : null}
+          {i === heroIdx && !extras.inner && highlights.length >= 3 ? <Marquee items={highlights} primary={primary} /> : null}
           {i === heroIdx ? <SectionNav page={page} primary={primary} /> : null}
         </Fragment>
       ))}
