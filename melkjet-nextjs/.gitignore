@@ -103,6 +103,8 @@ next-env.d.ts
 
 # همهٔ فایل‌های دادهٔ استورها (server state) — هیچ‌وقت نباید در git باشند
 .*-data.json
+# آمارِ بازدیدِ سایت‌سازها در حالتِ فایل (dev/تست) — دادهٔ محلی، نه کد
+.site-stats.json
 .persiansaze*.json
 .media*
 .*-store.json
