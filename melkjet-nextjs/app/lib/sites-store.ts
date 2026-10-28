@@ -266,7 +266,7 @@ export function getSitePage(site: Site, pageSlug: string): SitePage {
 
 interface SavePageInput { slug?: string; title?: string; blocks?: any[]; inMenu?: boolean; menuLabel?: string }
 
-interface SaveSiteInput {
+export interface SaveSiteInput {
   slug?: string
   title: string
   owner?: string
@@ -394,4 +394,10 @@ export async function saveSite(input: SaveSiteInput): Promise<Site> {
   const site = buildSiteDoc(input, res.slug, prevRow ? migrateSite(prevRow) : undefined)
   await kvSet(ROW(res.slug), site)
   return site
+}
+
+/** فاز ۳۳۹ب — پیش‌نمایشِ زندهٔ ویرایشگر: پیش‌نویسِ ذخیره‌نشده با «همان» نرمال‌سازیِ ذخیره به سندِ Site تبدیل
+ *  می‌شود تا موتورِ رندرِ سایتِ منتشرشده عیناً همان را نشان دهد (بدونِ نوشتن در انبارِ سایت‌ها). */
+export function buildPreviewSite(input: SaveSiteInput, slug: string): Site {
+  return buildSiteDoc(input, sanitizeSlug(slug || '') || 'preview', null)
 }

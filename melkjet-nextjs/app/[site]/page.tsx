@@ -1233,6 +1233,13 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
 
 // Top nav listing every page of the site, themed. Home → /{slug}, others → /{slug}/{pageSlug}.
 // صفحاتی که باید در منو بیایند: خانه همیشه + هر صفحه‌ای که inMenu !== false
+// نامِ برند = عنوانِ سایت پیش از «|» / «-» — ویرایشگر عنوانِ سئو («آژانس X | خرید و فروش ملک») را عنوانِ سایت
+// ذخیره می‌کند و منو کلِ آن را نشان می‌داد (دم‌درازِ سئویی در لوگو = حسِ قالبِ آماده).
+function brandOf(site: Site): string {
+  const t = String(site.title || '').split(/\s[|｜–—-]\s/)[0].trim()
+  return t || site.title
+}
+
 function menuPages(site: Site): { slug: string; label: string; home: boolean }[] {
   return site.pages
     .map((pg, i) => ({ slug: pg.slug, label: pg.menuLabel || pg.title, home: i === 0, inMenu: i === 0 || pg.inMenu !== false }))
@@ -1242,7 +1249,7 @@ function menuPages(site: Site): { slug: string; label: string; home: boolean }[]
 
 // رپرِ نازکِ سازگار: ناوبری به مؤلفهٔ کلاینتِ NavBar واگذار می‌شود (همبرگرِ موبایل).
 function SiteNav({ site, primary, currentSlug }: { site: Site; primary: string; currentSlug: string }) {
-  return <NavBar brand={site.title} items={menuPages(site)} currentSlug={currentSlug} siteSlug={site.slug} primary={primary} />
+  return <NavBar brand={brandOf(site)} items={menuPages(site)} currentSlug={currentSlug} siteSlug={site.slug} primary={primary} />
 }
 
 // Shared full-site shell: nav + the given page's blocks. Used by both the home
@@ -1406,7 +1413,7 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
       `}</style>
       <div className="mjs-progress" aria-hidden />
       <SiteMotion />
-      <NavBar brand={site.title} items={menuPages(site)} currentSlug={currentSlug || ''} siteSlug={site.slug} primary={primary} />
+      <NavBar brand={brandOf(site)} items={menuPages(site)} currentSlug={currentSlug || ''} siteSlug={site.slug} primary={primary} />
       {children}
       {footerBlocks.map(block => renderBlock(block, primary, site.ownerName, site.owner, site.slug))}
       {bottomNav ? <BottomNav site={site} currentSlug={currentSlug || ''} primary={primary} /> : null}
@@ -1414,7 +1421,7 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
   )
 }
 
-export async function SiteShell({ site, page }: { site: Site; page: SitePage }) {
+export async function SiteShell({ site, page, preview = false }: { site: Site; page: SitePage; preview?: boolean }) {
   const primary = site.theme?.primary || '#c9a84c'
 
   // فاز ۲۹۷ق — دادهٔ پروفایلیِ هیرو: همه واقعی. خطای هرکدام نباید صفحه را بیندازد،
@@ -1467,7 +1474,7 @@ export async function SiteShell({ site, page }: { site: Site; page: SitePage }) 
     avatar, views, reviewsCount, reviewsAvg, memberYear, contactHref,
     showStats: page.slug === 'home' || page === home,
     heroImages: heroImages.slice(0, 5),
-    brand: site.ownerName || site.title,
+    brand: site.ownerName || brandOf(site),
     highlights,
     ...(page !== home && page.slug !== 'home' ? { inner: { homeHref: `/${encodeURIComponent(site.slug)}`, title: (page as any).menuLabel || page.title, isContact: page.slug === 'contact' } } : {}),
   }
@@ -1476,7 +1483,8 @@ export async function SiteShell({ site, page }: { site: Site; page: SitePage }) 
   return (
     <SiteChrome site={site} currentSlug={page.slug}>
       {/* فاز ۲۹۶ب — آمارِ بازدیدِ سایتِ اختصاصی (پنلِ «سایت‌سازها»ی ادمین) */}
-      <Beacon slug={site.slug} />
+      {/* پیش‌نمایشِ ویرایشگر آمارِ بازدید را بالا نمی‌برد */}
+      {preview ? null : <Beacon slug={site.slug} />}
       {page.blocks.map((block, i) => (
         <Fragment key={block.id}>
           {renderBlock(block, primary, site.ownerName, site.owner, site.slug, extras)}

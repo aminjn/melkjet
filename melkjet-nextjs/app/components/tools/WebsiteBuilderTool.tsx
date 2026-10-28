@@ -942,26 +942,31 @@ function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
   const v = { grad: `linear-gradient(135deg, ${pal.primary}, ${pal.secondary} 72%)`, primary: pal.primary, bg: pal.bg, surface: pal.surface }
   const block = (b: string, i: number) => {
     switch (b) {
-      case 'hero': return <div key={i} style={{ background: v.grad, padding: '16px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-        <div style={{ height: 6, width: '58%', background: 'rgba(255,255,255,.95)', borderRadius: 3 }} />
-        <div style={{ height: 4, width: '42%', background: 'rgba(255,255,255,.6)', borderRadius: 2 }} />
-        <div style={{ height: 10, width: '26%', background: '#fff', borderRadius: 5, marginTop: 4 }} />
-      </div>
+      // فاز ۳۳۹ب — پیش‌نمایشِ کوچکِ قالب‌ها هم‌زبان با پوستهٔ نسلِ ۲ (هیروی دوستونه روی شفقِ تیره + نوارِ متحرک)
+      case 'hero': return <div key={i}><div style={{ background: `radial-gradient(90% 120% at 90% 0%, ${v.primary}88, transparent 60%), ${pal.secondary}`, padding: '15px 12px', display: 'flex', alignItems: 'center', gap: 10, direction: 'rtl' }}>
+        <div style={{ flex: 1.2, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+          <div style={{ height: 4, width: '30%', background: 'rgba(255,255,255,.35)', borderRadius: 3 }} />
+          <div style={{ height: 7, width: '88%', background: 'rgba(255,255,255,.95)', borderRadius: 3 }} />
+          <div style={{ height: 7, width: '52%', background: v.primary, borderRadius: 3 }} />
+          <div style={{ display: 'flex', gap: 4, marginTop: 3 }}><div style={{ height: 9, width: 30, background: v.primary, borderRadius: 5 }} /><div style={{ height: 9, width: 20, border: '1px solid rgba(255,255,255,.4)', borderRadius: 5 }} /></div>
+        </div>
+        <div style={{ flex: 1, padding: 6, borderRadius: 7, background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.22)', transform: 'rotate(-3deg)', display: 'flex', flexDirection: 'column', gap: 3 }}>{[0, 1, 2].map(k => <div key={k} style={{ height: 6, background: 'rgba(255,255,255,.14)', borderRadius: 3 }} />)}</div>
+      </div><div style={{ padding: '5px 12px', background: v.bg, display: 'flex', gap: 8, borderBottom: '1px solid #eee' }}>{[34, 22, 30, 18].map((w, k) => <div key={k} style={{ height: 4, width: w, background: k % 2 ? 'transparent' : '#555', border: k % 2 ? '1px solid #bbb' : 'none', borderRadius: 2 }} />)}</div></div>
       case 'search': return <div key={i} style={{ padding: '9px 12px', background: '#fff' }}><div style={{ height: 11, background: '#f0f0f2', border: '1px solid #e4e4e7', borderRadius: 6 }} /></div>
       case 'catalog': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>{[0, 1, 2, 3, 4, 5].map(k => <div key={k}><div style={{ height: 20, background: `${v.primary}22`, borderRadius: 4, marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9 }}>🧱</div><div style={{ height: 3, width: '75%', background: '#dcdce0', borderRadius: 2, marginBottom: 2 }} /><div style={{ height: 3, width: '45%', background: v.primary, borderRadius: 2, opacity: .8 }} /></div>)}</div>
       case 'pricelist': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderTop: k ? '1px solid #eee' : 'none' }}><div style={{ height: 3, width: '40%', background: '#d5d5da', borderRadius: 2 }} /><div style={{ height: 4, width: '22%', background: v.primary, borderRadius: 2, opacity: .8 }} /></div>)}</div>
       case 'listings': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1 }}><div style={{ height: 24, background: '#e7e7ea', borderRadius: 4, marginBottom: 4 }} /><div style={{ height: 3, width: '80%', background: '#dcdce0', borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: '55%', background: '#e6e6ea', borderRadius: 2 }} /></div>)}</div>
       case 'gallery': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 4 }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ height: 22, background: '#e3e3e7', borderRadius: 3 }} />)}</div>
-      case 'services': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1, padding: 7, background: '#fff', border: '1px solid #eee', borderRadius: 5, textAlign: 'center' }}><div style={{ width: 11, height: 11, borderRadius: 3, background: v.primary, margin: '0 auto 5px' }} /><div style={{ height: 3, width: '70%', background: '#ddd', borderRadius: 2, margin: '0 auto' }} /></div>)}</div>
-      case 'stats': return <div key={i} style={{ padding: '11px 12px', background: '#f5f4f1', display: 'flex', justifyContent: 'space-around' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ textAlign: 'center' }}><div style={{ height: 8, width: 20, background: v.primary, borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: 26, background: '#ccc', borderRadius: 2 }} /></div>)}</div>
+      case 'services': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7', display: 'flex', gap: 6, direction: 'rtl' }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1, padding: 7, background: '#fff', border: '1px solid #eee', borderRadius: 6 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div style={{ width: 11, height: 11, borderRadius: 3, background: v.primary }} /><div style={{ width: 10, height: 7, border: '1px solid #ccc', borderRadius: 2 }} /></div><div style={{ height: 3, width: '75%', background: '#c9c9cf', borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 2.5, width: '55%', background: '#e2e2e6', borderRadius: 2 }} /></div>)}</div>
+      case 'stats': return <div key={i} style={{ padding: '12px 12px', background: pal.secondary, display: 'flex', justifyContent: 'space-around' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ textAlign: 'right' }}><div style={{ height: 10, width: 24, background: `linear-gradient(90deg,#fff,${v.primary})`, borderRadius: 2, marginBottom: 4 }} /><div style={{ height: 3, width: 22, background: 'rgba(255,255,255,.35)', borderRadius: 2 }} /></div>)}</div>
       case 'about': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 8, alignItems: 'center' }}><div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>{[90, 80, 70, 50].map((w, k) => <div key={k} style={{ height: 3, width: `${w}%`, background: '#dcdce0', borderRadius: 2 }} />)}</div><div style={{ width: 44, height: 34, background: '#e7e7ea', borderRadius: 5 }} /></div>
       case 'team': return <div key={i} style={{ padding: '10px 12px', background: '#fff', display: 'flex', gap: 10, justifyContent: 'center' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}><div style={{ width: 22, height: 22, borderRadius: '50%', background: '#e3e3e7', border: `1.5px solid ${v.primary}` }} /><div style={{ height: 3, width: 22, background: '#dcdce0', borderRadius: 2 }} /><div style={{ height: 2.5, width: 16, background: v.primary, borderRadius: 2, opacity: .7 }} /></div>)}</div>
       case 'testimonials': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7' }}><div style={{ padding: 8, background: '#fff', border: '1px solid #eee', borderRadius: 6 }}>{[85, 65].map((w, k) => <div key={k} style={{ height: 3, width: `${w}%`, background: '#dadade', borderRadius: 2, marginBottom: 4 }} />)}<div style={{ height: 6, width: 28, background: '#e3e3e7', borderRadius: 3, marginTop: 5 }} /></div></div>
-      case 'cta': return <div key={i} style={{ padding: '14px 12px', background: v.grad, display: 'flex', justifyContent: 'center' }}><div style={{ height: 10, width: '32%', background: '#fff', borderRadius: 5 }} /></div>
+      case 'cta': return <div key={i} style={{ padding: '12px 22px', background: v.grad }}><div style={{ padding: '9px 0', borderRadius: 8, border: `1.5px solid ${v.primary}`, background: `${pal.secondary}dd`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}><div style={{ height: 5, width: '46%', background: '#fff', borderRadius: 3 }} /><div style={{ height: 8, width: '22%', background: '#fff', borderRadius: 4 }} /></div></div>
       case 'contact': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 5 }}>{[100, 100, 60].map((w, k) => <div key={k} style={{ height: 9, width: `${w}%`, background: '#f1f1f3', border: '1px solid #e6e6e6', borderRadius: 3 }} />)}</div>
       case 'blog': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1 }}><div style={{ height: 20, background: '#e7e7ea', borderRadius: 4, marginBottom: 4 }} /><div style={{ height: 3, width: '85%', background: '#dcdce0', borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: '60%', background: '#ededf0', borderRadius: 2 }} /></div>)}</div>
       case 'blogfull': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7', display: 'flex', gap: 6, flexDirection: 'row-reverse' }}><div style={{ flex: '0 0 26px', display: 'flex', flexDirection: 'column', gap: 3 }}>{[0, 1, 2].map(k => <div key={k} style={{ height: 4, background: k === 0 ? v.primary : '#e0e0e4', borderRadius: 2 }} />)}</div><div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>{[0, 1, 2, 3].map(k => <div key={k}><div style={{ height: 16, background: '#e7e7ea', borderRadius: 3, marginBottom: 2 }} /><div style={{ height: 2.5, width: '80%', background: '#dcdce0', borderRadius: 2 }} /></div>)}</div></div>
-      case 'footer': return <div key={i} style={{ padding: '11px 12px', background: '#1a1a1f', display: 'flex', justifyContent: 'space-between' }}>{[0, 1, 2].map(k => <div key={k} style={{ height: 3, width: 32, background: '#3a3a42', borderRadius: 2 }} />)}</div>
+      case 'footer': return <div key={i} style={{ padding: '10px 12px 6px', background: pal.secondary }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ height: 3, width: 32, background: 'rgba(255,255,255,.22)', borderRadius: 2 }} />)}</div><div style={{ height: 12, margin: '0 18%', border: `1px solid ${v.primary}66`, borderRadius: 3 }} /></div>
       default: return null
     }
   }
@@ -1357,6 +1362,38 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
 
   const canvasWidth: string | number = device === 'mobile' ? 375 : device === 'tablet' ? 768 : '100%'
 
+  // ── فاز ۳۳۹ب — «پیش‌نمایشِ واقعی»: پیش‌نویس با همان موتورِ سایتِ منتشرشده رندر می‌شود ──
+  // بومِ ویرایش رندرکنندهٔ جدا و قدیمیِ خودش را دارد (برای انتخاب/جابه‌جاییِ بلوک)؛ این حالت دقیقاً همان
+  // چیزی را نشان می‌دهد که بازدیدکننده می‌بیند (حرکت، هیرو، چیدمانِ نسلِ ۲) — مثلِ Wix/Framer.
+  const [livePreview, setLivePreview] = useState(false)
+  const [previewNonce, setPreviewNonce] = useState(0)
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const previewRef = useRef<HTMLIFrameElement | null>(null)
+  const previewScroll = useRef(0)
+  useEffect(() => {
+    if (!livePreview) return
+    let alive = true
+    setPreviewBusy(true)
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/sites/draft', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slug, title: seoTitle, theme, ownerName, seo: { title: seoTitle, description: seoDesc },
+            pages: pages.map(pg => ({ slug: pg.slug, title: pg.title, inMenu: pg.inMenu !== false, menuLabel: pg.menuLabel || undefined, blocks: pg.blocks.map(b => ({ id: b.id, type: b.type, props: b.props })) })),
+          }),
+        })
+        if (!alive) return
+        if (res.ok) {
+          try { previewScroll.current = previewRef.current?.contentWindow?.scrollY || 0 } catch { /* هم‌مبدأ است؛ احتیاط */ }
+          setPreviewNonce(n => n + 1)
+        } else setPreviewBusy(false)
+      } catch { if (alive) setPreviewBusy(false) }
+    }, 650)
+    return () => { alive = false; clearTimeout(t) }
+  }, [livePreview, pages, theme, seoTitle, seoDesc, ownerName, slug])
+  const previewPageSlug = pages[activePage]?.slug || 'home'
+
   // در موبایل، پنل‌های کناری به «شیتِ کشویی از پایین» تبدیل می‌شوند.
   const sheetStyle = (open: boolean): React.CSSProperties => ({
     position: 'fixed', left: 0, right: 0, bottom: 0, top: 'auto', width: 'auto',
@@ -1562,6 +1599,17 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           ))}
         </div>
 
+        <button
+          onClick={() => setLivePreview(v => !v)}
+          title="دیدنِ سایت دقیقاً همان‌طور که بازدیدکننده می‌بیند (با انیمیشن‌ها)"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 800,
+            border: livePreview ? '1px solid var(--gold)' : '1px solid var(--line)',
+            background: livePreview ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'var(--surface)',
+            color: livePreview ? '#16140f' : 'var(--text)', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0,
+          }}
+        >{livePreview ? '✎ برگشت به ویرایش' : '👁 پیش‌نمایشِ واقعی'}</button>
+
         <div className="mjwb-tb-hide" style={{ width: 1, height: 24, background: 'var(--line)', flexShrink: 0 }} />
 
         <button
@@ -1684,7 +1732,21 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
             <span style={{ flex: 1 }} />
             <button onClick={() => setActiveTab('pages')} title="تنظیمات صفحات و منو" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>⚙ مدیریت صفحات و منو</button>
           </div>
+          {livePreview ? (
+            <div style={{ width: canvasWidth, flexShrink: 0, position: 'relative', borderRadius: device !== 'desktop' ? 22 : 10, overflow: 'hidden', boxShadow: '0 14px 50px rgba(0,0,0,0.45)', border: device !== 'desktop' ? '8px solid #111' : '1px solid var(--line)', background: '#fff' }}>
+              <iframe
+                key={previewNonce}
+                ref={previewRef}
+                title="پیش‌نمایشِ واقعیِ سایت"
+                src={previewNonce ? `/site-preview?page=${encodeURIComponent(previewPageSlug)}&n=${previewNonce}` : 'about:blank'}
+                onLoad={() => { setPreviewBusy(false); try { const y = previewScroll.current; if (y) previewRef.current?.contentWindow?.scrollTo(0, y) } catch { /* */ } }}
+                style={{ display: 'block', width: '100%', height: 'calc(100vh - 170px)', border: 0, background: '#fff' }}
+              />
+              {previewBusy ? <div style={{ position: 'absolute', top: 10, insetInlineStart: 10, padding: '5px 12px', borderRadius: 999, background: 'rgba(0,0,0,.72)', color: '#fff', fontSize: 11.5, fontWeight: 700 }}>در حالِ به‌روزرسانی…</div> : null}
+            </div>
+          ) : null}
           <div style={{
+            display: livePreview ? 'none' : 'block',
             width: canvasWidth,
             minHeight: '100%',
             background: theme.bg || '#fff',
@@ -1871,11 +1933,11 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
 
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>پالتِ آمادهٔ سایت</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 7, marginBottom: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 7, marginBottom: 14 }}>
                     {SITE_PALETTES.map(pl => {
                       const active = theme.primary === pl.t.primary && theme.bg === pl.t.bg
                       return (
-                        <button key={pl.name} onClick={() => setTheme(t => ({ ...pl.t, ...(t.font ? { font: t.font } : {}) }))} title={pl.name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px', borderRadius: 9, border: `1.5px solid ${active ? 'var(--gold)' : 'var(--line)'}`, background: active ? 'var(--goldDim)' : 'var(--bg2)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right' }}>
+                        <button key={pl.name} onClick={() => setTheme(t => ({ ...pl.t, ...(t.font ? { font: t.font } : {}) }))} title={pl.name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px', borderRadius: 9, border: `1.5px solid ${active ? 'var(--gold)' : 'var(--line)'}`, background: active ? 'var(--goldDim)' : 'var(--bg2)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right', minWidth: 0 }}>
                           <span style={{ display: 'flex', flexShrink: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--line2)' }}>
                             <span style={{ width: 13, height: 22, background: pl.t.bg }} />
                             <span style={{ width: 13, height: 22, background: pl.t.primary }} />
