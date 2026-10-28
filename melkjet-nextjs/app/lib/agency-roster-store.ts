@@ -1106,10 +1106,16 @@ export async function recleanNames(id: string, apply: boolean): Promise<{ ok: bo
   const rc = await loadRowCache(id)
   const tokens = Object.keys(rc).filter(t => rc[t]?.desc)
   if (!tokens.length) return { ok: false, skipped: 'کشِ متنی خالی — نیازِ سینک از دیوار', removed: [], renamed: [] }
+  // فاز ۳۳۶ج — نامِ AIِ کش‌شده (`name`) را دور می‌ریزیم و فقط از «متنِ» کش‌شده با قوانینِ تازه
+  // دوباره استخراج می‌کنیم؛ وگرنه نامِ جعلیِ قدیمی («خوش هاشمی») که در کش نشسته بازتولید می‌شد و
+  // پاک‌سازی بی‌اثر می‌ماند. useAI:false → بدونِ qwenِ تازه (سریع)؛ موتورِ NERِ ۹۵٪ (primeشده در
+  // اسکریپت) مرجع است و qwen فقط تکمیلی بود، پس افتِ پوشش اندک است و سینکِ واقعیِ بعدی کامل می‌کند.
+  const textOnly: typeof rc = {}
+  for (const t of tokens) textOnly[t] = { title: rc[t].title, desc: rc[t].desc }
   const { buildAgencyRoster } = await import('./agency-roster')
   const pinnedKeys = (scrape.advisors || []).filter(a => a.phone).map(a => a.key)
   const roster = await buildAgencyRoster(scrape.slug, {
-    useAI: scrape.useAI, cached: rc, pinnedKeys,
+    useAI: false, cached: textOnly, pinnedKeys,
     f: {
       profileTokens: (async () => ({ posts: tokens.map(t => ({ token: t })), name: scrape.agencyName || '', reason: '' })) as any,
       post: (async () => ({ title: '', description: '' })) as any,
