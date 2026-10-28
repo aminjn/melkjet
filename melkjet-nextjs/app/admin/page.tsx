@@ -2577,7 +2577,7 @@ function AgencyRosterPanel() {
       if (!confirm(`${j.error}\n\nاگر واقعاً همان شخص است تأیید کن؛ وگرنه لغو کن و شمارهٔ درست را بزن.`)) { setMsg('لغو شد'); return }
       j = await post({ action: 'graduate', id, key, phone: ph, force: true })
     }
-    if (j.ok) { setMsg('⏳ در صفِ ساختِ حساب — انتقالِ فایل‌ها روی سرور انجام می‌شود (تا ۱–۲ دقیقه)'); load() } else setMsg('❌ ' + (j.error || 'خطا')) }
+    if (j.ok) { setMsg(j.merged ? `✅ ادغام شد — با مشاورِ هم‌شماره یکی شد${j.moved ? ` (${fa(j.moved)} آگهی منتقل شد)` : ''}.` : '⏳ در صفِ ساختِ حساب — انتقالِ فایل‌ها روی سرور انجام می‌شود (تا ۱–۲ دقیقه)'); load() } else setMsg('❌ ' + (j.error || 'خطا')) }
 
   // ویرایشِ نام و شماره بدونِ حذف‌وساخت — حذف سابقهٔ فایل‌ها را از بین می‌برد.
   const editAdvisorUi = async (id: string, key: string, cur: any) => {
@@ -2592,7 +2592,7 @@ function AgencyRosterPanel() {
       if (!confirm(`${j.error}\n\nاگر همان شخص است تأیید کن.`)) { setMsg('لغو شد'); return }
       j = await post({ action: 'edit-advisor', id, key, name: nm, phone: ph, force: true })
     }
-    if (j.ok) { setMsg(j.queued ? '✅ حساب در حالِ ساخت است — چند لحظهٔ دیگر در «کاربران» می‌آید و آگهی‌هایش منتشر می‌شود.' : `✅ ذخیره شد${j.moved ? ` — ${fa(j.moved)} فایل منتقل شد` : ''}`); load() }
+    if (j.ok) { setMsg(j.merged ? `✅ ادغام شد — این مشاور با مشاورِ هم‌شماره یکی شد${j.moved ? ` (${fa(j.moved)} آگهی منتقل شد)` : ''}.` : j.queued ? '✅ حساب در حالِ ساخت است — چند لحظهٔ دیگر در «کاربران» می‌آید و آگهی‌هایش منتشر می‌شود.' : `✅ ذخیره شد${j.moved ? ` — ${fa(j.moved)} فایل منتقل شد` : ''}`); load() }
     else setMsg('❌ ' + (j.error || 'خطا'))
   }
   // انتخابِ گروهی: پاک‌سازیِ مشاورانِ جعلی نباید ۲۰ بار کلیک و تأیید باشد.

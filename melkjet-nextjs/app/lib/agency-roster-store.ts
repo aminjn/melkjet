@@ -1162,8 +1162,34 @@ export async function phoneConflicts(): Promise<{ phone: string; legit: boolean;
   return out.sort((a, b) => Number(a.legit) - Number(b.legit))
 }
 
+// فاز ۳۳۶ح — ادغامِ دو مشاورِ «یک‌شخص» (باگِ زنده: رادمهر/رامهر با شمارهٔ یکسان؛ کاربر تأیید کرد که
+// یکی‌اند ولی force فقط گاردِ تعارض را رد می‌کرد و رکوردِ دوم را «جدا» می‌ساخت، نه ادغام). این تابع
+// مشاورِ `from` را در `to` ادغام می‌کند: آگهی‌های from زیرِ مالکِ to می‌روند، دادهٔ advisorِ حسابِ from
+// (اگر جدا بود) به حسابِ to منتقل می‌شود، توکن‌ها یکی می‌شوند و رکوردِ from حذف می‌شود. `to` (مشاورِ
+// موجود با حساب/شماره) میزبان می‌ماند.
+export async function mergeAdvisorInto(fromId: string, fromKey: string, toId: string, toKey: string): Promise<{ ok: boolean; error?: string; moved?: number }> {
+  if (fromId === toId && fromKey === toKey) return { ok: false, error: 'مبدأ و مقصد یکی‌اند' }
+  const fromScrape = await getScrape(fromId); const toScrape = await getScrape(toId)
+  if (!fromScrape || !toScrape) return { ok: false, error: 'اسکرپ یافت نشد' }
+  const from = fromScrape.advisors.find(a => a.key === fromKey)
+  const to = toScrape.advisors.find(a => a.key === toKey)
+  if (!from || !to) return { ok: false, error: 'مشاور یافت نشد' }
+  let moved = 0
+  const toOwner = to.phone || to.owner, fromOwner = from.phone || from.owner
+  if (fromOwner && toOwner && fromOwner !== toOwner) {
+    try { const { reassignListingOwnerPhone } = await import('./scraper-store'); moved = await reassignListingOwnerPhone(fromOwner, toOwner) } catch {}
+    // اگر هر دو حسابِ واقعی (موبایل) داشتند، دادهٔ advisorِ from به to (idempotent).
+    if (/^0\d{10}$/.test(fromOwner) && /^0\d{10}$/.test(toOwner)) {
+      try { const { mergeAdvisorData } = await import('./advisor-store'); const r = await mergeAdvisorData(fromOwner, toOwner); moved += r.listings } catch {}
+    }
+  }
+  await mutateScrape(toId, s => { if (!s) return; const t = s.advisors.find(a => a.key === toKey); if (t) t.tokens = [...new Set([...(t.tokens || []), ...(from.tokens || [])])].slice(0, 100) })
+  await mutateScrape(fromId, s => { if (s) s.advisors = s.advisors.filter(a => a.key !== fromKey) })
+  return { ok: true, moved }
+}
+
 /** ویرایشِ مشاور بدونِ حذف‌وساخت — حذف سابقهٔ فایل‌ها را از بین می‌برد. */
-export async function editAdvisor(id: string, key: string, patch: { name?: string; phone?: string }): Promise<{ ok: boolean; error?: string; moved?: number; queued?: boolean }> {
+export async function editAdvisor(id: string, key: string, patch: { name?: string; phone?: string }): Promise<{ ok: boolean; error?: string; moved?: number; queued?: boolean; merged?: boolean }> {
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد' }
   const rec = scrape.advisors.find(a => a.key === key)

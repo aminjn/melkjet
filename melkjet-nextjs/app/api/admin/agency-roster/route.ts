@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, listDueRosters} from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, mergeAdvisorInto, listDueRosters} from '@/app/lib/agency-roster-store'
 import { getCronBeat } from '@/app/lib/cron-heartbeat'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { rosterCities } from '@/app/lib/agency-roster-city'
@@ -97,13 +97,16 @@ export async function POST(req: NextRequest) {
   if (action === 'graduate') {
     if (!b.id || !b.key || !b.phone) return NextResponse.json({ error: 'id/key/phone لازم است' }, { status: 400 })
     // یکتاییِ شماره: اگر به مشاورِ دیگری با نامِ ناسازگار داده شده، جلویش گرفته می‌شود.
-    // مسدود نمی‌شود، معلق می‌شود — تصمیمِ نهایی با مدیر است (force).
-    if (!b.force) {
-      const cf = await phoneConflict(String(b.phone), String(b.id), String(b.key))
-      if (cf) return NextResponse.json({
+    // فاز ۳۳۶ح — force دیگر «رکوردِ دوم» نمی‌سازد؛ تأییدِ کاربر یعنی «همین شخص است» → ادغام.
+    const cf = await phoneConflict(String(b.phone), String(b.id), String(b.key))
+    if (cf) {
+      if (!b.force) return NextResponse.json({
         error: `این شماره از قبل به «${cf.name}» در آژانسِ ${cf.slug} داده شده. اگر همان شخص است، دوباره با تأیید بزنید.`,
         conflict: cf,
       }, { status: 409 })
+      const r = await mergeAdvisorInto(String(b.id), String(b.key), cf.id, cf.key)
+      if (r.ok) logAudit(who(s), 'ادغامِ مشاورِ هم‌شماره', `${b.key} → «${cf.name}» (${r.moved || 0} آگهی)`)
+      return NextResponse.json({ ...r, merged: true }, { status: r.ok ? 200 : 400 })
     }
     const r = await enqueueGraduate(String(b.id), String(b.key), String(b.phone), b.role ? String(b.role) : undefined)
     if (r.ok) { const sc = await getScrape(String(b.id)); logAudit(who(s), 'درخواستِ ساختِ حسابِ مشاور از آژانس', `${sc?.slug || ''} · ${b.key} → ${b.phone}`) }
@@ -111,11 +114,17 @@ export async function POST(req: NextRequest) {
   }
   if (action === 'edit-advisor') {
     if (!b.id || !b.key) return NextResponse.json({ error: 'id/key لازم است' }, { status: 400 })
-    if (b.phone && !b.force) {
+    if (b.phone) {
       const cf = await phoneConflict(String(b.phone), String(b.id), String(b.key))
-      if (cf) return NextResponse.json({
-        error: `این شماره از قبل به «${cf.name}» در آژانسِ ${cf.slug} داده شده.`, conflict: cf,
-      }, { status: 409 })
+      if (cf) {
+        if (!b.force) return NextResponse.json({
+          error: `این شماره از قبل به «${cf.name}» در آژانسِ ${cf.slug} داده شده.`, conflict: cf,
+        }, { status: 409 })
+        // فاز ۳۳۶ح — تأییدِ کاربر = «همین شخص» → ادغام در مشاورِ موجود، نه رکوردِ دوم.
+        const r = await mergeAdvisorInto(String(b.id), String(b.key), cf.id, cf.key)
+        if (r.ok) logAudit(who(s), 'ادغامِ مشاورِ هم‌شماره', `${b.key} → «${cf.name}» (${r.moved || 0} آگهی)`)
+        return NextResponse.json({ ...r, merged: true }, { status: r.ok ? 200 : 400 })
+      }
     }
     const r = await editAdvisor(String(b.id), String(b.key), {
       name: b.name != null ? String(b.name) : undefined,
