@@ -1,24 +1,42 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import NeighborhoodPicker from '../NeighborhoodPicker'
 
 // جزیرهٔ تعاملیِ هیروی صفحهٔ اصلی.
-// فاز ۲۹۸ی۵ (ری‌برند): حالتِ glass = پنلِ شیشه‌ایِ موکاپ — جعبهٔ زبانِ طبیعی + سه فیلترِ
-// برچسب‌دار (نوع ملک/موقعیت/نوع) + دکمهٔ جستجو + نوارِ دستیار با دکمهٔ گردِ ارسال.
-// همه واقعی‌اند و به /search می‌روند (قانونِ آهنین: هیچ ورودیِ تزئینیِ بی‌کار).
+// فاز ۲۹۸ی۵ (ری‌برند): حالتِ glass = پنلِ شیشه‌ایِ موکاپ — جعبهٔ زبانِ طبیعی + فیلترِ برچسب‌دار
+// + دکمهٔ جستجو + نوارِ دستیار با دکمهٔ گردِ ارسال. همه واقعی‌اند و به /search می‌روند.
+// فاز ۳۳۷ (هم‌ترازی با رقبا — دیوار/کیلید/Zillow): «موقعیت» از تکست‌باکسِ آزاد به کَسکِیدِ واقعیِ
+// شهر ← محله ارتقا یافت (CitySelectorِ سراسری در هدر شهر را در کوکی mj_city نگه می‌دارد؛ اینجا
+// محله با NeighborhoodPicker از همان شهر می‌آید)، + انتخابِ سریعِ «حداکثر بودجه».
 
 const KINDS = ['آپارتمان', 'ویلا و خانه', 'زمین و کلنگی', 'دفتر و اداری', 'مغازه و تجاری']
 const DEALS: { l: string; v: string }[] = [
   { l: 'خرید', v: '' }, { l: 'رهن و اجاره', v: 'rent' }, { l: 'پیش‌فروش', v: 'presale' },
 ]
+const CITIES = ['تهران', 'مشهد', 'اصفهان', 'کرج', 'شیراز', 'تبریز', 'قم', 'اهواز', 'رشت', 'کرمان', 'ارومیه', 'قزوین', 'یزد']
+// حداکثر بودجه (تومان) — میان‌بُرِ رایج؛ فیلترِ کاملِ قیمت در صفحهٔ جستجوست.
+const BUDGETS: { l: string; v: string }[] = [
+  { l: 'حداکثر بودجه', v: '' },
+  { l: 'تا ۳ میلیارد', v: '3000000000' }, { l: 'تا ۵ میلیارد', v: '5000000000' },
+  { l: 'تا ۸ میلیارد', v: '8000000000' }, { l: 'تا ۱۲ میلیارد', v: '12000000000' },
+  { l: 'تا ۲۰ میلیارد', v: '20000000000' }, { l: 'تا ۴۰ میلیارد', v: '40000000000' },
+]
+const readCity = () => { try { const m = document.cookie.match(/(?:^|; )mj_city=([^;]*)/); return m ? decodeURIComponent(m[1]) : '' } catch { return '' } }
+const writeCity = (c: string) => { try { document.cookie = `mj_city=${encodeURIComponent(c)};path=/;max-age=${365 * 86400};SameSite=Lax` } catch {} }
 
 export default function HeroSearch({ examples, glass = false }: { examples: string[]; glass?: boolean }) {
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState(KINDS[0])
   const [deal, setDeal] = useState('')
-  const [loc, setLoc] = useState('')
+  const [city, setCity] = useState('')
+  const [hood, setHood] = useState('')
+  const [budget, setBudget] = useState('')
   const [chat, setChat] = useState('')
+
+  useEffect(() => { setCity(readCity()) }, [])
+  const pickCity = (c: string) => { setCity(c); setHood(''); writeCity(c) }
 
   const go = (params: Record<string, string>) => {
     const qs = new URLSearchParams()
@@ -26,7 +44,7 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
     const s = qs.toString()
     router.push(s ? `/search?${s}` : '/search')
   }
-  const runSearch = () => go({ q: query, kind, type: deal, loc })
+  const runSearch = () => go({ q: query, kind, type: deal, hood, pmax: budget })
   const runChat = () => go({ q: chat.trim() || query })
   const fillQuery = (text: string) => { setQuery(text); go({ q: text }) }
 
@@ -63,19 +81,37 @@ export default function HeroSearch({ examples, glass = false }: { examples: stri
           <div style={{ flex: '1 1 208px', minWidth: 196, display: 'grid', gap: 10, alignContent: 'start' }}>
             <div className="mjhp-pills" style={{ display: 'grid', gap: 10 }}>
               <label style={pill}>
+                <span style={pillLabel}>معامله:</span>
+                <select value={deal} onChange={e => setDeal(e.target.value)} style={selStyle}>
+                  {DEALS.map(d => <option key={d.l} value={d.v} style={{ color: '#111' }}>{d.l}</option>)}
+                </select>
+              </label>
+              <label style={pill}>
                 <span style={pillLabel}>نوع ملک:</span>
                 <select value={kind} onChange={e => setKind(e.target.value)} style={selStyle}>
                   {KINDS.map(k => <option key={k} value={k} style={{ color: '#111' }}>{k}</option>)}
                 </select>
               </label>
               <label style={pill}>
-                <span style={pillLabel}>موقعیت:</span>
-                <input value={loc} onChange={e => setLoc(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') runSearch() }} placeholder="تهران" style={{ ...selStyle, cursor: 'text', minWidth: 0 }} />
+                <span style={pillLabel}>شهر:</span>
+                <select value={city} onChange={e => pickCity(e.target.value)} style={selStyle}>
+                  <option value="" style={{ color: '#111' }}>همهٔ شهرها</option>
+                  {CITIES.map(c => <option key={c} value={c} style={{ color: '#111' }}>{c}</option>)}
+                </select>
               </label>
+              {/* محله — کَسکِیدِ وابسته به شهر (اتوکامپلیت از دیتای جغرافیا). فقط وقتی شهر انتخاب شد. */}
+              <div style={{ ...pill, padding: '0 8px 0 14px' }}>
+                <span style={pillLabel}>محله:</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {city
+                    ? <NeighborhoodPicker value={hood} onChange={setHood} city={city} />
+                    : <span style={{ fontSize: 13, color: 'var(--hsg-label)', opacity: .6 }}>اول شهر را انتخاب کن</span>}
+                </div>
+              </div>
               <label style={pill}>
-                <span style={pillLabel}>نوع:</span>
-                <select value={deal} onChange={e => setDeal(e.target.value)} style={selStyle}>
-                  {DEALS.map(d => <option key={d.l} value={d.v} style={{ color: '#111' }}>{d.l}</option>)}
+                <span style={pillLabel}>بودجه:</span>
+                <select value={budget} onChange={e => setBudget(e.target.value)} style={selStyle}>
+                  {BUDGETS.map(b => <option key={b.l} value={b.v} style={{ color: '#111' }}>{b.l}</option>)}
                 </select>
               </label>
             </div>
