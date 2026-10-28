@@ -93,11 +93,11 @@ const DISPLAY = "'Markazi Text', Vazirmatn, serif"   // اگر فونت نبود
 // empLightTokens — پالتِ روز در خطِ ۱۵۷۹ متغیرها را روشن کرد ولی این ثابت‌ها تیره ماندند.
 // card بنفشِ نیمه‌شفاف بود: روی صفحهٔ تیره تیره دیده می‌شد، ولی داخلِ برگهٔ سفید، سفیدِ زیرش
 // از پشتش می‌زد بیرون و یاسیِ روشن می‌شد — و متن رویش خوانده نمی‌شد. حالا کدر و کاغذی است.
-const card: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, boxShadow: '0 1px 0 rgba(255,255,255,.85) inset, 0 10px 26px -18px rgba(30,40,60,.4)' }
+const card: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, boxShadow: '0 1px 0 var(--empHi, rgba(255,255,255,.85)) inset, 0 10px 26px -18px rgba(30,40,60,.4)' }
 // دکمهٔ طلاییِ chunky (سبکِ موبایل‌گیم): گرادیانِ پر، دورخطِ تیره، بِوِلِ پایین
 const btn: React.CSSProperties = { background: 'linear-gradient(180deg,#f5dc9b,#c9a96a)', color: '#33270a', border: '1px solid #a8873f', borderRadius: 12, padding: '10px 18px', fontWeight: 800, cursor: 'pointer', fontSize: 14, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.55), 0 2px 0 #9c7a3c, 0 8px 18px -10px rgba(160,120,40,.55)' }
-const btnGhost: React.CSSProperties = { background: '#ffffff', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 12, padding: '9px 17px', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, boxShadow: '0 1px 2px rgba(30,40,60,.07)' }
-const chip = (on: boolean): React.CSSProperties => ({ padding: '8px 15px', borderRadius: 999, border: `1px solid ${on ? '#a8873f' : 'var(--line)'}`, background: on ? 'linear-gradient(180deg,#f5dc9b,#dcbc6d)' : '#ffffff', color: on ? '#3a2c0c' : 'var(--muted)', cursor: 'pointer', fontSize: 13, fontWeight: on ? 800 : 600, boxShadow: on ? '0 2px 8px -4px rgba(160,120,40,.55)' : '0 1px 2px rgba(30,40,60,.06)' })
+const btnGhost: React.CSSProperties = { background: 'var(--empGhostBg, #ffffff)', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 12, padding: '9px 17px', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, boxShadow: '0 1px 2px rgba(30,40,60,.07)' }
+const chip = (on: boolean): React.CSSProperties => ({ padding: '8px 15px', borderRadius: 999, border: `1px solid ${on ? '#a8873f' : 'var(--line)'}`, background: on ? 'linear-gradient(180deg,#f5dc9b,#dcbc6d)' : 'var(--empGhostBg, #ffffff)', color: on ? '#3a2c0c' : 'var(--muted)', cursor: 'pointer', fontSize: 13, fontWeight: on ? 800 : 600, boxShadow: on ? '0 2px 8px -4px rgba(160,120,40,.55)' : '0 1px 2px rgba(30,40,60,.06)' })
 
 // 🎮 فاز ۱۶۰ — پوستهٔ tycoon برای بقیهٔ تب‌ها (فقط ظاهر — صفر منطق):
 // سربرگِ بخش با چیپِ رنگی، چیپِ پاداش، مربعِ آیکنِ رنگی، چیپِ وضعیت، نوارِ پیشرفتِ کلفت. رنگ‌ها همیشه hex.
@@ -169,6 +169,52 @@ function MJ({ children }: { children: React.ReactNode }) {
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
       <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,var(--gold),#8a6d1a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✨</div>
       <div style={{ ...card, background: 'var(--bg2)', flex: 1, fontSize: 14, lineHeight: 2 }}>{children}</div>
+    </div>
+  )
+}
+
+// 🎬 فاز ۳۴۰ — پس‌زمینهٔ سینماییِ ورود (معرفی → تولد): آسمانِ شبِ شهر + خطِ آسمانِ ساختمان‌ها با پنجره‌های
+// روشنِ چشمک‌زن. ورودِ بازی پیش از این یک فرمِ روشنِ نظرسنجی‌گونه بود (Monopoly GO/Upland اولین لحظه را
+// سینمایی می‌سازند — حساس‌ترین لحظه برای ماندنِ بازیکن). همه‌چیز قطعی از هش (قانون ۷)، بدونِ Math.random.
+// هشِ رشته‌های پشتِ‌سرهم (st0، st1…) نزدیکِ هم می‌افتد → ستاره‌ها/ساختمان‌ها ردیف می‌شدند؛ مخلوط‌سازِ avalanche.
+const mixOf = (k: string) => { let n = seedOf(k); n ^= n >>> 16; n = Math.imul(n, 0x45d9f3b); n ^= n >>> 16; n = Math.imul(n, 0x45d9f3b); n ^= n >>> 16; return n >>> 0 }
+function CineBackdrop() {
+  const W = 1200, H = 260
+  const towers: { x: number; w: number; h: number; far: boolean }[] = []
+  for (const far of [true, false]) {
+    let x = far ? -20 : -40, i = 0
+    while (x < W) {
+      const sd = mixOf((far ? 'f' : 'n') + i++)
+      const w = (far ? 46 : 58) + (sd % (far ? 40 : 54)), h = (far ? 90 : 60) + ((sd >> 6) % (far ? 120 : 150))
+      towers.push({ x, w, h, far }); x += w + (far ? 6 : 10) + ((sd >> 12) % 14)
+    }
+  }
+  const stars = Array.from({ length: 46 }, (_, i) => { const sd = mixOf('st' + i); return { l: (sd % 1000) / 10, t: ((sd >> 10) % 600) / 10, s: 1 + (sd % 3) * 0.6, d: (sd >> 4) % 5 } })
+  return (
+    <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: -1, overflow: 'hidden', background: 'radial-gradient(120% 80% at 70% 0%, #2b2266 0%, #141433 45%, #07070f 100%)' }}>
+      <div className="empCineGlow" style={{ position: 'absolute', width: '70vmax', height: '70vmax', left: '-20vmax', top: '-30vmax', borderRadius: '50%', background: 'radial-gradient(circle, rgba(233,193,98,.20), transparent 62%)', filter: 'blur(20px)' }} />
+      {stars.map((st, i) => <span key={i} style={{ position: 'absolute', left: `${st.l}%`, top: `${st.t}%`, width: st.s, height: st.s, borderRadius: '50%', background: '#fff', animation: `empTwinkle ${3 + st.d}s ease-in-out ${st.d * 0.7}s infinite` }} />)}
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax slice" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', height: '38vh', minHeight: 200 }}>
+        <defs>
+          <linearGradient id="empCineFar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#262352" /><stop offset="1" stopColor="#14132e" /></linearGradient>
+          <linearGradient id="empCineNear" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#15142c" /><stop offset="1" stopColor="#08080f" /></linearGradient>
+        </defs>
+        {towers.map((t, i) => {
+          const y = H - t.h, rows = Math.floor((t.h - 16) / 14), cols = Math.max(2, Math.floor((t.w - 10) / 12))
+          return (
+            <g key={i}>
+              <rect x={t.x} y={y} width={t.w} height={t.h} fill={t.far ? 'url(#empCineFar)' : 'url(#empCineNear)'} />
+              {Array.from({ length: rows * cols }, (_, k) => {
+                const sd = mixOf(`w${i}:${k}`)
+                if (sd % (t.far ? 5 : 4) !== 0) return null
+                const r = Math.floor(k / cols), c = k % cols
+                return <rect key={k} className={sd % 3 === 0 ? 'empWin' : undefined} x={t.x + 6 + c * 12} y={y + 10 + r * 14} width={6} height={7} rx={1} fill={t.far ? 'rgba(255,214,140,.38)' : 'rgba(255,214,140,.85)'} style={sd % 3 === 0 ? { animationDelay: `${(sd >> 5) % 6}s` } : undefined} />
+              })}
+            </g>
+          )
+        })}
+      </svg>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '22vh', background: 'linear-gradient(180deg, transparent, rgba(7,7,15,.85))' }} />
     </div>
   )
 }
@@ -1418,9 +1464,22 @@ export default function EmpirePage() {
 
   // ── تولد ──
   const questions = [
-    { key: 'city', title: 'در کدام شهر دنبالِ آینده‌ات هستی؟', el: <input value={city} onChange={e => setCity(e.target.value)} placeholder="مثلاً تهران" style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 14 }} /> , ok: () => !!city.trim() },
+    // 🎬 فاز ۳۴۰ — شهر با یک لمس (چیپ‌های شهرهای پرآگهی)؛ تایپ فقط برای شهرِ دیگر.
+    { key: 'city', title: 'در کدام شهر دنبالِ آینده‌ات هستی؟', el: <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{['تهران', 'کرج', 'مشهد', 'اصفهان', 'شیراز', 'تبریز', 'رشت', 'قم'].map(c => <button key={c} type="button" onClick={() => setCity(c)} style={{ ...chip(city === c), fontSize: 14, padding: '9px 16px' }}>{c}</button>)}</div>
+      <input value={city} onChange={e => setCity(e.target.value)} placeholder="یا نامِ شهرِ دیگر را بنویس" style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 14 }} />
+    </div>, ok: () => !!city.trim() },
     { key: 'tenB', title: 'اگر امروز ۱۰ میلیارد تومان داشتی چه کار می‌کردی؟', el: <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{['خانهٔ خودم را می‌خریدم', 'سرمایه‌گذاری می‌کردم', 'زمین می‌خریدم و می‌ساختم', 'یک کسب‌وکارِ تجاری راه می‌انداختم'].map(o => <button key={o} onClick={() => setTenB(o)} style={chip(tenB === o)}>{o}</button>)}</div>, ok: () => !!tenB },
-    { key: 'risk', title: 'چقدر اهلِ ریسک هستی؟', el: <div><input type="range" min={0} max={100} value={risk} onChange={e => setRisk(Number(e.target.value))} style={{ width: '100%' }} /><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)' }}><span>محتاط</span><b style={{ color: 'var(--gold)' }}>{fa(risk)}٪</b><span>جسور</span></div></div>, ok: () => true },
+    // 🎬 فاز ۳۴۰ — ریسک با برچسبِ زنده (🛡/⚖️/🚀) و نوارِ رنگی به‌جای اسلایدرِ خامِ مرورگر
+    { key: 'risk', title: 'چقدر اهلِ ریسک هستی؟', el: <div>
+      <div style={{ textAlign: 'center', marginBottom: 12 }}>
+        <div style={{ fontSize: 46, lineHeight: 1.1 }}>{risk < 34 ? '🛡' : risk < 67 ? '⚖️' : '🚀'}</div>
+        <div style={{ fontSize: 17, fontWeight: 900, marginTop: 6, color: risk < 34 ? '#8fd3ff' : risk < 67 ? '#f1cf7d' : '#ff9b7a' }}>{risk < 34 ? 'محتاط' : risk < 67 ? 'متعادل' : 'جسور'} · {fa(risk)}٪</div>
+      </div>
+      <input type="range" min={0} max={100} value={risk} onChange={e => setRisk(Number(e.target.value))} style={{ width: '100%', accentColor: '#e9c46a' }} />
+      <div style={{ height: 6, borderRadius: 6, marginTop: 6, background: 'linear-gradient(90deg,#ff9b7a,#f1cf7d,#8fd3ff)', opacity: .7 }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginTop: 6 }}><span>محتاط</span><span>جسور</span></div>
+    </div>, ok: () => true },
     { key: 'ptype', title: 'کدام نوع ملک بیشتر به دلت می‌نشیند؟', el: <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{['آپارتمان', 'ویلا', 'تجاری / مغازه', 'زمین و کلنگی'].map(o => <button key={o} onClick={() => setPtype(o)} style={chip(ptype === o)}>{o}</button>)}</div>, ok: () => !!ptype },
     { key: 'goal', title: 'هدفِ اصلی‌ات در این سفرِ مالی چیست؟', el: <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{['اولین خانهٔ خودم', 'درآمدِ ماهانه از اجاره', 'رشدِ سرمایه', 'ساخت‌وساز و توسعه'].map(o => <button key={o} onClick={() => setGoal(o)} style={chip(goal === o)}>{o}</button>)}</div>, ok: () => !!goal },
   ]
@@ -1573,10 +1632,14 @@ export default function EmpirePage() {
 
   // ══════════ رندر ══════════
   // لایهٔ حس و حرکت (جلد ۵۶): «هیچ چیزی نباید ناگهانی ظاهر نشود» — ورودِ پلکانی، میکرواینترکشن، جشنِ موفقیت.
+  // 🎬 فاز ۳۴۰ — مراحلِ ورود (معرفی → هدیه) پوستهٔ سینماییِ تیره می‌گیرند؛ داشبورد همان پالتِ روزِ هنرِ ایزومتریک.
+  const CINE_STEPS = ['pitch', 'path', 'q', 'dream', 'verdict', 'birth', 'gift']
+  const isCine = CINE_STEPS.includes(step)
+  const cineStage = ['path', 'q', 'dream', 'verdict', 'birth', 'gift'].indexOf(step)
   const wrap = (children: React.ReactNode) => (
-    <main dir="rtl" className="empRoot" style={{ maxWidth: 860, margin: '0 auto', padding: '24px 16px 80px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <main dir="rtl" className={`empRoot${isCine ? ' empCine' : ''}`} style={{ maxWidth: isCine ? 620 : 860, margin: '0 auto', padding: isCine ? '22px 18px 60px' : '24px 16px 80px', display: 'flex', flexDirection: 'column', gap: 16, minHeight: isCine ? '100vh' : undefined }}>
       {/* 🎨 فاز ۱۵۸ — پس‌زمینهٔ tycoon: بنفشِ عمیق → ماژنتا-سرمه‌ای؛ ثابت (شب‌پایه) — آسمانِ داخلِ کارتِ شهر خودش روز/شب دارد */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: -1, background: '#f7f4ed' }} />
+      {isCine ? <CineBackdrop /> : <div style={{ position: 'fixed', inset: 0, zIndex: -1, background: '#f7f4ed' }} />}
       <style>{`
         /* پالتِ روز — بازطراحیِ ۳۱ اوت ۲۰۲۶. هنرِ ایزومتریکِ بازی روشن و کرم‌رنگ است و
            روی پوستهٔ بنفشِ تیرهٔ قبلی رنگش می‌مُرد. متغیرها فقط اینجا بازتعریف می‌شوند،
@@ -1653,12 +1716,44 @@ export default function EmpirePage() {
         @keyframes empDust{0%{transform:translateY(0)}12%{opacity:.75}85%{opacity:.35}100%{transform:translateY(-72px);opacity:0}}
         .empDustDot{opacity:0;animation:empDust linear infinite}
         @media (prefers-reduced-motion: reduce){.empRoot *{animation:none!important;transition:none!important}.empDustDot{display:none!important}}
+        /* دستیارِ ✦ِ عمومیِ سایت روی نوارِ مأموریت/دکمه‌های بازی می‌افتاد؛ بازی راهنمای خودش (ملک‌جت) را دارد. */
+        .mj-ai-btn{display:none!important}
+        /* 🎬 فاز ۳۴۰ — پوستهٔ سینماییِ ورود: کارت/دکمه/ورودی‌ها از همین متغیرها رنگ می‌گیرند → شیشه‌ایِ تیره */
+        .empCine{--bg2:rgba(255,255,255,.07);--surface:rgba(255,255,255,.06);--line:rgba(255,255,255,.14);--line2:rgba(255,255,255,.24);
+          --text:#f4efe2;--muted:rgba(244,239,226,.64);--faint:rgba(244,239,226,.42);--goldText:#f1cf7d;--gold:#e9c46a;
+          --empHi:rgba(255,255,255,.10);--empGhostBg:rgba(255,255,255,.08);color:#f4efe2}
+        .empCine h1{color:#f4efe2}
+        .empCine input{background:rgba(255,255,255,.08)!important;color:#f4efe2!important;border-color:rgba(255,255,255,.24)!important}
+        .empCine input::placeholder{color:rgba(244,239,226,.45)}
+        .empCine [style*="var(--bg2)"]{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+        @keyframes empCineGlow{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(8vmax,6vmax) scale(1.15)}}
+        .empCineGlow{animation:empCineGlow 16s ease-in-out infinite}
+        .empWin{animation:empTwinkle 4s ease-in-out infinite}
+        @keyframes empLine{from{opacity:0;transform:translateY(12px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+        .empLine{opacity:0;animation:empLine .8s cubic-bezier(.16,1,.3,1) forwards}
+        @keyframes empCtaGlow{0%,100%{box-shadow:0 0 0 0 rgba(233,196,106,.55),0 14px 34px -10px rgba(233,196,106,.6)}50%{box-shadow:0 0 0 12px rgba(233,196,106,0),0 14px 34px -10px rgba(233,196,106,.6)}}
+        .empCta{animation:empCtaGlow 2.2s ease-in-out infinite}
+        .empPick{transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s ease,border-color .25s ease!important}
+        .empPick:hover{transform:translateY(-3px)!important;box-shadow:0 18px 40px -18px rgba(233,196,106,.55)!important;border-color:rgba(233,196,106,.6)!important}
+        @keyframes empIconBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+        .empPick:hover .empPickIc{animation:empIconBob 1.2s ease-in-out infinite}
       `}</style>
       <Burst seed={burst} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>🏛 امپراتوریِ من</h1>
         <Link href="/" style={{ color: 'var(--muted)', fontSize: 13, textDecoration: 'none' }}>← بازگشت به ملک‌جت</Link>
       </div>
+      {/* 🎬 مرحله‌شمارِ سفرِ ورود — «چقدر مانده» همیشه دیده می‌شود */}
+      {isCine && cineStage >= 0 ? (
+        <div aria-label={`مرحلهٔ ${fa(cineStage + 1)} از ۶`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {['شخصیت', 'شناخت', 'رؤیا', 'هویت', 'تولد', 'هدیه'].map((l, i) => (
+            <div key={l} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center' }}>
+              <div style={{ width: '100%', height: 4, borderRadius: 4, background: i <= cineStage ? 'linear-gradient(90deg,#f5dc9b,#c9a96a)' : 'rgba(255,255,255,.14)', boxShadow: i === cineStage ? '0 0 12px rgba(233,196,106,.8)' : 'none', transition: 'background .4s ease' }} />
+              <span style={{ fontSize: 10.5, fontWeight: i === cineStage ? 800 : 600, color: i === cineStage ? '#f1cf7d' : 'rgba(244,239,226,.45)' }}>{l}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {/* توستِ شناورِ خطا (فاز ۳۱): هر جای صفحه باشی، دلیلِ ردشدنِ اکشن را می‌بینی — «دکمهٔ گیرکرده» بی‌معنا می‌شود */}
       {err && <div style={{ position: 'fixed', bottom: 88, left: '50%', transform: 'translateX(-50%)', zIndex: 70, background: '#3a1212', border: '1px solid #a55', color: '#f0c5c5', padding: '10px 18px', borderRadius: 12, fontSize: 12.5, maxWidth: '92vw', boxShadow: '0 8px 28px -8px rgba(0,0,0,.6)' }}>⚠️ {err}</div>}
       {/* نشانگرِ درحال‌انجام: کلیکت گرفته شده — منتظرِ پاسخِ سرور است */}
@@ -1672,26 +1767,27 @@ export default function EmpirePage() {
 
   // ── تجربهٔ آغاز (GDD جلد۱): «از بین میلیون‌ها نفر، تو انتخاب شده‌ای... فقط یک فرصت.» ──
   if (step === 'pitch') return wrap(<>
-    <div style={{ ...card, textAlign: 'center', padding: '36px 20px', background: '#0a0a0c', borderColor: 'var(--gold)' }}>
-      <div style={{ fontSize: 34 }}>🏛</div>
-      <div style={{ fontSize: 19, fontWeight: 900, color: '#eee', margin: '14px 0 6px' }}>تبریک.</div>
-      <div style={{ fontSize: 14, color: '#bbb', lineHeight: 2.3 }}>
-        از بین میلیون‌ها نفر، تو برای برنامهٔ <b style={{ color: 'var(--gold)' }}>امپراتوریِ ملک‌جت</b> انتخاب شده‌ای.<br />
-        اما هنوز هیچ‌چیز نداری.<br />
-        نه خانه. نه سرمایه. نه اعتبار. نه شرکت.<br />
-        <b style={{ color: '#eee' }}>فقط یک فرصت.</b>
+    {/* 🎬 فاز ۳۴۰ — صحنهٔ آغاز: خطوطِ پلکانی روی آسمانِ شبِ شهر به‌جای کارتِ مشکیِ تنها */}
+    <div style={{ textAlign: 'center', padding: '6vh 6px 2vh', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div className="empLine" style={{ animationDelay: '.1s', width: 74, height: 74, borderRadius: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 38, background: 'linear-gradient(145deg,rgba(245,220,155,.22),rgba(201,169,106,.06))', border: '1px solid rgba(245,220,155,.45)', boxShadow: '0 0 40px rgba(233,196,106,.35)' }}>🏛</div>
+      <div className="empLine" style={{ animationDelay: '.35s', fontFamily: DISPLAY, fontSize: 'clamp(46px,13vw,72px)', fontWeight: 700, lineHeight: 1.1, margin: '22px 0 8px', background: 'linear-gradient(180deg,#fff3cf,#e9c46a 60%,#b8913f)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 6px 24px rgba(233,196,106,.35))' }}>تبریک.</div>
+      <div className="empLine" style={{ animationDelay: '.65s', fontSize: 16, color: 'rgba(244,239,226,.82)', lineHeight: 2.1, maxWidth: 440 }}>از بین میلیون‌ها نفر، تو برای برنامهٔ <b style={{ color: '#f1cf7d' }}>امپراتوریِ ملک‌جت</b> انتخاب شده‌ای.</div>
+      <div className="empLine" style={{ animationDelay: '1.05s', fontSize: 15, color: 'rgba(244,239,226,.62)', lineHeight: 2.1, marginTop: 10 }}>اما هنوز هیچ‌چیز نداری.</div>
+      <div className="empLine" style={{ animationDelay: '1.35s', display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', margin: '10px 0 4px' }}>
+        {['نه خانه', 'نه سرمایه', 'نه اعتبار', 'نه شرکت'].map(t => <span key={t} style={{ padding: '6px 13px', borderRadius: 999, fontSize: 13, fontWeight: 700, color: 'rgba(244,239,226,.7)', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.12)'}}>{t}</span>)}
       </div>
-      <div style={{ fontSize: 11, color: '#777', marginTop: 12 }}>همهٔ اعداد و ملک‌های این مسیر از بازارِ واقعیِ ملک‌جت می‌آیند.</div>
+      <div className="empLine" style={{ animationDelay: '1.8s', fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, color: '#fff', marginTop: 14, textShadow: '0 0 24px rgba(233,196,106,.6)' }}>فقط یک فرصت.</div>
+      <div className="empLine" style={{ animationDelay: '2.1s', fontSize: 11.5, color: 'rgba(244,239,226,.45)', marginTop: 14 }}>همهٔ اعداد و ملک‌های این مسیر از بازارِ واقعیِ ملک‌جت می‌آیند.</div>
     </div>
     {st?.guest ? (
-      <div style={{ display: 'flex', gap: 10 }}>
-        <Link href="/auth" style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>👑 شروعِ امپراتوری</Link>
-        <Link href="/search" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}>فعلاً فقط نگاه می‌کنم</Link>
+      <div className="empLine" style={{ animationDelay: '2.3s', display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <Link href="/auth" className="empCta" style={{ ...btn, textDecoration: 'none', display: 'inline-block', fontSize: 17, padding: '15px 34px', borderRadius: 999 }}>👑 شروعِ امپراتوری</Link>
+        <Link href="/search" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block', borderRadius: 999, padding: '15px 24px' }}>فعلاً فقط نگاه می‌کنم</Link>
       </div>
     ) : (
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button style={btn} onClick={() => setStep('path')}>👑 شروعِ امپراتوری</button>
-        <Link href="/buyer" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}>بعداً</Link>
+      <div className="empLine" style={{ animationDelay: '2.3s', display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <button className="empCta" style={{ ...btn, fontSize: 17, padding: '15px 34px', borderRadius: 999 }} onClick={() => setStep('path')}>👑 شروعِ امپراتوری</button>
+        <Link href="/buyer" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block', borderRadius: 999, padding: '15px 24px' }}>بعداً</Link>
       </div>
     )}
   </>)
@@ -1700,11 +1796,13 @@ export default function EmpirePage() {
   if (step === 'path') return wrap(<>
     <MJ><b>اولین تصمیمت:</b> کدام شخصیت را می‌خواهی؟ مسیرِ رشد، مأموریت‌ها و پیشنهادها بر همین اساس شکل می‌گیرد — و هیچ مسیری بسته نیست.</MJ>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
-      {[['hunter', '🏠', 'شکارچیِ فرصت'], ['investor', '💰', 'سرمایه‌گذار'], ['builder', '🏗', 'سازنده'], ['negotiator', '🤝', 'مذاکره‌کننده'], ['entrepreneur', '📈', 'کارآفرین'], ['trader', '🎯', 'تاجر']].map(([k, icon, l]) => (
-        <button key={k} onClick={() => { setPathKey(k); setQi(0); setStep('q') }}
-          style={{ ...card, cursor: 'pointer', textAlign: 'center', borderColor: pathKey === k ? 'var(--gold)' : 'var(--line)' }}>
-          <div style={{ fontSize: 28 }}>{icon}</div>
-          <div style={{ fontSize: 13, marginTop: 6, fontWeight: 700 }}>{l}</div>
+      {/* 🎬 فاز ۳۴۰ — هر مسیر یک جملهٔ «چه کاری می‌کنی» دارد (کارتِ شخصیتِ بازی، نه فقط آیکن) */}
+      {[['hunter', '🏠', 'شکارچیِ فرصت', 'ملکِ زیرِ قیمت را زودتر از همه پیدا کن'], ['investor', '💰', 'سرمایه‌گذار', 'سبد بچین؛ از اجاره و رشد سود بگیر'], ['builder', '🏗', 'سازنده', 'زمین بخر، پروانه بگیر، برج بساز'], ['negotiator', '🤝', 'مذاکره‌کننده', 'با مالک‌ها چانه بزن، ارزان‌تر بخر'], ['entrepreneur', '📈', 'کارآفرین', 'کسب‌وکارِ تجاری راه بینداز'], ['trader', '🎯', 'تاجر', 'بخر و بفروش؛ از نوسان سود ببر']].map(([k, icon, l, d], i) => (
+        <button key={k} className="empPick empLine" onClick={() => { setPathKey(k); setQi(0); setStep('q') }}
+          style={{ ...card, cursor: 'pointer', textAlign: 'center', padding: '18px 12px', borderColor: pathKey === k ? 'var(--gold)' : 'var(--line)', animationDelay: `${0.08 * i}s` }}>
+          <div className="empPickIc" style={{ fontSize: 34, filter: 'drop-shadow(0 6px 14px rgba(233,196,106,.35))' }}>{icon}</div>
+          <div style={{ fontSize: 14.5, marginTop: 8, fontWeight: 900, color: '#f4efe2' }}>{l}</div>
+          <div style={{ fontSize: 11.5, marginTop: 5, lineHeight: 1.7, color: 'rgba(244,239,226,.6)' }}>{d}</div>
         </button>
       ))}
     </div>
@@ -1747,7 +1845,9 @@ export default function EmpirePage() {
   if (step === 'verdict') return wrap(<>
     <div style={{ ...card, textAlign: 'center', padding: 28 }}>
       <div style={{ fontSize: 13, color: 'var(--muted)' }}>هویتِ مالیِ تو</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--gold)', margin: '10px 0' }}>{verdict?.title}</div>
+      {/* عنوانِ رسمی انگلیسی می‌ماند (دادهٔ سرور)؛ نمایشِ اصلی فارسی — کلِ رابط فارسی است */}
+      <div className="empLine" style={{ animationDelay: '.15s', fontFamily: DISPLAY, fontSize: 40, fontWeight: 700, margin: '10px 0 0', background: 'linear-gradient(180deg,#fff3cf,#e9c46a 60%,#b8913f)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 6px 22px rgba(233,196,106,.4))' }}>{({ 'Investor Profile': 'سرمایه‌گذار', 'Builder Profile': 'سازنده', 'Commercial Profile': 'تاجرِ تجاری', 'Luxury Profile': 'کلکسیونرِ لوکس' } as Record<string, string>)[verdict?.title || ''] || verdict?.title}</div>
+      <div style={{ fontSize: 11.5, letterSpacing: '1.5px', color: 'rgba(244,239,226,.45)', marginBottom: 12, direction: 'ltr' }}>{verdict?.title}</div>
       <div style={{ fontSize: 14 }}>اطمینان: <b>{fa(verdict?.confidence || 0)}٪</b> · DNA: <b>{verdict?.dna}</b></div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>این هویت با هر تصمیمِ واقعیِ تو در ملک‌جت به‌روز می‌شود.</div>
     </div>
@@ -1770,11 +1870,12 @@ export default function EmpirePage() {
   // ── هدیهٔ سرمایه + بستهٔ خوش‌آمد (§6.3) ──
   if (step === 'gift') { const e = st?.empire; return wrap(<>
     <div style={{ ...card, textAlign: 'center', padding: 28 }}>
-      <div style={{ fontSize: 34 }}>{e?.persona || '🏛'}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, margin: '8px 0' }}>{e?.name}</div>
+      {/* 🎬 فاز ۳۴۰ — لحظهٔ تولد: نشان در حلقهٔ درخشان + ظاهرشدنِ پلکانیِ هدیه‌ها */}
+      <div className="empLine" style={{ animationDelay: '.1s', width: 92, height: 92, margin: '0 auto', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 46, background: 'radial-gradient(circle, rgba(233,196,106,.28), rgba(233,196,106,.04) 70%)', border: '2px solid rgba(245,220,155,.6)', boxShadow: '0 0 0 8px rgba(233,196,106,.08), 0 0 48px rgba(233,196,106,.45)' }}>{e?.persona || '🏛'}</div>
+      <div className="empLine" style={{ animationDelay: '.35s', fontFamily: DISPLAY, fontSize: 32, fontWeight: 700, margin: '12px 0 4px', color: '#fff' }}>{e?.name}</div>
       <div style={{ fontSize: 12, color: 'var(--muted)' }}>امپراتوری #{fa(e?.no || 0)}</div>
-      <div style={{ margin: '18px 0', fontSize: 15 }}>💎 سرمایهٔ آغازین: <b style={{ color: 'var(--gold)' }}>{faB(e?.capital || 0)} تومان</b></div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+      <div className="empLine" style={{ animationDelay: '.6s', margin: '18px 0', fontSize: 15 }}>💎 سرمایهٔ آغازین: <b style={{ color: '#f1cf7d', fontSize: 20 }}>{faB(e?.capital || 0)} تومان</b></div>
+      <div className="empLine" style={{ animationDelay: '.9s', display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', fontSize: 13 }}>
         <span style={{ ...card, padding: '6px 12px' }}>🪙 {fa(e?.coins || 0)} ملک‌کوین</span>
         <span style={{ ...card, padding: '6px 12px' }}>⚡ {fa(e?.xp || 0)} XP</span>
         <span style={{ ...card, padding: '6px 12px' }}>🤖 {fa(e?.aiTokens || 0)} ژتونِ تحلیل</span>
