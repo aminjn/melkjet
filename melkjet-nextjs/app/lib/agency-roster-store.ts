@@ -1094,56 +1094,28 @@ export function nameCompatible(a: string, b: string): boolean {
   return true
 }
 
-// فاز ۳۳۶ب — پاک‌سازیِ نامِ مشاورانِ «ذخیره‌شده» با قوانینِ تازه، بدونِ دیوار و بدونِ انتقالِ آگهی.
-// از RowCache دوباره خوشه‌بندی می‌کند (نام‌های AIِ کش‌شده + heuristicِ تازه، پس نه دیوار نه qwenِ تازه)،
-// و فقط «نامِ نمایشیِ» خوشه‌های ungraduated را تصحیح می‌کند: خوشه‌ای که با قوانینِ تازه دیگر ساخته
-// نمی‌شود (مثلِ «خوش/جیحون» خیابان) حذف، و خوشه‌ای که نامش عوض شده («خوش هاشمی»→«هاشمی») rename
-// می‌شود. حساب‌دار (phone) و در-صفِ ساختِ حساب (graduating) هرگز دست نمی‌خورند. انتقال/آزادسازیِ
-// آگهی‌ها کارِ سینکِ واقعیِ بعدی است (این‌جا فقط نامِ پنل تمیز می‌شود).
+// فاز ۳۳۶د — پاک‌سازیِ «کم‌ریسکِ» نامِ مشاورانِ ذخیره‌شده: فقط خوشه‌هایی حذف می‌شوند که نامشان
+// با «قوانینِ کنونیِ validName» دیگر نامِ معتبری نیست — یعنی نوفهٔ قطعی: عددِ ناحیه («یک/دو»)،
+// شهرستان/محلهٔ تک‌کلمه‌ای (شمیران)، و شعار (انتخاب/فراتر/متفاوت…). این هیچ‌وقت نامِ واقعی را حذف
+// نمی‌کند (SHAYGAN/صالح حسینی/نام‌های لاتین همه از validName عبور می‌کنند).
+//
+// چرا «خوشه‌بندیِ دوبارهٔ کامل» نشد: بازخوشه‌بندیِ بدونِ qwen نامِ واقعیِ qwen-only را هم می‌انداخت
+// (۱۵۱ حذف، شاملِ SHAYGAN/صالح حسینی) و با qwen هم بارِ GPU + ناقطعیت داشت. نامِ «خیابان پس از
+// منطقه» (خوش هاشمی/فرمانیه عسگریان) که از validName عبور می‌کند، فقط با «سینکِ واقعیِ بعدی»
+// (qwen + فاز ۳۳۶) درست می‌شود — نه با پاک‌سازیِ آفلاین. حساب‌دار/در-صف هرگز دست نمی‌خورند.
 export async function recleanNames(id: string, apply: boolean): Promise<{ ok: boolean; skipped?: string; removed: string[]; renamed: { from: string; to: string }[] }> {
   const scrape = await getScrapeRow(id)
   if (!scrape) return { ok: false, skipped: 'اسکرپ یافت نشد', removed: [], renamed: [] }
-  const rc = await loadRowCache(id)
-  const tokens = Object.keys(rc).filter(t => rc[t]?.desc)
-  if (!tokens.length) return { ok: false, skipped: 'کشِ متنی خالی — نیازِ سینک از دیوار', removed: [], renamed: [] }
-  // فاز ۳۳۶ج — نامِ AIِ کش‌شده (`name`) را دور می‌ریزیم و فقط از «متنِ» کش‌شده با قوانینِ تازه
-  // دوباره استخراج می‌کنیم؛ وگرنه نامِ جعلیِ قدیمی («خوش هاشمی») که در کش نشسته بازتولید می‌شد و
-  // پاک‌سازی بی‌اثر می‌ماند. useAI:false → بدونِ qwenِ تازه (سریع)؛ موتورِ NERِ ۹۵٪ (primeشده در
-  // اسکریپت) مرجع است و qwen فقط تکمیلی بود، پس افتِ پوشش اندک است و سینکِ واقعیِ بعدی کامل می‌کند.
-  const textOnly: typeof rc = {}
-  for (const t of tokens) textOnly[t] = { title: rc[t].title, desc: rc[t].desc }
-  const { buildAgencyRoster } = await import('./agency-roster')
-  const pinnedKeys = (scrape.advisors || []).filter(a => a.phone).map(a => a.key)
-  const roster = await buildAgencyRoster(scrape.slug, {
-    useAI: false, cached: textOnly, pinnedKeys,
-    f: {
-      profileTokens: (async () => ({ posts: tokens.map(t => ({ token: t })), name: scrape.agencyName || '', reason: '' })) as any,
-      post: (async () => ({ title: '', description: '' })) as any,
-    },
-  })
-  if (!roster.ok) return { ok: false, skipped: roster.error || 'خوشه‌بندی ناموفق', removed: [], renamed: [] }
+  const { validName } = await import('./agency-name-lexicon')
   const recs = [...(scrape.advisors || [])]
-  // نگاشتِ کلیدِ خوشهٔ تازه به حساب‌دارِ هم‌نام (مثلِ سینک) تا rename درست بماند.
-  const gradRecs = recs.filter(r => r.phone)
-  for (const a of roster.advisors) {
-    if (recs.some(r => r.key === a.key)) continue
-    const hosts = gradRecs.filter(r => nameCompatible(r.name, a.name))
-    if (hosts.length === 1) a.key = hosts[0].key
-  }
-  const freshName = new Map<string, string>()
-  const freshTokens = new Map<string, string[]>()
-  for (const a of roster.advisors) { if (!freshName.has(a.key)) { freshName.set(a.key, a.name); freshTokens.set(a.key, a.tokens) } }
   const removed: string[] = []
-  const renamed: { from: string; to: string }[] = []
   for (let i = recs.length - 1; i >= 0; i--) {
     const r = recs[i]
     if (r.phone || r.graduating) continue                       // حساب‌دار/در-صف دست‌نخورده
-    if (!freshName.has(r.key)) { removed.push(r.name); recs.splice(i, 1); continue }
-    const fn = freshName.get(r.key)!
-    if (fn && fn !== r.name) { renamed.push({ from: r.name, to: fn }); r.name = fn; r.tokens = (freshTokens.get(r.key) || []).slice(0, 100) }
+    if (validName(r.name, scrape.agencyName || '') === '') { removed.push(r.name); recs.splice(i, 1) }
   }
-  if (apply && (removed.length || renamed.length)) await patchScrape(id, { advisors: recs })
-  return { ok: true, removed, renamed }
+  if (apply && removed.length) await patchScrape(id, { advisors: recs })
+  return { ok: true, removed, renamed: [] }
 }
 
 export interface PhoneConflict { id: string; slug: string; key: string; name: string }
