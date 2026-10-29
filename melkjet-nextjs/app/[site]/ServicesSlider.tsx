@@ -44,11 +44,20 @@ export default function ServicesSlider({
         .mjs-srv-card:hover{transform:translateY(-5px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-srv-arrow{transition:transform .18s ease, opacity .18s ease}
         .mjs-srv-arrow:hover{transform:translateY(-2px);opacity:.92}
-        /* موبایل: کارت‌های خدماتِ روی‌هم (عمودی) به‌جای اسکرولِ افقی */
+        /* موبایل (فاز ۳۴۲): شش کارتِ تمام‌عرضِ روی‌هم = چند صفحه اسکرول. خدماتِ بی‌عکس → شبکهٔ دوستونهٔ جمع‌وجور؛
+           کارت‌های عکس‌دار (پروژه) → ردیفِ لغزان با لبهٔ کارتِ بعدی. */
         @media(max-width:680px){
           .mjs-srv-arrow{display:none !important}
-          .mjs-srv-row{display:grid !important;grid-template-columns:1fr !important;gap:14px !important;overflow:visible !important}
-          .mjs-srv-card{min-width:0 !important}
+          .mjs-srv-row.mjs-srv-compact{display:grid !important;grid-template-columns:1fr 1fr !important;gap:12px !important;overflow:visible !important}
+          .mjs-srv-compact .mjs-srv-card{min-width:0 !important;padding:18px 15px !important;border-radius:18px !important}
+          .mjs-srv-compact .mjs-srv-card:last-child:nth-child(odd){grid-column:1 / -1}
+          .mjs-srv-compact .mjs-srv-no{display:none}
+          .mjs-srv-compact .mjs-srv-head{margin-bottom:14px !important}
+          .mjs-srv-compact .mjs-srv-ic{width:42px !important;height:42px !important;font-size:19px !important;border-radius:13px !important}
+          .mjs-srv-compact .mjs-srv-t{font-size:15.5px !important;margin-bottom:6px !important}
+          .mjs-srv-compact .mjs-srv-d{font-size:12.5px !important;line-height:1.75 !important;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+          .mjs-srv-row:not(.mjs-srv-compact){margin-inline:-20px;padding-inline:20px;scroll-padding-inline:20px}
+          .mjs-srv-row:not(.mjs-srv-compact) .mjs-srv-card{flex:0 0 80% !important;min-width:0 !important}
         }
       `}</style>
 
@@ -59,7 +68,7 @@ export default function ServicesSlider({
           fontSize: 20, fontWeight: 900, cursor: 'pointer', boxShadow: CARD_SHADOW, lineHeight: 1,
         }}>‹</button>
 
-        <div ref={rowRef} className="mjs-srv-row" style={{
+        <div ref={rowRef} className={`mjs-srv-row${items.some(s => s.image) ? '' : ' mjs-srv-compact'}`} style={{
           display: 'flex', gap: 24, overflowX: 'auto', scrollSnapType: 'x mandatory',
           paddingBottom: 6, flex: 1, scrollBehavior: 'smooth',
         }}>
@@ -78,7 +87,7 @@ export default function ServicesSlider({
               ) : (
                 // پوستهٔ نسلِ ۲ — به‌جای دایرهٔ آیکنِ وسطِ کارت (امضای قالب): آیکنِ کوچکِ گرادیانی در شروع +
                 // شمارهٔ بزرگِ توخالی در گوشه که با هاور رنگ می‌گیرد.
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 26 }}>
+                <div className="mjs-srv-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 26 }}>
                   <span className="mjs-srv-ic" style={{
                     width: 52, height: 52, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 24, color: '#fff', background: `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 60%, var(--mjs-secondary)))`,
@@ -87,8 +96,8 @@ export default function ServicesSlider({
                   <span className="mjs-srv-no" aria-hidden style={{ fontSize: 46, fontWeight: 900, lineHeight: .9, letterSpacing: '-2px', color: 'transparent', WebkitTextStroke: '1.2px color-mix(in srgb, var(--mjs-text) 28%, transparent)' }}>{(i + 1).toLocaleString('fa-IR', { minimumIntegerDigits: 2 })}</span>
                 </div>
               )}
-              <div style={{ fontSize: s.image ? 17 : 19, fontWeight: 900, color: 'var(--mjs-heading)', marginBottom: 10, padding: s.image ? '0 18px' : 0, letterSpacing: '-.3px' }}>{s.title}</div>
-              <div style={{ fontSize: 14, color: 'var(--mjs-text)', lineHeight: 1.9, padding: s.image ? '0 18px' : 0 }}>{s.desc}</div>
+              <div className="mjs-srv-t" style={{ fontSize: s.image ? 17 : 19, fontWeight: 900, color: 'var(--mjs-heading)', marginBottom: 10, padding: s.image ? '0 18px' : 0, letterSpacing: '-.3px' }}>{s.title}</div>
+              <div className="mjs-srv-d" style={{ fontSize: 14, color: 'var(--mjs-text)', lineHeight: 1.9, padding: s.image ? '0 18px' : 0 }}>{s.desc}</div>
               {s.href ? <div style={{ marginTop: 12, fontSize: 13, fontWeight: 800, color: primary }}>مشاهدهٔ پروژه ←</div> : null}
             </Card>
           )})}

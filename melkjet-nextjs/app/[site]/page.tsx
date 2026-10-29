@@ -92,7 +92,7 @@ const INK = 'var(--mjs-heading)'
 const MUTED = 'var(--mjs-muted)'
 const SURFACE = 'var(--mjs-surface)'
 const CARD_SHADOW = '0 10px 34px -22px rgba(20,16,10,.55), 0 2px 8px -4px rgba(20,16,10,.10)'
-const SECTION_PAD = 'clamp(56px,8vw,96px) clamp(20px,5vw,24px)'
+const SECTION_PAD = 'clamp(52px,7vw,88px) clamp(20px,5vw,24px)'
 // فاز ۲۹۷ق۲ — حاشیه‌های «تم‌آگاه»: بژِ هاردکد (#efe9df و خانواده) روی پالت‌های تیره
 // می‌جنگید و کل سیستم را آماتور نشان می‌داد. همه از رنگِ متنِ تم مشتق می‌شوند.
 const BORDER = '1px solid color-mix(in srgb, var(--mjs-text) 13%, transparent)'
@@ -103,21 +103,34 @@ const INPUT_BORDER = '1px solid color-mix(in srgb, var(--mjs-text) 20%, transpar
 const btnBg = (primary: string) => `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 72%, var(--mjs-secondary)))`
 
 // Bold section heading with a short primary accent underline.
-function SectionHeading({ children, primary, center, light, sub }: {
-  children: React.ReactNode; primary: string; center?: boolean; light?: boolean; sub?: string
+// فاز ۳۴۲ — «سرتیترِ کوچک» (eyebrow) بالای تیتر: ریتمِ مجله‌ای و یکدست با نشانِ هیرو؛ تیترِ تنهای بی‌مقدمه
+// همان چیزی بود که بخش‌ها را «بلوکِ قالبی» نشان می‌داد.
+function SectionHeading({ children, primary, center, light, sub, eyebrow }: {
+  children: React.ReactNode; primary: string; center?: boolean; light?: boolean; sub?: string; eyebrow?: string
 }) {
   return (
-    <div style={{ marginBottom: 'clamp(28px,4vw,44px)', textAlign: center ? 'center' : 'right' }}>
+    <div style={{ marginBottom: 'clamp(26px,4vw,42px)', textAlign: center ? 'center' : 'right' }}>
+      {eyebrow ? (
+        <div className="mjs-eyebrow" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 14,
+          fontSize: 12.5, fontWeight: 800, letterSpacing: '.3px', color: light ? 'rgba(255,255,255,.8)' : primary,
+        }}>
+          {/* راست‌به‌چپ: سرِ پررنگِ هر خط کنارِ متن است */}
+          <span aria-hidden style={{ width: 26, height: 2, borderRadius: 2, background: `linear-gradient(90deg, ${primary}, transparent)` }} />
+          {eyebrow}
+          {center ? <span aria-hidden style={{ width: 26, height: 2, borderRadius: 2, background: `linear-gradient(90deg, transparent, ${primary})` }} /> : null}
+        </div>
+      ) : null}
       <h2 style={{
         fontSize: 'clamp(28px,4.4vw,46px)', fontWeight: 900, letterSpacing: '-1.2px',
         color: light ? '#fff' : INK, margin: 0, lineHeight: 1.2,
       }}>{children}</h2>
-      <div className="mjs-h-line" style={{
+      {eyebrow ? null : <div className="mjs-h-line" style={{
         height: 4, width: 88, borderRadius: 999,
         background: `linear-gradient(90deg, ${primary}, color-mix(in srgb, ${primary} 25%, transparent))`,
         boxShadow: `0 2px 14px -2px ${primary}99`,
         margin: center ? '14px auto 0' : '14px 0 0',
-      }} />
+      }} />}
       {sub ? (
         <p style={{
           fontSize: 'clamp(14px,1.6vw,16px)', color: light ? 'rgba(255,255,255,.72)' : MUTED,
@@ -136,6 +149,8 @@ type HeroExtras = {
   reviewsCount: number
   reviewsAvg: number
   memberYear?: string
+  listingsCount?: number   // فاز ۳۴۲ — آگهی‌های فعالِ واقعیِ مالک (+ تیم، برای آژانس)
+  teamCount?: number       // فاز ۳۴۲ — مشاورانِ تیم (فقط وقتی سایت بلوکِ تیم دارد)
   contactHref?: string
   showStats: boolean
   // فاز ۲۹۷ق۳ — عکس‌های واقعیِ خودِ سایت (گالری/کارت‌های پروژه): هیروی بی‌عکس به‌جای
@@ -230,7 +245,8 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
                 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: primary, boxShadow: `0 0 0 4px ${primary}40` }} />{badge297}</span>
               ) : null
             })()}
-            {visual !== 'card' ? (
+            {/* نشانِ «تاییدشده» فقط وقتی ستونِ تصویری نیست (پرتره و کارت خودشان این نشان را دارند — دوباره نیاید) */}
+            {!visual ? (
               <span className="mjs-hero-badge" style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800,
                 color: '#aef0c3', background: 'rgba(37,170,92,.20)', border: '1px solid rgba(110,224,152,.36)',
@@ -275,10 +291,16 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
           {/* کارتِ اعتماد — فقط اعدادِ واقعی (بازدیدِ کل، نظراتِ تاییدشده، سالِ عضویت) */}
           {extras?.showStats ? (() => {
             const cells: { value: string; label: string; count?: boolean }[] = []
-            if (extras.views > 0) cells.push({ value: fa(extras.views), label: 'بازدیدِ صفحه', count: true })
+            // فاز ۳۴۲ — اول اعدادی که برای مشتری معنا دارند (فایلِ فعال، مشاور، امتیاز). «۴۲ بازدید» عددِ کوچکِ
+            // ضدِتبلیغ بود → بازدید فقط از ۳۰۰ به بالا. حداکثر سه خانه تا ردیف شلوغ نشود.
+            if ((extras.listingsCount || 0) > 0) cells.push({ value: fa(extras.listingsCount!), label: 'فایلِ فعال', count: true })
+            if ((extras.teamCount || 0) > 1) cells.push({ value: fa(extras.teamCount!), label: 'مشاورِ متخصص', count: true })
             if (extras.reviewsCount > 0) cells.push({ value: (Math.round(extras.reviewsAvg * 10) / 10).toLocaleString('fa-IR') + ' ★', label: `${fa(extras.reviewsCount)} نظرِ مشتری` })
+            if (extras.views >= 300) cells.push({ value: fa(extras.views), label: 'بازدیدِ صفحه', count: true })
             if (extras.memberYear) cells.push({ value: extras.memberYear, label: 'عضوِ ملک‌جت از' })
-            if (cells.length === 0) return null
+            cells.splice(3)
+            // «عضوِ ملک‌جت از ۱۴۰۵» به‌تنهایی ردیفِ آمار نمی‌سازد (یک عددِ تنها زیرِ دکمه‌ها خالی به نظر می‌رسید)
+            if (cells.length === 0 || (cells.length === 1 && extras.memberYear && cells[0].value === extras.memberYear)) return null
             return (
               <div className="mjs-hero-trust" style={{
                 display: 'flex', marginTop: 'clamp(34px,5vw,52px)', gap: 'clamp(18px,4vw,40px)', flexWrap: 'wrap',
@@ -340,7 +362,13 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
                 </a>
               ) : null}
             </div>
-            <span className="mjs-float-2" aria-hidden style={{ position: 'absolute', top: -18, left: -14, width: 74, height: 74, borderRadius: 22, background: `linear-gradient(135deg, ${primary}, transparent)`, opacity: .7, filter: 'blur(1px)' }} />
+            {/* فاز ۳۴۲ — به‌جای مربعِ رنگیِ شناور (شبیهِ خطای رندر)، تراشهٔ واقعیِ «فایلِ فعال» */}
+            {(extras?.listingsCount || 0) > 0 ? (
+              <span className="mjs-float-2" style={{ position: 'absolute', top: -16, left: -12, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 16, background: '#fff', color: '#15110b', fontSize: 13, fontWeight: 800, boxShadow: '0 20px 44px -18px rgba(0,0,0,.6)' }}>
+                <span style={{ width: 24, height: 24, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: btnBg(primary), color: '#fff', fontSize: 12 }}>⌂</span>
+                {fa(extras!.listingsCount!)} فایلِ فعال
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -470,7 +498,7 @@ async function ListingsBlock({ block, primary, ownerName, ownerPhone, slug }: { 
   return (
     <section id="listings" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="فایل‌های منتخب">{props.heading}</SectionHeading>
         {items.length === 0 ? (
           <EmptyBlockNote text="به‌زودی آگهی‌های ما اینجا نمایش داده می‌شود." />
         ) : (
@@ -500,7 +528,7 @@ async function BlogBlock({ block, primary, ownerName, slug: siteSlug }: { block:
   return (
     <section id="blog" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="مجله">{props.heading}</SectionHeading>
         {items.length === 0 ? (
           <div style={{ background: 'var(--mjs-bg)', border: BORDER_DASHED, borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: MUTED, fontSize: 14.5 }}>
             هنوز مقالهٔ منتشرشده‌ای برای نمایش وجود ندارد.
@@ -564,7 +592,7 @@ async function BlogFullBlock({ block, primary, ownerName, slug }: { block: SiteB
   return (
     <section id="blog" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        <SectionHeading primary={primary}>{heading}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="مجله">{heading}</SectionHeading>
         <BlogFull articles={articles} categories={categories} sidebar={sidebar} primary={primary} siteSlug={slug || ''} />
       </div>
     </section>
@@ -596,7 +624,7 @@ async function SearchListBlock({ block, primary, ownerName, ownerPhone, slug }: 
   return (
     <section id="listings" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="جستجوی فایل">{props.heading}</SectionHeading>
         {items.length === 0 ? (
           // پوستهٔ نسلِ ۲ — صفحهٔ «فایل‌ها» بی‌آگهی: به‌جای جعبهٔ نقطه‌چینِ «هنوز … نداریم»، دعوت به «سفارشِ فایل»
           // (رفتارِ واقعیِ مشاور: فایلِ مناسب را خودش پیدا می‌کند) — صفحه خالی نمی‌ماند و مشتری یک اقدام دارد.
@@ -622,7 +650,7 @@ function ServicesBlock({ block, primary }: { block: SiteBlock; primary: string }
   return (
     <section id="services" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="خدمات">{props.heading}</SectionHeading>
         <ServicesSlider items={items} perSlide={perSlide} primary={primary} />
       </div>
     </section>
@@ -635,7 +663,7 @@ function AboutBlock({ block, primary }: { block: SiteBlock; primary: string }) {
     <section id="about" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div className="mjs-about" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', gap: 'clamp(28px,5vw,56px)', alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 340px' }}>
-          <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+          <SectionHeading primary={primary} eyebrow="درباره ما">{props.heading}</SectionHeading>
           <p style={{ fontSize: 'clamp(15px,1.7vw,16.5px)', lineHeight: 2.1, color: 'var(--mjs-text)', margin: 0 }}>{props.text}</p>
         </div>
         {props.image ? (
@@ -684,7 +712,17 @@ function StatsBlock({ block, primary }: { block: SiteBlock; primary: string }) {
             padding: 'clamp(14px,2.4vw,22px) clamp(14px,2.6vw,28px)', textAlign: 'right',
             borderInlineStart: i > 0 ? '1px solid rgba(255,255,255,.14)' : 'none',
           }}>
-            <div data-count="" className="mjs-stat-num" style={{ fontSize: 'clamp(40px,5.6vw,64px)', fontWeight: 900, letterSpacing: '-2px', lineHeight: 1.05 }}>{s.value}</div>
+            {/* فاز ۳۴۲ — «۲۰ ساعته»/«۱۲ سال»: عدد بزرگ، واحد کوچک کنارش (قبلاً کلِ عبارت ۶۴px می‌شد و دو خط) */}
+            {(() => {
+              const v = String(s?.value ?? '').trim()
+              const m = v.match(/^([+\-]?[0-9۰-۹٬,.]+[%٪+]?)\s+(\S.*)$/)
+              return (
+                <div className="mjs-stat-num" style={{ fontSize: 'clamp(40px,5.6vw,64px)', fontWeight: 900, letterSpacing: '-2px', lineHeight: 1.05, whiteSpace: 'nowrap' }}>
+                  <span data-count="">{m ? m[1] : v}</span>
+                  {m ? <span style={{ fontSize: '.4em', letterSpacing: 0, marginInlineStart: 8, fontWeight: 800 }}>{m[2]}</span> : null}
+                </div>
+              )
+            })()}
             <div style={{ fontSize: 'clamp(13.5px,1.5vw,15px)', color: 'rgba(255,255,255,.66)', fontWeight: 700, marginTop: 10 }}>{String(s?.label || '')}</div>
           </div>
         ))}
@@ -703,7 +741,7 @@ function GalleryBlock({ block, primary }: { block: SiteBlock; primary: string })
   return (
     <section id="gallery" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="گالری">{props.heading}</SectionHeading>
         <GallerySlider images={imgs.slice(0, total)} perSlide={perSlide} primary={primary} />
       </div>
     </section>
@@ -736,7 +774,7 @@ function TestimonialsBlock({ block, primary, ownerPhone, slug }: { block: SiteBl
         <div className="mjs-about" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', gap: 'clamp(28px,5vw,64px)', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 320px', position: 'relative' }}>
             <div aria-hidden style={{ position: 'absolute', top: -40, right: -8, fontSize: 180, lineHeight: 1, fontWeight: 900, color: `${primary}1c`, pointerEvents: 'none' }}>”</div>
-            <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+            <SectionHeading primary={primary} eyebrow="صدای مشتریان">{props.heading}</SectionHeading>
             <p style={{ fontSize: 'clamp(15px,1.7vw,17px)', lineHeight: 2.1, color: 'var(--mjs-text)', margin: 0, maxWidth: 440 }}>
               تجربهٔ همکاری با ما را بنویسید — نظرِ شما پس از تأیید این‌جا منتشر می‌شود و به دیگران در انتخاب کمک می‌کند.
             </p>
@@ -750,7 +788,7 @@ function TestimonialsBlock({ block, primary, ownerPhone, slug }: { block: SiteBl
   return (
     <section id="reviews" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <SectionHeading primary={primary} center>{props.heading}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="صدای مشتریان" center>{props.heading}</SectionHeading>
         {quotes.length > 0 ? (
           <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(290px,1fr))', gap: 24 }}>
             {quotes.map((s, i) => {
@@ -830,7 +868,7 @@ function ContactBlock({ block, primary, slug }: { block: SiteBlock; primary: str
   return (
     <section id="contact" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-        <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="در تماس باشید">{props.heading}</SectionHeading>
         <div className="mjs-contact-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1.45fr', gap: 22, alignItems: 'start' }}>
           {/* کارتِ راه‌های ارتباطی */}
           <div className="mjs-card" style={{ background: SURFACE, border: BORDER, borderRadius: 22, padding: 'clamp(22px,3.5vw,30px)', boxShadow: CARD_SHADOW }}>
@@ -985,62 +1023,57 @@ function FooterBlock({ block, primary, ownerName, slug }: { block: SiteBlock; pr
 // چیدمانِ تمیزتر، و «شماره» دیگر خام نیست — پشتِ «نمایشِ شماره» (RevealPhone) که هر نمایش
 // در پنلِ سایت‌سازها گزارش می‌شود. slug برای همان گزارش لازم است.
 export function TeamMemberCard({ m, primary, showSites, showPhone, slug }: { m: TeamMember; primary: string; showSites: boolean; showPhone: boolean; slug?: string }) {
-  const info: { icon: string; label: string; value: string }[] = []
-  if (m.areas) info.push({ icon: '📍', label: 'مناطقِ کاری', value: m.areas })
-  if (m.experience) info.push({ icon: '⏳', label: 'سابقه', value: m.experience })
-  if (m.activeListings > 0) info.push({ icon: '🏠', label: 'آگهیِ فعال', value: `${m.activeListings.toLocaleString('fa-IR')} مورد` })
+  // فاز ۳۴۲ — کارتِ مشاورِ نسلِ ۲: به‌جای «نوارِ آبیِ تخت + دایره» (امضای قالب)، هالهٔ نرمِ رنگِ برند،
+  // آواتار با حلقهٔ گرادیانی، مناطق زیرِ نام، و نوارِ آمارِ واقعی (آگهیِ فعال / سابقه) مثلِ کارتِ پروفایل.
   const initial = (m.name || '?').trim().charAt(0) || '?'
+  const stats: { value: string; label: string }[] = []
+  if (m.activeListings > 0) stats.push({ value: m.activeListings.toLocaleString('fa-IR'), label: 'آگهیِ فعال' })
+  if (m.experience) stats.push({ value: m.experience, label: 'سابقه' })
   return (
-    <div className="mjs-card" style={{ background: 'var(--mjs-bg)', border: BORDER, borderRadius: 24, overflow: 'hidden', boxShadow: CARD_SHADOW, textAlign: 'center', display: 'flex', flexDirection: 'column' }}>
-      {/* سرستونِ گرادیانیِ بلندتر + هالهٔ نرم */}
-      <div style={{ position: 'relative', height: 92, background: `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 60%, var(--mjs-secondary)))`, overflow: 'hidden' }}>
-        <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(260px 120px at 80% 0%, rgba(255,255,255,.22), transparent 70%)' }} />
+    <div className="mjs-card mjs-team-card" style={{
+      position: 'relative', isolation: 'isolate', overflow: 'hidden', background: 'var(--mjs-bg)', border: BORDER, borderRadius: 26,
+      padding: '28px 22px 22px', boxShadow: CARD_SHADOW, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center',
+    }}>
+      <div aria-hidden style={{ position: 'absolute', inset: '0 0 auto 0', height: 150, zIndex: -1, background: `radial-gradient(120% 100% at 50% -10%, color-mix(in srgb, ${primary} 22%, transparent), transparent 72%)` }} />
+      <div aria-hidden style={{ position: 'absolute', inset: '0 0 auto 0', height: 150, zIndex: -1, opacity: .5, backgroundImage: `radial-gradient(color-mix(in srgb, ${primary} 30%, transparent) 1px, transparent 1.2px)`, backgroundSize: '14px 14px', WebkitMaskImage: 'linear-gradient(180deg,#000,transparent)', maskImage: 'linear-gradient(180deg,#000,transparent)' }} />
+      {/* آواتار با حلقهٔ گرادیانی */}
+      <div className="mjs-team-ava" style={{ padding: 3, borderRadius: '50%', background: `conic-gradient(from 200deg, ${primary}, color-mix(in srgb, ${primary} 25%, #fff), ${primary})`, boxShadow: `0 16px 34px -16px ${primary}` }}>
+        {m.photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={m.photo} alt={m.name} loading="lazy" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', objectPosition: 'top', display: 'block', border: '3px solid var(--mjs-bg)' }} />
+        ) : (
+          <div style={{ width: 96, height: 96, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: btnBg(primary), color: '#fff', fontSize: 38, fontWeight: 900, border: '3px solid var(--mjs-bg)' }}>{initial}</div>
+        )}
       </div>
-      <div style={{ padding: '0 20px 22px', marginTop: -56, display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-        {/* دایرهٔ آواتار با حلقهٔ درخشان (حفظ شد) */}
-        <div style={{ position: 'relative' }}>
-          {m.photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={m.photo} alt={m.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', objectPosition: 'top', display: 'block', border: '4px solid var(--mjs-bg)', boxShadow: `0 0 0 3px ${primary}, 0 10px 24px -8px rgba(0,0,0,.45)` }} />
-          ) : (
-            <div style={{ width: 100, height: 100, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, ${primary}2e, ${primary}14)`, color: primary, fontSize: 40, fontWeight: 900, border: '4px solid var(--mjs-bg)', boxShadow: `0 0 0 3px ${primary}, 0 10px 24px -10px ${primary}` }}>{initial}</div>
-          )}
+      <div style={{ fontSize: 18.5, fontWeight: 900, color: INK, marginTop: 14, letterSpacing: '-.3px' }}>{m.name}</div>
+      {m.title ? <div style={{ fontSize: 13, color: primary, fontWeight: 800, marginTop: 4 }}>{m.title}</div> : null}
+      {m.areas ? <div style={{ fontSize: 12.5, color: MUTED, marginTop: 8, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {m.areas}</div> : null}
+      {m.specialties.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 12 }}>
+          {m.specialties.slice(0, 3).map((s, i) => (
+            <span key={i} style={{ fontSize: 11.5, fontWeight: 700, color: primary, background: `${primary}12`, border: `1px solid ${primary}2e`, borderRadius: 999, padding: '3px 11px' }}>{s}</span>
+          ))}
         </div>
-        <div style={{ fontSize: 18.5, fontWeight: 900, color: INK, marginTop: 13 }}>{m.name}</div>
-        {m.title ? <div style={{ fontSize: 13, color: primary, fontWeight: 700, marginTop: 4 }}>{m.title}</div> : null}
-        {/* چیپ‌های تخصص */}
-        {m.specialties.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 12 }}>
-            {m.specialties.slice(0, 3).map((s, i) => (
-              <span key={i} style={{ fontSize: 11.5, fontWeight: 600, color: primary, background: `${primary}14`, border: `1px solid ${primary}33`, borderRadius: 999, padding: '3px 11px' }}>{s}</span>
-            ))}
-          </div>
-        )}
-        {/* اطلاعاتِ مفید (بدونِ شماره — شماره پشتِ دکمه می‌رود) */}
-        {info.length > 0 && (
-          <div style={{ width: '100%', marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'right' }}>
-            {info.map((r, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, background: SURFACE, border: BORDER_SOFT, borderRadius: 11, padding: '8px 11px' }}>
-                <span style={{ width: 26, height: 26, borderRadius: 8, background: `${primary}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>{r.icon}</span>
-                <span style={{ fontSize: 11.5, color: MUTED, flexShrink: 0 }}>{r.label}:</span>
-                <span style={{ fontSize: 12.5, color: INK, fontWeight: 700, marginInlineStart: 'auto', direction: 'rtl', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {/* شماره: پشتِ «نمایشِ شماره» (گزارش‌پذیر)، نه خام */}
-        {showPhone && m.phone ? (
-          <div style={{ width: '100%', marginTop: 14, display: 'flex', justifyContent: 'center' }}>
-            <RevealPhone token={sealPhone(m.phone)} mask={phoneMask(m.phone)} primary={primary} slug={slug} />
-          </div>
-        ) : null}
-        {/* دکمه‌ها */}
-        {showSites && m.slug ? (
-          <div style={{ marginTop: 'auto', paddingTop: 16, width: '100%' }}>
-            <a href={`/${m.slug}`} target="_blank" rel="noreferrer" className="mjs-btn" style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: '#fff', background: btnBg(primary), borderRadius: 999, padding: '11px 8px', textDecoration: 'none', boxShadow: `0 12px 26px -12px ${primary}` }}>وب‌سایتِ من ↗</a>
-          </div>
-        ) : null}
-      </div>
+      )}
+      {stats.length > 0 && (
+        <div style={{ width: '100%', marginTop: 18, display: 'grid', gridTemplateColumns: `repeat(${stats.length}, minmax(0,1fr))`, background: SURFACE, border: BORDER_SOFT, borderRadius: 16, overflow: 'hidden' }}>
+          {stats.map((st, i) => (
+            <div key={i} style={{ padding: '11px 8px', borderInlineStart: i > 0 ? BORDER_SOFT : 'none', minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: INK, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.value}</div>
+              <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3 }}>{st.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* شماره: پشتِ «نمایشِ شماره» (گزارش‌پذیر)، نه خام */}
+      {(showPhone && m.phone) || (showSites && m.slug) ? (
+        <div style={{ marginTop: 'auto', paddingTop: 16, width: '100%', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+          {showPhone && m.phone ? <RevealPhone token={sealPhone(m.phone)} mask={phoneMask(m.phone)} primary={primary} slug={slug} /> : null}
+          {showSites && m.slug ? (
+            <a href={`/${m.slug}`} target="_blank" rel="noreferrer" className="mjs-btn" style={{ display: 'block', width: '100%', fontSize: 13.5, fontWeight: 800, color: '#fff', background: btnBg(primary), borderRadius: 999, padding: '11px 8px', textDecoration: 'none', boxShadow: `0 12px 26px -12px ${primary}` }}>وب‌سایتِ من ↗</a>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -1058,12 +1091,13 @@ async function TeamBlock({ block, primary, ownerPhone, slug }: { block: SiteBloc
   return (
     <section id="team" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <SectionHeading primary={primary} center sub={props.subheading || undefined}>{props.heading || 'مشاوران ما'}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="تیمِ ما" center sub={props.subheading || undefined}>{props.heading || 'مشاوران ما'}</SectionHeading>
         {people.length === 0 ? (
           <div style={{ background: SURFACE, border: BORDER_DASHED, borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: MUTED, fontSize: 14.5 }}>هنوز مشاوری به این آژانس متصل نشده است.</div>
         ) : (
-          <div className="mjs-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 24 }}>
-            {people.map(m => <TeamMemberCard key={m.phone} m={m} primary={primary} showSites={showSites} showPhone={showPhone} slug={slug} />)}
+          // دسکتاپ: ستون‌های هم‌عرض و وسط‌چین (یک مشاور کلِ عرض را نمی‌گیرد)؛ موبایل: ردیفِ افقیِ لغزان (CSSِ mjs-team-row)
+          <div className="mjs-team-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,280px))', justifyContent: 'center', gap: 22 }}>
+            {people.map(m => <TeamMemberCard key={memberIdOf(m)} m={m} primary={primary} showSites={showSites} showPhone={showPhone} slug={slug} />)}
           </div>
         )}
       </div>
@@ -1085,7 +1119,7 @@ async function CatalogBlock({ block, primary, ownerPhone, slug: siteSlug }: { bl
   return (
     <section id="catalog" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <SectionHeading primary={primary} center>{props.heading || 'محصولات ما'}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="فروشگاه" center>{props.heading || 'محصولات ما'}</SectionHeading>
         {products.length === 0 ? (
           <EmptyBlockNote text="به‌زودی محصولات و قیمت‌های ما اینجا نمایش داده می‌شود." />
         ) : (
@@ -1125,7 +1159,7 @@ async function PriceListBlock({ block, primary, ownerPhone }: { block: SiteBlock
   return (
     <section id="pricelist" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        <SectionHeading primary={primary} center>{props.heading || 'نرخِ روزِ محصولات'}</SectionHeading>
+        <SectionHeading primary={primary} eyebrow="نرخِ روز" center>{props.heading || 'نرخِ روزِ محصولات'}</SectionHeading>
         <div style={{ marginTop: 24, background: 'var(--mjs-bg)', borderRadius: 16, overflow: 'hidden', boxShadow: CARD_SHADOW }}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', padding: '12px 18px', background: `${primary}12`, fontSize: 13, fontWeight: 800, color: INK }}>
             <div>کالا</div><div>واحد</div><div style={{ textAlign: 'left' }}>قیمت (تومان)</div>
@@ -1379,9 +1413,27 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
         .mjs-marquee:hover .mjs-marquee-track{animation-play-state:paused}
         /* فاز ۳۴۱ — انیمیشنِ بی‌پایانِ بیرونِ دید متوقف (SiteMotion → data-off) */
         [data-off],[data-off] *,[data-off]::before{animation-play-state:paused !important}
+        /* فاز ۳۴۲ — دو بخشِ پیاپیِ هم‌رنگ: پدینگِ پایینِ اولی + بالای دومی ≈ ۱۸۰px فضای خالی (حسِ «بلوک‌های
+           جدا»). بخشِ دوم پدینگِ بالایش را کم می‌کند تا صفحه یک روایتِ پیوسته باشد. */
+        main>section[style*="background:var(--mjs-bg)"]+section[style*="background:var(--mjs-bg)"],
+        main>section[style*="background:var(--mjs-surface)"]+section[style*="background:var(--mjs-surface)"]{padding-top:clamp(8px,2vw,20px) !important}
+        /* فاز ۳۴۲ — کارتِ مشاور: بلند شدن + چرخشِ آرامِ حلقهٔ آواتار با هاور */
+        .mjs-team-card{transition:transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s ease}
+        .mjs-team-card:hover{transform:translateY(-6px);box-shadow:0 26px 60px -30px rgba(20,16,10,.6)}
+        .mjs-team-ava{transition:transform .6s cubic-bezier(.16,1,.3,1)}
+        .mjs-team-card:hover .mjs-team-ava{transform:scale(1.04) rotate(-4deg)}
+        @media(max-width:719px){
+          /* موبایل: تیم به‌جای کارت‌های تمام‌صفحهٔ روی‌هم، ردیفِ لغزانِ افقی با «لبهٔ کارتِ بعدی» (مثلِ اپ) */
+          .mjs-team-row{display:flex !important;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px !important;margin-inline:calc(-1 * clamp(20px,5vw,24px));padding:4px clamp(20px,5vw,24px) 14px;scrollbar-width:none}
+          .mjs-team-row::-webkit-scrollbar{display:none}
+          .mjs-team-row>*{flex:0 0 78%;scroll-snap-align:center}
+          .mjs-team-row>*:only-child{flex-basis:100%}
+          /* نوارِ بخش‌ها روی موبایل چسبان نیست (نوارِ پایین و هدر کافی‌اند؛ ۶۰px از صفحه را نمی‌خورد) */
+          .mjs-subnav{position:relative !important;top:auto !important}
+        }
         .mjs-aurora>i{will-change:transform}
         /* هدرِ «اسکرول‌شده» روی موبایل سایه/جابه‌جاییِ ارتفاع نگیرد (reflowِ هر بار) */
-        @media(max-width:719px){main.mjs-scrolled .mjs-nav>div{min-height:64px !important}}
+        @media(max-width:719px){main.mjs-scrolled .mjs-nav>div:first-child{min-height:64px !important}}
         /* خطِ زیرِ تیترِ بخش‌ها با ورود «کشیده» می‌شود */
         .mjs-h-line{transform-origin:100% 50%;transition:transform 1.1s .25s cubic-bezier(.16,1,.3,1)}
         html.mjs-js [data-r="mask"]:not(.mjs-in)+.mjs-h-line{transform:scaleX(0)}
@@ -1398,12 +1450,15 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
         .mjs-btn:hover::after{transform:translateX(-120%)}
         /* هدر: با اسکرول فشرده‌تر و سایه‌دار (فاز ۳۴۱: بی‌بلور ← تقریباً مات، تا متنِ زیرش از پشتش دیده نشود) */
         .mjs-nav{transition:background .3s ease, box-shadow .3s ease}
-        .mjs-nav>div{transition:min-height .3s ease}
+        .mjs-nav>div:first-child{transition:min-height .3s ease}
         main.mjs-scrolled .mjs-nav{background:color-mix(in srgb,var(--mjs-bg) 95%,transparent) !important;box-shadow:0 14px 40px -28px rgba(20,16,10,.8) !important}
-        main.mjs-scrolled .mjs-nav>div{min-height:58px !important}
+        /* فقط ردیفِ اصلیِ هدر؛ قبلاً پنلِ بستهٔ منوی موبایل (mjs-nav-panel) هم ۵۸px می‌گرفت → نوارِ سفیدِ خالی زیرِ هدر */
+        main.mjs-scrolled .mjs-nav>div:first-child{min-height:58px !important}
         .mjs-stat-num{background:linear-gradient(135deg,#fff,color-mix(in srgb,${primary} 55%,#fff));-webkit-background-clip:text;background-clip:text;color:transparent}
         .mjs-grad-word{background:linear-gradient(100deg,color-mix(in srgb,${primary} 55%,#fff),${primary} 60%,color-mix(in srgb,${primary} 70%,#fff));-webkit-background-clip:text;background-clip:text;color:transparent}
         @media(max-width:899px){.mjs-hero-grid{grid-template-columns:1fr !important}.mjs-hero-visual{max-width:440px;margin-inline:auto;width:100%}}
+        /* فاز ۳۴۲ — موبایل: پرترهٔ ۴:۵ به عرضِ کامل یک صفحهٔ کامل را می‌گرفت؛ جمع‌وجور و کمی خوابیده‌تر */
+        @media(max-width:719px){.mjs-hero-portrait{max-width:min(70vw,270px) !important}.mjs-hero-portrait img{aspect-ratio:1 / 1 !important}}
         @media(max-width:640px){#hero{min-height:auto !important;padding-top:64px !important;padding-bottom:72px !important}.mjs-hero-card{display:none !important}.mjs-hero-visual.mjs-hero-portrait{max-width:300px}.mjs-cue{display:none !important}}
         /* فاز ۲۹۷ط — منوی پایینِ موبایل فقط زیرِ ۷۲۰px دیده می‌شود؛ جا برای آن ته صفحه باز می‌شود */
         @media(max-width:719px){
@@ -1479,8 +1534,21 @@ export async function SiteShell({ site, page, preview = false }: { site: Site; p
     ? '#contact'
     : site.pages.some(pg => pg.slug === 'contact') ? `/${encodeURIComponent(site.slug)}/contact` : ''
   const memberYear = site.createdAt ? new Date(site.createdAt).toLocaleDateString('fa-IR', { year: 'numeric' }) : ''
+  // فاز ۳۴۲ — آمارِ واقعیِ هیرو: آگهی‌های فعالِ مالک (+ آگهیِ مشاورانِ تیم وقتی سایت بلوکِ تیم دارد) و تعدادِ تیم.
+  let listingsCount = 0, teamCount = 0
+  if (page.slug === 'home' || page === home) {
+    try { listingsCount = (await ownerListings(site.ownerName, site.owner, 100000)).length }
+    catch (e: any) { console.error(`[site:${site.slug}] شمارشِ آگهی‌ها شکست خورد: ${e?.message || e}`) }
+    if (site.owner && site.pages.some(pg => pg.blocks.some(b => b.type === 'team'))) {
+      try {
+        const team = await getTeamMembers(site.owner)
+        teamCount = team.length
+        listingsCount += team.reduce((a, m) => a + (m.activeListings || 0), 0)
+      } catch (e: any) { console.error(`[site:${site.slug}] خواندنِ تیم شکست خورد: ${e?.message || e}`) }
+    }
+  }
   const extras: HeroExtras = {
-    avatar, views, reviewsCount, reviewsAvg, memberYear, contactHref,
+    avatar, views, reviewsCount, reviewsAvg, memberYear, contactHref, listingsCount, teamCount,
     showStats: page.slug === 'home' || page === home,
     heroImages: heroImages.slice(0, 5),
     brand: site.ownerName || brandOf(site),
