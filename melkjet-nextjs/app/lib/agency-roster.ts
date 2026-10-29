@@ -258,9 +258,9 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
 // (اختیاری) پالایشِ AI: نامِ کانونیِ مشاورِ هر آگهی را برمی‌گرداند (فارسی؛ خالی اگر امضا نبود).
 // دسته‌ای صدا زده می‌شود تا هزینهٔ AI کم بماند. اگر مدل نبود/خطا داد → [] (تکیه بر heuristic).
 // (exported برای اسکریپتِ کیس‌استادی scripts/roster-casestudy.mjs — فاز ۲۹۷ش)
-export async function aiCanonical(items: { i: number; title: string; desc: string }[]): Promise<{ map: Record<number, string>; raw: string }> {
+export async function aiCanonical(items: { i: number; title: string; desc: string }[]): Promise<{ map: Record<number, string>; raw: string; answered?: number[] }> {
   const { model, provider } = resolveAgent([['content', 'text'], ['chat', 'text']])
-  if (!model) return { map: {}, raw: '(هیچ مدلی تنظیم نشده)' }
+  if (!model) return { map: {}, raw: '(هیچ مدلی تنظیم نشده)', answered: [] }
   // اموجی/نماد را به فاصله تبدیل می‌کنیم تا اسمِ چسبیده به اموجی («♀️محمدی») برای AI هم خوانا شود.
   const clip = (s: string) => { const d = deEmoji(s || '').replace(/\s+/g, ' ').trim(); return d.length > 1200 ? d.slice(0, 300) + ' … ' + d.slice(-800) : d }
   const list = items.map(it => `${it.i}) ${deEmoji(it.title || '').slice(0, 80)} :: ${clip(it.desc)}`).join('\n')
@@ -284,11 +284,18 @@ export async function aiCanonical(items: { i: number; title: string; desc: strin
     new Promise<string>(r => setTimeout(() => r('(تایم‌اوت ۳۰ثانیه)'), 30000)),
   ])
   const map: Record<number, string> = {}
+  // فاز ۳۴۱ — «answered» = ردیف‌هایی که AI واقعاً درباره‌شان حکم داد (حتی «خالی»). جوابِ خالیِ AI یعنی
+  // «این آگهی امضای مشاور ندارد» و باید حرفِ آخر باشد؛ پاسخِ خراب/تایم‌اوت هیچ ردیفی را answered نمی‌کند.
+  const answered: number[] = []
   try {
     const j = JSON.parse((out.match(/\[[\s\S]*\]/) || ['[]'])[0])
-    for (const r of j) if (r && typeof r.i === 'number' && typeof r.name === 'string' && r.name.trim()) map[r.i] = r.name.trim()
+    for (const r of j) {
+      if (!r || typeof r.i !== 'number') continue
+      answered.push(r.i)
+      if (typeof r.name === 'string' && r.name.trim()) map[r.i] = r.name.trim()
+    }
   } catch {}
-  return { map, raw: out }
+  return { map, raw: out, answered }
 }
 
 export interface RosterAdvisor { key: string; name: string; tokens: string[]; posts: BrandPost[] }
@@ -305,9 +312,9 @@ export interface AgencyRoster {
 export async function buildAgencyRoster(
   slugOrUrl: string,
   opts: { useAI?: boolean; maxDetails?: number; onProgress?: (done: number, total: number) => void;
-    cached?: Record<string, { title: string; desc: string; name?: string }>;   // توکن→متن + نامِ AI (ازسرگیری)
+    cached?: Record<string, { title: string; desc: string; name?: string; aiv?: number }>;   // توکن→متن + نامِ AI (ازسرگیری)
     pinnedKeys?: string[];   // فاز ۲۷۹ — کلیدِ مشاورهایی که حسابِ واقعی دارند: در ادغام همیشه میزبان می‌مانند
-    onRow?: (token: string, r: { title: string; desc: string; name?: string }) => void;
+    onRow?: (token: string, r: { title: string; desc: string; name?: string; aiv?: number }) => void;
     onCluster?: (done: number, total: number) => void;   // فاز ۱۹۴ — پیشرفتِ فازِ AI هم دیده شود
     f?: { profileTokens?: typeof fetchDivarProfileTokens; post?: typeof fetchDivarPost; ai?: typeof aiCanonical };   // فاز ۱۹۶ — تزریق برای تستِ کاملِ چرخه
     shouldStop?: () => Promise<boolean> } = {},   // فاز ۱۹۶ — دکمهٔ توقف
@@ -385,13 +392,16 @@ export async function buildAgencyRoster(
   // مسیر: پنل → API و مدل‌های AI → افزودنِ ارائه‌دهنده (baseUrl+کلید) + تخصیصِ مدل + روشن‌کردنِ بخشِ روستر.
   // (AI_NAMING بالاتر محاسبه شد — پیش از فازِ ML.)
   let aiMap: Record<number, string> = {}
+  const aiAsked = new Set<number>()   // فاز ۳۴۱ — ردیف‌هایی که AI حکم داده (نام یا «بی‌امضا»)
   if (AI_NAMING && opts.useAI !== false) {
     // فاز ۱۹۶ (فیدبک: «شناساییِ AI را دوبار انجام داده، خواندنِ فهرست را ۴ بار») — نامِ AI هم مثلِ متن
     // در کشِ ازسرگیری می‌ماند؛ پاسِ بعدی فقط ردیف‌های نپرسیده را می‌پرسد، نه ۴۵ فراخوانِ تکراری.
     const pending: { idx: number; row: (typeof rows)[number] }[] = []
     rows.forEach((r, idx) => {
       const cachedName = opts.cached?.[r.post.token]?.name
-      if (cachedName !== undefined) aiMap[idx] = cachedName
+      // نامِ خالیِ کش‌شده فقط اگر از «پاسخِ واقعیِ AI» آمده باشد (aiv=2) حکم است؛ خالیِ قدیمی ممکن است
+      // از تایم‌اوت/پاسخِ خراب ذخیره شده باشد → یک بار دوباره پرسیده می‌شود.
+      if (cachedName !== undefined && (cachedName || opts.cached?.[r.post.token]?.aiv === 2)) { aiMap[idx] = cachedName; aiAsked.add(idx) }
       // AIِ روشن = «حرفِ آخر»: همهٔ ادهای کش‌نشده به AI می‌روند، نه فقط resolvedنشده‌ها. چون
       // واژه‌نامهٔ آموخته (resolved) از پنجرهٔ خرابِ بی‌مدل آلوده شده بود («جهانگرد»ِ ۲۵فایلی)،
       // اگر resolvedها را از AI معاف کنیم آلودگی باقی می‌مانَد. qwen روی سرورِ خودِ مالک است (رایگان).
@@ -407,11 +417,16 @@ export async function buildAgencyRoster(
       const slice = pending.slice(i, i + 12)
       const chunk = slice.map(p2 => ({ i: p2.idx, title: p2.row.title, desc: p2.row.desc }))
       try {
-        const got = (await (opts.f?.ai || aiCanonical)(chunk)).map
+        const res = await (opts.f?.ai || aiCanonical)(chunk)
+        const got = res.map
+        // پاسخِ قدیمیِ بی‌answered (تستِ تزریقی): هر ردیفِ دسته پاسخ‌گرفته حساب می‌شود، مثلِ رفتارِ قبلی.
+        const answered = new Set(res.answered ?? (Object.keys(got).length ? slice.map(p2 => p2.idx) : []))
         Object.assign(aiMap, got)
-        emptyStreak = Object.keys(got).length === 0 ? emptyStreak + 1 : 0
-        // چک‌پوینتِ نام‌ها: پرسیده‌شده = ذخیره (نبودِ نام هم با '' ذخیره می‌شود تا دوباره پرسیده نشود)
-        for (const p2 of slice) { try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '' }) } catch {} }
+        for (const i2 of answered) aiAsked.add(i2)
+        emptyStreak = answered.size === 0 ? emptyStreak + 1 : 0
+        // چک‌پوینتِ نام‌ها: فقط ردیفِ پاسخ‌گرفته ذخیره می‌شود ('' = «AI گفت بی‌امضاست»)؛ ردیفِ پاسخِ خراب
+        // ذخیره نمی‌شود تا سینکِ بعد دوباره پرسیده شود (قبلاً تایم‌اوت هم '' ذخیره و برای همیشه «بی‌نام» می‌شد).
+        for (const p2 of slice) { if (!answered.has(p2.idx)) continue; try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '', aiv: 2 }) } catch {} }
       } catch { emptyStreak++ }
       try { opts.onCluster?.(chunkNo, chunksTotal) } catch {}
       if (emptyStreak >= 3) { console.log('[roster] AI returned nothing 3 chunks in a row — skipping rest (heuristic continues)'); break }
@@ -462,7 +477,14 @@ export async function buildAgencyRoster(
     // بماند — دقیقاً مثلِ قبل. تفاوتِ کلیدی با قبل: «واژه‌نامهٔ آموختهٔ تاریخی» و «یادگیری» با AI روشن
     // خاموش‌اند (پایین‌تر)، و همین بود که آشغال را «چسبان» می‌کرد (حذفِ خوشه، وزنِ آموخته را پاک
     // نمی‌کرد و سینکِ بعد بازتولید می‌شد). پس پوشش حفظ می‌شود، بدونِ برگشتِ آشغالِ قدیمی.
-    const chosen = ai || cand[0]
+    // فاز ۳۴۱ (فیدبکِ مالک: «سند تعاونی و فن‌کوئل را مشاور تشخیص داده؛ امکان ندارد AI این را بگوید —
+    // هنوز ماشین دارد انجام می‌دهد»). درست بود: وقتی AI آگهی را خواند و گفت «امضای مشاور ندارد»، همین خط
+    // جای خالی را با حدسِ مدلِ آماری (cand[0]) پر می‌کرد — یعنی «نه»ِ AI عملاً نادیده گرفته می‌شد.
+    // حالا حکمِ AI نهایی است؛ فقط سیگنالِ قطعیِ شخص («خانم X»، «X هستم»، «کارشناس: X» — r.trusted) می‌تواند
+    // جای سکوتِ AI را بگیرد. پوشش از دست نمی‌رود: آگهیِ بی‌امضای مشاوری که در همین آژانس امضای دیگری دارد
+    // در «پاسِ دوم» (پایین‌تر) به او می‌چسبد. وقتی AI خاموش است یا این ردیف را نپرسیده، رفتار مثلِ قبل است.
+    const aiSaidNone = aiAsked.has(idx) && !ai
+    const chosen = ai || (aiSaidNone && !r.trusted ? '' : cand[0])
     if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); unnamedIdx.push(idx); return }
     const k = keyOf(chosen)
     // «سیگنالِ قوی» = نامِ آموختهٔ تثبیت‌شده در موضعِ امضا، یا توافقِ مستقلِ AI و heuristic.

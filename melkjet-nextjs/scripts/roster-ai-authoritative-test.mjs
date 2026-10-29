@@ -34,12 +34,33 @@ ok('AI روشن: آگهیِ واقعاً بی‌امضا بی‌نام می‌م
 // ── ۲: AI روشن + qwen برای idx 4-7 «رضایی» می‌دهد → qwen جای خالی را پر می‌کند و نامش می‌آید ──
 const r2 = await buildAgencyRoster('s2', { useAI: true, f: mkF(async (ch) => { const m = {}; for (const it of ch) if (it.i >= 4) m[it.i] = 'رضایی'; return { map: m, raw: '' } }) })
 ok('AI روشن: نامِ qwen («رضایی» ۴) می‌آید', r2.advisors.some(a => a.name === 'رضایی' && a.tokens.length === 4))
-ok('AI روشن: هم‌زمان heuristic «نقی» (۴) هم حفظ می‌شود → هیچ آگهیِ بی‌نام', r2.advisors.some(a => a.name === 'نقی' && a.tokens.length === 4) && r2.unnamed.tokens.length === 0)
+// فاز ۳۴۱ — AI همهٔ دسته را خواند و برای idx 0-3 گفت «بی‌امضا» → حدسِ ماشین («نقی») دیگر جای «نه»ِ AI را نمی‌گیرد.
+ok('AI روشن: «نه»ِ AI نهایی است — حدسِ heuristic جای خالیِ AI را پر نمی‌کند', !r2.advisors.some(a => a.name === 'نقی') && r2.unnamed.tokens.length === 4)
 
 // ── ۳: AI خاموش → رفتارِ ML-onlyِ قبلی دست‌نخورده ──
 saveAdminData({ ...base, aiEnabled: false })
 const r3 = await buildAgencyRoster('s3', { useAI: true, f: mkF(async () => ({ map: {}, raw: '' })) })
 ok('AI خاموش: رفتارِ قبلی — heuristic خوشهٔ «نقی» (۴) را می‌سازد', r3.advisors.some(a => a.name === 'نقی' && a.tokens.length === 4))
+
+// ── ۴ (فاز ۳۴۱ — نمونهٔ زندهٔ مالک): «وضعیت سند: تعاونی» / «سرمایش: فن کوئل» و AI می‌گوید بی‌امضا ──
+saveAdminData({ ...base, aiEnabled: true, aiAreas: { roster: true } })
+const live = 'فروش آپارتمان 128 متری | ۳ خواب\n\nمتراژ: ۱۳۱ متر مربع\nتعداد خواب: ۳ خوابه\nطبقه: ۱۰\nسیستم سرمایش: فن کوئل\nسال ساخت: ۱۳۹۳\nوضعیت سند: تعاونی\nقیمت کل: 29 میلیارد تومان\n\nجهت کسب اطلاعات بیشتر و هماهنگی بازدید تماس بگیرید.'
+const mkLive = (aiFn) => ({ ...mkF(aiFn), post: async (t) => ({ title: 'آپارتمان ' + t, description: live, images: [] }) })
+const r4 = await buildAgencyRoster('s4', { useAI: true, f: mkLive(async (ch) => ({ map: {}, raw: '[]', answered: ch.map(it => it.i) })) })
+ok('AI می‌گوید بی‌امضا ← «تعاونی»/«فن کوئل» مشاور نمی‌شوند', r4.advisors.length === 0 && r4.unnamed.tokens.length === 8)
+// همان آگهی با AI خاموش (فقط ماشین): مقدارِ «برچسب: مقدار» هم دیگر نام نیست
+saveAdminData({ ...base, aiEnabled: false })
+const r5 = await buildAgencyRoster('s5', { useAI: true, f: mkLive(async () => ({ map: {}, raw: '' })) })
+ok('AI خاموش: «تعاونی»/«فن کوئل»/«کوئل» هم نام نمی‌شوند', !r5.advisors.some(a => /تعاونی|کوئل|فن/.test(a.name)))
+const { extractSignature } = await import('../app/lib/agency-roster.ts')
+ok('کارشناس فروش: مرادی (برچسبِ نقش) هنوز نام است', extractSignature('آپارتمان', 'نوساز\nوضعیت سند: تعاونی\nکارشناس فروش: مرادی')[0] === 'مرادی')
+
+// ── ۶: نامِ خالیِ کش‌شدهٔ قدیمی (ممکن است تایم‌اوت بوده) دوباره پرسیده می‌شود؛ خالیِ aiv=2 نه ──
+saveAdminData({ ...base, aiEnabled: true, aiAreas: { roster: true } })
+const asked = []
+const cached = Object.fromEntries(tokens.map((t, i) => [t, { title: 'آپارتمان ' + t, desc: 'نوساز', name: '', ...(i < 4 ? { aiv: 2 } : {}) }]))
+await buildAgencyRoster('s6', { useAI: true, cached, f: mkF(async (ch) => { asked.push(...ch.map(it => it.i)); return { map: {}, raw: '[]', answered: ch.map(it => it.i) } }) })
+ok('خالیِ بی‌نسخه دوباره پرسیده شد، خالیِ aiv=2 نه', asked.sort().join(',') === '4,5,6,7')
 
 restore()
 console.log(`\n${fail === 0 ? '✅' : '❌'} ${pass} پاس · ${fail} خطا\n`)

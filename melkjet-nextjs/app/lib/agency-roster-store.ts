@@ -188,7 +188,8 @@ export async function anyScrapeRunning(): Promise<boolean> {
 // ── چک‌پوینتِ ازسرگیری: متنِ آگهی‌های اسکرپ‌شده (توکن→{title,desc}) در یک کلیدِ جدا، برای هر اسکرپ ──
 // اگر سینک نیمه‌کاره بماند (reload/کیل)، رانِ بعدی آگهی‌های کش‌شده را دوباره از دیوار نمی‌گیرد و ادامه می‌دهد.
 // در پایانِ موفق پاک می‌شود تا سینکِ روزانه‌ی بعدی دادهٔ تازه بگیرد.
-type RowCache = Record<string, { title: string; desc: string; name?: string; at?: number }>   // name = نامِ AI؛ at = زمانِ اسکرپِ ردیف (فاز ۱۹۸ — کشِ دائمیِ اینکرمنتال)
+type RowCache = Record<string, { title: string; desc: string; name?: string; aiv?: number; at?: number }>   // aiv=2: نام (حتی خالی) حکمِ واقعیِ AI است (فاز ۳۴۱)
+//   // name = نامِ AI؛ at = زمانِ اسکرپِ ردیف (فاز ۱۹۸ — کشِ دائمیِ اینکرمنتال)
 const CACHE_KV = 'agency_roster_cache'
 const CACHE_FILE = join(process.cwd(), '.agency-roster-cache.json')
 // ── فاز ۲۷۵c — کشِ ردیف «per-اسکرپ» شارد شد (همان الگوی فاز ۲۵۹ برای advisor) ──────────
@@ -589,7 +590,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     for (const [k] of staleRows) delete rowCache[k]
     if (staleRows.length) console.log(`[roster] incremental: refreshing ${staleRows.length} stale rows of ${rowTotal} (cap ${refreshCap})`)
     let lastCacheWrite = 0
-    const onRow = (token: string, r: { title: string; desc: string; name?: string }) => {
+    const onRow = (token: string, r: { title: string; desc: string; name?: string; aiv?: number }) => {
       if (!r.desc) return   // متنِ خالی را کش نکن تا دفعهٔ بعد دوباره گرفته شود (خودترمیمی)
       rowCache[token] = { ...rowCache[token], ...r, at: rowCache[token]?.at && !('title' in r && r.title) ? rowCache[token].at : Date.now() }   // فاز ۱۹۶/۱۹۸: نامِ AI روی همان رکورد + مهرِ زمان
       const now = Date.now()
