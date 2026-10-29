@@ -62,20 +62,35 @@ export default function SiteMotion() {
     }, { threshold: 0.4 })
     main.querySelectorAll('[data-count]').forEach(el => { if (!el.closest('[data-r]')) io2.observe(el) })
 
+    // ── فاز ۳۴۱ (لگِ اسکرول) — انیمیشن‌های بی‌پایان (شفق، لبهٔ چرخانِ CTA، نوارِ متحرک، نورِ شناور) فقط وقتی
+    // در دیدند اجرا می‌شوند؛ بیرونِ دید data-off می‌گیرند و CSS متوقفشان می‌کند (قبلاً همیشه رنگ‌آمیزیِ دوباره).
+    const loops = main.querySelectorAll<HTMLElement>('.mjs-aurora, .mjs-glow-border, .mjs-marquee, .mjs-hero-glow, .mjs-float, .mjs-float-2')
+    const io3 = new IntersectionObserver(entries => {
+      for (const e of entries) (e.target as HTMLElement).toggleAttribute('data-off', !e.isIntersecting)
+    }, { rootMargin: '120px 0px 120px 0px' })
+    loops.forEach(el => io3.observe(el))
+
     // ── اسکرول: نوارِ پیشرفت + هدرِ «اسکرول‌شده» + پارالاکسِ هیرو ──
     const bar = document.querySelector<HTMLElement>('.mjs-progress')
-    const hero = main.querySelector<HTMLElement>('#hero .mjs-hero-par')
-    let raf = 0
+    // پارالاکس فقط روی دسکتاپ (نشانگرِ دقیق): روی گوشی جابه‌جاییِ لایهٔ بزرگِ هیرو در هر فریمِ اسکرول هزینهٔ بی‌ثمر بود.
+    const hero = window.matchMedia('(pointer: fine) and (min-width: 900px)').matches ? main.querySelector<HTMLElement>('#hero .mjs-hero-par') : null
+    let raf = 0, scrolled = false
+    // ارتفاعِ سند فقط با تغییرِ اندازه دوباره خوانده می‌شود (خواندنِ scrollHeight در هر فریم = layoutِ اجباری)
+    let docH = document.documentElement.scrollHeight - window.innerHeight
+    const onResize = () => { docH = document.documentElement.scrollHeight - window.innerHeight }
     const onScroll = () => {
       if (raf) return
       raf = requestAnimationFrame(() => {
         raf = 0
-        const y = window.scrollY, h = document.documentElement.scrollHeight - window.innerHeight
-        if (bar) bar.style.transform = `scaleX(${h > 0 ? Math.min(1, y / h) : 0})`
-        main.classList.toggle('mjs-scrolled', y > 24)
+        const y = window.scrollY
+        if (bar) bar.style.transform = `scaleX(${docH > 0 ? Math.min(1, y / docH) : 0})`
+        const sc = y > 24
+        if (sc !== scrolled) { scrolled = sc; main.classList.toggle('mjs-scrolled', sc) }
         if (hero && y < 1200) hero.style.transform = `translate3d(0, ${(y * 0.28).toFixed(1)}px, 0)`
       })
     }
+    window.addEventListener('resize', onResize, { passive: true })
+    const ro = new ResizeObserver(onResize); ro.observe(document.body)
     window.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
 
@@ -91,8 +106,9 @@ export default function SiteMotion() {
     if (fine) main.addEventListener('pointermove', onMove, { passive: true })
 
     return () => {
-      io.disconnect(); io2.disconnect()
+      io.disconnect(); io2.disconnect(); io3.disconnect(); ro.disconnect()
       window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onResize)
       if (fine) main.removeEventListener('pointermove', onMove)
     }
   }, [])

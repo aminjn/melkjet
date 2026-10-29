@@ -132,7 +132,7 @@ export default function ListingsSlider({
                 {it.category ? (
                   <span style={{
                     position: 'absolute', top: 12, insetInlineStart: 12, fontSize: 11.5, fontWeight: 800,
-                    color: '#fff', background: 'rgba(10,8,5,.55)', backdropFilter: 'blur(6px)',
+                    color: '#fff', background: 'rgba(10,8,5,.72)',
                     border: '1px solid rgba(255,255,255,.25)', borderRadius: 999, padding: '5px 12px',
                   }}>{it.category}</span>
                 ) : null}

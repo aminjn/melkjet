@@ -372,7 +372,7 @@ void migrateBlock
 
 // Real, props-driven render of a block — shared by canvas previews. The public
 // page (app/[site]/page.tsx) mirrors this exact markup as a clean page.
-type TeamMemberLite = { phone: string; name: string; photo: string; title: string; specialties: string[]; areas: string; experience: string; activeListings: number; slug: string }
+type TeamMemberLite = { phone: string; id?: string; name: string; photo: string; title: string; specialties: string[]; areas: string; experience: string; activeListings: number; slug: string }
 type ArticleLite = { title: string; excerpt?: string; image?: string; category?: string; date?: string }
 // آگهیِ کامل (مثلِ کارتِ سایت اصلی): نوعِ معامله، متراژ، اتاق، وضعیتِ فروش.
 type ListingLite = { title: string; location?: string; price?: string; image?: string; category?: string; deal?: string; ptype?: string; area?: string; rooms?: string; dealStatus?: string }
@@ -683,7 +683,7 @@ function BlockBody({ block, primary, myListings, myArticles, myProducts, teamMem
     const showPhone = p.showPhone !== 'no'
     const sel: string[] | null = Array.isArray(p.members) ? p.members : null
     let people = (teamMembers || [])
-    if (sel) people = people.filter(m => sel.includes(m.phone))
+    if (sel && sel.length) people = people.filter(m => sel.includes(m.id || m.phone))
     return (
       <div style={{ background: '#faf9f7', padding: '44px 28px', direction: 'rtl', textAlign: 'center' }}>
         <div style={{ fontSize: 22, fontWeight: 900, color: '#1a1510', marginBottom: 6 }}>{p.heading || 'مشاوران ما'}</div>
@@ -703,7 +703,7 @@ function BlockBody({ block, primary, myListings, myArticles, myProducts, teamMem
               if (m.experience) rows.push(['⏳', m.experience])
               if (m.activeListings > 0) rows.push(['🏠', `${m.activeListings.toLocaleString('fa-IR')} آگهی`])
               return (
-                <div key={m.phone} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 18, width: 210, boxShadow: '0 10px 28px -18px rgba(0,0,0,.5)', overflow: 'hidden', textAlign: 'center' }}>
+                <div key={m.id || m.phone} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 18, width: 210, boxShadow: '0 10px 28px -18px rgba(0,0,0,.5)', overflow: 'hidden', textAlign: 'center' }}>
                   <div style={{ height: 56, background: `linear-gradient(135deg,${primary},#1a1510)` }} />
                   <div style={{ padding: '0 14px 16px', marginTop: -40 }}>
                     {m.photo
@@ -2134,7 +2134,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                       const checkedAll = !explicit
                       const isChecked = (ph: string) => explicit ? raw.includes(ph) : true
                       const toggle = (ph: string) => {
-                        const base: string[] = explicit ? [...raw] : teamMembers.map(m => m.phone)
+                        const base: string[] = explicit ? [...raw] : teamMembers.map(m => m.id || m.phone)
                         const next = base.includes(ph) ? base.filter(x => x !== ph) : [...base, ph]
                         updateProp(id, 'members', next)
                       }
@@ -2147,8 +2147,8 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                             <>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
                                 {teamMembers.map(m => (
-                                  <label key={m.phone} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 6px', borderRadius: 7, background: isChecked(m.phone) ? 'var(--goldDim)' : 'transparent' }}>
-                                    <input type="checkbox" checked={isChecked(m.phone)} onChange={() => toggle(m.phone)} style={{ width: 15, height: 15, accentColor: 'var(--gold)' }} />
+                                  <label key={m.id || m.phone} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 6px', borderRadius: 7, background: isChecked(m.id || m.phone) ? 'var(--goldDim)' : 'transparent' }}>
+                                    <input type="checkbox" checked={isChecked(m.id || m.phone)} onChange={() => toggle(m.id || m.phone)} style={{ width: 15, height: 15, accentColor: 'var(--gold)' }} />
                                     {m.photo
                                       // eslint-disable-next-line @next/next/no-img-element
                                       ? <img src={m.photo} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }} />

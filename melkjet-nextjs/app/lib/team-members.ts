@@ -14,7 +14,10 @@ export interface TeamMember {
   experience: string     // سابقه
   activeListings: number // آگهیِ فعال
   slug: string           // آدرسِ سایتِ شخصیِ مشاور (از سایت‌ساز)
+  id?: string            // فاز ۳۴۱ — شناسهٔ پایدارِ انتخاب در سایت‌ساز: شماره، یا `name:<نام>` برای مشاورِ بی‌حساب
 }
+/** شناسهٔ انتخابِ عضو (سایت‌ساز props.members): شماره، وگرنه نام. */
+export const memberIdOf = (m: { phone?: string; name?: string; id?: string }) => m.id || m.phone || `name:${m.name || ''}`
 
 // آدرسِ سایتِ منتشرشدهٔ خودِ مشاور (در صورتِ وجود) — منبعِ واقعی به‌جای slugِ دستی در پروفایل.
 async function siteSlugFor(phone: string): Promise<string> {
@@ -27,21 +30,26 @@ async function siteSlugFor(phone: string): Promise<string> {
 // برای همین بلوکِ «مشاوران ما» در سایتِ خودکارشان همیشه خالی بود. وقتی رابطهٔ رسمی خالی
 // است، مشاورانِ حساب‌دارِ (phone‌دار) اسکرپِ همان آژانس تیم را می‌سازند.
 // کش با TTL تا رندرِ سایتِ هر آژانس همهٔ ردیف‌های رُستر را دوباره نخواند.
-let rosterTeam297: { at: number; map: Map<string, { phone: string; name: string }[]> } | null = null
-async function rosterMembersOf(agencyPhone: string): Promise<{ phone: string; name: string }[]> {
+// فاز ۳۴۱ — «تیم ما مشاورین را نشان نمی‌دهد»: فقط مشاورانِ phone‌دار (حساب‌ساخته) می‌آمدند؛ آژانسی که هنوز برای
+// مشاورانش حساب نساخته بود تیمِ خالی داشت (و پوستهٔ نسلِ ۲ بخشِ خالی را پنهان می‌کند → صفحهٔ «تیم ما» بی‌محتوا).
+// حالا همهٔ مشاورانِ نام‌دارِ رُستر می‌آیند: حساب‌دارها با پروفایلِ کامل، بقیه با نام و تعدادِ آگهیِ واقعی.
+type RosterMember = { phone: string; name: string; listings: number }
+let rosterTeam297: { at: number; map: Map<string, RosterMember[]> } | null = null
+async function rosterMembersOf(agencyPhone: string): Promise<RosterMember[]> {
   if (!rosterTeam297 || Date.now() - rosterTeam297.at > 120_000) {
-    const map = new Map<string, { phone: string; name: string }[]>()
+    const map = new Map<string, RosterMember[]>()
     try {
       const { listScrapes } = await import('./agency-roster-store')
       for (const sc of await listScrapes()) {
-        const members = (sc.advisors || []).filter(a => a.phone).map(a => ({ phone: String(a.phone), name: a.name || '' }))
+        const members = (sc.advisors || []).filter(a => a.phone || (a.name || '').trim())
+          .map(a => ({ phone: String(a.phone || ''), name: (a.name || '').trim(), listings: Number(a.listingCount) || 0 }))
         if (!members.length) continue
         // کلیدِ آژانس: شمارهٔ حسابِ آژانس (پس از graduate) — agencyOwner یا agencyPhone
         for (const key of [sc.agencyPhone, sc.agencyOwner]) {
           const k = String(key || '').trim()
           if (!/^\d{6,}$/.test(k)) continue   // هنوز کلیدِ موقتِ agency:slug است — حسابی ندارد
           const prev = map.get(k) || []
-          for (const m of members) if (m.phone !== k && !prev.some(p => p.phone === m.phone)) prev.push(m)
+          for (const m of members) if (m.phone !== k && !prev.some(p => (m.phone ? p.phone === m.phone : !p.phone && p.name === m.name))) prev.push(m)
           map.set(k, prev)
         }
       }
@@ -82,6 +90,9 @@ export async function getTeamMembers(agencyPhone: string): Promise<TeamMember[]>
   if (!agencyPhone) return []
   const formal = await listAgencyMembers(agencyPhone)
   if (formal.length) return Promise.all(formal.map(m => enrichMember(m.advisorPhone, m.advisorName || '')))
-  const roster = await rosterMembersOf(agencyPhone)
-  return Promise.all(roster.slice(0, 40).map(m => enrichMember(m.phone, m.name)))
+  const roster = (await rosterMembersOf(agencyPhone)).slice()
+    .sort((a, b) => (b.phone ? 1 : 0) - (a.phone ? 1 : 0) || b.listings - a.listings)
+  return Promise.all(roster.slice(0, 40).map(async m => m.phone
+    ? enrichMember(m.phone, m.name)
+    : { phone: '', id: `name:${m.name}`, name: m.name, photo: '', title: 'مشاورِ املاک', specialties: [], areas: '', experience: '', activeListings: m.listings, slug: '' } as TeamMember))
 }

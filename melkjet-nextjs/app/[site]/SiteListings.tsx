@@ -163,7 +163,7 @@ export default function SiteListings({ items, primary, siteSlug = '' }: { items:
                   <div style={{ height: '100%', background: `linear-gradient(135deg,${GRADS[i % GRADS.length]})` }} />
                 )}
                 <div aria-hidden style={{ position: 'absolute', insetInline: 0, bottom: 0, height: 70, background: 'linear-gradient(180deg, transparent, rgba(10,8,5,.45))', pointerEvents: 'none' }} />
-                <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, fontSize: 11.5, fontWeight: 800, color: '#fff', background: it.deal === 'rent' ? 'rgba(13,148,136,.85)' : `color-mix(in srgb, ${primary} 85%, transparent)`, backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 999, padding: '5px 12px' }}>{it.deal === 'rent' ? 'اجاره' : 'فروش'}</span>
+                <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, fontSize: 11.5, fontWeight: 800, color: '#fff', background: it.deal === 'rent' ? 'rgba(13,148,136,.85)' : `color-mix(in srgb, ${primary} 85%, transparent)`, border: '1px solid rgba(255,255,255,.25)', borderRadius: 999, padding: '5px 12px' }}>{it.deal === 'rent' ? 'اجاره' : 'فروش'}</span>
               </div>
               <div style={{ padding: 20 }}>
                 <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--mjs-heading)', marginBottom: 7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>

@@ -23,7 +23,8 @@ export default function NavBar({
 
   return (
     <nav className="mjs-nav" style={{
-      background: 'color-mix(in srgb, var(--mjs-bg) 86%, transparent)', backdropFilter: 'blur(10px)',
+      // بلورِ هدرِ چسبان هر فریمِ اسکرول از نو حساب می‌شد (لگِ موبایل) — تقریباً مات و بی‌بلور
+      background: 'color-mix(in srgb, var(--mjs-bg) 96%, transparent)',
       borderBottom: '1px solid color-mix(in srgb, var(--mjs-text) 12%, transparent)',
       padding: '0 clamp(16px,4vw,24px)', direction: 'rtl', position: 'sticky', top: 0, zIndex: 50,
       boxShadow: '0 6px 24px -22px rgba(20,16,10,.7)',

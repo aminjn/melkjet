@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getSite, getSitePage, type Site, type SitePage, type SiteBlock } from '@/app/lib/sites-store'
 import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
-import { getTeamMembers, type TeamMember } from '@/app/lib/team-members'
+import { getTeamMembers, memberIdOf, type TeamMember } from '@/app/lib/team-members'
 import { listReviews } from '@/app/lib/reviews-store'
 import { shopProductsOf } from '@/app/lib/materials-store'
 import ListingsSlider from './ListingsSlider'
@@ -196,9 +196,9 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
             : bgImage ? <div style={{ position: 'absolute', inset: 0, background: `${overlayGrad ? overlayGrad + ', ' : ''}${bgImage}`, backgroundSize: 'cover', backgroundPosition: 'center' }} /> : null}
         {aurora ? (
           <div className="mjs-aurora" style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: `radial-gradient(120% 90% at 85% 0%, color-mix(in srgb, ${primary} 26%, var(--mjs-secondary)), var(--mjs-secondary) 62%)` }}>
-            <i style={{ position: 'absolute', width: '62vmax', height: '62vmax', top: '-28%', right: '-12%', borderRadius: '50%', filter: 'blur(70px)', opacity: .55, background: `radial-gradient(circle, ${primary}, transparent 64%)` }} />
-            <i style={{ position: 'absolute', width: '48vmax', height: '48vmax', bottom: '-30%', left: '-10%', borderRadius: '50%', filter: 'blur(80px)', opacity: .42, background: `radial-gradient(circle, color-mix(in srgb, ${primary} 45%, #7b6cff), transparent 66%)` }} />
-            <i style={{ position: 'absolute', width: '34vmax', height: '34vmax', top: '30%', left: '28%', borderRadius: '50%', filter: 'blur(90px)', opacity: .28, background: `radial-gradient(circle, color-mix(in srgb, ${primary} 35%, #fff), transparent 66%)` }} />
+            <i style={{ position: 'absolute', width: '62vmax', height: '62vmax', top: '-28%', right: '-12%', borderRadius: '50%', opacity: .55, background: `radial-gradient(circle, ${primary}, transparent 64%)` }} />
+            <i style={{ position: 'absolute', width: '48vmax', height: '48vmax', bottom: '-30%', left: '-10%', borderRadius: '50%', opacity: .42, background: `radial-gradient(circle, color-mix(in srgb, ${primary} 45%, #7b6cff), transparent 66%)` }} />
+            <i style={{ position: 'absolute', width: '34vmax', height: '34vmax', top: '30%', left: '28%', borderRadius: '50%', opacity: .28, background: `radial-gradient(circle, color-mix(in srgb, ${primary} 35%, #fff), transparent 66%)` }} />
           </div>
         ) : null}
       </div>
@@ -226,7 +226,7 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
                 <span className="mjs-hero-badge" style={{
                   display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: textColor,
                   background: 'rgba(255,255,255,.10)', border: '1px solid rgba(255,255,255,.20)',
-                  padding: '7px 16px 7px 14px', borderRadius: 999, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                  padding: '7px 16px 7px 14px', borderRadius: 999,
                 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: primary, boxShadow: `0 0 0 4px ${primary}40` }} />{badge297}</span>
               ) : null
             })()}
@@ -234,7 +234,7 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
               <span className="mjs-hero-badge" style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800,
                 color: '#aef0c3', background: 'rgba(37,170,92,.20)', border: '1px solid rgba(110,224,152,.36)',
-                padding: '7px 14px', borderRadius: 999, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                padding: '7px 14px', borderRadius: 999,
               }}>✓ تاییدشده در ملک‌جت</span>
             ) : null}
           </div>
@@ -267,7 +267,7 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
                 display: 'inline-flex', alignItems: 'center', gap: 8, padding: '16px 28px',
                 background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.28)',
                 borderRadius: 999, fontSize: 15.5, fontWeight: 800, color: textColor,
-                textDecoration: 'none', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                textDecoration: 'none',
               }}>☎ تماس</a>
             ) : null}
           </div>
@@ -304,7 +304,7 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
               <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#22a55a', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>✓</span>تاییدشده در ملک‌جت
             </span>
             {extras!.reviewsCount > 0 ? (
-              <span className="mjs-float-2" style={{ position: 'absolute', top: '9%', left: '-7%', padding: '10px 14px', borderRadius: 16, background: 'rgba(12,10,8,.72)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,.18)', color: '#fff', fontSize: 13, fontWeight: 800, boxShadow: '0 20px 44px -18px rgba(0,0,0,.6)' }}>
+              <span className="mjs-float-2" style={{ position: 'absolute', top: '9%', left: '-7%', padding: '10px 14px', borderRadius: 16, background: 'rgba(12,10,8,.86)', border: '1px solid rgba(255,255,255,.18)', color: '#fff', fontSize: 13, fontWeight: 800, boxShadow: '0 20px 44px -18px rgba(0,0,0,.6)' }}>
                 <span style={{ color: '#ffcf4a' }}>★</span> {(Math.round(extras!.reviewsAvg * 10) / 10).toLocaleString('fa-IR')} <span style={{ opacity: .65, fontWeight: 600 }}>از {fa(extras!.reviewsCount)} نظر</span>
               </span>
             ) : null}
@@ -313,8 +313,9 @@ function HeroBlock({ block, primary, extras }: { block: SiteBlock; primary: stri
           <div className="mjs-hero-visual mjs-hero-card" style={{ position: 'relative', justifySelf: 'center', width: '100%', maxWidth: 420, perspective: 1400 }}>
             <div className="mjs-float" style={{
               position: 'relative', borderRadius: 28, padding: 'clamp(22px,3vw,30px)',
-              background: 'linear-gradient(160deg, rgba(255,255,255,.16), rgba(255,255,255,.05))',
-              border: '1px solid rgba(255,255,255,.22)', backdropFilter: 'blur(18px) saturate(1.4)', WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
+              // بدونِ backdrop-filter: پشتش شفقِ متحرک است و بلورِ پس‌زمینهٔ متحرک هر فریم از نو محاسبه می‌شد (لگِ اسکرول)
+              background: 'linear-gradient(160deg, color-mix(in srgb, var(--mjs-secondary) 55%, rgba(255,255,255,.18)), color-mix(in srgb, var(--mjs-secondary) 80%, rgba(255,255,255,.06)))',
+              border: '1px solid rgba(255,255,255,.22)',
               boxShadow: '0 50px 100px -50px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.28)',
               transform: 'rotateY(-9deg) rotateX(4deg)', transformStyle: 'preserve-3d', color: '#fff',
             }}>
@@ -372,8 +373,8 @@ function InnerHero({ block, primary, extras }: { block: SiteBlock; primary: stri
       <div className="mjs-hero-par" aria-hidden style={{ position: 'absolute', inset: '-10% 0 -10% 0', zIndex: 0 }}>
         {image ? <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, rgba(10,8,6,.35), rgba(10,8,6,.78)), url(${image}) center/cover` }} /> : (
           <div className="mjs-aurora" style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: `radial-gradient(120% 120% at 90% 0%, color-mix(in srgb, ${primary} 24%, var(--mjs-secondary)), var(--mjs-secondary) 60%)` }}>
-            <i style={{ position: 'absolute', width: '50vmax', height: '50vmax', top: '-40%', right: '-10%', borderRadius: '50%', filter: 'blur(70px)', opacity: .5, background: `radial-gradient(circle, ${primary}, transparent 64%)` }} />
-            <i style={{ position: 'absolute', width: '40vmax', height: '40vmax', bottom: '-50%', left: '0%', borderRadius: '50%', filter: 'blur(80px)', opacity: .35, background: `radial-gradient(circle, color-mix(in srgb, ${primary} 45%, #7b6cff), transparent 66%)` }} />
+            <i style={{ position: 'absolute', width: '50vmax', height: '50vmax', top: '-40%', right: '-10%', borderRadius: '50%', opacity: .5, background: `radial-gradient(circle, ${primary}, transparent 64%)` }} />
+            <i style={{ position: 'absolute', width: '40vmax', height: '40vmax', bottom: '-50%', left: '0%', borderRadius: '50%', opacity: .35, background: `radial-gradient(circle, color-mix(in srgb, ${primary} 45%, #7b6cff), transparent 66%)` }} />
           </div>
         )}
       </div>
@@ -791,11 +792,12 @@ function CtaBlock({ block, primary }: { block: SiteBlock; primary: string }) {
         position: 'absolute', inset: 0, pointerEvents: 'none',
         background: `radial-gradient(460px 300px at 85% 15%, ${primary}33, transparent 70%), radial-gradient(420px 300px at 10% 90%, rgba(255,255,255,.10), transparent 70%)`,
       }} />
-      {/* پوستهٔ نسلِ ۲ — لبهٔ درخشانِ چرخان (conic + @property) دورِ پنل؛ مرورگرِ بی‌پشتیبان: لبهٔ ثابت */}
-      <div className="mjs-glow-border" style={{ position: 'relative', maxWidth: 824, margin: '0 auto', padding: 2, borderRadius: 32, background: `conic-gradient(from var(--mjs-a, 0deg), transparent 0deg, ${primary} 70deg, #fff 110deg, transparent 170deg, transparent 360deg)` }}>
+      {/* پوستهٔ نسلِ ۲ — لبهٔ درخشانِ چرخان دورِ پنل. فاز ۳۴۱: قبلاً conicِ @property بود که هر فریم کلِ پنل را
+          دوباره رنگ می‌کرد (~۶۰٪ هزینهٔ رسترِ اسکرول)؛ حالا لایهٔ ::before یک بار رنگ می‌شود و فقط transform می‌چرخد. */}
+      <div className="mjs-glow-border" style={{ position: 'relative', maxWidth: 824, margin: '0 auto', padding: 2, borderRadius: 32, overflow: 'hidden', isolation: 'isolate', background: `color-mix(in srgb, ${primary} 35%, transparent)` }}>
       <div style={{
         position: 'relative', maxWidth: 820, margin: '0 auto',
-        background: 'color-mix(in srgb, var(--mjs-secondary) 88%, transparent)', backdropFilter: 'blur(10px)',
+        background: 'color-mix(in srgb, var(--mjs-secondary) 92%, transparent)',
         border: '1px solid rgba(255,255,255,.10)', borderRadius: 30,
         padding: 'clamp(36px,6vw,60px) clamp(22px,5vw,48px)',
         boxShadow: '0 34px 90px -40px rgba(0,0,0,.75)',
@@ -1049,7 +1051,8 @@ async function TeamBlock({ block, primary, ownerPhone, slug }: { block: SiteBloc
   const showPhone = props.showPhone !== 'no'
   const sel = Array.isArray(props.members) ? (props.members as string[]) : null
   let people = ownerPhone ? await getTeamMembers(ownerPhone) : []
-  if (sel) people = people.filter(m => sel.includes(m.phone))
+  // آرایهٔ خالیِ ذخیره‌شده = «انتخابِ خاصی نشده»، نه «هیچ‌کس» (وگرنه تیم ناپدید می‌شد)
+  if (sel && sel.length) people = people.filter(m => sel.includes(memberIdOf(m)))
   // پوستهٔ نسلِ ۲ — بخشِ خالی روی سایتِ منتشرشده رندر نمی‌شود (جعبهٔ «هنوز … نداریم» امضای قالبِ پیش‌ساخته بود).
   if (people.length === 0) return null
   return (
@@ -1186,7 +1189,7 @@ function SectionNav({ page, primary }: { page: SitePage; primary: string }) {
   return (
     <nav className="mjs-subnav" style={{
       position: 'sticky', top: 64, zIndex: 40, direction: 'rtl',
-      background: 'color-mix(in srgb, var(--mjs-bg) 90%, transparent)', backdropFilter: 'blur(10px)',
+      background: 'color-mix(in srgb, var(--mjs-bg) 97%, transparent)',
       borderBottom: '1px solid color-mix(in srgb, var(--mjs-text) 10%, transparent)',
       padding: '0 clamp(16px,4vw,24px)',
     }}>
@@ -1269,7 +1272,7 @@ function BottomNav({ site, currentSlug, primary }: { site: Site; currentSlug: st
   return (
     <nav className="mjs-bottom-bar" style={{
       position: 'fixed', bottom: 0, insetInlineStart: 0, insetInlineEnd: 0, zIndex: 60, direction: 'rtl',
-      display: 'none', background: 'color-mix(in srgb, var(--mjs-bg) 94%, transparent)', backdropFilter: 'blur(12px)',
+      display: 'none', background: 'color-mix(in srgb, var(--mjs-bg) 98%, transparent)',
       borderTop: '1px solid color-mix(in srgb, var(--mjs-text) 14%, transparent)',
       paddingBottom: 'env(safe-area-inset-bottom)', boxShadow: '0 -6px 24px -18px rgba(20,16,10,.8)',
     }}>
@@ -1349,8 +1352,8 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
         @keyframes mjsFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
         @keyframes mjsMarquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
         @keyframes mjsCue{0%{transform:translateY(0);opacity:0}30%{opacity:1}100%{transform:translateY(12px);opacity:0}}
-        @keyframes mjsSpin{to{--mjs-a:360deg}}
-        @property --mjs-a{syntax:'<angle>';inherits:false;initial-value:0deg}
+        @keyframes mjsSpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+        .mjs-glow-border::before{content:'';position:absolute;left:50%;top:50%;width:max(1100px,140%);aspect-ratio:1;transform:translate(-50%,-50%);background:conic-gradient(transparent 0deg,${primary} 70deg,#fff 110deg,transparent 170deg,transparent 360deg);pointer-events:none;z-index:0}
         .mjs-progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:300;transform:scaleX(0);transform-origin:100% 50%;background:linear-gradient(270deg,${primary},color-mix(in srgb,${primary} 40%,#fff));pointer-events:none}
         @media (prefers-reduced-motion: no-preference){
           html.mjs-js [data-r]:not(.mjs-in){opacity:0}
@@ -1370,9 +1373,15 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
           .mjs-float-2{animation:mjsFloat 7.5s 1.2s ease-in-out infinite}
           .mjs-marquee-track{animation:mjsMarquee 38s linear infinite}
           .mjs-cue i{animation:mjsCue 1.8s ease-in-out infinite}
-          .mjs-glow-border{animation:mjsSpin 7s linear infinite}
+          .mjs-glow-border::before{animation:mjsSpin 7s linear infinite;will-change:transform}
+          @media(max-width:719px){.mjs-glow-border::before{animation:none;will-change:auto}}
         }
         .mjs-marquee:hover .mjs-marquee-track{animation-play-state:paused}
+        /* فاز ۳۴۱ — انیمیشنِ بی‌پایانِ بیرونِ دید متوقف (SiteMotion → data-off) */
+        [data-off],[data-off] *,[data-off]::before{animation-play-state:paused !important}
+        .mjs-aurora>i{will-change:transform}
+        /* هدرِ «اسکرول‌شده» روی موبایل سایه/جابه‌جاییِ ارتفاع نگیرد (reflowِ هر بار) */
+        @media(max-width:719px){main.mjs-scrolled .mjs-nav>div{min-height:64px !important}}
         /* خطِ زیرِ تیترِ بخش‌ها با ورود «کشیده» می‌شود */
         .mjs-h-line{transform-origin:100% 50%;transition:transform 1.1s .25s cubic-bezier(.16,1,.3,1)}
         html.mjs-js [data-r="mask"]:not(.mjs-in)+.mjs-h-line{transform:scaleX(0)}
@@ -1387,10 +1396,10 @@ export function SiteChrome({ site, currentSlug, children, appendFooter, bottomNa
         .mjs-btn{position:relative;overflow:hidden;isolation:isolate}
         .mjs-btn::after{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.38) 50%,transparent 70%);transform:translateX(120%);transition:transform .8s cubic-bezier(.16,1,.3,1)}
         .mjs-btn:hover::after{transform:translateX(-120%)}
-        /* هدر: با اسکرول فشرده‌تر و شیشه‌ای‌تر */
+        /* هدر: با اسکرول فشرده‌تر و سایه‌دار (فاز ۳۴۱: بی‌بلور ← تقریباً مات، تا متنِ زیرش از پشتش دیده نشود) */
         .mjs-nav{transition:background .3s ease, box-shadow .3s ease}
         .mjs-nav>div{transition:min-height .3s ease}
-        main.mjs-scrolled .mjs-nav{background:color-mix(in srgb,var(--mjs-bg) 78%,transparent) !important;box-shadow:0 14px 40px -28px rgba(20,16,10,.8) !important}
+        main.mjs-scrolled .mjs-nav{background:color-mix(in srgb,var(--mjs-bg) 95%,transparent) !important;box-shadow:0 14px 40px -28px rgba(20,16,10,.8) !important}
         main.mjs-scrolled .mjs-nav>div{min-height:58px !important}
         .mjs-stat-num{background:linear-gradient(135deg,#fff,color-mix(in srgb,${primary} 55%,#fff));-webkit-background-clip:text;background-clip:text;color:transparent}
         .mjs-grad-word{background:linear-gradient(100deg,color-mix(in srgb,${primary} 55%,#fff),${primary} 60%,color-mix(in srgb,${primary} 70%,#fff));-webkit-background-clip:text;background-clip:text;color:transparent}
