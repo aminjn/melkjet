@@ -267,14 +267,42 @@ export function contextNoiseTokens(text: string): Set<string> {
     }
   }
   for (const k of specValueTokens(text)) out.add(k)
+  for (const k of placeCompoundTokens(text)) out.add(k)
   return out
 }
+
+// فاز ۳۴۳ — «شمس» از «شمس آباد» (نمونهٔ زندهٔ مالک: ۹ آگهیِ یک آژانسِ شمس‌آباد همه «مشاور شمس» شدند).
+// واژه‌ای که «هر بار» در این متن پیش از پسوندِ مکانی («آباد/شهر») آمده، تکه‌ای از نامِ محله است، نه نامِ آدم.
+// «هر بار» مهم است: اگر جای دیگری از متن «خانم شمس» آمده باشد، بن نمی‌شود. نیم‌فاصله هم مرز است
+// («شمس‌آباد» ⇒ شمس + آباد).
+const PLACE_NEXT = new Set(['آباد', 'اباد', 'آبادی', 'ابادی', 'شهر'].map(keyOf))
+export function placeCompoundTokens(text: string): Set<string> {
+  const ws = deEmoji(String(text || '')).split(/[^\u0621-\u06ccA-Za-z]+/).filter(Boolean)
+  const total = new Map<string, number>(), placed = new Map<string, number>()
+  for (let i = 0; i < ws.length; i++) {
+    const k = keyOf(ws[i]); if (!k) continue
+    total.set(k, (total.get(k) || 0) + 1)
+    if (i + 1 < ws.length && PLACE_NEXT.has(keyOf(ws[i + 1]))) placed.set(k, (placed.get(k) || 0) + 1)
+  }
+  const out = new Set<string>()
+  for (const [k, n] of placed) if (n === total.get(k)) out.add(k)
+  return out
+}
+
+/** بانِ «سخت» — برخلافِ بانِ آدرس، حتی نامِ trust/گازِتیر/AI هم از آن معاف نیست: مقدارِ مشخصه («سند: تعاونی»)
+ *  و تکهٔ نامِ محله («شمس» از «شمس آباد») در هیچ بافتی امضای مشاور نیستند. */
+export function hardBanTokens(text: string): Set<string> {
+  const out = specValueTokens(text)
+  for (const k of placeCompoundTokens(text)) out.add(k)
+  return out
+}
+export const hitsBan = (name: string, ban: Set<string>) => !!name && name.split(/\s+/).some(w => ban.has(keyOf(w)))
 
 // فاز ۳۴۱ — «مقدارِ مشخصه» هرگز نامِ مشاور نیست: «وضعیت سند: تعاونی»، «سیستم سرمایش: فن کوئل»، «کف: لمینت».
 // نمونهٔ زندهٔ کاربر: «تعاونی» و «فن کوئل» مشاور شده بودند. به‌جای افزودنِ تک‌تکِ واژه‌ها به فهرستِ سیاه
 // (که فردا با «سند: منگوله‌دار» دوباره می‌شکند)، ساختار را می‌خوانیم: خطِ «برچسب: مقدار» که برچسبش نقشِ
 // آدم نیست (کارشناس/مشاور/نام/هماهنگی/…)، مقدارش ویژگیِ ملک است. «کارشناس فروش: مرادی» دست‌نخورده می‌ماند.
-const ROLE_LABEL = /(کارشناس|مشاور|فروشنده|امضا|نام|مدیر|هماهنگی|راهنمایی|تماس|مسئول|مسوول|بازدید|ارتباط|مالک|فروش|احترام|تشکر|سپاس|خانم|آقا|جناب)/
+const ROLE_LABEL = /(کارشناس|مشاور|فروشنده|امضا|نام|مدیر|هماهنگی|راهنمایی|تماس|مسئول|مسوول|بازدید|ارتباط|مالک|فروش|احترام|تشکر|سپاس|خانم|آقا|جناب|ارادت|مخلص|شما|خدمت|همراه|نماینده|کارگزار|املاک|مسکن|آژانس|مهندس|دکتر)/
 export function specValueTokens(text: string): Set<string> {
   const out = new Set<string>()
   for (const line of deEmoji(String(text || '')).split(/[\n\r]+/)) {

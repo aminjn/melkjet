@@ -3,7 +3,7 @@ import { aiFor, resolveAgent, aiActive } from './gapgpt'
 import { nameProbSync, NAME_THRESHOLD, corpusCount } from './roster-name-model'
 import { bestName, hasSparse as hasSparseModel } from './roster-ner'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
-import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord, nameRuleWhitelistRaw, FIRST_NAMES } from './agency-name-lexicon'
+import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord, nameRuleWhitelistRaw, FIRST_NAMES, hardBanTokens, hitsBan } from './agency-name-lexicon'
 import { loadNameRules } from './roster-name-rules'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
@@ -133,7 +133,9 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
     // آدرس را در بافتِ نقش می‌شناسد و «منطقه فراهانی» را نامِ مشاور می‌گیرد (نه آدرس). ولی حدسِ ضعیف
     // trustPerson نمی‌گیرد (SOLO_NEVER سرِ جا) و چون p<0.97 است از دروازهٔ nameProb هم می‌گذرد.
     const banFree = !!(ner && (ner.trust || ner.gaz))
-    const v = ner ? validName(ner.name, agencyName, banFree ? undefined : banned, { trustPerson: !!ner.trust }) : ''
+    const v0 = ner ? validName(ner.name, agencyName, banFree ? undefined : banned, { trustPerson: !!ner.trust }) : ''
+    // فاز ۳۴۳ — بانِ سخت (مقدارِ مشخصه / تکهٔ نامِ محله) حتی برای trust/گازِتیر: «شمس» از «شمس آباد» هرگز.
+    const v = v0 && !hitsBan(v0, hardBanTokens(raw)) ? v0 : ''
     if (!v) {
       // بک‌استاپِ دقتِ‌بالا وقتی مدل ساکت است: خطی که «دقیقاً <نامِ کوچکِ شناخته‌شده> <نامِ خانوادگی>»
       // است (مثلِ «✅ سالار عباسی» روی خطِ خودش) نامِ قطعی است و مدلِ ناقص نباید از دستش بدهد.
@@ -258,6 +260,9 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
 // (اختیاری) پالایشِ AI: نامِ کانونیِ مشاورِ هر آگهی را برمی‌گرداند (فارسی؛ خالی اگر امضا نبود).
 // دسته‌ای صدا زده می‌شود تا هزینهٔ AI کم بماند. اگر مدل نبود/خطا داد → [] (تکیه بر heuristic).
 // (exported برای اسکریپتِ کیس‌استادی scripts/roster-casestudy.mjs — فاز ۲۹۷ش)
+// نسخهٔ پرامپتِ نام‌گذاری؛ با هر تغییرِ معنادارِ پرامپت بالا برود تا جواب‌های کش‌شدهٔ قدیمی دوباره پرسیده شوند.
+// ۲ = حکمِ واقعیِ AI (فاز ۳۴۱)؛ ۳ = قواعدِ عنوان/محله/مشخصه (فاز ۳۴۳).
+export const AI_PROMPT_V = 3
 export async function aiCanonical(items: { i: number; title: string; desc: string }[]): Promise<{ map: Record<number, string>; raw: string; answered?: number[] }> {
   const { model, provider } = resolveAgent([['content', 'text'], ['chat', 'text']])
   if (!model) return { map: {}, raw: '(هیچ مدلی تنظیم نشده)', answered: [] }
@@ -276,8 +281,12 @@ export async function aiCanonical(items: { i: number; title: string; desc: strin
     '(۷) نامِ معبر/محله هرگز اسمِ مشاور نیست: هر کلمه‌ای که بعدِ «بین/خیابان/کوچه/بلوار/نبش/میدان/شهرک/فاز/منطقه/پلاک» آمده آدرس است، نه آدم → خالی. مثال: «بین فلاحی ۴۱ و ۴۳» ⇒ «فلاحی» آدرس است. ' +
     '(۸) واژهٔ ملکی/موقعیتی مثلِ «لوکیشن، منطقه، دوخواب، قابل، آزاد، ایرانی، عزیزان، هماهنگی» اسم نیست → خالی. ' +
     // فاز ۳۳۶و — دادهٔ زنده: qwen نامِ «محله» و «تشکرِ پایانی» را مشاور می‌گرفت («سعادت آباد»⇒«سعادت» ۱۵فایل، «با سپاس»⇒«سپاس» ۱۶فایل).
-    '(۹) نامِ محله/منطقهٔ تهران هرگز اسمِ مشاور نیست (حتی بدونِ کلیدواژهٔ آدرس): سعادت‌آباد، جنت‌آباد، شهرک‌غرب، پونک، نارمک، تهرانپارس، ونک، نیاوران، پاسداران، گیشا، صادقیه، اکباتان، پیروزی، رسالت، مجیدیه و مانندِ این‌ها → خالی. مثال: «سعادت آباد» ⇒ «سعادت» نه، خالی. ' +
+    '(۹) نامِ محله/منطقهٔ تهران هرگز اسمِ مشاور نیست (حتی بدونِ کلیدواژهٔ آدرس): سعادت‌آباد، جنت‌آباد، شهرک‌غرب، پونک، نارمک، تهرانپارس، ونک، نیاوران، پاسداران، گیشا، صادقیه، اکباتان، پیروزی، رسالت، مجیدیه، شمس‌آباد، یوسف‌آباد، امیرآباد، دولت‌آباد و مانندِ این‌ها → خالی. مثال: «سعادت آباد» ⇒ «سعادت» نه، خالی. ' +
     '(۱۰) واژهٔ تشکر/خداحافظیِ پایانِ آگهی اسم نیست: «با سپاس»، «سپاسگزارم»، «با تشکر»، «ارادتمند»، «درود»، «خداحافظ» → خالی. مثال: «با سپاس» ⇒ «سپاس» نه، خالی. ' +
+    // فاز ۳۴۳ — نمونهٔ زنده: «۱۶۵ متر / شمس آباد / فقط امروز» ⇒ AI «شمس» را مشاور گرفت.
+    '(۱۱) عنوانِ آگهی (پیش از «::») فقط برای فهمِ موضوع است و تقریباً هرگز نامِ مشاور ندارد؛ نام را فقط از متنِ توضیحات (پس از «::») بردار. ' +
+    '(۱۲) هر واژه‌ای که تکه‌ای از نامِ یک مکان است اسمِ آدم نیست: «X آباد»، «X شهر»، «شهرک X»، «میدان X»، «برج X». مثال: «شمس آباد» ⇒ «شمس» نه؛ «امیر آباد» ⇒ «امیر» نه؛ «یوسف آباد» ⇒ «یوسف» نه. ' +
+    '(۱۳) مقدارِ یک مشخصه اسم نیست: «وضعیت سند: تعاونی»، «سیستم سرمایش: فن کوئل»، «کف: سرامیک» → خالی. ' +
     'خروجی فقط JSON، بدونِ توضیح: [{"i":<شماره>,"name":"<نام یا خالی>"}]'
   const out = await Promise.race([
     chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: list }], { temperature: 0, max_tokens: 1500 }, provider),
@@ -336,7 +345,7 @@ export async function buildAgencyRoster(
   const maxDetails = Math.max(1, Math.min(opts.maxDetails ?? 3000, posts.length))
   // برای هر آگهی: عنوان + توضیحات را می‌گیریم و کاندیدای امضا را می‌سازیم.
   // `addr` = توکن‌های آدرسِ همین آگهی؛ هیچ منبعی (AI/lexicon/heuristic) اجازه ندارد از آنها اسم بسازد.
-  const rows: { post: BrandPost; title: string; desc: string; cand: string[]; addr: Set<string>; trusted: boolean }[] = []
+  const rows: { post: BrandPost; title: string; desc: string; cand: string[]; addr: Set<string>; trusted: boolean; hard: Set<string>; descKeys: Set<string> }[] = []
   for (let i = 0; i < maxDetails; i++) {
     if (i % 5 === 0 && opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
     const p = posts[i]
@@ -351,7 +360,10 @@ export async function buildAgencyRoster(
       await sleep(600)   // نرخِ کندتر تا دیوار زیرِ فشار آگهی‌ها را رد نکند (fetchDivarPost خودش retry هم دارد)
     }
     const txt = `${title}\n${desc}`
-    rows.push({ post: p, title, desc, cand: extractSignature(title, desc, name), addr: new Set([...addressTokens(txt), ...contextNoiseTokens(txt)]), trusted: signatureTrusted(title, desc, name) })
+    rows.push({
+      post: p, title, desc, cand: extractSignature(title, desc, name), addr: new Set([...addressTokens(txt), ...contextNoiseTokens(txt)]), trusted: signatureTrusted(title, desc, name),
+      hard: hardBanTokens(txt), descKeys: new Set(deEmoji(desc).split(/[^\u0621-\u06ccA-Za-z]+/).filter(Boolean).map(keyOf)),
+    })
     try { opts.onProgress?.(i + 1, maxDetails) } catch {}
   }
 
@@ -377,7 +389,7 @@ export async function buildAgencyRoster(
   const resolved: Record<number, string> = {}
   if (!AI_NAMING) rows.forEach((r, idx) => {
     // نامِ آموخته هرجای متن پذیرفته می‌شود جز آن‌جا که توکنِ آدرسِ همین آگهی است.
-    const m = validName(lexiconMatch(`${r.title}\n${r.desc}`, trusted), name, r.addr)
+    const m = validName(lexiconMatch(r.desc, trusted), name, r.addr)   // فاز ۳۴۳ — فقط متنِ آگهی، نه عنوان
     if (m) resolved[idx] = m
   })
 
@@ -401,7 +413,8 @@ export async function buildAgencyRoster(
       const cachedName = opts.cached?.[r.post.token]?.name
       // نامِ خالیِ کش‌شده فقط اگر از «پاسخِ واقعیِ AI» آمده باشد (aiv=2) حکم است؛ خالیِ قدیمی ممکن است
       // از تایم‌اوت/پاسخِ خراب ذخیره شده باشد → یک بار دوباره پرسیده می‌شود.
-      if (cachedName !== undefined && (cachedName || opts.cached?.[r.post.token]?.aiv === 2)) { aiMap[idx] = cachedName; aiAsked.add(idx) }
+      // فاز ۳۴۳ — نسخهٔ پرامپت (AI_PROMPT_V): جوابِ پرامپتِ قدیمی (مثلِ «شمس» از عنوان) یک بار دوباره پرسیده می‌شود.
+      if (cachedName !== undefined && (opts.cached?.[r.post.token]?.aiv || 0) >= AI_PROMPT_V) { aiMap[idx] = cachedName; aiAsked.add(idx) }
       // AIِ روشن = «حرفِ آخر»: همهٔ ادهای کش‌نشده به AI می‌روند، نه فقط resolvedنشده‌ها. چون
       // واژه‌نامهٔ آموخته (resolved) از پنجرهٔ خرابِ بی‌مدل آلوده شده بود («جهانگرد»ِ ۲۵فایلی)،
       // اگر resolvedها را از AI معاف کنیم آلودگی باقی می‌مانَد. qwen روی سرورِ خودِ مالک است (رایگان).
@@ -426,7 +439,7 @@ export async function buildAgencyRoster(
         emptyStreak = answered.size === 0 ? emptyStreak + 1 : 0
         // چک‌پوینتِ نام‌ها: فقط ردیفِ پاسخ‌گرفته ذخیره می‌شود ('' = «AI گفت بی‌امضاست»)؛ ردیفِ پاسخِ خراب
         // ذخیره نمی‌شود تا سینکِ بعد دوباره پرسیده شود (قبلاً تایم‌اوت هم '' ذخیره و برای همیشه «بی‌نام» می‌شد).
-        for (const p2 of slice) { if (!answered.has(p2.idx)) continue; try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '', aiv: 2 }) } catch {} }
+        for (const p2 of slice) { if (!answered.has(p2.idx)) continue; try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '', aiv: AI_PROMPT_V }) } catch {} }
       } catch { emptyStreak++ }
       try { opts.onCluster?.(chunkNo, chunksTotal) } catch {}
       if (emptyStreak >= 3) { console.log('[roster] AI returned nothing 3 chunks in a row — skipping rest (heuristic continues)'); break }
@@ -436,6 +449,7 @@ export async function buildAgencyRoster(
   // خوشه‌بندی — اولویت: (۱) AI، (۲) نامِ مورد اعتمادِ ML (short-circuit)، (۳) lexiconِ موضعِ امضا، (۴) heuristic.
   const clusters = new Map<string, RosterAdvisor>()
   const strongKeys = new Set<string>()   // خوشه‌هایی با «سیگنالِ قویِ نام» — نه حدسِ تنها
+  const trustedKeys = new Set<string>()  // فاز ۳۴۳ — خوشه‌هایی که دست‌کم یک امضای قطعیِ شخص («خانم X»، «X هستم») دارند
   const freshKeys = new Set<string>()     // خوشه‌هایی که این اجرا واقعاً از متن استخراج شدند (نه پژواکِ lexicon)
   const fileCount = new Map<string, number>()   // برای وزن‌دهیِ یادگیری بر اساسِ تعدادِ فایل
   const unnamed: { tokens: string[]; posts: BrandPost[] } = { tokens: [], posts: [] }
@@ -444,9 +458,13 @@ export async function buildAgencyRoster(
     // کاندیداهای «موضعِ امضا»یِ همین آگهی (heuristic) — تنها جایی که یک اسم واقعاً امضای مشاور است.
     // نامِ trusted (سیگنالِ قطعیِ شخص) banned/آدرس را دور می‌زند — وگرنه «منطقه خانم اسدی» که
     // «اسدی» را به addr می‌برد، همین‌جا نامِ درست را می‌کُشت و آگهی بی‌نام می‌ماند.
-    const cand = r.cand.map(c => validName(c, name, r.trusted ? undefined : r.addr, { trustPerson: r.trusted })).filter(Boolean)
+    // فاز ۳۴۳ (فیدبکِ مالک: «شمس را از عنوانِ آگهی آورده — محلهٔ شمس‌آباد»). دو قانونِ همگانی برای «همهٔ» منابع
+    // (AI، امضای قطعی، مدل): (۱) بانِ سخت (تکهٔ نامِ محله/مقدارِ مشخصه)، (۲) نام باید در «متنِ» آگهی باشد؛ عنوانِ
+    // دیوار جای امضای مشاور نیست (متراژ/محله/قیمت است). AI عنوان را هم می‌بیند و «شمس» را از «۱۶۵ متر / شمس آباد» برمی‌داشت.
+    const srcOk = (n: string) => !!n && !hitsBan(n, r.hard) && n.split(/\s+/).every(w => r.descKeys.has(keyOf(w)))
+    const cand = r.cand.map(c => validName(c, name, r.trusted ? undefined : r.addr, { trustPerson: r.trusted })).filter(c => srcOk(c))
     const candKeys = new Set(cand.map(c => keyOf(c)))
-    const lexRaw = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), name, r.addr)
+    const lexRaw = validName(lexiconMatch(r.desc, learned), name, r.addr)
     // lexicon فقط وقتی معتبر است که نامِ آموخته‌شده در موضعِ امضایِ همین آگهی باشد (جزوِ cand)،
     // نه هر جای متن — وگرنه «ایران/ایرانی» در آدرس، آگهیِ مشاورِ دیگری («لشگری») را می‌دزدد.
     const lex = lexRaw && candKeys.has(keyOf(lexRaw)) ? lexRaw : ''
@@ -459,7 +477,8 @@ export async function buildAgencyRoster(
     // حالا هر سه منبع فقط وقتی معتبرند که نام در **موضعِ امضای همین آگهی** باشد.
     // (تعمیمِ کنترل‌شدهٔ واژه‌نامه به آگهی‌های بی‌امضا، پس از خوشه‌بندی و فقط برای مشاورِ
     //  «تثبیت‌شده در همین آژانس» انجام می‌شود — پایین‌تر.)
-    const ai = validName(aiMap[idx] || '', name, r.addr)
+    const aiRaw = validName(aiMap[idx] || '', name, r.addr)
+    const ai = srcOk(aiRaw) ? aiRaw : ''
     const res = resolved[idx] && candKeys.has(keyOf(resolved[idx])) ? resolved[idx] : ''
     // اولویت: AIِ متن‌آگاه → نامِ تثبیت‌شدهٔ ML (در موضعِ امضا) → lexiconِ موضعِ امضا → heuristic.
     // ترتیب عوض شد: استخراجِ متن (که حالا برچسب‌زنِ توکن است) بر واژه‌نامهٔ آموخته
@@ -491,6 +510,7 @@ export async function buildAgencyRoster(
     // نامِ trusted (امضای قطعیِ شخص) «سیگنالِ قوی» است → از تنزلِ MIN_FILES معاف؛ یک آگهیِ
     // صریحِ «خانم اسدی مشاور» مشاورِ واقعی است، نه نوفهٔ تک‌فایلی.
     if (res || lex || (ai && candKeys.has(keyOf(ai))) || r.trusted) strongKeys.add(k)
+    if (r.trusted && cand.some(c2 => keyOf(c2) === k)) trustedKeys.add(k)
     // «تازه» = این اجرا از متن استخراج شد (AI یا heuristic)، نه صرفاً پژواکِ نامِ از قبل آموخته.
     if (ai || cand.length) freshKeys.add(k)
     fileCount.set(k, (fileCount.get(k) || 0) + 1)
@@ -515,6 +535,7 @@ export async function buildAgencyRoster(
     host.tokens.push(...small.tokens); host.posts.push(...small.posts)
     fileCount.set(host.key, (fileCount.get(host.key) || 0) + (fileCount.get(small.key) || 0))
     if (strongKeys.has(small.key)) strongKeys.add(host.key)
+    if (trustedKeys.has(small.key)) trustedKeys.add(host.key)
     if (freshKeys.has(small.key)) freshKeys.add(host.key)
     clusters.delete(small.key)
     console.log(`[roster] merged «${small.name}» → «${host.name}» (${small.tokens.length} فایل)`)
@@ -530,6 +551,22 @@ export async function buildAgencyRoster(
     // اگر خوشهٔ کوتاه حسابِ واقعی دارد، جهتِ ادغام برعکس می‌شود (نامِ بلند در کوتاه).
     if (pinned.has(k) && !pinned.has(hosts[0].key)) mergeInto(hosts[0], c)
     else mergeInto(c, hosts[0])
+  }
+
+  // ── فاز ۳۴۳ — «نامِ» خوشه‌ای که در عنوانِ بیشترِ آگهی‌هایش آمده، محله/برندِ آژانس است، نه مشاور ──
+  // نمونهٔ زنده: آژانسِ شمس‌آباد — «شمس» در عنوانِ هر ۹ آگهی. مشاورِ واقعی نامش را در امضای متن می‌نویسد،
+  // نه در عنوانِ همهٔ فایل‌ها. استثنا: مشاورِ دارای حساب (pinned) و خوشه‌ای که امضای قطعیِ شخص دارد.
+  const titleKeysOf = (t: string) => new Set(deEmoji(t || '').split(/[^\u0621-\u06ccA-Za-z]+/).filter(Boolean).map(keyOf))
+  const titleKeysByToken = new Map(rows.map(r => [r.post.token, titleKeysOf(r.title)]))
+  for (const [k, c] of [...clusters]) {
+    if (pinned.has(k) || trustedKeys.has(k) || c.tokens.length < 3) continue
+    const ws = c.name.split(/\s+/).map(keyOf)
+    const inTitle = c.tokens.filter(t => { const tk = titleKeysByToken.get(t); return !!tk && ws.every(w => tk.has(w)) }).length
+    if (inTitle / c.tokens.length >= 0.6) {
+      console.log(`[roster] «${c.name}» در عنوانِ ${inTitle}/${c.tokens.length} آگهی — محله/برند است، نه مشاور → بی‌نام`)
+      unnamed.tokens.push(...c.tokens); unnamed.posts.push(...c.posts)
+      clusters.delete(k)
+    }
   }
 
   // ── چرت‌وپرت‌زدایی (فیدبک: «چرت و پرت زیاد میاره») ──
@@ -559,8 +596,8 @@ export async function buildAgencyRoster(
     const claimed: number[] = []
     for (const idx of unnamedIdx) {
       const r = rows[idx]
-      const hit = validName(lexiconMatch(`${r.title}\n${r.desc}`, established.map(c => ({ name: c.name }))), name, r.addr)
-      if (!hit) continue
+      const hit = validName(lexiconMatch(r.desc, established.map(c => ({ name: c.name }))), name, r.addr)
+      if (!hit || hitsBan(hit, r.hard)) continue
       const host = clusters.get(keyOf(hit))
       if (!host) continue
       host.tokens.push(r.post.token); host.posts.push(r.post)
@@ -625,7 +662,7 @@ export async function debugRoster(slugOrUrl: string, n = 30): Promise<any> {
     // دقیقاً همان دروازه‌های تولید (فاز ۲۷۵): توکنِ آدرسِ همین آگهی برای هر سه منبع ممنوع است،
     // و اولویت مثلِ خوشه‌بندیِ واقعی AI → lexicon → heuristic است (نه lexicon اول).
     const addr = addressTokens(`${r.title}\n${r.desc}`)
-    const lex = validName(lexiconMatch(`${r.title}\n${r.desc}`, learned), name, addr)
+    const lex = validName(lexiconMatch(r.desc, learned), name, addr)
     const heur = extractSignature(r.title, r.desc, name)[0] || ''
     const ai = validName(aiMap[r.i] || '', name, addr)
     const chosen = ai || lex || heur

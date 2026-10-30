@@ -188,7 +188,7 @@ export async function anyScrapeRunning(): Promise<boolean> {
 // ── چک‌پوینتِ ازسرگیری: متنِ آگهی‌های اسکرپ‌شده (توکن→{title,desc}) در یک کلیدِ جدا، برای هر اسکرپ ──
 // اگر سینک نیمه‌کاره بماند (reload/کیل)، رانِ بعدی آگهی‌های کش‌شده را دوباره از دیوار نمی‌گیرد و ادامه می‌دهد.
 // در پایانِ موفق پاک می‌شود تا سینکِ روزانه‌ی بعدی دادهٔ تازه بگیرد.
-type RowCache = Record<string, { title: string; desc: string; name?: string; aiv?: number; at?: number }>   // aiv=2: نام (حتی خالی) حکمِ واقعیِ AI است (فاز ۳۴۱)
+type RowCache = Record<string, { title: string; desc: string; name?: string; aiv?: number; at?: number }>   // aiv = نسخهٔ پرامپتی که این نام (حتی خالی) را داده (AI_PROMPT_V)
 //   // name = نامِ AI؛ at = زمانِ اسکرپِ ردیف (فاز ۱۹۸ — کشِ دائمیِ اینکرمنتال)
 const CACHE_KV = 'agency_roster_cache'
 const CACHE_FILE = join(process.cwd(), '.agency-roster-cache.json')

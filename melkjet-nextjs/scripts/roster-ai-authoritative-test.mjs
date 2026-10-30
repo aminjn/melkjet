@@ -32,7 +32,9 @@ ok('AI روشن + qwen خالی: پوشش حفظ شد — heuristic «نقی» (
 ok('AI روشن: آگهیِ واقعاً بی‌امضا بی‌نام می‌ماند (cand خالی)', r1.unnamed.tokens.length === 4)
 
 // ── ۲: AI روشن + qwen برای idx 4-7 «رضایی» می‌دهد → qwen جای خالی را پر می‌کند و نامش می‌آید ──
-const r2 = await buildAgencyRoster('s2', { useAI: true, f: mkF(async (ch) => { const m = {}; for (const it of ch) if (it.i >= 4) m[it.i] = 'رضایی'; return { map: m, raw: '' } }) })
+// فاز ۳۴۳ — نامِ AI باید در متنِ آگهی باشد (نامِ ساختگی/از عنوان رد می‌شود)، پس متنِ idx 4-7 امضای «رضایی» دارد
+const mk2 = (aiFn) => ({ ...mkF(aiFn), post: async (t) => { const i = tokens.indexOf(t); return { title: 'آپارتمان ' + t, description: i < 4 ? 'نوساز، کارشناس فروش جهت راهنمایی نقی' : 'نوساز فول امکانات\nبا تشکر رضایی', images: [] } } })
+const r2 = await buildAgencyRoster('s2', { useAI: true, f: mk2(async (ch) => { const m = {}; for (const it of ch) if (it.i >= 4) m[it.i] = 'رضایی'; return { map: m, raw: '' } }) })
 ok('AI روشن: نامِ qwen («رضایی» ۴) می‌آید', r2.advisors.some(a => a.name === 'رضایی' && a.tokens.length === 4))
 // فاز ۳۴۱ — AI همهٔ دسته را خواند و برای idx 0-3 گفت «بی‌امضا» → حدسِ ماشین («نقی») دیگر جای «نه»ِ AI را نمی‌گیرد.
 ok('AI روشن: «نه»ِ AI نهایی است — حدسِ heuristic جای خالیِ AI را پر نمی‌کند', !r2.advisors.some(a => a.name === 'نقی') && r2.unnamed.tokens.length === 4)
@@ -58,9 +60,27 @@ ok('کارشناس فروش: مرادی (برچسبِ نقش) هنوز نام ا
 // ── ۶: نامِ خالیِ کش‌شدهٔ قدیمی (ممکن است تایم‌اوت بوده) دوباره پرسیده می‌شود؛ خالیِ aiv=2 نه ──
 saveAdminData({ ...base, aiEnabled: true, aiAreas: { roster: true } })
 const asked = []
-const cached = Object.fromEntries(tokens.map((t, i) => [t, { title: 'آپارتمان ' + t, desc: 'نوساز', name: '', ...(i < 4 ? { aiv: 2 } : {}) }]))
+const cached = Object.fromEntries(tokens.map((t, i) => [t, { title: 'آپارتمان ' + t, desc: 'نوساز', name: '', ...(i < 4 ? { aiv: 3 } : {}) }]))
 await buildAgencyRoster('s6', { useAI: true, cached, f: mkF(async (ch) => { asked.push(...ch.map(it => it.i)); return { map: {}, raw: '[]', answered: ch.map(it => it.i) } }) })
-ok('خالیِ بی‌نسخه دوباره پرسیده شد، خالیِ aiv=2 نه', asked.sort().join(',') === '4,5,6,7')
+ok('جوابِ بی‌نسخه دوباره پرسیده شد، جوابِ نسخهٔ فعلی نه', asked.sort().join(',') === '4,5,6,7')
+
+// ── ۷ (فاز ۳۴۳ — نمونهٔ زندهٔ مالک): آژانسِ شمس‌آباد؛ «شمس» در عنوانِ همهٔ آگهی‌ها، و AI همان را برمی‌گرداند ──
+saveAdminData({ ...base, aiEnabled: true, aiAreas: { roster: true } })
+const shamsF = (aiFn, desc) => ({
+  profileTokens: async () => ({ posts: tokens.map(t => ({ token: t, title: '۱۶۵ متر / شمس آباد / فقط امروز ۵۵.۵ م / تک واحدی' })), name: 'املاک شهاب', reason: '' }),
+  post: async () => ({ title: '۱۶۵ متر / شمس آباد / فقط امروز ۵۵.۵ م / تک واحدی', description: desc, images: [] }),
+  ai: aiFn,
+})
+const sayShams = async (ch) => ({ map: Object.fromEntries(ch.map(it => [it.i, 'شمس'])), raw: '', answered: ch.map(it => it.i) })
+const r7 = await buildAgencyRoster('s7', { useAI: true, f: shamsF(sayShams, 'فروش آپارتمان ۱۶۵ متری\nسه خواب، نوساز\nجهت بازدید تماس بگیرید') })
+ok('AI «شمس» از عنوان می‌دهد (متن «شمس» ندارد) ← مشاورِ «شمس» ساخته نمی‌شود', !r7.advisors.some(a => a.name === 'شمس'))
+const r8 = await buildAgencyRoster('s8', { useAI: true, f: shamsF(sayShams, 'آپارتمان نوساز در شمس‌آباد، میدان بهشتی\nکارشناس منطقه شمس آباد') })
+ok('«شمس» در متن هم فقط پیش از «آباد» آمده ← باز هم مشاور نیست', !r8.advisors.some(a => a.name === 'شمس'))
+const r9 = await buildAgencyRoster('s9', { useAI: true, f: shamsF(async (ch) => ({ map: Object.fromEntries(ch.map(it => [it.i, 'احمدی'])), raw: '', answered: ch.map(it => it.i) }), 'آپارتمان نوساز در شمس آباد\nکارشناس فروش: خانم احمدی') })
+ok('مشاورِ واقعی در همان آژانس («خانم احمدی») سالم می‌ماند', r9.advisors.some(a => a.name === 'احمدی' && a.tokens.length === 8))
+saveAdminData({ ...base, aiEnabled: false })
+const r10 = await buildAgencyRoster('s10', { useAI: true, f: shamsF(async () => ({ map: {}, raw: '' }), 'آپارتمان نوساز\nمشاور تخصصی منطقه شمس آباد\nتماس بگیرید') })
+ok('AI خاموش (فقط ماشین): «شمس» هم ساخته نمی‌شود', !r10.advisors.some(a => /شمس/.test(a.name)))
 
 restore()
 console.log(`\n${fail === 0 ? '✅' : '❌'} ${pass} پاس · ${fail} خطا\n`)
