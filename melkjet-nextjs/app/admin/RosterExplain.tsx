@@ -77,8 +77,18 @@ export function UnnamedExplain({ id }: { id: string }) {
       const rules = cur?.rules || { blacklist: [], whitelist: [] }
       const r = await fetch('/api/admin/roster-name-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blacklist: rules.blacklist, whitelist: [...rules.whitelist, name] }) })
       const j = await r.json()
-      const saved = (j?.rules?.whitelist || []).slice(-1)[0]
-      setMsg(j.ok ? `✅ «${saved || name}» به فهرستِ سفید رفت — در سینکِ بعدیِ این آژانس اعمال می‌شود` : (j.error || 'خطا'))
+      if (!j.ok) { setMsg(j.error || 'خطا'); return }
+      // نامی که واقعاً ذخیره شد (سرور نقش/لقب را جدا می‌کند: «کارشناس خانم X» ⇒ «X»)
+      const saved = String((j?.rules?.whitelist || []).find((w: string) => name.includes(w) && w.length > 1) || name)
+      // فاز ۳۴۴ب (فیدبکِ مالک: «می‌زنم این نام است، انگار هیچ اتفاقی نمی‌افتد») — همهٔ آگهی‌های همین فهرست که این نام
+      // در متنشان هست همان لحظه کنار می‌روند و شمرده می‌شوند، و همگام‌سازیِ همین آژانس فوراً در صف می‌رود تا اثرش دیده شود.
+      const words = saved.replace(/\u200c/g, ' ').split(/\s+/).filter(Boolean)
+      const has = (t: string) => { const tt = (t || '').replace(/\u200c/g, ' '); return words.every(w => tt.includes(w)) }
+      const hit = (rows || []).filter(x => has(x.text)).length
+      setRows(rs => (rs || []).filter(x => !has(x.text)))
+      let queued = false
+      try { const q = await fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync', id }) }); queued = q.ok } catch {}
+      setMsg(`✅ «${saved}» در فهرستِ سفید ثبت شد — ${fa(hit)} آگهیِ این فهرست این نام را دارند و به «${saved}» می‌رسند. ${queued ? '🔄 همگام‌سازیِ این آژانس در صف رفت (چند دقیقهٔ دیگر در فهرستِ مشاوران می‌آید).' : 'برای اعمال، «همگام‌سازی الان» را بزن.'}`)
     } catch (e: any) { setMsg(String(e?.message || e)) }
   }
   if (!rows) return (
@@ -94,7 +104,7 @@ export function UnnamedExplain({ id }: { id: string }) {
         <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(rows.length)} آگهی (آن‌ها که «خطِ امضا» دارند اول)</span>
         <button onClick={() => setRows(null)} style={{ marginInlineStart: 'auto', background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>بستن</button>
       </div>
-      {msg && <div style={{ fontSize: 12, color: 'var(--gold)' }}>{msg}</div>}
+      {msg && <div style={{ fontSize: 12.5, color: '#5fd98a', background: 'rgba(95,217,138,.08)', border: '1px solid rgba(95,217,138,.3)', borderRadius: 8, padding: '7px 10px', lineHeight: 1.9 }}>{msg}</div>}
       {!rows.length && <div style={{ fontSize: 12, color: 'var(--faint)' }}>آگهیِ بی‌نامی نیست.</div>}
       {rows.map(r => (
         <div key={r.token} style={{ border: `1px solid ${r.sigLine ? 'rgba(231,103,74,.45)' : 'var(--line2)'}`, borderRadius: 10, padding: '8px 10px', background: 'var(--bg)' }}>

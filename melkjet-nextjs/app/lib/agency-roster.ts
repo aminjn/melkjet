@@ -1,7 +1,7 @@
 import { fetchDivarProfileTokens, fetchDivarPost, divarProfileSlug, type BrandPost } from './divar-post'
 import { aiFor, resolveAgent, aiActive } from './gapgpt'
 import { nameProbSync, NAME_THRESHOLD, corpusCount } from './roster-name-model'
-import { bestName, hasSparse as hasSparseModel } from './roster-ner'
+import { bestName, hasSparse as hasSparseModel, isAreaName } from './roster-ner'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
 import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord, nameRuleWhitelistRaw, FIRST_NAMES, hardBanTokens, hitsBan, normFa, personLike } from './agency-name-lexicon'
 import { isDivarMetaText } from './divar-text'
@@ -112,7 +112,7 @@ const SURNAME_TAIL = new Set(['زاده', 'پور', 'نژاد', 'فر', 'نیا'
 const isPhoneTok = (t: string) => t.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/\D/g, '').length >= 8
 // واژه‌بندی: جداکننده «هر نویسهٔ غیرِ حرف/رقم» (نیم‌فاصله جزوِ واژه). «⭕️____کارشناس خانم اسماعیلی____⭕️» زیرخط را
 // به واژه می‌چسباند («اسماعیلی____») و نامِ درستِ AI «در متن نیست» حساب می‌شد (خودروجت فاز ۳۵۲).
-function textLines(text: string): string[][] {
+export function textLines(text: string): string[][] {
   return deEmoji(normFa(String(text || ''))).split(/[\n\r]+/)
     .map(l => l.split(/[^\p{L}\p{N}\p{M}\u200c]+/u).filter(Boolean).map(w => keyOf(w).toLowerCase()).filter(Boolean))
     .filter(l => l.length)
@@ -141,6 +141,19 @@ export function inSignaturePosition(o: { line: string[]; i: number; n: number })
   if (i + n + 1 < line.length && line[i + n] === 'در' && line[i + n + 1].startsWith('خدمت')) return true   // «رسولی در خدمتِ شما»
   for (const j of [i - 2, i - 1, i + n, i + n + 1]) if (j >= 0 && j < line.length && isPhoneTok(line[j])) return true
   return false
+}
+// فاز ۳۴۴ب (اسکرین‌شاتِ مالک: ۲۰ آگهیِ «مشاور و کارشناس منطقه فراهانی» — AI «فراهانی» گفت ولی رد شد) — «منطقه» نشانهٔ
+// آدرس است و `validName(…, addr)` واژهٔ پس از آن را «نامِ معبر» حساب می‌کرد؛ هم جوابِ AI هم حدسِ ماشین می‌مُرد، درحالی‌که
+// نام دقیقاً در موضعِ امضاست (پس از «کارشناس»، یا پیش از «هستم»). قاعده: نامی که در متن «در موضعِ امضا» آمده و خودش
+// محلهٔ شناخته‌شده/واژهٔ مکانی نیست («پونک/ونک/…آباد»)، از بانِ آدرس معاف است. بانِ سخت (تکهٔ نامِ محله) سرِ جایش است.
+export function acceptName(raw: string, agencyName: string, addr: Set<string>, descLines: string[][], opts?: { trustPerson?: boolean }): string {
+  if (!raw) return ''
+  const v = validName(raw, agencyName, addr, opts)
+  if (v) return v
+  const free = validName(raw, agencyName, undefined, opts)
+  if (!free || isAreaName(free)) return ''
+  const keys = free.split(/\s+/).filter(Boolean).map(w => keyOf(w).toLowerCase())
+  return nameOccurrences(keys, descLines).some(inSignaturePosition) ? free : ''
 }
 export function gateAiName(ai: string, text: string, candKeys: Set<string>): string {
   if (!ai) return ''
@@ -650,7 +663,7 @@ export async function buildAgencyRoster(
     // (AI، امضای قطعی، مدل): (۱) بانِ سخت (تکهٔ نامِ محله/مقدارِ مشخصه)، (۲) نام باید در «متنِ» آگهی باشد؛ عنوانِ
     // دیوار جای امضای مشاور نیست (متراژ/محله/قیمت است). AI عنوان را هم می‌بیند و «شمس» را از «۱۶۵ متر / شمس آباد» برمی‌داشت.
     const srcOk = (n: string) => !!n && !hitsBan(n, r.hard) && nameOccurrences(n.split(/\s+/).filter(Boolean).map(w => keyOf(w).toLowerCase()), r.descLines).length > 0
-    const candAll = r.cand.map(c => validName(c, name, r.trusted ? undefined : r.addr, { trustPerson: r.trusted })).filter(c => srcOk(c))
+    const candAll = r.cand.map(c => r.trusted ? validName(c, name, undefined, { trustPerson: true }) : acceptName(c, name || '', r.addr, r.descLines)).filter(c => srcOk(c))
     // فاز ۳۴۴ — حدسِ بی‌پشتوانهٔ ماشین (نه امضای قطعی) فقط وقتی «معتبر» است که یا شکلِ نامِ آدم داشته باشد یا در موضعِ
     // امضا باشد («کارشناس فروش جهت راهنمایی نقی») — همان معیارِ دروازهٔ نامِ AI. فقط حدسِ معتبر می‌تواند با AI «توافق»
     // کند؛ وگرنه «هوشمند»ِ «کلید هوشمند» (حدسِ ضعیفِ ماشین) جوابِ اشتباهِ AI را تأیید می‌کرد.
@@ -671,7 +684,7 @@ export async function buildAgencyRoster(
     // (تعمیمِ کنترل‌شدهٔ واژه‌نامه به آگهی‌های بی‌امضا، پس از خوشه‌بندی و فقط برای مشاورِ
     //  «تثبیت‌شده در همین آژانس» انجام می‌شود — پایین‌تر.)
     // فاز ۳۴۴ — نامِ AI از دروازهٔ «واژه‌به‌واژه در متن + (توافق با ماشین | موضعِ امضا | نامِ کاملِ آدم)» می‌گذرد.
-    const aiRaw = validName(aiMap[idx] || '', name, r.addr)
+    const aiRaw = acceptName(aiMap[idx] || '', name || '', r.addr, r.descLines)
     const ai = srcOk(aiRaw) ? gateAiName(aiRaw, r.desc, candKeys) : ''
     if (aiMap[idx] && !ai) nameCounts.aiRejected++
     if (ai) nameCounts.aiNamed++

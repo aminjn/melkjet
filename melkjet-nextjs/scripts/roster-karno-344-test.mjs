@@ -2,7 +2,8 @@
 // کارنو: دیوار «⭕️____کارشناس خانم اسماعیلی____⭕️» دارد، ولی متنی که به AI رفته بود «انتشار آگهی / آخرین نردبان» بود
 // و ماشین «تیوفایو» را از عنوان برمی‌داشت.
 // Run: node --import ./scripts/reos-loader.mjs scripts/roster-karno-344-test.mjs
-import { extractSignature, signatureTrusted, gateAiName, buildAgencyRoster } from '../app/lib/agency-roster.ts'
+import { extractSignature, signatureTrusted, gateAiName, buildAgencyRoster, acceptName, textLines } from '../app/lib/agency-roster.ts'
+import { addressTokens, contextNoiseTokens } from '../app/lib/agency-name-lexicon.ts'
 import { gazetteerName } from '../app/lib/roster-ner.ts'
 import { isDivarMetaText } from '../app/lib/divar-text.ts'
 import { divarDescriptionWidget, parseDivarPostBody } from '../app/lib/divar-post.ts'
@@ -83,6 +84,20 @@ ok('«هوشمند» (AI، وسطِ جمله) رد شد', !r.advisors.some(a => 
 ok('آگهیِ فقط-متادیتا بی‌نام ماند و شمرده شد', r.unnamed.tokens.includes('k4') && st.metaText === 1)
 ok('هیچ «شمس»ی ساخته نشد', !r.advisors.some(a => /شمس/.test(a.name)))
 ok('آمار: AI روشن با مدلِ RosterAgent', st.aiOn === true && st.model === 'm')
+
+console.log('── فاز ۳۴۴ب — «منطقه X»ِ امضا (اسکرین‌شاتِ مالک: ۲۰ آگهیِ «فراهانی» رد می‌شد) ──')
+const acc = (name, desc) => { const t = `فروش آپارتمان\n${desc}`; const addr = new Set([...addressTokens(t), ...contextNoiseTokens(t)]); const L = textLines(desc); return gateAiName(acceptName(name, AGM, addr, L), desc, new Set()) }
+ok('«مشاور و کارشناس منطقه فراهانی» ⇒ AI «فراهانی» پذیرفته', acc('فراهانی', 'فول امکانات\nمشاور و کارشناس منطقه فراهانی') === 'فراهانی')
+ok('«مشاور قدیمی منطقه هوشیار هستم» ⇒ «هوشیار» پذیرفته', acc('هوشیار', 'نوساز\nمشاور قدیمی منطقه هوشیار هستم') === 'هوشیار')
+ok('«مشاور تخصصی منطقه سعادتی» ⇒ «سعادتی» پذیرفته', acc('سعادتی', 'نوساز\nمشاور تخصصی منطقه سعادتی') === 'سعادتی')
+ok('ضدتست: «کارشناس منطقه پونک» ⇒ «پونک» (محله) رد', acc('پونک', 'نوساز\nکارشناس منطقه پونک') === '')
+ok('ضدتست: «مشاور منطقه سعادت آباد» ⇒ «سعادت» رد', acc('سعادت', 'نوساز\nمشاور منطقه سعادت آباد') === '')
+ok('ضدتست: «واقع در منطقه فراهانی» (آدرس، بی‌نقش) ⇒ رد', acc('فراهانی', 'نوساز\nواقع در خیابان اصلی منطقه فراهانی، پلاک ۴') === '')
+const rF = await buildAgencyRoster('s344f', { useAI: false, f: {
+  profileTokens: async () => ({ posts: ['h0', 'h1', 'h2'].map(t => ({ token: t, title: 'فروش ۱۰۵ متر باغ فیض' })), name: AGM, reason: '' }),
+  post: async (t) => ({ title: 'فروش ۱۰۵ متر باغ فیض', description: `قابل شخصی ${t}\nمشاور و کارشناس منطقه فراهانی`, images: [] }),
+} })
+ok('چرخهٔ کامل (بی‌AI): هر ۳ آگهیِ «منطقه فراهانی» ⇒ مشاورِ «فراهانی»', rF.advisors.some(a => a.name === 'فراهانی' && a.tokens.length === 3))
 
 console.log('── باگِ خودروجت: متنِ خوانده‌نشده + فهرستِ سفیدِ «با نقش» ──')
 const { sanitizeWhitelistName } = await import('../app/lib/agency-name-lexicon.ts')

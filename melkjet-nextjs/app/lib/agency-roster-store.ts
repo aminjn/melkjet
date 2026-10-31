@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { cacheRemote } from './listing-image'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete, kvGetPrefix, kvGetPrefixField } from './db'
-import { buildAgencyRoster, extractSignature, gateAiName, signatureTrusted, signatureLikeLine, AI_PROMPT_V } from './agency-roster'
+import { buildAgencyRoster, extractSignature, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V } from './agency-roster'
 import { validName, keyOf, addressTokens, contextNoiseTokens, normFa } from './agency-name-lexicon'
 import { isDivarMetaText } from './divar-text'
 import { importDivarToken } from './advisor-divar-import'
@@ -279,10 +279,11 @@ export async function explainUnnamed(id: string, limit = 100): Promise<{ ok: boo
     const addr = new Set([...addressTokens(txt), ...contextNoiseTokens(txt)])
     const cand = extractSignature(title, desc, ag)
     const machine = cand[0] || ''
-    const candKeys = new Set(cand.map(x => validName(x, ag, addr)).filter(Boolean).map(keyOf))
+    const dLines = descLinesOf(desc)
+    const candKeys = new Set(cand.map(x => acceptName(x, ag, addr, dLines)).filter(Boolean).map(keyOf))
     const aiRaw = typeof c.name === 'string' ? c.name : ''
     const aiAsked = c.name !== undefined && (c.aiv || 0) >= AI_PROMPT_V
-    const ai = aiRaw ? gateAiName(validName(aiRaw, ag, addr), desc, candKeys) : ''
+    const ai = aiRaw ? gateAiName(acceptName(aiRaw, ag, addr, dLines), desc, candKeys) : ''
     const strong = signatureTrusted(title, desc, ag)
     let reason: string
     if (ai) reason = `AI «${ai}» گفت؛ این نام فقط در همین یک آگهی بود (کمتر از ۲ آگهی) → به «بی‌نام» رفت`
