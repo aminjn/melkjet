@@ -194,6 +194,8 @@ let moderatingSince = 0
 let rosterRunning = false
 let graduateRunning = false   // فاز ۱۷۶ — صفِ ساختِ حساب، مستقل از سینکِ رُستر
 let graduateSince = 0
+let gradPrepRunning = false   // فاز ۳۴۴و — قفلِ جدای بخشِ آنی
+let gradPrepSince = 0
 let enrichSweeping = false    // فاز ۱۹۱ — جارویِ تحلیلِ هوشمند
 let autoSiting = false        // فاز ۲۹۶ — سایت‌سازِ خودکارِ اهالیِ دایرکتوری
 
@@ -247,6 +249,16 @@ async function queueTick(): Promise<void> {
       console.error('[cron] graduate queue stuck >20min — releasing lock so next tick retries')
       graduateRunning = false
     }
+    // فاز ۳۴۴و — «بخشِ آنیِ» ساختِ حساب قفلِ خودش را دارد: انتقالِ طولانیِ یک مشاور/آژانس (قفلِ graduateRunning)
+    // دیگر کلیکِ بعدی را ۱۵–۲۰ دقیقه پشتِ خودش نگه نمی‌دارد. ایدمپوتنت است (ملاک = شماره روی ردیف).
+    if (!gradPrepRunning || lockStuck(gradPrepSince, Date.now(), 10 * 60_000)) {
+      gradPrepRunning = true; gradPrepSince = Date.now()
+      ;(async () => {
+        try { const { prepareGraduateJobs } = await import('./agency-roster-store'); await prepareGraduateJobs() }
+        catch (e) { console.error('[cron] graduate prepare failed:', String((e as Error)?.message || e).slice(0, 160)) }
+        finally { gradPrepRunning = false }
+      })()
+    }
     if (!graduateRunning) {
       graduateRunning = true; graduateSince = Date.now()
       ;(async () => {
@@ -258,6 +270,8 @@ async function queueTick(): Promise<void> {
           // هر تیک یک حساب و حداکثر ۱۰ فایل: اگر بار زیاد شود ترمیم آهسته‌تر پیش
           // می‌رود، ولی سایت کند نمی‌شود.
           await repairOrphanPublishes(10)
+          // فاز ۳۴۴و — فایل‌های جامانده زیرِ agency:slugِ آژانس‌هایی که پیش از این فیکس حساب گرفتند
+          try { const { healAgencyLegacyFiles } = await import('./agency-roster-store'); await healAgencyLegacyFiles() } catch (e) { console.error('[cron] agency legacy heal failed:', String((e as Error)?.message || e).slice(0, 160)) }
         } catch { /* کارِ بعدی در تیکِ بعد */ } finally { graduateRunning = false }
       })()
     }

@@ -45,6 +45,9 @@ export interface RosterScrape {
   agencyName: string
   agencyOwner: string    // کلیدِ حسابِ آژانس (agency:slug یا شمارهٔ موبایل پس از graduate)
   agencyPhone?: string
+  agencyTransferFrom?: string   // فاز ۳۴۴و — مبدأِ فایل‌های «بی‌نام (خودِ آژانس)» تا انتقال تمام شود (قبلاً گم می‌شد ⇒ فایل‌ها هرگز منتقل نمی‌شدند)
+  gradJobs?: { key: string; prepared: boolean; error: string; attempts: number }[]   // فقط نمایشی (listScrapes)؛ ذخیره نمی‌شود
+  agencyGraduating?: boolean    // فاز ۳۴۴و — آژانس در صفِ ساختِ حساب (پنل «⏳» نشان می‌دهد؛ قبلاً هیچ نشانی نبود ⇒ ۳۰ بار کلیک)
   advisors: RosterAdvisor[]
   useAI: boolean
   schedule: 'off' | 'daily' | '6h'
@@ -245,6 +248,9 @@ export async function listScrapes(): Promise<RosterScrape[]> {
     .map(s => isStale(s, now) ? { ...s, running: false, lastError: s.lastError || 'همگام‌سازی نیمه‌کاره ماند — خودکار از همان‌جا ادامه می‌یابد' } : s)
     // فاز ۱۹۹ — پرچمِ یتیمِ «در حال ساخت»: اگر کاری در صف نیست، پرچم در نمایش خاموش می‌شود (خودترمیم)
     .map(s => ({ ...s, advisors: (s.advisors || []).map(a => a.graduating && !q.some(j => j.id === s.id && j.key === a.key) ? { ...a, graduating: false } : a) }))
+    .map(s => s.agencyGraduating && !q.some(j => j.id === s.id && j.key === '__agency__') ? { ...s, agencyGraduating: false } : s)
+    // فاز ۳۴۴و — وضعیتِ صف برای پنل (علتِ خطای گذرا دیگر فقط در لاگِ سرور نیست)
+    .map(s => { const js = q.filter(j => j.id === s.id); return js.length ? { ...s, gradJobs: js.map(j => ({ key: j.key, prepared: !!j.prepared, error: j.error || '', attempts: j.attempts || 0 })) } : s })
     .sort((a, b) => b.createdAt - a.createdAt)
 }
 
@@ -336,7 +342,11 @@ export async function addScrape(input: { slug: string; agencyName?: string; useA
   await putScrape(s)
   return { ok: true, scrape: s }
 }
-export async function removeScrape(id: string): Promise<void> { await deleteScrapeRow(id) }
+export async function removeScrape(id: string): Promise<void> {
+  await deleteScrapeRow(id)
+  // فاز ۳۴۴و — کارهای صفِ حسابِ آژانسِ حذف‌شده هم بروند (وگرنه هر تیک «اسکرپ یافت نشد» تکرار می‌شد)
+  await mutateQueue(jobs => { for (let i = jobs.length - 1; i >= 0; i--) if (jobs[i].id === id) jobs.splice(i, 1) }).catch(() => {})
+}
 
 // «همگام‌سازیِ الان» — سینکِ دستی همیشه «تازه» است: کشِ ازسرگیری پاک می‌شود تا آگهی‌ها دوباره
 // از دیوار گرفته شوند (کشِ کهنهٔ دورهٔ پروکسیِ مرده که متنِ خالی داشت، دیگر استفاده نمی‌شود).
@@ -902,10 +912,20 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
   for (const im of getDivar(fromO).imports.filter(i => i.sourceId === sourceId)) {
     const arr = impsByOld.get(im.listingId) || []; arr.push(im); impsByOld.set(im.listingId, arr)
   }
+  // فاز ۳۴۴و — فایلی که توکنش از قبل زیرِ مقصد ایمپورت شده (سینکِ بعد از ساختِ حساب دوباره واردش کرده بود) کپی نمی‌شود،
+  // فقط از مبدأ حذف — وگرنه ترمیمِ فایل‌های جامانده یک نسخهٔ تکراری در حسابِ مقصد می‌ساخت.
+  const destTokens = new Set(getDivar(toO).imports.map(i => i.token))
+  let dupDropped = 0
   console.log(`[roster] reassign start from=${fromO} → ${toO} files=${items.length}`)
   for (let i = 0; i < items.length; i++) {
     const l = items[i]
     const tf = Date.now()
+    const ims = impsByOld.get(l.id) || []
+    if (ims.length && ims.every(im => destTokens.has(im.token))) {
+      try { await deleteListing(fromO, l.id) } catch {}
+      dupDropped++
+      continue
+    }
     const { id: _id, publicId: _p, ...fields } = l as Listing & { publicId?: string }
     // آگهیِ فعال بعداً توسطِ جارو عمومی می‌شود؛ publicIdِ قبلی برای کپیِ غنی‌سازی همراهش می‌ماند.
     const nl = await addListing(toO, l.status === 'active' && _p ? { ...fields, enrichFrom: _p } : fields)
@@ -920,10 +940,11 @@ async function reassignListings(fromO: string, toO: string, sourceId: string): P
   // انتقالِ رکوردهای ایمپورت (توکن→listingId جدید) تا آپدیتِ بعدی همان فایل‌ها را بشناسد.
   for (const im of getDivar(fromO).imports.filter(i => i.sourceId === sourceId)) {
     const m = moved.find(x => x.oldId === im.listingId)
+    if (!m && destTokens.has(im.token)) continue   // نسخهٔ مقصد مرجع است
     recordImport(toO, { ...im, listingId: m ? m.newId : im.listingId })
   }
   clearImports(fromO)
-  console.log(`[roster] reassign done files=${moved.length} totalMs=${Date.now() - t0}`)
+  console.log(`[roster] reassign done files=${moved.length}${dupDropped ? ` dupDropped=${dupDropped}` : ''} totalMs=${Date.now() - t0}`)
   return moved.length
 }
 
@@ -942,7 +963,13 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   if (!isAgency && !rec) return { ok: false, error: 'مشاور یافت نشد' }
   const name = isAgency ? scrape.agencyName : rec!.name
   // اگر انتقالِ قبلی نیمه‌کاره مانده، مبدأ همان ownerِ موقتِ ذخیره‌شده است نه شمارهٔ تازه‌نشسته.
-  const fromOwner = isAgency ? scrape.agencyOwner : (rec!.transferFrom || rec!.owner)
+  // فاز ۳۴۴و — آژانس هم مثلِ مشاور مبدأِ انتقال را نگه می‌دارد. قبلاً بخشِ آنی agencyOwner را به شماره می‌برد و انتقالِ
+  // بعدی «fromOwner === شماره» می‌دید و بی‌هیچ انتقالی «تمام» اعلام می‌کرد ⇒ فایل‌های آژانس زیرِ agency:slug جا می‌ماندند.
+  // آژانسی که پیش از این فیکس حساب گرفته (agencyOwner = شماره، بی‌مبدأ) از همان agency:slugِ پیش‌فرض منتقل می‌شود.
+  const legacyAgencyOwner = `agency:${scrape.slug}`
+  const fromOwner = isAgency
+    ? (scrape.agencyTransferFrom || (scrape.agencyOwner === p ? legacyAgencyOwner : scrape.agencyOwner))
+    : (rec!.transferFrom || rec!.owner)
   // فاز ۳۲۱ج — fromOwner===p یعنی قبلاً با همین شماره graduate شده. اگر حساب واقعاً وجود دارد،
   // این «از قبل انجام‌شده» است نه شکست؛ قبلاً پنل قرمزِ گمراه‌کنندهٔ «ساخت حساب ناموفق» نشان می‌داد
   // در حالی که حساب ساخته شده بود (و صفِ سینک هر شب همان خطای کاذب را تکرار می‌کرد).
@@ -969,7 +996,8 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
     } catch {}
     if (!roleId) console.error(`[roster] ⚠️ نقشِ ${wantAgency ? 'آژانس املاک' : 'مشاور املاک'} پیدا نشد — حساب ${p} بی‌نقش ساخته می‌شود و در دایرکتوری دیده نمی‌شود (قانونِ شمارهٔ یک)`)
     const cr = createAccount(p, { name, role: roleId || undefined })
-    if (!cr.ok) return { ok: false, error: cr.error }
+    // فاز ۳۴۴و — بخشِ آنی حالا هم در درخواستِ ادمین و هم در صف اجرا می‌شود؛ اگر دیگری همین لحظه ساختش، شکست نیست.
+    if (!cr.ok && !accountExists(p)) return { ok: false, error: cr.error }
     console.log(`[roster] graduate: account created phone=${p} name=${name} role=${roleId || '(نقش پیدا نشد!)'}`)
   }
   step = 'profile'
@@ -983,7 +1011,7 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   // ادامه دهد (وگرنه owner دیگر شماره است و مبدأ برای همیشه گم می‌شد).
   await mutateScrape(id, s => {
     if (!s) return
-    if (isAgency) { s.agencyOwner = p; s.agencyPhone = p }
+    if (isAgency) { if (!s.agencyTransferFrom && s.agencyOwner !== p) s.agencyTransferFrom = s.agencyOwner; s.agencyOwner = p; s.agencyPhone = p }
     else {
       const r = s.advisors.find(x => x.key === key)
       if (r) { if (!r.transferFrom) r.transferFrom = fromOwner; r.owner = p; r.phone = p; r.graduatedAt = Date.now() }
@@ -1002,6 +1030,7 @@ export async function graduateAdvisor(id: string, key: string, phone: string, ro
   step = 'finalize'
   await mutateScrape(id, s => {
     if (!s) return
+    if (isAgency) { s.agencyGraduating = false; delete s.agencyTransferFrom; return }
     const r = s.advisors.find(x => x.key === key)
     if (r) { r.graduating = false; delete r.transferFrom }   // انتقال تمام شد
   })
@@ -1039,6 +1068,28 @@ export async function removeAdvisor(id: string, key: string): Promise<{ ok: bool
 // unpublishedAt رعایت می‌شود: آنچه مشاور عمداً از انتشار درآورده دوباره منتشر نمی‌شود.
 // مکان‌نمای چرخشی تا یک حسابِ پرفایل بقیه را گرسنه نگذارد.
 let _orphanCursor = 0
+// فاز ۳۴۴و — ترمیمِ آژانس‌هایی که «پیش از» این فیکس حساب گرفتند: بخشِ آنی agencyOwner را به شماره برده بود و انتقال هرگز
+// اجرا نشد، پس فایل‌های «بی‌نام (خودِ آژانس)» هنوز زیرِ agency:slug‌اند (در حسابِ آژانس دیده نمی‌شوند). هر فراخوان حداکثر یک
+// آژانس، فقط وقتی هیچ سینکی در جریان نیست، و هر آژانس یک بار در هر پروسه بررسی می‌شود.
+const _agencyHealChecked = new Set<string>()
+export async function healAgencyLegacyFiles(): Promise<number> {
+  const scrapes = await listScrapes()
+  if (scrapes.some(s => s.running)) return 0
+  const q = await getQueue()
+  for (const s of scrapes) {
+    if (_agencyHealChecked.has(s.id)) continue
+    if (!s.agencyPhone || s.agencyTransferFrom || s.agencyOwner !== s.agencyPhone) { _agencyHealChecked.add(s.id); continue }
+    if (q.some(j => j.id === s.id && j.key === '__agency__')) continue
+    const legacy = `agency:${s.slug}`
+    const n = ((await getAdvisor(legacy)).listings || []).length
+    _agencyHealChecked.add(s.id)
+    if (!n) continue
+    console.log(`[roster] agency legacy heal ${s.slug}: ${n} فایل زیرِ ${legacy} جا مانده بود → ${s.agencyPhone}`)
+    return await reassignListings(legacy, s.agencyPhone, s.id)
+  }
+  return 0
+}
+
 export async function repairOrphanPublishes(limit = 10): Promise<number> {
   const scrapes = await listScrapes()
   // وقتی سینکِ رُستر در جریان است کنار می‌کشیم — همان قاعده‌ای که جارویِ غنی‌سازی
@@ -1095,6 +1146,7 @@ export async function enqueueGraduate(id: string, key: string, phone: string, ro
       if (rec.phone) return { ok: false as const, error: 'این مشاور از قبل حساب دارد' }
       rec.graduating = true
     } else if (s.agencyPhone) return { ok: false as const, error: 'آژانس از قبل حساب دارد' }
+    else s.agencyGraduating = true
     return { ok: true as const }
   })
   if (!v.ok) return v
@@ -1107,6 +1159,43 @@ export async function enqueueGraduate(id: string, key: string, phone: string, ro
 }
 
 // اینستنسِ ۰: یک کارِ صفِ graduate را بردار و اجرا کن (خارج از قفلِ mutate اجرا می‌شود).
+// فاز ۳۴۴و — «بخشِ آنی» (حساب + شماره روی ردیف) تابعِ مستقل شد. قبلاً فقط ابتدای processGraduateQueue اجرا می‌شد که
+// زیرِ همان قفلِ «انتقالِ فایل‌ها» است: یک انتقالِ طولانی (آژانسِ صدها فایل) کلیکِ بعدی را ۱۵–۲۰ دقیقه پشتِ خودش نگه
+// می‌داشت. حالا (۱) مسیرِ API همان لحظهٔ کلیک صدایش می‌زند، (۲) کرون هر تیک با قفلِ جدا. ملاکِ «انجام‌شده» خودِ رکورد است
+// (شماره روی ردیف نشسته؟) نه پرچمِ prepared/startedAt — پس ردیفی که شماره‌اش به هر دلیل پریده (نوشتنِ کهنهٔ سینک، کارِ
+// claimشدهٔ پیش از دیپلوی) در اولین فرصت خودش درست می‌شود. graduateAdvisor با deferTransfer ایدمپوتنت است.
+export async function prepareGraduateJobs(only?: { id: string; key: string }): Promise<number> {
+  const jobs = await getQueue()
+  let did = 0
+  for (const job of jobs) {
+    if (only && (job.id !== only.id || job.key !== only.key)) continue
+    const sc = await getScrape(job.id)
+    if (!sc) continue
+    const isAgency = job.key === '__agency__'
+    const rec = isAgency ? null : sc.advisors.find(a => a.key === job.key)
+    if (isAgency ? sc.agencyPhone === job.phone : (!rec || rec.phone === job.phone)) continue
+    try {
+      const r = await graduateAdvisor(job.id, job.key, job.phone, job.role, { deferTransfer: true })
+      if (r.ok) {
+        did++
+        await mutateQueue(q => { const j = q.find(x => x.jid === job.jid); if (j) { j.prepared = true; delete j.error } })
+      } else {
+        // خطای قطعی (شمارهٔ نامعتبر/تکراری و…) — همان رفتارِ مسیرِ کامل: کار حذف و علت ثبت می‌شود.
+        console.error(`[roster] graduate prepare FAILED key=${job.key}: ${r.error || 'خطا'}`)
+        await mutateQueue(q => { const i = q.findIndex(x => x.jid === job.jid); if (i >= 0) q.splice(i, 1) })
+        await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; if (isAgency) s.agencyGraduating = false; s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` } })
+      }
+    } catch (e: any) {
+      // گذرا — تیکِ بعدی دوباره تلاش می‌کند؛ علت روی کار می‌نشیند تا پنل نشانش دهد (قانونِ شمارهٔ یک).
+      const msg = String(e?.message || e).slice(0, 160)
+      console.error(`[roster] graduate prepare transient key=${job.key}: ${msg}`)
+      await mutateQueue(q => { const j = q.find(x => x.jid === job.jid); if (j) j.error = msg }).catch(() => {})
+    }
+  }
+  if (did) console.log(`[roster] graduate: ${did} حسابِ آنی ساخته شد`)
+  return did
+}
+
 export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boolean; error?: string }> {
   // فاز ۱۹۹ (فیدبک: «"در حال ساخت حساب" برای همیشه می‌ماند ولی حساب ساخته شده») — ریشه: کار «قبل از انجام»
   // از صف برداشته می‌شد؛ کیلِ وسطِ کار (دیپلوی/reload) = کارِ گم‌شده و پرچمِ ابدی. حالا at-least-once:
@@ -1118,41 +1207,10 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
   const preJobs = await getQueue()
   if (!preJobs.length) return { ran: false }
   const syncRunning = await anyScrapeRunning()
-  // «بخشِ آنی» برای همهٔ کارهای منتظر همیشه اول اجرا می‌شود — نه فقط وسطِ سینک. وگرنه
-  // انتقالِ سنگینِ نفرِ اول (~۱ دقیقه)، ثبتِ شمارهٔ نفرهای بعدی را پشتِ خودش نگه می‌داشت
-  // و پنل برای آنها دقیقه‌ها «در حال ساخت حساب…» می‌ماند (فیدبکِ ۲۸ سپتامبر).
-  {
-    let did = 0
-    // فاز ۳۴۴ه — کاری که «prepared» است ولی شماره‌اش روی رکورد نیست (نسخهٔ کهنهٔ یک سینک پاکش کرده بود) دوباره آماده می‌شود.
-    const lostPhone = new Set<string>()
-    for (const job of preJobs) {
-      if (!job.prepared || job.startedAt || job.key === '__agency__') continue
-      const sc = await getScrape(job.id)
-      const rec = sc?.advisors.find(a => a.key === job.key)
-      if (rec && rec.phone !== job.phone) lostPhone.add(job.jid)
-    }
-    for (const job of preJobs) {
-      if ((job.prepared && !lostPhone.has(job.jid)) || job.startedAt) continue
-      try {
-        const r = await graduateAdvisor(job.id, job.key, job.phone, job.role, { deferTransfer: true })
-        if (r.ok) {
-          did++
-          await mutateQueue(jobs => { const j = jobs.find(x => x.jid === job.jid); if (j) j.prepared = true })
-        } else {
-          // خطای قطعی (شمارهٔ نامعتبر/تکراری و…) — همان رفتارِ مسیرِ کامل: کار حذف و علت ثبت می‌شود.
-          console.error(`[roster] graduate prepare FAILED key=${job.key}: ${r.error || 'خطا'}`)
-          await mutateQueue(jobs => { const i = jobs.findIndex(x => x.jid === job.jid); if (i >= 0) jobs.splice(i, 1) })
-          await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` } })
-        }
-      } catch (e: any) {
-        // گذرا — تیکِ بعدی (۴۵ث) دوباره تلاش می‌کند؛ بخشِ آنی ایدمپوتنت است.
-        console.error(`[roster] graduate prepare transient key=${job.key}: ${String(e?.message || e).slice(0, 120)}`)
-      }
-    }
-    if (did) console.log(`[roster] graduate: ${did} حسابِ آنی ساخته شد${syncRunning ? ' — انتقالِ فایل‌ها بعد از پایانِ سینک' : ' — انتقالِ فایل‌ها در پس‌زمینه'}`)
-    // وسطِ سینک انتقالِ سنگین اجرا نمی‌شود (رقابتِ استخر/قفل — درسِ ۳۰ اوت)؛ فقط بخشِ آنی.
-    if (syncRunning) return { ran: did > 0 }
-  }
+  // «بخشِ آنی» برای همهٔ کارهای منتظر همیشه اول (ایدمپوتنت؛ کرون هم جدا صدایش می‌زند).
+  const did = await prepareGraduateJobs()
+  // وسطِ سینک انتقالِ سنگین اجرا نمی‌شود (رقابتِ استخر/قفل — درسِ ۳۰ اوت)؛ فقط بخشِ آنی.
+  if (syncRunning) return { ran: did > 0 }
   const job = await mutateQueue(jobs => {
     const now = Date.now()
     const j = jobs.find(x => !x.startedAt || now - x.startedAt > 10 * 60_000)
@@ -1175,7 +1233,7 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
     await mutateQueue(jobs => { const i = jobs.findIndex(x => x.jid === job.jid); if (i >= 0) jobs.splice(i, 1) })   // فاز ۱۹۹: حذف فقط بعدِ اتمام
     if (!r.ok) {
       // رکوردِ مشاور را از حالتِ «در حالِ ساخت» درآور و خطا را ثبت کن.
-      await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) { rec.graduating = false } s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` } })
+      await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) { rec.graduating = false } if (job.key === '__agency__') s.agencyGraduating = false; s.lastError = `ساختِ حساب ناموفق: ${r.error || 'خطا'}` } })
     }
     return { ran: true, ok: r.ok, error: r.error }
   } catch (e: any) {
@@ -1191,7 +1249,7 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
       await mutateQueue(jobs => { const j = jobs.find(x => x.jid === job.jid); if (j) { j.startedAt = undefined; j.attempts = (j.attempts || 0) + 1 } })
     } else {
       await mutateQueue(jobs => { const i = jobs.findIndex(x => x.jid === job.jid); if (i >= 0) jobs.splice(i, 1) })
-      await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; s.lastError = `ساختِ حساب ناموفق: ${msg}` } })
+      await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; if (job.key === '__agency__') s.agencyGraduating = false; s.lastError = `ساختِ حساب ناموفق: ${msg}` } })
     }
     return { ran: true, ok: false, error: msg }
   } finally { clearInterval(beat) }
@@ -1242,7 +1300,8 @@ export async function recleanNames(id: string, apply: boolean): Promise<{ ok: bo
     if (r.phone || r.graduating) continue                       // حساب‌دار/در-صف دست‌نخورده
     if (junk(r.name)) { removed.push(r.name); recs.splice(i, 1) }
   }
-  if (apply && removed.length) await patchScrape(id, { advisors: recs })
+  // فاز ۳۴۴و — روی ردیفِ «زنده» حذف می‌شود، نه بازنویسیِ کلِ فهرست از اسنپ‌شات (همان مسابقهٔ ۳۴۴ه).
+  if (apply && removed.length) { const drop = new Set(scrape.advisors.filter(r => !recs.includes(r)).map(r => r.key)); await mutateScrape(id, s => { if (s) s.advisors = s.advisors.filter(a => !drop.has(a.key) || !!a.phone || !!a.graduating) }) }
   return { ok: true, removed, renamed: [] }
 }
 
@@ -1374,7 +1433,7 @@ export async function editAdvisor(id: string, key: string, patch: { name?: strin
   if (newPhone && !oldPhone) {
     // اگر نام هم همراهِ شماره آمده، اول روی ردیف بنشان تا حسابِ ساخته‌شده نامِ درست بگیرد.
     if (patch.name != null && patch.name.trim() && patch.name.trim() !== rec.name) {
-      await patchScrape(id, { advisors: scrape.advisors.map(a => a.key !== key ? a : { ...a, name: patch.name!.trim() }) } as any)
+      await mutateScrape(id, s => { const r = s?.advisors.find(a => a.key === key); if (r) r.name = patch.name!.trim() })
     }
     const g = await enqueueGraduate(id, key, newPhone, 'advisor')
     return g.ok ? { ok: true, queued: true, moved: 0 } : { ok: false, error: g.error }

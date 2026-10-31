@@ -2550,7 +2550,7 @@ function AgencyRosterPanel() {
     adv: t.adv + (x.advisors || []).length, gap: t.gap + noAcc(x), files: t.files + (x.lastTotal || 0),
   }), { adv: 0, gap: 0, files: 0 }), [rows])
 
-  useEffect(() => { if (!scrapes.some(s => s.running || s.runRequested || (s.advisors || []).some((a: any) => a.graduating))) return; const id = setInterval(load, 4000); return () => clearInterval(id) }, [scrapes])
+  useEffect(() => { if (!scrapes.some(s => s.running || s.runRequested || s.agencyGraduating || (s.advisors || []).some((a: any) => a.graduating))) return; const id = setInterval(load, 4000); return () => clearInterval(id) }, [scrapes])
 
   const post = (body: any) => fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json())
   const add = async () => { if (!slug.trim()) return; setBusy(true); setMsg(''); try { const j = await post({ action: 'add', slug: slug.trim(), agencyName: name.trim() }); if (j.ok) { setSlug(''); setName(''); setMsg('✅ افزوده شد — «همگام‌سازی الان» را بزن'); load() } else setMsg('❌ ' + (j.error || 'خطا')) } finally { setBusy(false) } }
@@ -2578,7 +2578,12 @@ function AgencyRosterPanel() {
       if (!confirm(`${j.error}\n\nاگر واقعاً همان شخص است تأیید کن؛ وگرنه لغو کن و شمارهٔ درست را بزن.`)) { setMsg('لغو شد'); return }
       j = await post({ action: 'graduate', id, key, phone: ph, force: true })
     }
-    if (j.ok) { setMsg(j.merged ? `✅ ادغام شد — با مشاورِ هم‌شماره یکی شد${j.moved ? ` (${fa(j.moved)} آگهی منتقل شد)` : ''}.` : '⏳ در صفِ ساختِ حساب — انتقالِ فایل‌ها روی سرور انجام می‌شود (تا ۱–۲ دقیقه)'); load() } else setMsg('❌ ' + (j.error || 'خطا')) }
+    if (j.ok) {
+      if (j.merged) setMsg(`✅ ادغام شد — با مشاورِ هم‌شماره یکی شد${j.moved ? ` (${fa(j.moved)} آگهی منتقل شد)` : ''}.`)
+      else if (j.instant) setMsg('✅ حساب ساخته شد — انتقالِ فایل‌ها در پس‌زمینه انجام می‌شود (اگر همگام‌سازی در جریان باشد، بعد از پایانش). لازم نیست دوباره بزنید.')
+      else setMsg('⏳ در صفِ ساختِ حساب — تا یک دقیقهٔ دیگر روی سرور ساخته می‌شود. لازم نیست دوباره بزنید.')
+      load()
+    } else setMsg('❌ ' + (j.error || 'خطا')) }
 
   // ویرایشِ نام و شماره بدونِ حذف‌وساخت — حذف سابقهٔ فایل‌ها را از بین می‌برد.
   const editAdvisorUi = async (id: string, key: string, cur: any) => {
@@ -2805,9 +2810,9 @@ function AgencyRosterPanel() {
                       <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(a.listingCount)} فایل</span>
                       <SrcBadge src={a.src} />
                       {a.phone
-                        ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {a.phone}</span>
+                        ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {a.phone}{a.graduating ? <span dir="rtl" style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 11 }}> · انتقالِ فایل‌ها در صف</span> : null}</span>
                         : a.graduating
-                          ? <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>⏳ در حالِ ساختِ حساب…</span>
+                          ? <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>⏳ در حالِ ساختِ حساب…{(() => { const e = (s.gradJobs || []).find((j: any) => j.key === a.key)?.error; return e ? <span style={{ fontWeight: 400, color: '#e06666', fontSize: 11 }}> (تلاشِ دوباره: {e.slice(0, 80)})</span> : null })()}</span>
                           : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="۰۹… یا ثابت ۰۲۱…" value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
                             <button onClick={() => graduate(s.id, a.key)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب</button></>}
                       <button onClick={() => editAdvisorUi(s.id, a.key, a)} title="ویرایشِ نام و شماره" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: 'var(--gold)', fontSize: 11.5, cursor: 'pointer' }}>ویرایش</button>
@@ -2821,7 +2826,9 @@ function AgencyRosterPanel() {
                     <span style={{ fontWeight: 700, fontSize: 13 }}>🏢 بی‌نام (خودِ آژانس)</span>
                     <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(s.lastUnnamed || 0)} فایل</span>
                     {s.agencyPhone
-                      ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {s.agencyPhone}</span>
+                      ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {s.agencyPhone}{s.agencyGraduating ? <span dir="rtl" style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 11 }}> · انتقالِ فایل‌ها در صف</span> : null}</span>
+                      : s.agencyGraduating
+                        ? <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>⏳ در حالِ ساختِ حسابِ آژانس…{(() => { const e = (s.gradJobs || []).find((j: any) => j.key === '__agency__')?.error; return e ? <span style={{ fontWeight: 400, color: '#e06666', fontSize: 11 }}> (تلاشِ دوباره: {e.slice(0, 80)})</span> : null })()}</span>
                       : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="۰۹… یا ثابت ۰۲۱…" value={phones[`${s.id}:__agency__`] || ''} onChange={e => setPhone(`${s.id}:__agency__`, e.target.value)} />
                         <button onClick={() => graduate(s.id, '__agency__')} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب آژانس</button></>}
                   </div>

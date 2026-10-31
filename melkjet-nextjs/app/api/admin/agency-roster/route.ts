@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, mergeAdvisorInto, listDueRosters, explainUnnamed } from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, prepareGraduateJobs, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, mergeAdvisorInto, listDueRosters, explainUnnamed } from '@/app/lib/agency-roster-store'
 import { getCronBeat } from '@/app/lib/cron-heartbeat'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { rosterCities } from '@/app/lib/agency-roster-city'
@@ -113,7 +113,19 @@ export async function POST(req: NextRequest) {
     }
     const r = await enqueueGraduate(String(b.id), String(b.key), String(b.phone), b.role ? String(b.role) : undefined)
     if (r.ok) { const sc = await getScrape(String(b.id)); logAudit(who(s), 'درخواستِ ساختِ حسابِ مشاور از آژانس', `${sc?.slug || ''} · ${b.key} → ${b.phone}`) }
-    return NextResponse.json(r, { status: r.ok ? 200 : 400 })
+    // فاز ۳۴۴و — «بخشِ آنی» (حساب + شماره) همین‌جا، در همان درخواست: چند کوئریِ کوچک، بی‌دیوار، بی‌انتقالِ فایل. قبلاً تا
+    // نوبتِ صفِ اینستنسِ ۰ (پشتِ انتقالِ فایل‌های دیگران) صبر می‌کرد ⇒ ۱۵–۲۰ دقیقه بی‌هیچ نشانی ⇒ ۳۰ بار کلیک.
+    // انتقالِ سنگینِ فایل‌ها همچنان کارِ صف است. شکست این‌جا ⇒ صف دوباره تلاش می‌کند (ایدمپوتنت).
+    let instant = false
+    if (r.ok) {
+      try {
+        await prepareGraduateJobs({ id: String(b.id), key: String(b.key) })
+        const sc = await getScrape(String(b.id))
+        instant = !!sc && (String(b.key) === '__agency__' ? !!sc.agencyPhone : !!sc.advisors.find(a => a.key === String(b.key))?.phone)
+      }
+      catch (e) { console.error('[roster] graduate instant (api) failed:', String((e as Error)?.message || e).slice(0, 160)) }
+    }
+    return NextResponse.json({ ...r, instant }, { status: r.ok ? 200 : 400 })
   }
   if (action === 'edit-advisor') {
     if (!b.id || !b.key) return NextResponse.json({ error: 'id/key لازم است' }, { status: 400 })

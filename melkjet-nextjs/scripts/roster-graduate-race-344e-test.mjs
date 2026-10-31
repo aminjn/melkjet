@@ -74,10 +74,10 @@ try {
   sc = await S.getScrape(id)
   ok('خودترمیم: تیکِ بعدیِ صف شماره را دوباره نشاند', sc.advisors.find(a => a.key === rd3.key)?.phone === PH2)
   await S.patchScrape(id, { running: false })
-  for (let i = 0; i < 3 && (await S.hasGraduateJobs()); i++) await S.processGraduateQueue()
+  for (let i = 0; i < 4; i++) await S.processGraduateQueue()
   sc = await S.getScrape(id)
   const fin = sc.advisors.find(a => a.key === rd3.key)
-  ok('پس از پایانِ سینک: انتقال تمام و پرچمِ «در حال ساخت» خاموش', fin?.phone === PH2 && !fin.graduating && !(await S.hasGraduateJobs()))
+  ok('پس از پایانِ سینک: انتقال تمام و پرچمِ «در حال ساخت» خاموش', fin?.phone === PH2 && !fin.graduating && !((await S.listScrapes()).find(x => x.id === id).gradJobs || []).length)
 } finally { for (const id of ids) try { await S.removeScrape(id) } catch {} }
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
