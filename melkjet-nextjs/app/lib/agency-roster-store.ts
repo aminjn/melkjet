@@ -2,7 +2,9 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { cacheRemote } from './listing-image'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete, kvGetPrefix, kvGetPrefixField } from './db'
-import { buildAgencyRoster } from './agency-roster'
+import { buildAgencyRoster, extractSignature, gateAiName, signatureTrusted, signatureLikeLine, AI_PROMPT_V } from './agency-roster'
+import { validName, keyOf, addressTokens, contextNoiseTokens, normFa } from './agency-name-lexicon'
+import { isDivarMetaText } from './divar-text'
 import { importDivarToken } from './advisor-divar-import'
 import { warmEnrichment } from './enrich-warm'
 import { getEnrichment, patchEnrichment } from './enrich-store'
@@ -31,6 +33,7 @@ export interface RosterAdvisor {
   graduatedAt?: number
   graduating?: boolean   // در صفِ «ساختِ حساب» روی اینستنسِ ۰
   transferFrom?: string  // فاز ۲۷۷ — ownerِ موقتِ مبدأ تا وقتی انتقالِ فایل‌ها تمام نشده (ازسرگیریِ امن)
+  src?: { ai: number; sig: number; machine: number; claim: number }   // فاز ۳۴۴ — چه کسی نام را داد (پنل)
 }
 // کارِ صفِ «ساختِ حساب» — سنگین (انتقالِ فایل‌ها)، روی اینستنسِ ۰ اجرا می‌شود تا درخواستِ ادمین قفل نشود.
 export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; attempts?: number; prepared?: boolean; error?: string }   // attempts: شمارِ خطاهای گذرا؛ prepared: بخشِ آنی (حساب+شماره) انجام شده (۲۸ سپتامبر)   // فاز ۱۹۹ — claim برای صفِ at-least-once
@@ -59,6 +62,7 @@ export interface RosterScrape {
   lastTotal?: number
   lastUnnamed?: number
   unnamedTokens?: string[]   // توکنِ آگهی‌های بی‌امضا (به آژانس) — سقفِ ۱۰۰
+  nameStats?: import('./agency-roster').NameStats   // فاز ۳۴۴ — «تصمیم با AI بود یا امضا یا ماشین» در آخرین سینک
   running?: boolean
   runStartedAt?: number    // برای تشخیصِ رانِ گیرکرده/مرده
   lastProgressAt?: number  // آخرین باری که پیشرفت نوشته شد — مبنای تشخیصِ «مرده» (نه زمانِ شروع)
@@ -188,7 +192,7 @@ export async function anyScrapeRunning(): Promise<boolean> {
 // ── چک‌پوینتِ ازسرگیری: متنِ آگهی‌های اسکرپ‌شده (توکن→{title,desc}) در یک کلیدِ جدا، برای هر اسکرپ ──
 // اگر سینک نیمه‌کاره بماند (reload/کیل)، رانِ بعدی آگهی‌های کش‌شده را دوباره از دیوار نمی‌گیرد و ادامه می‌دهد.
 // در پایانِ موفق پاک می‌شود تا سینکِ روزانه‌ی بعدی دادهٔ تازه بگیرد.
-type RowCache = Record<string, { title: string; desc: string; name?: string; aiv?: number; at?: number }>   // aiv = نسخهٔ پرامپتی که این نام (حتی خالی) را داده (AI_PROMPT_V)
+type RowCache = Record<string, { title: string; desc: string; name?: string; aiv?: number; dv?: number; at?: number }>   // aiv = نسخهٔ پرامپتی که این نام (حتی خالی) را داده (AI_PROMPT_V)
 //   // name = نامِ AI؛ at = زمانِ اسکرپِ ردیف (فاز ۱۹۸ — کشِ دائمیِ اینکرمنتال)
 const CACHE_KV = 'agency_roster_cache'
 const CACHE_FILE = join(process.cwd(), '.agency-roster-cache.json')
@@ -240,6 +244,59 @@ export async function listScrapes(): Promise<RosterScrape[]> {
     // فاز ۱۹۹ — پرچمِ یتیمِ «در حال ساخت»: اگر کاری در صف نیست، پرچم در نمایش خاموش می‌شود (خودترمیم)
     .map(s => ({ ...s, advisors: (s.advisors || []).map(a => a.graduating && !q.some(j => j.id === s.id && j.key === a.key) ? { ...a, graduating: false } : a) }))
     .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+// فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۹–۳۵۲) — «چرا بی‌نام؟»: برای آگهی‌های بی‌نامِ یک آژانس، همان متنی که ذخیره شده و
+// به AI رفته + حکمِ AI (از کش) + حدسِ ماشین + علتِ نهایی. فقط از کش می‌خواند (بدونِ دیوار/AI) پس آنی است.
+// هدف: مالک «ببیند» چه کسی چه گفت، به‌جای حدس زدن.
+export interface UnnamedExplain {
+  token: string; title: string; text: string
+  ai: string; aiAsked: boolean; aiRejected: boolean
+  machine: string; signature: boolean
+  reason: string
+  sigLine?: string   // خطِ امضای ظاهری در آگهیِ بی‌نام (اولویتِ بررسی)
+  oldText?: boolean  // متن با خوانشِ قدیمیِ دیوار ذخیره شده (در سینک‌های بعد تازه می‌شود)
+  metaText?: boolean // «متن» فقط تاریخِ انتشار/نردبانِ دیوار است؛ AI متنِ آگهی را ندیده
+  noText?: boolean   // متنِ این آگهی هنوز از دیوار خوانده نشده
+}
+export async function explainUnnamed(id: string, limit = 100): Promise<{ ok: boolean; error?: string; agencyName?: string; rows: UnnamedExplain[] }> {
+  const s = await getScrapeRow(id)
+  if (!s) return { ok: false, error: 'آژانس پیدا نشد', rows: [] }
+  // همان مدل‌هایی که سینک بارگذاری می‌کند — وگرنه «حدسِ ماشین» این‌جا با سینک فرق می‌کرد.
+  try { const { primeNameModel } = await import('./roster-name-model'); await primeNameModel() } catch {}
+  try { const { loadNer } = await import('./roster-ner'); await loadNer() } catch {}
+  try { const { loadNameRules } = await import('./roster-name-rules'); await loadNameRules() } catch {}
+  const cache = await loadRowCache(id)
+  const ag = s.agencyName || ''
+  const rows: UnnamedExplain[] = []
+  for (const token of (s.unnamedTokens || []).slice(0, limit)) {
+    const c = cache[token]
+    const base = { token, title: c?.title || '', ai: '', aiAsked: false, aiRejected: false, machine: '', signature: false }
+    if (!c || !c.desc) { rows.push({ ...base, text: '', noText: true, reason: 'متنِ این آگهی در دست نیست — یا دیوار جواب نداد/کند بود، یا «توضیحات» فقط تاریخِ انتشار/نردبان بود (ذخیره نمی‌شود). سینکِ بعد دوباره از دیوار می‌خواند.' }); continue }
+    if (isDivarMetaText(c.desc)) { rows.push({ ...base, text: c.desc, metaText: true, reason: 'این «توضیحات» نیست — تاریخِ انتشار/نردبانِ دیوار است که خوانندهٔ قدیمی به‌جای متنِ آگهی برداشته بود؛ سینکِ بعد از دیوار دوباره خوانده و به AI داده می‌شود.' }); continue }
+    const title = normFa(c.title || ''), desc = normFa(c.desc)
+    const txt = `${title}\n${desc}`
+    const addr = new Set([...addressTokens(txt), ...contextNoiseTokens(txt)])
+    const cand = extractSignature(title, desc, ag)
+    const machine = cand[0] || ''
+    const candKeys = new Set(cand.map(x => validName(x, ag, addr)).filter(Boolean).map(keyOf))
+    const aiRaw = typeof c.name === 'string' ? c.name : ''
+    const aiAsked = c.name !== undefined && (c.aiv || 0) >= AI_PROMPT_V
+    const ai = aiRaw ? gateAiName(validName(aiRaw, ag, addr), desc, candKeys) : ''
+    const strong = signatureTrusted(title, desc, ag)
+    let reason: string
+    if (ai) reason = `AI «${ai}» گفت؛ این نام فقط در همین یک آگهی بود (کمتر از ۲ آگهی) → به «بی‌نام» رفت`
+    else if (aiRaw) reason = `AI گفت «${aiRaw}» ولی رد شد (در متن نبود، یا واژهٔ آگهی/محله/نامِ آژانس است، یا وسطِ جمله بود)`
+    else if (machine && strong) reason = `امضای «${machine}» دیده شد؛ این نام فقط در همین یک آگهی بود (کمتر از ۲ آگهی) → به «بی‌نام» رفت`
+    else if (aiAsked && machine) reason = `AI گفت امضا ندارد؛ حدسِ ماشین («${machine}») چون امضای صریح نبود، کنار گذاشته شد`
+    else if (aiAsked) reason = 'AI گفت امضا ندارد و ماشین هم نامی پیدا نکرد'
+    else if (machine) reason = `AI این آگهی را (هنوز) نپرسیده؛ حدسِ ماشین («${machine}») شکلِ نام نداشت یا در یک آگهی بود`
+    else reason = 'AI این آگهی را (هنوز) نپرسیده و ماشین هم نامی پیدا نکرد'
+    rows.push({ ...base, text: c.desc, ai: aiRaw, aiAsked, aiRejected: !!aiRaw && !ai, machine, signature: strong, reason, sigLine: signatureLikeLine(desc) || undefined, oldText: (c.dv || 0) < 4 || undefined })
+  }
+  // آگهی‌هایی که «خطِ امضا» دارند ولی بی‌نام ماندند، اول (همان‌ها که احتمالاً نامشان از دست رفته)
+  rows.sort((x, y) => Number(!!y.sigLine) - Number(!!x.sigLine))
+  return { ok: true, agencyName: ag, rows }
 }
 export async function getScrape(id: string): Promise<RosterScrape | null> { return getScrapeRow(id) }
 
@@ -590,7 +647,27 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     for (const [k] of staleRows) delete rowCache[k]
     if (staleRows.length) console.log(`[roster] incremental: refreshing ${staleRows.length} stale rows of ${rowTotal} (cap ${refreshCap})`)
     let lastCacheWrite = 0
-    const onRow = (token: string, r: { title: string; desc: string; name?: string; aiv?: number }) => {
+    // فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۷–۳۵۲) — متن‌های ذخیره‌شده با خوانشِ قدیمیِ دیوار («بلندترین رشتهٔ پاسخ»):
+    // (۱) «متادیتای انتشار» (انتشار آگهی/آخرین نردبان) — همه، بی‌سقف، دوباره خوانده می‌شوند؛ (۲) «متنِ یکسان در ≥۳
+    // آگهیِ یک آژانس» (نشانهٔ متنِ بیگانهٔ صفحه، همان که مشاورِ خیالی می‌سازد) — همه؛ (۳) بقیهٔ ردیف‌های خوانشِ قدیمی
+    // تدریجی، حداکثر ۲۰۰ در هر سینک (متنِ کهنه/ناقص بی‌صدا امضا را پنهان می‌کرد).
+    const metaRows = Object.entries(rowCache).filter(([, v]) => isDivarMetaText(v.desc))
+    for (const [k] of metaRows) delete rowCache[k]
+    if (metaRows.length) console.log(`[roster] refetching ${metaRows.length} rows whose text was Divar's publish-date line`)
+    const byDesc = new Map<string, string[]>()
+    for (const [tok, v] of Object.entries(rowCache)) {
+      if ((v.dv || 0) >= 4 || !v.desc) continue
+      const k = v.desc.replace(/\s+/g, ' ').trim()
+      if (k.length < 20) continue
+      const arr = byDesc.get(k); if (arr) arr.push(tok); else byDesc.set(k, [tok])
+    }
+    let dupDropped = 0
+    for (const toks of byDesc.values()) if (toks.length >= 3) for (const t of toks) { delete rowCache[t]; dupDropped++ }
+    if (dupDropped) console.log(`[roster] ${dupDropped} rows shared one description (old parser) — refetching`)
+    const oldRows = Object.entries(rowCache).filter(([, v]) => (v.dv || 0) < 4).sort((a, b) => (a[1].at || 0) - (b[1].at || 0)).slice(0, 200)
+    for (const [k] of oldRows) delete rowCache[k]
+    if (oldRows.length) console.log(`[roster] refreshing ${oldRows.length} rows read by the old Divar parser`)
+    const onRow = (token: string, r: { title: string; desc: string; name?: string; aiv?: number; dv?: number }) => {
       if (!r.desc) return   // متنِ خالی را کش نکن تا دفعهٔ بعد دوباره گرفته شود (خودترمیمی)
       rowCache[token] = { ...rowCache[token], ...r, at: rowCache[token]?.at && !('title' in r && r.title) ? rowCache[token].at : Date.now() }   // فاز ۱۹۶/۱۹۸: نامِ AI روی همان رکورد + مهرِ زمان
       const now = Date.now()
@@ -631,7 +708,10 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     const freshByKey = new Map<string, (typeof roster.advisors)[number]>()
     for (const a of roster.advisors) {
       const ex = freshByKey.get(a.key)
-      if (ex) { ex.tokens = [...ex.tokens, ...a.tokens]; ex.posts = [...(ex.posts || []), ...(a.posts || [])] }
+      if (ex) {
+        ex.tokens = [...ex.tokens, ...a.tokens]; ex.posts = [...(ex.posts || []), ...(a.posts || [])]
+        if (ex.src && a.src) ex.src = { ai: ex.src.ai + a.src.ai, sig: ex.src.sig + a.src.sig, machine: ex.src.machine + a.src.machine, claim: ex.src.claim + a.src.claim }
+      }
       else freshByKey.set(a.key, { ...a, tokens: [...a.tokens], posts: [...(a.posts || [])] })
     }
     for (const a of freshByKey.values()) {
@@ -639,6 +719,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       if (!rec) { rec = { key: a.key, name: a.name, owner: `adv:${scrape.slug}:${a.key}`, listingCount: 0 }; recs.push(rec) }
       else if (!rec.phone && a.name) rec.name = a.name
       rec.tokens = a.tokens.slice(0, 100)   // لینکِ آگهی‌های دیوار برای بازبینی
+      rec.src = a.src
     }
     // هرسِ خودکار: رکوردهای قدیمی که این‌بار دیگر کشف نشدند و به حساب هم تبدیل نشده‌اند
     // (اسم‌های خرابِ نوفه از سینکِ قبلی) حذف می‌شوند تا لیست تمیز شود.
@@ -719,6 +800,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       if (s.runStartedAt) s.lastOkMs = Date.now() - s.runStartedAt
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
+      if (roster.nameStats) s.nameStats = roster.nameStats
     })
     console.log(`[roster] pass end OK: advisors=${recs.length} total=${roster.total} unnamed=${roster.unnamed.tokens.length}`)
     // فاز ۱۹۸ — کش دیگر پاک نمی‌شود (اینکرمنتال): فقط توکن‌هایی که دیگر در پروفایلِ دیوار نیستند هرس می‌شوند.

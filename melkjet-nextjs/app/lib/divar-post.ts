@@ -1,5 +1,6 @@
 import { proxiedRequest } from './proxy-fetch'
 import { pickDivarProxy, reportDivarProxy } from './divar-proxy-pool'
+import { isDivarMetaText } from './divar-text'
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
@@ -197,6 +198,58 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: Br
   return { posts: list, name }
 }
 
+// ── فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۷–۳۵۲) — «متنِ خودِ فروشنده»، نه بلندترین رشتهٔ پاسخ ──
+// پیش از این توضیحات = «نخستین کلیدِ description در کلِ پاسخ» و اگر کوتاه‌تر بود «بلندترین رشتهٔ کلِ پاسخ».
+// پاسخِ تک‌آگهیِ دیوار ویجت‌های «آگهی‌های دیگر/مشابه» و متنِ کسب‌وکار هم دارد؛ در آگهیِ کوتاه، متنِ بیگانه
+// «توضیحات» می‌شد و همهٔ آگهی‌های کوتاهِ یک آژانس متن (و نامِ مشاورِ) مشترکِ غلط می‌گرفتند (خودروجت: مشاورِ
+// خیالیِ «هوشمند» با ۵۰ فایل). حالا: (۱) ویجت‌های آگهیِ دیگر پیش از هر خوانشی حذف (ownPostTree)، (۲) متن از
+// ویجتِ DESCRIPTION_ROW / بخشِ DESCRIPTION (بلندترینِ داخلِ بخش مقدم)، (۳) متادیتای انتشار هرگز توضیحات نیست.
+// روشِ قدیمی فقط وقتی است که هیچ ویجتی پیدا نشود.
+export function divarDescriptionWidget(d: any): string {
+  const inSec: string[] = [], elsewhere: string[] = []
+  const walk = (x: any, inDesc = false) => {
+    if (!x || typeof x !== 'object') return
+    if (Array.isArray(x)) { for (const y of x) walk(y, inDesc); return }
+    // داخلِ بخشِ DESCRIPTION هر ویجتِ متن‌دار (نوعش هر چه باشد) کاندیداست؛ بیرونش فقط DESCRIPTION_ROW.
+    const isDescWidget = x.widget_type === 'DESCRIPTION_ROW' || (inDesc && !!x.widget_type)
+    if (isDescWidget && typeof x.data?.text === 'string') {
+      if (x.data.text.trim() && !isDivarMetaText(x.data.text)) (inDesc ? inSec : elsewhere).push(x.data.text)
+      return
+    }
+    const sec = x.section_name === 'DESCRIPTION'
+    for (const k in x) walk(x[k], inDesc || sec)
+  }
+  walk(d)
+  const longest = (a: string[]) => a.slice().sort((p, q) => q.length - p.length)[0] || ''
+  return longest(inSec) || longest(elsewhere)
+}
+/** عنوانِ خودِ آگهی (ویجتِ LEGEND_TITLE_ROW)؛ '' اگر نبود. «بلندترین title» می‌توانست عنوانِ ویجتِ دیگری باشد. */
+export function divarLegendTitle(d: any): string {
+  let out = ''
+  const walk = (x: any) => { if (out || !x || typeof x !== 'object') return; if (x.widget_type === 'LEGEND_TITLE_ROW' && typeof x.data?.title === 'string') { out = x.data.title.trim(); return } for (const k in x) walk(x[k]) }
+  walk(d)
+  return out
+}
+/** ویجت‌های «آگهیِ دیگر» (POST_ROW/CARD، بخش‌های SUGGEST/RELATED/SIMILAR، ویجتی که به توکنِ دیگری اشاره دارد)
+ *  را حذف می‌کند — وگرنه محله/قیمت/متنِ آگهیِ دیگرِ همان کسب‌وکار برداشته می‌شد. */
+const FOREIGN_WIDGET = /^POST_(?:ROW|CARD)|SUGGEST|RECOMMEND|RELATED|SIMILAR/
+export function ownPostTree(d: any, token: string): any {
+  const prune = (x: any): any => {
+    if (!x || typeof x !== 'object') return x
+    if (Array.isArray(x)) return x.map(prune).filter(y => y !== undefined)
+    const wt = String(x.widget_type || ''), sn = String(x.section_name || '')
+    if (wt || sn) {
+      if (FOREIGN_WIDGET.test(wt) || FOREIGN_WIDGET.test(sn)) return undefined
+      const t = x.data?.action?.payload?.token ?? x.data?.token ?? x.action?.payload?.token
+      if (wt && typeof t === 'string' && t && t !== token) return undefined
+    }
+    const o: Record<string, unknown> = {}
+    for (const k in x) { const v = prune(x[k]); if (v !== undefined) o[k] = v }
+    return o
+  }
+  return prune(d)
+}
+
 // واکشی جزئیات کامل یک آگهی دیوار (همهٔ عکس‌ها/مشخصات/توضیحات/مختصات) از طریق پروکسی.
 export async function fetchDivarPost(token: string): Promise<DivarPost> {
   const empty: DivarPost = { images: [], facts: [], amenities: [] }
@@ -219,21 +272,34 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
     if (attempt < 3) await nap(700 * (attempt + 1))   // 0.7s, 1.4s, 2.1s
   }
   if (!res || res.status !== 200 || !res.body) return { ...empty, reason: res ? `http_${res.status}` : 'unreachable' }
+  return parseDivarPostBody(token, res.body)
+}
+
+/** پارسِ پاسخِ posts-v2ِ دیوار — خالص (بدونِ شبکه) تا با نمونهٔ واقعیِ پاسخ تست شود (فاز ۳۴۴). */
+export function parseDivarPostBody(token: string, resBody: string): DivarPost {
+  const empty: DivarPost = { images: [], facts: [], amenities: [] }
+  const res = { body: resBody }
   try {
+    let raw: any = null
+    try { raw = JSON.parse(res.body) } catch { /* fall back below */ }
+    // فاز ۳۴۴ — همهٔ خوانش‌ها روی «خودِ این آگهی» (ویجت‌های آگهی‌های دیگر حذف)؛ رشتهٔ بدنه هم از همان.
+    const d: any = raw ? ownPostTree(raw, token) : null
+    const ownBody = d ? JSON.stringify(d) : res.body
 
-    const re = /https?:\\?\/\\?\/[^"'\s]*divarcdn[^"'\s]*\.(?:jpe?g|png|webp)/gi
-    const found = (res.body.match(re) || []).map(u => u.replace(/\\\//g, '/'))
-    const byName = new Map<string, string>()
-    for (const u of found) {
-      if (/widget-icons|\/imgs\/|logo|avatar|brand/i.test(u)) continue
-      const name = (u.split('?')[0].split('/').pop() || u)
-      const ex = byName.get(name)
-      if (!ex || (/thumbnail/i.test(ex) && !/thumbnail/i.test(u))) byName.set(name, u)
+    const imagesOf = (src: string) => {
+      const re = /https?:\\?\/\\?\/[^"'\s]*divarcdn[^"'\s]*\.(?:jpe?g|png|webp)/gi
+      const found = (src.match(re) || []).map(u => u.replace(/\\\//g, '/'))
+      const byName = new Map<string, string>()
+      for (const u of found) {
+        if (/widget-icons|\/imgs\/|logo|avatar|brand/i.test(u)) continue
+        const name = (u.split('?')[0].split('/').pop() || u)
+        const ex = byName.get(name)
+        if (!ex || (/thumbnail/i.test(ex) && !/thumbnail/i.test(u))) byName.set(name, u)
+      }
+      return Array.from(byName.values()).slice(0, 20)
     }
-    const images = Array.from(byName.values()).slice(0, 20)
-
-    let d: any = null
-    try { d = JSON.parse(res.body) } catch { /* fall back below */ }
+    let images = imagesOf(ownBody)
+    if (!images.length && ownBody !== res.body) images = imagesOf(res.body)
 
     const strOf = (x: any): string => {
       if (x == null) return ''
@@ -265,17 +331,23 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
       const nr = findFirst(d, 'numberOfRooms'); if (nr != null) factsMap['اتاق'] = strOf(nr)
       const la = findFirst(d, 'latitude'), lo = findFirst(d, 'longitude')
       if (typeof la === 'number' && typeof lo === 'number') { lat = la; lng = lo }
-      const dsc = findFirst(d, 'description'); if (dsc) description = strOf(dsc)
-      // فقط «متنِ واقعی» کاندیدِ توضیحات باشد — نه URLِ عکس (که طولانی‌ترین رشتهٔ payload است
-      // و قبلاً اشتباهاً به‌جای توضیحات می‌نشست). متنِ واقعی فاصله دارد و URL نیست.
-      const isText = (s: string) => s.length > 20 && /\s/.test(s) && !/^https?:\/\//i.test(s) && !/divarcdn|\/static\/|\.(webp|jpe?g|png|gif|svg|mp4)(\?|$)/i.test(s)
-      let longest = description && isText(description) ? description : ''
-      const dwalk = (x: any) => {
-        if (typeof x === 'string') { if (isText(x) && x.length > longest.length) longest = x }
-        else if (x && typeof x === 'object') { for (const k in x) dwalk(x[k]) }
+      // فاز ۳۴۴ — متنِ «خودِ فروشنده» از ویجتِ توضیحات؛ روشِ قدیمی (description/بلندترین رشته) فقط وقتی ویجتی نیست.
+      const widgetText = divarDescriptionWidget(d) || divarDescriptionWidget(raw)
+      if (widgetText) description = widgetText
+      else {
+        const dsc = findFirst(d, 'description'); if (dsc && !isDivarMetaText(strOf(dsc))) description = strOf(dsc)
+        // فقط «متنِ واقعی» کاندیدِ توضیحات باشد — نه URLِ عکس (که طولانی‌ترین رشتهٔ payload است
+        // و قبلاً اشتباهاً به‌جای توضیحات می‌نشست). متنِ واقعی فاصله دارد و URL نیست.
+        const isText = (s: string) => s.length > 20 && /\s/.test(s) && !/^https?:\/\//i.test(s) && !/divarcdn|\/static\/|\.(webp|jpe?g|png|gif|svg|mp4)(\?|$)/i.test(s) && !isDivarMetaText(s)
+        let longest = description && isText(description) ? description : ''
+        const dwalk = (x: any) => {
+          if (typeof x === 'string') { if (isText(x) && x.length > longest.length) longest = x }
+          // عنوان/زیرعنوانِ خودِ آگهی (LEGEND_TITLE_ROW) توضیحات نیست — در آگهیِ بی‌متن «بلندترین رشته» همین بود.
+          else if (x && typeof x === 'object' && x.widget_type !== 'LEGEND_TITLE_ROW') { for (const k in x) dwalk(x[k]) }
+        }
+        dwalk(d)
+        if (longest && longest.length > (description && isText(description) ? description.length : 0)) description = longest
       }
-      dwalk(d)
-      if (longest && longest.length > (description && isText(description) ? description.length : 0)) description = longest
 
       const walk = (x: any) => {
         if (!x || typeof x !== 'object') return
@@ -315,7 +387,7 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
 
     if (!description) {
       const unesc = (s: string) => s.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\//g, '/')
-      const descs = [...res.body.matchAll(/"description"\s*:\s*"((?:[^"\\]|\\.){20,})"/g)].map(m => unesc(m[1]))
+      const descs = [...ownBody.matchAll(/"description"\s*:\s*"((?:[^"\\]|\\.){20,})"/g)].map(m => unesc(m[1])).filter(t => !isDivarMetaText(t))
       if (descs.length) description = descs.sort((a, b) => b.length - a.length)[0]
     }
 
@@ -343,7 +415,8 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
       const titles: string[] = []
       const tw = (x: any) => { if (!x || typeof x !== 'object') return; if (typeof x.title === 'string' && x.title.trim()) titles.push(x.title.trim()); for (const k in x) tw(x[k]) }
       tw(d)
-      title = titles.filter(t => t !== 'املاک').sort((a, b) => b.length - a.length)[0] || ''
+      // فاز ۳۴۴ — اول ویجتِ عنوانِ خودِ آگهی؛ «بلندترین title» می‌توانست عنوانِ ویجتِ دیگر یا نامِ کسب‌وکار باشد.
+      title = divarLegendTitle(d) || titles.filter(t => t !== 'املاک').sort((a, b) => b.length - a.length)[0] || ''
     }
     const city = d ? strOf(findFirst(d, 'city_persian')).trim() : ''
     const district = d ? strOf(findFirst(d, 'district_persian')).trim() : ''
@@ -390,7 +463,7 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
 
     // پشتیبانِ عمیق برای آگهی‌های اجارهٔ «قابل‌تبدیل» (تاگلِ ودیعه/اجاره): قیمت در ویجتی می‌آید
     // که از walkِ title/value رد می‌شود؛ پس مستقیم از کلِ بدنهٔ پاسخ می‌خوانیم.
-    const body = res.body || ''
+    const body = ownBody || ''   // فاز ۳۴۴ — قیمت هم فقط از ویجت‌های خودِ این آگهی
     // مقدار پس از برچسبِ فارسی (ودیعه/رهن/اجاره/قیمت) در بدنه. همهٔ occurrenceها را می‌گردیم
     // و اولین عددِ واقع‌بینانه (≥۱م) را برمی‌گردانیم؛ پس برچسب‌های تزئینی (بردکرامب، «قابل تبدیل»)
     // که عددِ بزرگ کنارشان نیست، رد می‌شوند.

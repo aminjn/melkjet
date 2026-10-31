@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, mergeAdvisorInto, listDueRosters} from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, mergeAdvisorInto, listDueRosters, explainUnnamed } from '@/app/lib/agency-roster-store'
 import { getCronBeat } from '@/app/lib/cron-heartbeat'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { rosterCities } from '@/app/lib/agency-roster-city'
@@ -15,6 +15,9 @@ const who = (s: any) => s?.name || s?.phone || 'مدیر'
 //        با ?cities=1 → نقشهٔ «آژانس → شهر» (فیلترِ شهرِ پنل).
 export async function GET(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  // فاز ۳۴۴ — ?explain=<scrapeId> → «چرا بی‌نام؟» برای آگهی‌های بی‌نامِ همان آژانس (از کش، آنی)
+  const ex = req.nextUrl.searchParams.get('explain')
+  if (ex) return NextResponse.json(await explainUnnamed(ex), { headers: { 'Cache-Control': 'no-store' } })
   const dbg = req.nextUrl.searchParams.get('debug')
   if (dbg) return NextResponse.json(await debugRoster(dbg), { headers: { 'Cache-Control': 'no-store' } })
   // ۸ اکتبر — عمداً جدا از GETِ اصلی: پنل هنگامِ سینک هر ۴ ثانیه poll می‌کند و این

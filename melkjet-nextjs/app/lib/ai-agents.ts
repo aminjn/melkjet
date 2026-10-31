@@ -17,6 +17,9 @@ export const AGENTS: AgentDef[] = [
   { id: 'translation', name: 'TranslationAgent', task: 'ترجمه محتوا', needs: 'text' },
   { id: 'summary', name: 'SummaryAgent', task: 'خلاصه‌سازی گزارش', needs: 'text' },
   { id: 'lead', name: 'LeadAgent', task: 'مدیریت لیدهای فروش', needs: 'text' },
+  // فاز ۳۴۴ — مدلِ جدا برای «تشخیصِ نامِ مشاور در آگهی‌های آژانس» (روستر). اگر خالی بماند همان مدلِ
+  // ContentAgent/ChatAgent به‌کار می‌رود؛ با یک مدلِ قوی‌تر فقط همین کار بهتر می‌شود.
+  { id: 'roster', name: 'RosterAgent', task: 'تشخیصِ نامِ مشاورِ املاک در آگهی‌های آژانس (روستر)', needs: 'text' },
   { id: 'alert', name: 'AlertAgent', task: 'اعلان‌های هوشمند', needs: 'text' },
   { id: 'analytics', name: 'AnalyticsAgent', task: 'تحلیل رفتار کاربر', needs: 'text' },
   { id: 'negotiation', name: 'NegotiationAgent', task: 'پشتیبانی مذاکره', needs: 'both' },

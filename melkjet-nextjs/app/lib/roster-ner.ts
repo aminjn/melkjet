@@ -207,7 +207,9 @@ const CRAFT_CONTEXT = new Set<string>([
   'آهنگری', 'جوشکاری', 'کابینت', 'کابینتسازی', 'لولهکشی', 'برقکاری', 'سیمانکاری', 'بنایی', 'بنا', 'سفتکاری',
   'نماکاری', 'نما', 'کناف', 'دکوراسیون', 'طراح', 'معمار', 'مجری', 'پیمانکار',
 ].map(keyOf))
-const PLACE_SUFFIX = /(?:آباد|اباد|شهر|پارک|ده|کلا|جان)$/
+// فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۸) — «ده» و «جان» حذف شدند: هر فامیلیِ «…زاده» (علیزاده، حسن‌زاده)، «ستوده»،
+// «آزاده»، «مرجان» را «نامِ مکان» می‌گرفت و حتی پس از «خانم/آقای/کارشناس» دور می‌انداخت.
+const PLACE_SUFFIX = /(?:آباد|اباد|شهر|پارک|کلا)$/
 // فاز ۳۱۵ — واژه‌های «ناحیه‌ای» که در بلوکِ امضا، *عبارتِ نقش* را می‌بندند و نام بلافاصله پس از
 // آن‌ها می‌آید: «کارشناس امور ملکی منطقه فراهانی». این‌ها جزوِ ADDR_MARKERS هم هستند، ولی اینجا
 // فقط به‌عنوان «لنگرِ پیش از نام» استفاده می‌شوند، نه نشانهٔ آدرس.
@@ -258,13 +260,28 @@ const toksOfLine = (line: string) => line.split(/[^ء-ی‌]+/).map(w => w.repla
 // توکنِ خط» که منبعِ اصلیِ نامِ جعلیِ محله/خیابان بود («منطقه خوش هاشمی»⇒«خوش»، «منطقه جیحون»⇒«جیحون»).
 // حدسِ ضعیف دیگر trust:0.97 نمی‌گیرد تا از دروازهٔ nameProb + بانِ آدرس + MIN_FILES عبور نکند —
 // همان مدلِ ۹۵٪ تصمیم می‌گیرد «فراهانی/رامتین» (نام) را از «خوش/جیحون» (خیابان) جدا کند.
-function _gazInfo(desc: string): { name: string; weak: boolean } | null {
-  const S = (name: string): { name: string; weak: boolean } => ({ name, weak: false })
-  const W = (name: string): { name: string; weak: boolean } => ({ name, weak: true })
-  const scan = deEmoji(String(desc || '')).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean).slice(-10)
-  for (let L = scan.length - 1; L >= 0; L--) {   // از پایان به بالا (امضا معمولاً آخر است)
+// فاز ۳۴۴ (پورت از خودروجت، فاز ۳۵۰–۳۵۲) — «بهترین برخورد»، نه «اولین برخورد از پایین». همهٔ خط‌ها سنجیده و
+// رتبه‌بندی می‌شوند: ۰ = لقب + نام / نامِ کوچک + خانوادگی، ۱ = سیگنالِ قویِ دیگر (خطِ «فقط نقش + یک واژه»، پسوندِ قوی
+// پس از نقش، «…: X»)، ۲ = حدسِ ضعیف؛ هم‌رتبه ⇒ پایین‌ترین خط. نمونهٔ خودروجت: «نماینده رسمی فروش محصولات» زیرِ
+// «کارشناس خانم اسماعیلی» آمده بود و چون پایین‌تر بود برنده می‌شد. ۱۰ خطِ پایانی همهٔ قاعده‌ها را می‌گیرند؛ خط‌های
+// بالاتر فقط رتبهٔ ۰ را (امضای «کارشناس خانم ستوده» گاهی وسطِ آگهی است، پیش از فهرستِ امکانات/آدرس).
+// اسمِ جمع («…ات/…ها/…های») هرگز نامِ تک‌واژه نیست («فروش محصولات/خدمات»).
+const PLURAL_NOUN = /(?:[^ی]ات|ها|های|هایی)$/
+const singleNameOk = (w: string) => surnameOk(w) && !PLURAL_NOUN.test(w.replace(/‌/g, ''))
+// واژه‌های «عبارتِ نقش»: خطی که «فقط» این‌ها + یک واژه است («کارشناس فروش بیات»، «مشاور فروش شاکر») امضاست.
+const ROLE_PHRASE = new Set<string>(['کارشناس', 'کارشناسان', 'مشاور', 'مشاورین', 'مشاوران', 'نماینده', 'فروشنده', 'فروش',
+  'خرید', 'ارشد', 'تخصصی', 'رسمی', 'شما', 'محترم', 'جهت', 'هماهنگی', 'راهنمایی', 'تماس', 'با', 'و', 'املاک', 'ملکی', 'امور', 'مدیر', 'مدیریت'].map(keyOf))
+type GazHit = { name: string; weak: boolean; rank: number }
+function _gazInfo(desc: string): GazHit | null {
+  const T = (name: string): GazHit => ({ name, weak: false, rank: 0 })   // لقب + نام / نامِ کوچک + خانوادگی
+  const S = (name: string): GazHit => ({ name, weak: false, rank: name.includes(' ') ? 0 : 1 })
+  const W = (name: string): GazHit => ({ name, weak: true, rank: 2 })
+  const all = deEmoji(String(desc || '')).split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
+  const tailFrom = Math.max(0, all.length - 10)
+  const scan = all
+  const lineHit = (L: number): GazHit | null => {
     const toks = toksOfLine(scan[L])
-    if (!toks.length) continue
+    if (!toks.length) return null
     // نخستین «کلیدواژهٔ نقش» روی این خط — لنگرِ نامِ کوچک فقط «پس از» آن معتبر است (وگرنه
     // «خیابان محمد علی جناح» نامِ جعلی می‌سازد). عنوان (آقای/خانم) لنگرِ مستقلِ خودش است.
     let roleIdx = -1
@@ -277,8 +294,8 @@ function _gazInfo(desc: string): { name: string; weak: boolean } | null {
         if (STREET_TITLES.has(k) && toks.some(t => STREET_CONTEXT.has(keyOf(t)) || CRAFT_CONTEXT.has(keyOf(t)))) continue
         const a = toks[i + 1], b = toks[i + 2]
         if (surnameOk(a)) {
-          if (FIRST_NAMES.has(keyOf(a)) && surnameOk(b)) return S(`${a} ${b}`)   // نام کوچک + خانوادگی
-          return S(a)                                                            // فقط نامِ خانوادگی پس از عنوان
+          if (FIRST_NAMES.has(keyOf(a)) && surnameOk(b)) return T(`${a} ${b}`)   // نام کوچک + خانوادگی
+          return T(a)                                                            // فقط نامِ خانوادگی پس از عنوان
         }
       }
       // (ب) نامِ کوچکِ شناخته‌شده، فقط پس از کلیدواژهٔ نقشِ همین خط: «کارشناس … محمد طهرانی».
@@ -287,10 +304,16 @@ function _gazInfo(desc: string): { name: string; weak: boolean } | null {
         if (surnameOk(b) && !FIRST_NAMES.has(keyOf(b))) return S(`${toks[i]} ${b}`)
       }
     }
+    if (L < tailFrom) return null   // بالاتر از ۱۰ خطِ پایانی فقط لقب/نامِ کامل
+    // (ب۰) فاز ۳۴۴ — خطی که «فقط» عبارتِ نقش + یک واژه است: «کارشناس فروش بیات» — امضاست، شکلِ فامیلی هرچه باشد.
+    if (toks.length >= 2 && ROLE_ANCHOR.has(keyOf(toks[0])) && toks.slice(0, -1).every(t => ROLE_PHRASE.has(keyOf(t)))) {
+      const last = toks[toks.length - 1], lk = keyOf(last)
+      if (!SOLO_NEVER_NAME.has(lk) && !isAreaWord(lk) && singleNameOk(last)) return { name: last, weak: false, rank: 1 }
+    }
     // (ب۲) نامِ خانوادگیِ تنها پس از کلیدواژهٔ نقش (تا ۳ واژه بعدتر): «کارشناس منطقه باقریان»،
     // «مشاور شما پارسافر». پسوندِ قوی + ردِ مکان/طلا تا «غرب/طلایی» جعل نشود.
     if (roleIdx >= 0) for (let i = roleIdx + 1; i < toks.length && i <= roleIdx + 3; i++) {
-      if (surnameStrong(toks[i])) return S(toks[i])
+      if (surnameStrong(toks[i]) && singleNameOk(toks[i])) return S(toks[i])
     }
     // (ب۳) فاز ۳۱۵ — «نقش … منطقه/محله/ناحیه <نام>»: الگوی قالبیِ آژانس‌ها که نامِ مشاور را
     // پس از واژهٔ ناحیه می‌آورد و خودِ واژهٔ ناحیه عبارتِ نقش را می‌بندد: «کارشناس امور ملکی
@@ -309,7 +332,7 @@ function _gazInfo(desc: string): { name: string; weak: boolean } | null {
           // فاز ۳۳۶ — تک‌کلمهٔ «منطقه <X>» فقط وقتی کاندیدا می‌شود که «شکلِ نام» داشته باشد: نامِ
           // کوچکِ شناخته‌شده (رامتین) یا پسوندِ نامِ خانوادگی (فراهانی«ی»/زاده/یان…). واژهٔ عامِ بی‌شکلِ
           // محله/خیابان («خوش/جیحون/سپه/طوس») همین‌جا رد می‌شود. حدسِ ضعیف (W): در تولید از nameProb هم می‌گذرد.
-          if (!SOLO_NEVER_NAME.has(keyOf(a)) && !(b && PLACE_SUFFIX.test(b)) && (FIRST_NAMES.has(keyOf(a)) || SUFFIX.test(a) || surnameStrong(a))) return W(a)
+          if (!SOLO_NEVER_NAME.has(keyOf(a)) && singleNameOk(a) && !(b && PLACE_SUFFIX.test(b)) && (FIRST_NAMES.has(keyOf(a)) || SUFFIX.test(a) || surnameStrong(a))) return W(a)
         }
       }
     }
@@ -324,7 +347,7 @@ function _gazInfo(desc: string): { name: string; weak: boolean } | null {
         const okw = (w: string) => surnameOk(w) && !isAreaWord(keyOf(w)) && !SOLO_NEVER_NAME.has(keyOf(w))
         if (cw.length === 2 && okw(cw[0]) && okw(cw[1])) return S(`${cw[0]} ${cw[1]}`)
         const w = cw[cw.length - 1] || '', wk = keyOf(w)
-        if (w.length >= 3 && okw(w) && (FIRST_NAMES.has(wk) || SUFFIX.test(w) || surnameStrong(w))) return S(w)
+        if (w.length >= 3 && okw(w) && singleNameOk(w) && (FIRST_NAMES.has(wk) || SUFFIX.test(w) || surnameStrong(w))) return S(w)
       }
     }
     // (ب۴) فاز ۳۲۱ — نامِ «تنها»ی پایانِ خطِ امضا پس از کلیدواژهٔ نقش، فارغ از جداکننده:
@@ -344,7 +367,7 @@ function _gazInfo(desc: string): { name: string; weak: boolean } | null {
         if (prev && toks.length - 2 > roleIdx && FIRST_NAMES.has(keyOf(prev)) && surnameOk(prev) && !FIRST_NAMES.has(lk)) return S(`${prev} ${last}`)
         // تک‌کلمه: نامِ کوچکِ شناخته‌شده، یا پسوندِ خانوادگی، یا خطِ «نقش + دقیقاً یک واژهٔ کوتاه».
         // فاز ۳۳۶ — تک‌کلمهٔ «آخرین توکن» = حدسِ ضعیف (W): از دروازهٔ nameProb عبور می‌کند.
-        if (!SOLO_NEVER_NAME.has(lk) && (FIRST_NAMES.has(lk) || SUFFIX.test(last) || surnameStrong(last) || (toks.length - 1 === roleIdx + 1 && last.length <= 3))) return W(last)
+        if (!SOLO_NEVER_NAME.has(lk) && singleNameOk(last) && (FIRST_NAMES.has(lk) || SUFFIX.test(last) || surnameStrong(last) || (toks.length - 1 === roleIdx + 1 && last.length <= 3))) return W(last)
       }
     }
     // (ج) فاز ۲۹۸م — برچسب روی یک خط، نام روی خطِ بعد: «کارشناس ملکی شما ؛ \n احمد باغبانی».
@@ -358,8 +381,15 @@ function _gazInfo(desc: string): { name: string; weak: boolean } | null {
       const nt = toksOfLine(scan[nl])
       if (nt.length >= 2 && FIRST_NAMES.has(keyOf(nt[0])) && surnameOk(nt[1]) && !FIRST_NAMES.has(keyOf(nt[1]))) return S(`${nt[0]} ${nt[1]}`)
     }
+    return null
   }
-  return null
+  // از پایین به بالا؛ فقط رتبهٔ «بهتر» جایگزین می‌شود ⇒ در هم‌رتبه، پایین‌ترین خط می‌ماند.
+  let best: GazHit | null = null
+  for (let L = scan.length - 1; L >= 0; L--) {
+    const h = lineHit(L)
+    if (h && (!best || h.rank < best.rank)) { best = h; if (best.rank === 0 && L >= tailFrom) break }
+  }
+  return best
 }
 // سازگاری: نامِ گازِتیر به‌صورتِ رشته (برای تست‌ها و صداگرهایی که فقط نام می‌خواهند).
 export function gazetteerName(desc: string): string | null { return _gazInfo(desc)?.name ?? null }
@@ -394,17 +424,19 @@ export function selfIntroName(desc: string): string | null {
 
 /** نامِ مشاورِ این آگهی، یا خالی. نامِ دوبخشی وقتی ساخته می‌شود که توکنِ همسایه هم
  *  نمرهٔ بالایی داشته باشد — نه با قاعده، بلکه با همان نمرهٔ مدل. */
-export function bestName(title: string, desc: string): { name: string; p: number; trust?: boolean; gaz?: boolean } | null {
+// فاز ۳۴۴ — `src` = از کجا آمد: label («نقش: X»)، self («X هستم»)، gaz (قاعدهٔ امضا)، model (حدسِ آماری).
+export type NameSource = 'label' | 'self' | 'gaz' | 'model'
+export function bestName(title: string, desc: string): { name: string; p: number; trust?: boolean; gaz?: boolean; src: NameSource } | null {
   // فاز ۲۹۵ — امضای برچسب‌دارِ صریح بر مدل مقدم است (دقتِ بالا، بدونِ حدس).
   // `trust` = این نام از یک «سیگنالِ قطعیِ شخص» آمده (برچسب «نقش: نام»، معرفیِ «نام هستم»،
   // یا عنوانِ «خانم/آقای نام»)، نه حدسِ مدل. فاز ۲۹۸ی۳: فقط همین مسیرها اجازه دارند از
   // بانِ «نامِ تک‌کلمه‌ایِ شهر» (SOLO_NEVER_NAME) عبور کنند — «خانم شهریار»/«شهریار هستم»
   // واقعاً شخص‌اند، ولی «منطقه طلایی»/«کارشناس تهران» (حدسِ مدل) همچنان بی‌نام می‌مانند.
   const ln = labeledName(desc)
-  if (ln) return { name: ln, p: 0.98, trust: true }
+  if (ln) return { name: ln, p: 0.98, trust: true, src: 'label' }
   // فاز ۲۹۷م — معرفیِ صریحِ خود («X هستم در خدمت شما») هم بر مدل مقدم است.
   const sn = selfIntroName(desc)
-  if (sn) return { name: sn, p: 0.97, trust: true }
+  if (sn) return { name: sn, p: 0.97, trust: true, src: 'self' }
   // فاز ۲۹۸ل — لنگرِ «نامِ کوچکِ شناخته‌شده»: «کارشناس منطقه محمد طهرانی» (بدونِ جداکننده)
   // که مدل سکوت می‌کرد و labeledName (نیازمندِ «:») نمی‌گرفت. سیگنالِ مثبت و مطمئن، پس
   // بر مدل مقدم و p≥۰.۹۷ (از دروازهٔ nameProb عبور می‌کند — همان مدلی که اینجا کم آورده).
@@ -412,9 +444,9 @@ export function bestName(title: string, desc: string): { name: string; p: number
   // مدل مقدم است؛ حدسِ «ضعیف» (تک‌کلمهٔ «منطقه <X>»/«آخرین توکن») trust نمی‌گیرد و با p=0.9 از
   // دروازهٔ nameProb + بانِ آدرس عبور می‌کند — تا محله/خیابان («خوش/جیحون») نامِ جعلی نسازد.
   const gz = _gazInfo(desc)
-  if (gz) return gz.weak ? { name: gz.name, p: 0.9, gaz: true } : { name: gz.name, p: 0.97, trust: true }
+  if (gz) return gz.weak ? { name: gz.name, p: 0.9, gaz: true, src: 'gaz' } : { name: gz.name, p: 0.97, trust: true, src: 'gaz' }
   // مدلِ خلوت (۹۵.۲٪) اگر بارگذاری شده باشد، مرجع است؛ چگال (۹۰.۴٪) تورِ ایمنی.
-  if (hasSparse()) return bestNameSparse(title, desc)
+  if (hasSparse()) { const r = bestNameSparse(title, desc); return r ? { ...r, src: 'model' } : null }
   const m = NER
   if (!m) return null
   const c = getCorpus()
@@ -432,7 +464,7 @@ export function bestName(title: string, desc: string): { name: string; p: number
   let name = toks[bi].w
   if (near(bi + 1) && (!near(bi - 1) || scores[bi + 1] >= scores[bi - 1])) name = toks[bi].w + ' ' + toks[bi + 1].w
   else if (near(bi - 1)) name = toks[bi - 1].w + ' ' + toks[bi].w
-  return { name, p: scores[bi] }
+  return { name, p: scores[bi], src: 'model' }
 }
 
 // ── مدلِ خلوت با درهم‌سازیِ ویژگی (فاز ۲۸۲) ─────────────────────────────────

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
+import { NameStatsLine, SrcBadge, UnnamedExplain } from './RosterExplain'
 import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
@@ -2760,6 +2761,8 @@ function AgencyRosterPanel() {
               </button>
             </div>
             {s.lastError && <div style={{ fontSize: 11, color: '#e06666', marginTop: 5, lineHeight: 1.8 }}>خطا: {s.lastError}</div>}
+            {/* فاز ۳۴۴ — «تصمیم با AI بود یا امضا یا ماشین؟» + شاخص‌های قرمزِ کیفیت (آخرین سینک) */}
+            <NameStatsLine st={s.nameStats} />
 
             {/* زمان‌بندیِ اختصاصی — تاشو، تا ۱۵۵ ردیف ۱۵۵ جفت سلکتِ باز نداشته باشند */}
             {schedOpen === s.id && (
@@ -2800,6 +2803,7 @@ function AgencyRosterPanel() {
                         onChange={() => toggleAdv(`${s.id}:${a.key}`)} style={{ width: 16, height: 16, cursor: 'pointer' }} />}
                       <span style={{ fontWeight: 700, fontSize: 13 }}>{a.name}</span>
                       <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(a.listingCount)} فایل</span>
+                      <SrcBadge src={a.src} />
                       {a.phone
                         ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {a.phone}</span>
                         : a.graduating
@@ -2822,6 +2826,7 @@ function AgencyRosterPanel() {
                         <button onClick={() => graduate(s.id, '__agency__')} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب آژانس</button></>}
                   </div>
                   <DivarLinks tokens={s.unnamedTokens} />
+                  {(s.lastUnnamed || 0) > 0 && <UnnamedExplain id={s.id} />}
                 </div>
               </div>
             )}

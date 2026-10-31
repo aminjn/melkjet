@@ -11,8 +11,19 @@
 const ZWNJ = /‌/g
 
 // نرمال‌سازیِ کلید: فارسی یکدست (ي→ی، ك→ک)، لاتین CAPS، فاصله/نیم‌فاصله حذف.
+// فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۷) — یکسان‌سازیِ متنِ فارسی پیش از هر مقایسه: «هماهنگیِ»/«هماهنگى»/«هماهنگي»
+// یک واژه‌اند. اعراب/تشدید، کشیده، ZWJ و نشانه‌های جهت حذف؛ «ي/ى/ك/ۀ/ة/أ/إ» و ارقامِ عربی یکدست.
+export function normFa(s: string): string {
+  return String(s || '')
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')                      // اعراب/تشدید/همزهٔ روی حرف
+    .replace(/\u0640/g, '')                                                   // کشیده
+    .replace(/[\u200D\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF\u00AD]/g, '')   // ZWJ، نشانه‌های جهت، BOM
+    .replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[ۀة]/g, 'ه').replace(/[أإ]/g, 'ا')
+    .replace(/[٠-٩]/g, d => String.fromCharCode(d.charCodeAt(0) + 0x06F0 - 0x0660))   // ارقامِ عربی → فارسی
+}
+
 export function keyOf(name: string): string {
-  const s = String(name || '').replace(ZWNJ, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
+  const s = normFa(String(name || '')).replace(ZWNJ, '').replace(/\s+/g, '').trim()
   return /^[A-Za-z]+$/.test(s) ? s.toUpperCase() : s
 }
 
@@ -296,6 +307,19 @@ export function hardBanTokens(text: string): Set<string> {
   for (const k of placeCompoundTokens(text)) out.add(k)
   return out
 }
+// فاز ۳۴۴ (باگی که خودروجت پیدا کرد) — ورودیِ فهرستِ سفید «نام» است، نه «خطِ امضا»: اگر ادمین «کارشناس خانم اسماعیلی»
+// را بنویسد، همان عبارت (با نقش و لقب) نامِ مشاور می‌شد و کنارِ «اسماعیلی»ِ واقعی یک مشاورِ دومِ غلط می‌ساخت. واژه‌های
+// نقش/لقب/جهت/کلیدواژه از ابتدا و انتها حذف می‌شوند؛ اگر چیزی نماند، ورودی نام نیست و ذخیره نمی‌شود.
+const WL_STRIP = new Set(['کارشناس', 'کارشناسان', 'مشاور', 'مشاوران', 'مشاورین', 'فروش', 'فروشنده', 'نماینده', 'مدیر', 'مدیریت',
+  'خانم', 'آقا', 'آقای', 'اقا', 'اقای', 'جناب', 'سرکار', 'مهندس', 'دکتر', 'حاج', 'حاجی', 'استاد', 'تخصصی', 'ارشد', 'رسمی', 'املاک',
+  'جهت', 'هماهنگی', 'راهنمایی', 'بازدید', 'تماس', 'با', 'و', 'شما', 'ارادتمند', 'تشکر', 'احترام', 'سپاس', 'هستم', 'هستیم'].map(keyOf))
+export function sanitizeWhitelistName(s: string): string {
+  const ws = deEmoji(normFa(String(s || ''))).replace(/[:：.,،؛;!?()[\]«»"'|/\\\-–—_]+/g, ' ').split(/\s+/).filter(Boolean)
+  let a = 0, b = ws.length
+  while (a < b && WL_STRIP.has(keyOf(ws[a]))) a++
+  while (b > a && WL_STRIP.has(keyOf(ws[b - 1]))) b--
+  return ws.slice(a, b).join(' ').trim()
+}
 export const hitsBan = (name: string, ban: Set<string>) => !!name && name.split(/\s+/).some(w => ban.has(keyOf(w)))
 
 // فاز ۳۴۱ — «مقدارِ مشخصه» هرگز نامِ مشاور نیست: «وضعیت سند: تعاونی»، «سیستم سرمایش: فن کوئل»، «کف: لمینت».
@@ -389,6 +413,23 @@ export function bareNameLine(line: string, minWords = 1, agencyName = '', banned
 // «کلید نخورده» با ۸ فایل، «مشخصات ملک:» با ۱۰ فایل. حالا منطق برعکس شد:
 // چیزی نام است که *شکلِ نام* داشته باشد، نه اینکه صرفاً در فهرستِ سیاه نباشد.
 const SURNAME_SUFFIX = /(?:زاده|نژاد|پور|یان|فرد|منش|مهر|راد|نیا|لو|فر|مند|خواه|طلب|دوست|بخش|ی)$/
+/** «شکلِ نامِ آدم»: یک تا سه واژهٔ فارسی که یا نامِ کوچکِ شناخته‌شده دارد، یا واژهٔ آخرش پسوندِ نام‌خانوادگی
+ *  (با دست‌کم ۳ حرفِ ریشه). برای پذیرفتنِ نامِ دوواژه‌ایِ AI وسطِ جمله و حدسِ بی‌پشتوانهٔ ماشین (فاز ۳۴۴). */
+export function personLike(v: string): boolean {
+  const ws = String(v || '').trim().split(/\s+/).filter(Boolean)
+  if (!ws.length || ws.length > 3) return false
+  if (ws.every(w => /^[A-Za-z]+$/.test(w))) return false
+  const isFirst = (w: string) => {
+    const k = keyOf(w)
+    if (FIRST_NAMES.has(k)) return true
+    for (const pre of ['محمد', 'امیر', 'علی', 'ابو']) if (k.startsWith(pre) && FIRST_NAMES.has(k.slice(pre.length))) return true
+    return false
+  }
+  if (ws.some(isFirst)) return true
+  const last = keyOf(ws[ws.length - 1])
+  const m = last.match(SURNAME_SUFFIX)
+  return !!m && last.length - m[0].length >= 3
+}
 
 export const FIRST_NAMES = new Set([
   'محمد','علی','حسن','حسین','رضا','مهدی','امیر','امین','احمد','ابوالفضل','اکبر','اصغر','ایمان',

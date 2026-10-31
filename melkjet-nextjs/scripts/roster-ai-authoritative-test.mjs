@@ -10,7 +10,7 @@ let pass = 0, fail = 0
 const ok = (n, c) => { if (c) { pass++; console.log('  ✓ ' + n) } else { fail++; console.log('  ✗ ' + n) } }
 
 const { saveAdminData, getAdminData } = await import('../app/lib/admin-store.ts')
-const { buildAgencyRoster } = await import('../app/lib/agency-roster.ts')
+const { buildAgencyRoster, AI_PROMPT_V } = await import('../app/lib/agency-roster.ts')
 const ADMIN_SNAPSHOT = JSON.parse(JSON.stringify(getAdminData()))
 const restore = () => { try { saveAdminData(ADMIN_SNAPSHOT) } catch {} }
 process.on('exit', restore)
@@ -34,7 +34,8 @@ ok('AI روشن: آگهیِ واقعاً بی‌امضا بی‌نام می‌م
 // ── ۲: AI روشن + qwen برای idx 4-7 «رضایی» می‌دهد → qwen جای خالی را پر می‌کند و نامش می‌آید ──
 // فاز ۳۴۳ — نامِ AI باید در متنِ آگهی باشد (نامِ ساختگی/از عنوان رد می‌شود)، پس متنِ idx 4-7 امضای «رضایی» دارد
 const mk2 = (aiFn) => ({ ...mkF(aiFn), post: async (t) => { const i = tokens.indexOf(t); return { title: 'آپارتمان ' + t, description: i < 4 ? 'نوساز، کارشناس فروش جهت راهنمایی نقی' : 'نوساز فول امکانات\nبا تشکر رضایی', images: [] } } })
-const r2 = await buildAgencyRoster('s2', { useAI: true, f: mk2(async (ch) => { const m = {}; for (const it of ch) if (it.i >= 4) m[it.i] = 'رضایی'; return { map: m, raw: '' } }) })
+// فاز ۳۴۴ — AI حالا آگهی‌به‌آگهی پرسیده می‌شود؛ «نه» باید صریح باشد (answered)، نه از روی «دسته‌ای که نام داشت».
+const r2 = await buildAgencyRoster('s2', { useAI: true, f: mk2(async (ch) => { const m = {}; for (const it of ch) if (it.i >= 4) m[it.i] = 'رضایی'; return { map: m, raw: '', answered: ch.map(it => it.i) } }) })
 ok('AI روشن: نامِ qwen («رضایی» ۴) می‌آید', r2.advisors.some(a => a.name === 'رضایی' && a.tokens.length === 4))
 // فاز ۳۴۱ — AI همهٔ دسته را خواند و برای idx 0-3 گفت «بی‌امضا» → حدسِ ماشین («نقی») دیگر جای «نه»ِ AI را نمی‌گیرد.
 ok('AI روشن: «نه»ِ AI نهایی است — حدسِ heuristic جای خالیِ AI را پر نمی‌کند', !r2.advisors.some(a => a.name === 'نقی') && r2.unnamed.tokens.length === 4)
@@ -60,7 +61,7 @@ ok('کارشناس فروش: مرادی (برچسبِ نقش) هنوز نام ا
 // ── ۶: نامِ خالیِ کش‌شدهٔ قدیمی (ممکن است تایم‌اوت بوده) دوباره پرسیده می‌شود؛ خالیِ aiv=2 نه ──
 saveAdminData({ ...base, aiEnabled: true, aiAreas: { roster: true } })
 const asked = []
-const cached = Object.fromEntries(tokens.map((t, i) => [t, { title: 'آپارتمان ' + t, desc: 'نوساز', name: '', ...(i < 4 ? { aiv: 3 } : {}) }]))
+const cached = Object.fromEntries(tokens.map((t, i) => [t, { title: 'آپارتمان ' + t, desc: 'نوساز', name: '', ...(i < 4 ? { aiv: AI_PROMPT_V } : {}) }]))
 await buildAgencyRoster('s6', { useAI: true, cached, f: mkF(async (ch) => { asked.push(...ch.map(it => it.i)); return { map: {}, raw: '[]', answered: ch.map(it => it.i) } }) })
 ok('جوابِ بی‌نسخه دوباره پرسیده شد، جوابِ نسخهٔ فعلی نه', asked.sort().join(',') === '4,5,6,7')
 

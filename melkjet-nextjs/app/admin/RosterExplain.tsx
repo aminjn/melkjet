@@ -1,0 +1,124 @@
+'use client'
+import { useState } from 'react'
+
+// فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۸–۳۵۲) — ابزارِ «دیدن و سنجیدن» برای مالک در پنلِ رُستر:
+//   • NameStatsLine: آمارِ آخرین سینک — AI روشن بود؟ با کدام مدل؟ هر نام از کجا آمد؟ + شاخص‌های قرمز
+//   • SrcBadge: منبعِ تصمیمِ هر مشاور (AI / امضا / ماشین / چسبیده)
+//   • UnnamedExplain: «🔍 چرا بی‌نام؟» — همان متنی که به AI رفته، جوابِ AI، حدسِ ماشین، علت، و «✅ این نام است»
+const fa = (n: number) => Number(n || 0).toLocaleString('fa-IR')
+const chip: React.CSSProperties = { fontSize: 11, padding: '2px 9px', borderRadius: 999, fontWeight: 700, whiteSpace: 'nowrap' }
+const RED: React.CSSProperties = { ...chip, background: 'rgba(231,103,74,.14)', color: '#e7674a', fontWeight: 800 }
+
+export interface NameStatsLite {
+  aiOn: boolean; model?: string; rows: number; aiAnswered: number; aiNamed: number; aiRejected: number
+  byAI: number; bySig: number; byMachine: number; byClaim: number; unnamed: number
+  skippedSig?: number; failedBatches: number; gaveUp: boolean; budgetHit: boolean; metaText?: number; textMissing?: number; unnamedSigLike?: number
+}
+
+export function NameStatsLine({ st }: { st?: NameStatsLite }) {
+  if (!st) return null
+  const pending = st.rows - st.aiAnswered - (st.skippedSig || 0)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6, fontSize: 11.5 }}>
+      {st.aiOn
+        ? <span style={{ ...chip, background: 'rgba(95,217,138,.12)', color: '#5fd98a' }} title="مدلِ RosterAgent یا مدلِ محتوا/چت">🤖 AI روشن{st.model ? ` · ${st.model}` : ''} — خواند {fa(st.aiAnswered)}/{fa(st.rows)}</span>
+        : <span style={RED} title="پنل → API و مدل‌های AI → مدلِ RosterAgent + روشن‌کردنِ بخشِ روستر">⚠ AI خاموش — نام‌ها را فقط قاعده/ماشین داد</span>}
+      {!!st.skippedSig && <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--muted)' }} title="امضای صریح با قاعده حل شد و به AI نرفت">✍ {fa(st.skippedSig)} امضای قطعی</span>}
+      <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--muted)' }} title="منبعِ نامِ آگهی‌های نام‌دار">
+        منبع: AI {fa(st.byAI)} · امضا {fa(st.bySig)} · ماشین {fa(st.byMachine)}{st.byClaim ? ` · چسبیده ${fa(st.byClaim)}` : ''}
+      </span>
+      {st.aiRejected > 0 && <span style={{ ...chip, background: 'rgba(231,161,74,.12)', color: '#e7a14a' }} title="نامِ AI که در متن/موضعِ امضا نبود">✗ {fa(st.aiRejected)} نامِ AI رد شد</span>}
+      {st.aiOn && pending > 0 && (st.budgetHit || st.gaveUp) && <span style={RED}>⏳ {fa(pending)} آگهی هنوز به AI نرسید{st.gaveUp ? ' (AI پشتِ‌سرِهم جواب نداد)' : ' (سقفِ زمان)'} — سینکِ بعد</span>}
+      {!!st.textMissing && <span style={RED} title="دیوار جواب نداد/کند بود؛ سینکِ بعد دوباره می‌خواند">⚠ متنِ {fa(st.textMissing)} آگهی خوانده نشد</span>}
+      {!!st.unnamedSigLike && <span style={RED} title="آگهیِ بی‌نامی که خطِ امضا دارد — احتمالاً نامی از دست رفته؛ «چرا بی‌نام؟» را ببین">⚠ {fa(st.unnamedSigLike)} آگهیِ بی‌نام خطِ امضا دارند</span>}
+      {!!st.metaText && <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--faint)' }} title="متنِ این آگهی‌ها فقط تاریخِ انتشار/نردبانِ دیوار بود">⛔ {fa(st.metaText)} متن = تاریخِ انتشار</span>}
+    </div>
+  )
+}
+
+export function SrcBadge({ src }: { src?: { ai: number; sig: number; machine: number; claim: number } }) {
+  if (!src) return null
+  const parts: [string, number, string][] = [['🤖 AI', src.ai, '#5fd98a'], ['✍ امضا', src.sig, '#60a5fa'], ['⚙ ماشین', src.machine, '#e7a14a'], ['🔗 چسبیده', src.claim, 'var(--muted)']]
+  const shown = parts.filter(p => p[1] > 0)
+  if (!shown.length) return null
+  return (
+    <span style={{ display: 'inline-flex', gap: 4 }} title="چه کسی این نام را داد (تعدادِ آگهی)">
+      {shown.map(([l, n, c]) => <span key={l} style={{ ...chip, fontSize: 10.5, background: 'var(--bg)', color: c, border: '1px solid var(--line2)' }}>{l} {fa(n)}</span>)}
+    </span>
+  )
+}
+
+interface ExRow {
+  token: string; title: string; text: string; ai: string; aiAsked: boolean; aiRejected: boolean
+  machine: string; signature: boolean; reason: string; sigLine?: string; oldText?: boolean; metaText?: boolean; noText?: boolean
+}
+
+export function UnnamedExplain({ id }: { id: string }) {
+  const [rows, setRows] = useState<ExRow[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [openTok, setOpenTok] = useState('')
+  const [msg, setMsg] = useState('')
+  const load = async () => {
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch(`/api/admin/agency-roster?explain=${encodeURIComponent(id)}`, { cache: 'no-store' })
+      const j = await r.json()
+      if (!j.ok) setErr(j.error || 'خطا'); else setRows(j.rows || [])
+    } catch (e: any) { setErr(String(e?.message || e)) }
+    setBusy(false)
+  }
+  // «✅ این نام است» → فهرستِ سفید (سراسری؛ نقش/لقب را سرور خودش جدا می‌کند — «کارشناس خانم X» ⇒ «X»).
+  const whitelist = async (guess: string) => {
+    const name = (window.prompt('نامِ مشاور (فقط نام — بدونِ «کارشناس/خانم/آقای»):', guess) || '').trim()
+    if (!name) return
+    try {
+      const cur = await (await fetch('/api/admin/roster-name-rules', { cache: 'no-store' })).json()
+      const rules = cur?.rules || { blacklist: [], whitelist: [] }
+      const r = await fetch('/api/admin/roster-name-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blacklist: rules.blacklist, whitelist: [...rules.whitelist, name] }) })
+      const j = await r.json()
+      const saved = (j?.rules?.whitelist || []).slice(-1)[0]
+      setMsg(j.ok ? `✅ «${saved || name}» به فهرستِ سفید رفت — در سینکِ بعدیِ این آژانس اعمال می‌شود` : (j.error || 'خطا'))
+    } catch (e: any) { setMsg(String(e?.message || e)) }
+  }
+  if (!rows) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <button onClick={load} disabled={busy} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '5px 10px', color: 'var(--gold)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>{busy ? '…' : '🔍 چرا بی‌نام؟'}</button>
+      {err && <span style={{ fontSize: 11.5, color: '#e06666' }}>{err}</span>}
+    </div>
+  )
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 12.5 }}>🔍 چرا بی‌نام؟</b>
+        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(rows.length)} آگهی (آن‌ها که «خطِ امضا» دارند اول)</span>
+        <button onClick={() => setRows(null)} style={{ marginInlineStart: 'auto', background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>بستن</button>
+      </div>
+      {msg && <div style={{ fontSize: 12, color: 'var(--gold)' }}>{msg}</div>}
+      {!rows.length && <div style={{ fontSize: 12, color: 'var(--faint)' }}>آگهیِ بی‌نامی نیست.</div>}
+      {rows.map(r => (
+        <div key={r.token} style={{ border: `1px solid ${r.sigLine ? 'rgba(231,103,74,.45)' : 'var(--line2)'}`, borderRadius: 10, padding: '8px 10px', background: 'var(--bg)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12 }}>
+            <a href={`https://divar.ir/v/${r.token}`} target="_blank" rel="noreferrer" dir="ltr" style={{ color: 'var(--gold)', fontSize: 11.5 }}>{r.token} ↗</a>
+            <span style={{ color: 'var(--text)', fontWeight: 700, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }}>{r.title}</span>
+            {r.metaText && <span style={RED}>⛔ متن = تاریخِ انتشار</span>}
+            {r.noText && <span style={RED}>⚠ متن خوانده نشده</span>}
+            {r.oldText && <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--faint)' }} title="با خوانشِ قدیمیِ دیوار ذخیره شده — در سینک‌های بعد تازه می‌شود">خوانشِ قدیمی</span>}
+            {r.sigLine && <span style={RED} title={r.sigLine}>⚠ خطِ امضا دارد</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 5, fontSize: 11.5, color: 'var(--muted)' }}>
+            <span>AI: {r.ai ? <b style={{ color: r.aiRejected ? '#e7674a' : '#5fd98a' }}>«{r.ai}»{r.aiRejected ? ' (رد شد)' : ''}</b> : r.aiAsked ? 'بی‌امضا' : <span style={{ color: 'var(--faint)' }}>نپرسیده</span>}</span>
+            <span>ماشین: {r.machine ? <b style={{ color: 'var(--text)' }}>«{r.machine}»</b> : '—'}{r.signature ? ' (امضای صریح)' : ''}</span>
+          </div>
+          {r.sigLine && <div style={{ marginTop: 4, fontSize: 11.5, color: '#e7674a' }}>خطِ امضا: «{r.sigLine}»</div>}
+          <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--text)', lineHeight: 1.8 }}>علت: {r.reason}</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+            {!!r.text && <button onClick={() => setOpenTok(openTok === r.token ? '' : r.token)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{openTok === r.token ? 'بستنِ متن' : 'متنی که به AI رفت'}</button>}
+            {!r.metaText && !r.noText && <button onClick={() => whitelist(r.ai || r.machine)} style={{ background: 'transparent', border: '1px solid rgba(95,217,138,.45)', borderRadius: 8, padding: '3px 9px', color: '#5fd98a', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✅ این نام است</button>}
+          </div>
+          {openTok === r.token && <pre style={{ marginTop: 6, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12, lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px', maxHeight: 280, overflow: 'auto', direction: 'rtl' }}>{r.text}</pre>}
+        </div>
+      ))}
+    </div>
+  )
+}

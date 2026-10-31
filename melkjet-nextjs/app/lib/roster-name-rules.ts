@@ -11,7 +11,7 @@
 // مدل (roster-ner → agency-name-lexicon) هرگز به db/این‌ماژول نمی‌رسد — ریشهٔ باگِ قبلی بسته شد.
 import { kvGet, kvSet, pgEnabled } from './db'
 import { readJsonCached, writeJsonCached } from './json-file'
-import { keyOf, setNameRuleCache } from './agency-name-lexicon'
+import { keyOf, setNameRuleCache, sanitizeWhitelistName } from './agency-name-lexicon'
 import { join } from 'path'
 
 const KV = 'roster_name_rules'
@@ -20,16 +20,18 @@ export interface NameRules { blacklist: string[]; whitelist: string[] }
 const EMPTY: NameRules = { blacklist: [], whitelist: [] }
 // یکتا، trim، بدونِ خالی، سقفِ منطقی.
 const clean = (a?: string[]): string[] => [...new Set((a || []).map(s => String(s || '').trim()).filter(Boolean))].slice(0, 5000)
+// فاز ۳۴۴ — فهرستِ سفید فقط «نام»: نقش/لقب («کارشناس خانم …») حذف می‌شود؛ هم هنگامِ ذخیره، هم برای ورودی‌های قدیمیِ ذخیره‌شده.
+const cleanWhite = (a?: string[]): string[] => clean((a || []).map(sanitizeWhitelistName))
 
 export async function getNameRules(): Promise<NameRules> {
   try {
     const r = pgEnabled() ? await kvGet<NameRules>(KV, EMPTY) : readJsonCached<NameRules>(FILE, EMPTY)
-    return { blacklist: clean(r?.blacklist), whitelist: clean(r?.whitelist) }
+    return { blacklist: clean(r?.blacklist), whitelist: cleanWhite(r?.whitelist) }
   } catch { return { blacklist: [], whitelist: [] } }
 }
 
 export async function setNameRules(r: NameRules): Promise<NameRules> {
-  const v: NameRules = { blacklist: clean(r?.blacklist), whitelist: clean(r?.whitelist) }
+  const v: NameRules = { blacklist: clean(r?.blacklist), whitelist: cleanWhite(r?.whitelist) }
   if (pgEnabled()) await kvSet(KV, v); else writeJsonCached(FILE, v)
   applyCache(v)   // اثرِ فوری روی همین پروسه؛ بقیهٔ اینستنس‌ها در loadNameRulesِ سینکِ بعدی می‌بینند
   return v

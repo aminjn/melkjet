@@ -3,7 +3,8 @@ import { aiFor, resolveAgent, aiActive } from './gapgpt'
 import { nameProbSync, NAME_THRESHOLD, corpusCount } from './roster-name-model'
 import { bestName, hasSparse as hasSparseModel } from './roster-ner'
 import { knownNames, learnName, pruneLearned } from './agency-roster-ml'
-import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord, nameRuleWhitelistRaw, FIRST_NAMES, hardBanTokens, hitsBan } from './agency-name-lexicon'
+import { keyOf, deEmoji, addressTokens, contextNoiseTokens, validName, strictName, bareNameLine, TITLES, isNoiseWord, nameRuleWhitelistRaw, FIRST_NAMES, hardBanTokens, hitsBan, normFa, personLike } from './agency-name-lexicon'
+import { isDivarMetaText } from './divar-text'
 import { loadNameRules } from './roster-name-rules'
 const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
@@ -72,10 +73,84 @@ const RE_SELF = /([ء-ی]{2,15}(?:\s+[ء-ی]{2,15})?)\s+(?:هستم|هستیم|�
 // آیا نامِ استخراج‌شده از «سیگنالِ قطعیِ شخص» آمده؟ (عنوان «خانم/آقای X»، برچسبِ «نقش: X»،
 // معرفیِ «X هستم»، یا گازِتیرِ trust — p≥۰.۹۷). چنین نامی حتی روی «یک» آگهی مشاورِ واقعی است و نباید
 // با بانِ آدرس (مثلِ «منطقه خانم اسدی») یا گاردِ MIN_FILES بی‌نام شود. همان trustِ مسیرِ مدلِ extractSignature.
+// فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۹–۳۵۰) — امضای قطعی = فهرستِ سفید، «لقب + نام» (در «هر» خط)، «نقش: نام»،
+// «نام هستم»، و خطی که «فقط عبارتِ نقش + یک واژه» است. چنین آگهی‌ای با قاعده حل شده و اصلاً به AI نمی‌رود؛
+// «نه»ِ AI هم آن را حذف نمی‌کند. (حدسِ ضعیفِ «منطقه X» عمداً بیرون است: در ملکی اغلب نامِ محله است.)
 export function signatureTrusted(title: string, desc: string, agencyName = ''): boolean {
-  const ner = bestName(title, desc)
+  if (whitelistHits(normFa(`${title || ''}\n${desc || ''}`)).length) return true
+  const ner = bestName(normFa(title), normFa(desc))
   if (!ner || !ner.trust) return false
-  return !!validName(ner.name, agencyName, undefined, { trustPerson: true })
+  const v = validName(ner.name, agencyName, undefined, { trustPerson: true })
+  return !!v && !hitsBan(v, hardBanTokens(`${title || ''}\n${desc || ''}`))
+}
+// نام‌های فهرستِ سفیدِ مدیریتی که «دنبالهٔ واژه‌به‌واژه»شان در متن آمده.
+function whitelistHits(raw: string): string[] {
+  const _wl = nameRuleWhitelistRaw()
+  if (!_wl.length) return []
+  const words = raw.split(/[^ء-یA-Za-z]+/).filter(Boolean).map(keyOf)
+  const hits: string[] = []
+  for (const wname of _wl) {
+    const wk = wname.split(/\s+/).filter(Boolean).map(keyOf).filter(Boolean)
+    if (!wk.length) continue
+    for (let i = 0; i + wk.length <= words.length; i++) {
+      if (wk.every((k, j) => k === words[i + j])) { hits.push(wname.replace(/\s+/g, ' ').trim()); break }
+    }
+  }
+  return [...new Set(hits)]
+}
+
+// ── فاز ۳۴۴ (پورت از خودروجت، فازهای ۳۳۹/۳۴۵ج/۳۴۷/۳۴۸/۳۵۲) — دروازهٔ نامِ AI: «در متن» و «در موضعِ امضا» ──
+// ملک‌جت تا امروز نامِ AI را بی‌شرط می‌پذیرفت («شمس» از عنوانِ «۱۶۵ متر / شمس آباد» همین‌طور آمد). حالا نامِ AI
+// پذیرفته است اگر (۱) «واژه‌به‌واژه» در متن آمده باشد (نه چسباندنِ دو واژه، نه املای ساختگی) و (۲) یا با حدسِ
+// ماشینِ همین آگهی یکی باشد (دو منبعِ مستقل)، یا در «موضعِ امضا» باشد: پس از نقش/لقب/تماس، کنارِ شماره، تنها روی
+// خط، پیش از «هستم/در خدمت»، یا دوواژه‌ای با شکلِ نامِ آدم. شکلِ فامیلی شرط نیست («ستوده/شاکر/بیات» رد می‌شدند).
+const SIG_KEYS = new Set(['مشاور', 'کارشناس', 'فروشنده', 'تماس', 'هماهنگی', 'راهنمایی', 'آقای', 'آقا', 'اقای', 'اقا', 'خانم',
+  'جناب', 'سرکار', 'مهندس', 'دکتر', 'حاج', 'حاجی', 'امضا', 'احترام', 'تشکر', 'سپاس', 'ارادتمند', 'مدیر', 'مدیریت', 'ارتباط', 'پاسخگو', 'پاسخگویی',
+  'مسئول', 'مشاورین', 'مشاوران', 'کارشناسان', 'نماینده', 'باتشکر', 'بااحترام', 'مشاورفروش', 'کارشناسفروش'].map(keyOf))
+const SELF_NEXT = new Set(['هستم', 'هستیم', 'درخدمتم', 'درخدمتتونم', 'درخدمتتان'].map(keyOf))
+const SURNAME_TAIL = new Set(['زاده', 'پور', 'نژاد', 'فر', 'نیا', 'راد', 'مهر', 'منش', 'کیا', 'وند'].map(keyOf))
+const isPhoneTok = (t: string) => t.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/\D/g, '').length >= 8
+// واژه‌بندی: جداکننده «هر نویسهٔ غیرِ حرف/رقم» (نیم‌فاصله جزوِ واژه). «⭕️____کارشناس خانم اسماعیلی____⭕️» زیرخط را
+// به واژه می‌چسباند («اسماعیلی____») و نامِ درستِ AI «در متن نیست» حساب می‌شد (خودروجت فاز ۳۵۲).
+function textLines(text: string): string[][] {
+  return deEmoji(normFa(String(text || ''))).split(/[\n\r]+/)
+    .map(l => l.split(/[^\p{L}\p{N}\p{M}\u200c]+/u).filter(Boolean).map(w => keyOf(w).toLowerCase()).filter(Boolean))
+    .filter(l => l.length)
+}
+// محلِ رخدادهای نام (به‌صورتِ واژه‌های کامل) در خطوطِ متن.
+function nameOccurrences(nameKeys: string[], lines: string[][]): { line: string[]; i: number; n: number }[] {
+  const out: { line: string[]; i: number; n: number }[] = []
+  for (const line of lines) {
+    for (let i = 0; i < line.length; i++) {
+      if (nameKeys.every((k, j) => line[i + j] === k)) { out.push({ line, i, n: nameKeys.length }); continue }
+      // «حسن زاده» در متن ↔ «حسن‌زاده/حسنزاده» از AI
+      if (nameKeys.length === 1 && i + 1 < line.length && SURNAME_TAIL.has(line[i + 1]) && line[i] + line[i + 1] === nameKeys[0]) out.push({ line, i, n: 2 })
+      // «حسن‌زاده» در متن (یک واژه پس از حذفِ نیم‌فاصله) ↔ «حسن زاده» از AI
+      if (nameKeys.length === 2 && line[i] === nameKeys[0] + nameKeys[1]) out.push({ line, i, n: 1 })
+    }
+  }
+  return out
+}
+export function inSignaturePosition(o: { line: string[]; i: number; n: number }): boolean {
+  const { line, i, n } = o
+  if (line.length === n) return true                                          // تنها روی خطِ خودش
+  // «± لقب»: واژهٔ دیگرِ خطِ دوواژه‌ای باید لقب/نقش/شماره باشد («آقای رضایی»، «رضایی ۰۹۱۲…») — نه «کلید هوشمند».
+  if (line.length === n + 1) { const other = i === 0 ? line[n] : line[0]; if (SIG_KEYS.has(other) || isPhoneTok(other)) return true }
+  for (let j = Math.max(0, i - 3); j < i; j++) if (SIG_KEYS.has(line[j])) return true
+  if (i + n < line.length && SELF_NEXT.has(line[i + n])) return true          // «… هستم»
+  if (i + n + 1 < line.length && line[i + n] === 'در' && line[i + n + 1].startsWith('خدمت')) return true   // «رسولی در خدمتِ شما»
+  for (const j of [i - 2, i - 1, i + n, i + n + 1]) if (j >= 0 && j < line.length && isPhoneTok(line[j])) return true
+  return false
+}
+export function gateAiName(ai: string, text: string, candKeys: Set<string>): string {
+  if (!ai) return ''
+  const nameKeys = ai.split(/\s+/).filter(Boolean).map(w => keyOf(w).toLowerCase())
+  const occ = nameOccurrences(nameKeys, textLines(text))
+  if (!occ.length) return ''                                  // نه واژه‌به‌واژه در متن → ساختگی/چسبانده
+  if (candKeys.has(keyOf(ai))) return ai                      // توافقِ دو منبعِ مستقل
+  if (occ.some(inSignaturePosition)) return ai                // در موضعِ امضا — هر شکلی داشته باشد
+  if (nameKeys.length >= 2 && personLike(ai)) return ai       // «امیر رضایی» وسطِ جمله: شکلِ کاملِ نام
+  return ''                                                   // تک‌واژهٔ وسطِ جمله = واژهٔ آگهی، نه نام
 }
 
 // خطی که پس از حذفِ اموجی/القاب «دقیقاً دو واژه» است و واژهٔ اول نامِ کوچکِ شناخته‌شده —
@@ -90,7 +165,20 @@ function firstNameFullLine(raw: string, agencyName: string, banned: Set<string>)
   return ''
 }
 
+// فاز ۳۴۴ (پورت از خودروجت، فاز ۳۵۲) — امضای مشاور در «متنِ آگهی» است؛ عنوانِ دیوار متراژ/محله/قیمت است. نامی که
+// فقط در عنوان آمده پذیرفته نیست، مگر در خودِ عنوان در موضعِ امضا باشد یا در فهرستِ سفید — روی «همهٔ» مسیرها.
 export function extractSignature(title: string, desc: string, agencyName = ''): string[] {
+  const out = extractSignatureAny(title, desc, agencyName)
+  if (!out.length) return out
+  const dLines = textLines(desc || ''), tLines = textLines(title || '')
+  const wl = new Set(whitelistHits(collapseSpacedLatin(normFa(`${title || ''}\n${desc || ''}`))))
+  return out.filter(n => {
+    if (wl.has(n)) return true
+    const keys = n.split(/\s+/).filter(Boolean).map(w => keyOf(w).toLowerCase())
+    return nameOccurrences(keys, dLines).length > 0 || nameOccurrences(keys, tLines).some(inSignaturePosition)
+  })
+}
+function extractSignatureAny(title: string, desc: string, agencyName = ''): string[] {
   // مسیرِ اصلی: برچسب‌زنِ توکن (roster-ner). روی دادهٔ کنارگذاشته ۸۷.۹٪ درست بود.
   // الگوهای زیر فقط وقتی اجرا می‌شوند که مدل بارگذاری نشده باشد — پس در تولید
   // تصمیم با مدل است، نه با قاعده.
@@ -101,24 +189,16 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   // «فلاحی» از «بین فلاحی ۴۱»، «کسری» از «کسری بودجه»، و «امین» از «مشاور امینِ شما» (صفت، نه نام)
   // هرگز اسم نمی‌شوند. فاز ۳۲۱ — این banned حالا به مسیرِ مدل هم اعمال می‌شود (قبلاً فقط در fallback
   // بود، ولی تولید همیشه مدل‌دار است؛ «مشاور امین شما» ⇒ «امین»ِ جعلی از همین‌جا می‌آمد).
+  // فاز ۳۴۴ — متن پیش از همه‌چیز یکسان می‌شود («هماهنگیِ»/«هماهنگى» ⇒ «هماهنگی»).
+  title = normFa(title || ''); desc = normFa(desc || '')
+  if (isDivarMetaText(desc)) desc = ''   // «انتشار آگهی / آخرین نردبان» متنِ آگهی نیست
   const raw = collapseSpacedLatin(`${title || ''}\n${desc || ''}`)
 
   // ── وایت‌لیستِ مدیریتی: قاطع و مقدم بر همه‌چیز (حتی سکوتِ مدل) ──
   // ادمین صریحاً گفته این نام است؛ پس اگر عینِ نامِ وایت‌لیست (دنبالهٔ واژه‌ها، بی‌حساسیت به
   // فاصله/نیم‌فاصله) در متنِ آگهی بیاید، همان‌جا قطعی برمی‌گردد — پیش از مسیرِ مدل.
-  const _wl = nameRuleWhitelistRaw()
-  if (_wl.length) {
-    const words = raw.split(/[^ء-یA-Za-z]+/).filter(Boolean).map(keyOf)
-    const hits: string[] = []
-    for (const wname of _wl) {
-      const wk = wname.split(/\s+/).filter(Boolean).map(keyOf).filter(Boolean)
-      if (!wk.length) continue
-      for (let i = 0; i + wk.length <= words.length; i++) {
-        if (wk.every((k, j) => k === words[i + j])) { hits.push(wname.replace(/\s+/g, ' ').trim()); break }
-      }
-    }
-    if (hits.length) return [...new Set(hits)]
-  }
+  const wlHits = whitelistHits(raw)
+  if (wlHits.length) return wlHits
 
   const banned = new Set([...addressTokens(raw), ...contextNoiseTokens(raw)])
   // هر واژه‌ای که بلافاصله پیش از «شما» بنشیند در جایگاهِ صفت است، نه نام: «امینِ شما»، «همراهِ شما».
@@ -151,6 +231,12 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
     if (ner!.p < 0.97) {
       const bp = nameProbSync(v)
       if (bp !== null && bp < NAME_THRESHOLD) return []
+    }
+    // فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۷) — حدسِ «تک‌کلمه‌ایِ» مدلِ آماری فقط در موضعِ امضا نام است — همان دروازهٔ
+    // نامِ AI. «هوشمند» در «کلید هوشمند»، «تعاونی» در «سند تعاونی» واژهٔ آگهی‌اند، نه امضا.
+    if (ner!.src === 'model' && !ner!.trust && !v.includes(' ')) {
+      const occ = nameOccurrences([keyOf(v).toLowerCase()], textLines(raw))
+      if (!occ.some(inSignaturePosition)) return []
     }
     return [v]
   }
@@ -257,40 +343,46 @@ export function extractSignature(title: string, desc: string, agencyName = ''): 
   return full.sort((a, b) => (scores.get(b) ?? 0) - (scores.get(a) ?? 0))
 }
 
-// (اختیاری) پالایشِ AI: نامِ کانونیِ مشاورِ هر آگهی را برمی‌گرداند (فارسی؛ خالی اگر امضا نبود).
-// دسته‌ای صدا زده می‌شود تا هزینهٔ AI کم بماند. اگر مدل نبود/خطا داد → [] (تکیه بر heuristic).
+// پالایشِ AI: نامِ مشاورِ هر آگهی را برمی‌گرداند (خالی اگر امضا نبود). اگر مدل نبود/خطا داد → map خالی.
 // (exported برای اسکریپتِ کیس‌استادی scripts/roster-casestudy.mjs — فاز ۲۹۷ش)
+// فاز ۳۴۴ — مدلِ نام‌گذاریِ روستر: اول «RosterAgent» (اختصاصی، از پنلِ «API و مدل‌های AI»)، بعد مدلِ محتوا/چت.
+export const ROSTER_AGENT: [string, 'text'][] = [['roster', 'text'], ['content', 'text'], ['chat', 'text']]
 // نسخهٔ پرامپتِ نام‌گذاری؛ با هر تغییرِ معنادارِ پرامپت بالا برود تا جواب‌های کش‌شدهٔ قدیمی دوباره پرسیده شوند.
-// ۲ = حکمِ واقعیِ AI (فاز ۳۴۱)؛ ۳ = قواعدِ عنوان/محله/مشخصه (فاز ۳۴۳).
-export const AI_PROMPT_V = 3
-export async function aiCanonical(items: { i: number; title: string; desc: string }[]): Promise<{ map: Record<number, string>; raw: string; answered?: number[] }> {
-  const { model, provider } = resolveAgent([['content', 'text'], ['chat', 'text']])
+// ۲ = حکمِ واقعیِ AI (فاز ۳۴۱)؛ ۳ = قواعدِ عنوان/محله/مشخصه (فاز ۳۴۳)؛ ۴ = پرامپتِ «بازخوانی»، تک‌آگهی، متنِ ویجت (فاز ۳۴۴).
+export const AI_PROMPT_V = 4
+export async function aiCanonical(items: { i: number; title: string; desc: string }[], agencyName = ''): Promise<{ map: Record<number, string>; raw: string; answered?: number[] }> {
+  const { model, provider } = resolveAgent(ROSTER_AGENT)
   if (!model) return { map: {}, raw: '(هیچ مدلی تنظیم نشده)', answered: [] }
   // اموجی/نماد را به فاصله تبدیل می‌کنیم تا اسمِ چسبیده به اموجی («♀️محمدی») برای AI هم خوانا شود.
-  const clip = (s: string) => { const d = deEmoji(s || '').replace(/\s+/g, ' ').trim(); return d.length > 1200 ? d.slice(0, 300) + ' … ' + d.slice(-800) : d }
+  // نام اغلب در «ابتدای» معرفی یا «انتهای» آگهی است؛ گاهی وسط (پیش از فهرستِ امکانات/آدرس) — برشِ بزرگ‌تر.
+  const clip = (s: string) => { const d = deEmoji(s || '').replace(/\s+/g, ' ').trim(); return d.length > 1800 ? d.slice(0, 500) + ' … ' + d.slice(-1200) : d }
   const list = items.map(it => `${it.i}) ${deEmoji(it.title || '').slice(0, 80)} :: ${clip(it.desc)}`).join('\n')
-  const sys = 'تو نامِ «فروشنده/مشاور/کارشناسِ فروشِ» هر آگهیِ ملک را از متن درمی‌آوری تا آگهی‌های یک آژانسِ املاک به تفکیکِ مشاور جدا شوند. ' +
-    'نکتهٔ مهم: نامِ فروشنده تقریباً همیشه در «انتهای» متن است، بعد از عبارت‌هایی مثلِ «کارشناس فروش»، «مشاور فروش»، «جهت راهنمایی»، «جهت هماهنگی»، «با تشکر». مثال: «کارشناس فروش جهت راهنمایی محمدی» → نام = «محمدی». «مشاور فروش: خانم کامرانی» → «کامرانی». ' +
-    'قواعد: (۱) فقط نامِ واقعیِ شخص (فارسی، مثل «علی رضایی» یا «محمدی» یا «مهدی») یا امضای برند (مثل «SHAYGAN»). ' +
-    '(۲) هرگز نوعِ ملک/واژهٔ ملکی را برنگردان (آپارتمان، ویلا، پنت‌هاوس، سوییت، کلنگی، متراژ، نوساز و…). ' +
-    '(۳) نامِ خودِ آژانس (مثلِ «املاک سعادت») اسمِ مشاور نیست → خالی. ' +
-    '(۴) القاب را حذف کن: «خانم رضایی»→«رضایی». «خانم/آقا» به‌تنهایی = خالی. ' +
-    '(۵) عبارتِ تبلیغاتی یا قید/صفت («فروش ویژه»، «تضمین بهترین خرید»، «کارشناسی رایگان»، «جهت راهنمایی»، «همین حالا»، «فقط»، «واقعی»، «عکس‌ها تزئینی»، «قطعی»، «مستاجر»، «مالک»، «موجود»، «رزرو») هرگز اسم نیست → خالی. ' +
-    '(۶) اگر اسمِ واقعیِ فروشنده در متن نبود، خالی بگذار (حدس نزن). فقط چیزی را برگردان که مطمئنی نامِ یک آدم است؛ کوچک‌ترین تردید = خالی. ' +
-    // فاز ۲۷۵ — بزرگ‌ترین منبعِ اسمِ جعلی: نامِ کوچه/خیابان را اسمِ آدم می‌گرفت («بین فلاحی ۴۱ و ۴۳» → «فلاحی»).
-    '(۷) نامِ معبر/محله هرگز اسمِ مشاور نیست: هر کلمه‌ای که بعدِ «بین/خیابان/کوچه/بلوار/نبش/میدان/شهرک/فاز/منطقه/پلاک» آمده آدرس است، نه آدم → خالی. مثال: «بین فلاحی ۴۱ و ۴۳» ⇒ «فلاحی» آدرس است. ' +
-    '(۸) واژهٔ ملکی/موقعیتی مثلِ «لوکیشن، منطقه، دوخواب، قابل، آزاد، ایرانی، عزیزان، هماهنگی» اسم نیست → خالی. ' +
-    // فاز ۳۳۶و — دادهٔ زنده: qwen نامِ «محله» و «تشکرِ پایانی» را مشاور می‌گرفت («سعادت آباد»⇒«سعادت» ۱۵فایل، «با سپاس»⇒«سپاس» ۱۶فایل).
-    '(۹) نامِ محله/منطقهٔ تهران هرگز اسمِ مشاور نیست (حتی بدونِ کلیدواژهٔ آدرس): سعادت‌آباد، جنت‌آباد، شهرک‌غرب، پونک، نارمک، تهرانپارس، ونک، نیاوران، پاسداران، گیشا، صادقیه، اکباتان، پیروزی، رسالت، مجیدیه، شمس‌آباد، یوسف‌آباد، امیرآباد، دولت‌آباد و مانندِ این‌ها → خالی. مثال: «سعادت آباد» ⇒ «سعادت» نه، خالی. ' +
-    '(۱۰) واژهٔ تشکر/خداحافظیِ پایانِ آگهی اسم نیست: «با سپاس»، «سپاسگزارم»، «با تشکر»، «ارادتمند»، «درود»، «خداحافظ» → خالی. مثال: «با سپاس» ⇒ «سپاس» نه، خالی. ' +
-    // فاز ۳۴۳ — نمونهٔ زنده: «۱۶۵ متر / شمس آباد / فقط امروز» ⇒ AI «شمس» را مشاور گرفت.
-    '(۱۱) عنوانِ آگهی (پیش از «::») فقط برای فهمِ موضوع است و تقریباً هرگز نامِ مشاور ندارد؛ نام را فقط از متنِ توضیحات (پس از «::») بردار. ' +
-    '(۱۲) هر واژه‌ای که تکه‌ای از نامِ یک مکان است اسمِ آدم نیست: «X آباد»، «X شهر»، «شهرک X»، «میدان X»، «برج X». مثال: «شمس آباد» ⇒ «شمس» نه؛ «امیر آباد» ⇒ «امیر» نه؛ «یوسف آباد» ⇒ «یوسف» نه. ' +
-    '(۱۳) مقدارِ یک مشخصه اسم نیست: «وضعیت سند: تعاونی»، «سیستم سرمایش: فن کوئل»، «کف: سرامیک» → خالی. ' +
-    'خروجی فقط JSON، بدونِ توضیح: [{"i":<شماره>,"name":"<نام یا خالی>"}]'
+  // فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۹ — «AI ۸۳ آگهی را خواند ولی ۶ نام داد») — پرامپتِ قبلی با «کوچک‌ترین تردید =
+  // خالی» مدل را به «بی‌نام» هل می‌داد، درحالی‌که امضای آژانس‌ها دقیقاً همان متنِ تکراری است («⭕️ کارشناس خانم
+  // ستوده ⭕️» در همهٔ آگهی‌ها). حالا هدف «پیدا کردن» است، با نمونه‌های واقعی؛ و فهرستِ «چه چیزی نام نیست» (ملکی،
+  // محله، مقدارِ مشخصه، تشکر، نامِ آژانس) سرِ جایش است. هر دروغِ مدل را دروازهٔ «در متن + موضعِ امضا» می‌گیرد.
+  const sys = 'تو نامِ «مشاور/کارشناسِ فروش/فروشندهٔ» هر آگهیِ ملک را از متنِ توضیحات درمی‌آوری تا آگهی‌های یک آژانسِ املاک به تفکیکِ مشاور جدا شوند. ' +
+    'هر آگهی را تا آخر بخوان؛ نامِ مشاور معمولاً کنارِ نقش («کارشناس/کارشناس فروش/مشاور/مشاور فروش/فروشنده/جهت هماهنگی/جهت بازدید/تماس با/با تشکر/ارادتمند شما»)، لقب («آقای/خانم/مهندس») یا شمارهٔ تلفن می‌آید — اغلب در انتها، گاهی اولِ متن یا وسطِ آن، و گاهی میانِ اموجی و نماد (⭕️ ✅ 👤 ▪). متنِ امضا در آگهی‌های یک آژانس معمولاً تکراری است؛ در هر آگهی که آمده، نام را برگردان. ' +
+    (agencyName ? `نامِ این آژانس «${deEmoji(agencyName).replace(/\s+/g, ' ').trim().slice(0, 40)}» است؛ آن و هر بخشی از آن اسمِ مشاور نیست. ` : '') +
+    'نمونه‌ها: «⭕️ کارشناس خانم ستوده ⭕️» → «ستوده». «کارشناس فروش جهت راهنمایی محمدی» → «محمدی». «مشاور فروش: خانم کامرانی» → «کامرانی». «جهت بازدید هماهنگی با آقای رادمهر» → «رادمهر». «✅ سالار عباسی ۰۹۱۲…» → «سالار عباسی». «حیدری هستم مشاور شما» → «حیدری». «جهت کسب اطلاعات بیشتر و هماهنگی بازدید تماس بگیرید» (بی‌نام) → خالی. ' +
+    'قواعد: (۱) فقط نامِ واقعیِ یک «آدم» (فارسی، مثلِ «علی رضایی»، «محمدی»، «ستوده») یا امضای برندِ لاتین (مثلِ «SHAYGAN»). ' +
+    '(۲) هرگز نوعِ ملک/واژهٔ ملکی را برنگردان (آپارتمان، ویلا، پنت‌هاوس، سوییت، کلنگی، متراژ، نوساز، لوکیشن، دوخواب، تک‌واحدی…). ' +
+    '(۳) القاب را حذف کن: «خانم رضایی»→«رضایی». «خانم/آقا/مهندس» به‌تنهایی = خالی. ' +
+    '(۴) عبارتِ تبلیغاتی/قید/صفت («فروش ویژه»، «فوری»، «فقط امروز»، «همین حالا»، «قطعی»، «مالک»، «مستاجر»، «موجود»، «رزرو»، «هماهنگی»، «عزیزان») اسم نیست. ' +
+    // فاز ۲۷۵ — نامِ کوچه/خیابان («بین فلاحی ۴۱ و ۴۳» → «فلاحی»).
+    '(۵) نامِ معبر/محله/منطقه اسمِ مشاور نیست: هر واژه پس از «بین/خیابان/کوچه/بلوار/نبش/میدان/شهرک/فاز/منطقه/پلاک» آدرس است؛ و نامِ محله‌ها (سعادت‌آباد، جنت‌آباد، شهرک‌غرب، پونک، نارمک، تهرانپارس، ونک، نیاوران، پاسداران، گیشا، صادقیه، اکباتان، شمس‌آباد، یوسف‌آباد، امیرآباد…) هم. ' +
+    // فاز ۳۴۳ — «۱۶۵ متر / شمس آباد» ⇒ «شمس».
+    '(۶) هر واژه‌ای که تکه‌ای از نامِ یک مکان است اسمِ آدم نیست: «شمس آباد» ⇒ «شمس» نه؛ «امیر آباد» ⇒ «امیر» نه؛ «برج X»/«شهرک X» ⇒ X نه. ' +
+    '(۷) مقدارِ یک مشخصه اسم نیست: «وضعیت سند: تعاونی»، «سیستم سرمایش: فن کوئل»، «کف: سرامیک». ' +
+    // فاز ۳۳۶و — «با سپاس» ⇒ «سپاس».
+    '(۸) واژهٔ تشکر/خداحافظی («با سپاس»، «با تشکر»، «ارادتمند»، «درود») خودش اسم نیست — اسمِ پس از آن را بردار. ' +
+    '(۹) عنوانِ آگهی (پیش از «::») فقط برای فهمِ موضوع است؛ نام را از توضیحات (پس از «::») بردار. اگر هیچ نامِ آدمی در توضیحات نیست، خالی بگذار — از عنوان یا مشخصاتِ ملک اسم نساز. ' +
+    '(۱۰) نام را «دقیقاً با همان املای متن» بنویس؛ حرفی کم یا اضافه نکن. ' +
+    'خروجی فقط JSON برای «همهٔ» شماره‌ها، بدونِ توضیح: [{"i":<شماره>,"name":"<نام یا خالی>"}]'
   const out = await Promise.race([
     chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: list }], { temperature: 0, max_tokens: 1500 }, provider),
-    new Promise<string>(r => setTimeout(() => r('(تایم‌اوت ۳۰ثانیه)'), 30000)),
+    // فاز ۳۴۴ — ۳۰ثانیه برای مدلِ ۲۷B روی آگهیِ بلند کم بود (تایم‌اوت ⇒ عملاً «ماشین» تصمیم می‌گرفت).
+    new Promise<string>(r => setTimeout(() => r('(تایم‌اوت ۶۰ثانیه)'), 60000)),
   ])
   const map: Record<number, string> = {}
   // فاز ۳۴۱ — «answered» = ردیف‌هایی که AI واقعاً درباره‌شان حکم داد (حتی «خالی»). جوابِ خالیِ AI یعنی
@@ -307,13 +399,52 @@ export async function aiCanonical(items: { i: number; title: string; desc: strin
   return { map, raw: out, answered }
 }
 
-export interface RosterAdvisor { key: string; name: string; tokens: string[]; posts: BrandPost[] }
+// فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۸/۳۵۰) — «چه کسی این نام را داد؟» برای هر مشاور: ai = خودِ هوش مصنوعی،
+// sig = امضای صریح با قاعده (خانم/آقای X، «نقش: X»، «X هستم»، فهرستِ سفید)، machine = حدسِ ماشین چون AI این آگهی
+// را نخواند/خاموش بود، claim = آگهیِ بی‌امضایی که به مشاورِ تثبیت‌شدهٔ همین آژانس چسبید.
+export interface NameSrc { ai: number; sig: number; machine: number; claim: number }
+export interface NameStats {
+  aiOn: boolean          // AI برای نام‌گذاریِ روستر روشن بود؟
+  model?: string         // مدلی که نام‌ها را خواند (RosterAgent یا مدلِ محتوا/چت)
+  rows: number           // آگهی‌های بررسی‌شده
+  aiAnswered: number     // آگهی‌هایی که AI واقعاً درباره‌شان حکم داد (نام یا «بی‌امضا»)
+  aiNamed: number        // …که نامِ پذیرفته‌شده دادند
+  aiRejected: number     // نامِ AI که در متن/موضعِ امضا نبود و رد شد
+  byAI: number; bySig: number; byMachine: number; byClaim: number; unnamed: number
+  skippedSig: number     // آگهی‌هایی که امضای قطعی داشتند و به AI نرفتند
+  failedBatches: number  // آگهی‌هایی که AI به آن‌ها پاسخ نداد (تایم‌اوت/JSONِ خراب)
+  gaveUp: boolean        // پس از شکست‌های پیاپی، بقیه بدونِ AI
+  budgetHit: boolean     // سقفِ زمانیِ فازِ AI
+  metaText: number       // آگهی‌هایی که «متن»شان فقط متادیتای انتشارِ دیوار بود
+  textMissing: number    // ⚠ آگهی‌هایی که متنشان پس از ۳ تلاش از دیوار خوانده نشد (throttle/تایم‌اوت) — سینکِ بعد دوباره
+  unnamedSigLike: number // ⚠ آگهیِ بی‌نامی که «خطِ امضا» دارد (نقش/لقب + واژهٔ نام‌مانند) — باید ۰ باشد
+}
+// «خطِ امضا»ی ظاهری: نقش/لقب و پس از آن (تا ۳ واژه) یک واژهٔ غیرِنوفه. معیارِ کیفیتِ پنل: آگهیِ بی‌نامی که چنین
+// خطی دارد، احتمالاً نامی را از دست داده‌ایم.
+const SIGLIKE_KEYS = new Set(['کارشناس', 'مشاور', 'فروشنده', 'آقای', 'آقا', 'اقای', 'اقا', 'خانم', 'جناب', 'سرکار', 'نماینده'].map(keyOf))
+export function signatureLikeLine(text: string): string {
+  for (const line of deEmoji(normFa(text || '')).split(/[\n\r]+/)) {
+    const toks = line.split(/[^ء-ی‌A-Za-z]+/).filter(Boolean)
+    for (let i = 0; i < toks.length; i++) {
+      if (!SIGLIKE_KEYS.has(keyOf(toks[i]))) continue
+      for (let j = i + 1; j < toks.length && j <= i + 3; j++) {
+        const w = toks[j]
+        if (TITLES.has(keyOf(w)) || isNoiseWord(w)) continue
+        if (keyOf(w).length >= 3) return line.trim()
+        break
+      }
+    }
+  }
+  return ''
+}
+export interface RosterAdvisor { key: string; name: string; tokens: string[]; posts: BrandPost[]; src?: NameSrc }
 export interface AgencyRoster {
   ok: boolean; error?: string
   slug: string; agencyName?: string
   total: number; scanned: number
   advisors: RosterAdvisor[]
   unnamed: { tokens: string[]; posts: BrandPost[] }   // بدونِ امضا → به خودِ آژانس
+  nameStats?: NameStats
 }
 
 // ساختِ رُسترِ کامل: همهٔ آگهی‌های آژانس → استخراجِ امضا → خوشه‌بندی.
@@ -321,9 +452,9 @@ export interface AgencyRoster {
 export async function buildAgencyRoster(
   slugOrUrl: string,
   opts: { useAI?: boolean; maxDetails?: number; onProgress?: (done: number, total: number) => void;
-    cached?: Record<string, { title: string; desc: string; name?: string; aiv?: number }>;   // توکن→متن + نامِ AI (ازسرگیری)
+    cached?: Record<string, { title: string; desc: string; name?: string; aiv?: number; dv?: number }>;   // توکن→متن + نامِ AI (ازسرگیری؛ dv=4: متن از ویجتِ توضیحات)
     pinnedKeys?: string[];   // فاز ۲۷۹ — کلیدِ مشاورهایی که حسابِ واقعی دارند: در ادغام همیشه میزبان می‌مانند
-    onRow?: (token: string, r: { title: string; desc: string; name?: string; aiv?: number }) => void;
+    onRow?: (token: string, r: { title: string; desc: string; name?: string; aiv?: number; dv?: number }) => void;
     onCluster?: (done: number, total: number) => void;   // فاز ۱۹۴ — پیشرفتِ فازِ AI هم دیده شود
     f?: { profileTokens?: typeof fetchDivarProfileTokens; post?: typeof fetchDivarPost; ai?: typeof aiCanonical };   // فاز ۱۹۶ — تزریق برای تستِ کاملِ چرخه
     shouldStop?: () => Promise<boolean> } = {},   // فاز ۱۹۶ — دکمهٔ توقف
@@ -345,27 +476,65 @@ export async function buildAgencyRoster(
   const maxDetails = Math.max(1, Math.min(opts.maxDetails ?? 3000, posts.length))
   // برای هر آگهی: عنوان + توضیحات را می‌گیریم و کاندیدای امضا را می‌سازیم.
   // `addr` = توکن‌های آدرسِ همین آگهی؛ هیچ منبعی (AI/lexicon/heuristic) اجازه ندارد از آنها اسم بسازد.
-  const rows: { post: BrandPost; title: string; desc: string; cand: string[]; addr: Set<string>; trusted: boolean; hard: Set<string>; descKeys: Set<string> }[] = []
+  const rows: { post: BrandPost; title: string; desc: string; cand: string[]; addr: Set<string>; trusted: boolean; hard: Set<string>; descLines: string[][] }[] = []
+  let metaText = 0, textMissing = 0
+  // فاز ۳۴۴ (باگی که خودروجت هم داشت: «۱۰ آگهی، متنِ هیچ‌کدام خوانده نشده — سینک درست نمی‌کند») — وقتی خواندنِ متنِ
+  // یک آگهی از دیوار شکست می‌خورد (throttle/۴۲۹/تایم‌اوت)، آگهی بی‌صدا «بی‌متن» می‌ماند و در همین سینک دیگر تلاش
+  // نمی‌شد؛ اگر دیوار در سینکِ بعد هم کُند بود، همان آگهی‌ها برای همیشه بی‌نام می‌ماندند و هیچ‌جا دیده نمی‌شد.
+  // حالا: خواندن‌های ناموفق در پایانِ همین پاس دو دورِ دیگر (با مکثِ بیشتر) تلاش می‌شوند، و هرچه باز ماند در
+  // آمارِ پنل (textMissing) با رنگِ قرمز دیده می‌شود — و چون کش نمی‌شود، سینکِ بعد هم دوباره می‌خواندش.
+  const texts: { title: string; desc: string; failed: boolean; meta?: boolean }[] = []
+  const readText = async (p: BrandPost): Promise<{ title: string; desc: string; failed: boolean; meta?: boolean }> => {
+    let title = p.title || '', desc = '', failed = false, meta = false
+    try {
+      const d = await (opts.f?.post || fetchDivarPost)(p.token)
+      title = (d.title || title || '').trim(); desc = (d.description || '').trim()
+      if (d.reason && !desc) failed = true   // http_429/unreachable/… — نه «آگهیِ واقعاً بی‌متن»
+    } catch { failed = true }
+    if (isDivarMetaText(desc)) { desc = ''; meta = true }   // «انتشار آگهی/آخرین نردبان: …» متنِ آگهی نیست
+    if (!failed) { try { opts.onRow?.(p.token, { title, desc, dv: 4 }) } catch {} }   // چک‌پوینت (dv=4: ویجتِ توضیحات)
+    return { title, desc, failed, meta }
+  }
   for (let i = 0; i < maxDetails; i++) {
     if (i % 5 === 0 && opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
     const p = posts[i]
-    let title = p.title || '', desc = ''
     // ازسرگیری فقط اگر متنِ کامل کش شده باشد. کشِ desc-خالی (از دورهٔ پروکسیِ مرده) دوباره گرفته
     // می‌شود تا اسمِ آخرِ متن از دست نرود (باگِ «خانم هرمزی → بی‌نام»).
     const hit = opts.cached?.[p.token]
-    if (hit && hit.desc) { title = (hit.title || title || '').trim(); desc = hit.desc.trim() }
+    // فاز ۳۴۴ — «انتشار آگهی/آخرین نردبان: …» متنِ آگهی نیست؛ نه از کش خوانده می‌شود، نه کش می‌شود، نه به AI می‌رود.
+    if (hit && hit.desc && !isDivarMetaText(hit.desc)) texts.push({ title: (hit.title || p.title || '').trim(), desc: hit.desc.trim(), failed: false })
     else {
-      try { const d = await (opts.f?.post || fetchDivarPost)(p.token); title = (d.title || title || '').trim(); desc = (d.description || '').trim() } catch {}
-      try { opts.onRow?.(p.token, { title, desc }) } catch {}   // چک‌پوینت برای ازسرگیری
+      texts.push(await readText(p))
       await sleep(600)   // نرخِ کندتر تا دیوار زیرِ فشار آگهی‌ها را رد نکند (fetchDivarPost خودش retry هم دارد)
     }
+    try { opts.onProgress?.(i + 1, maxDetails) } catch {}
+  }
+  for (let round = 1; round <= 2; round++) {
+    const again = texts.map((t, i) => (t.failed ? i : -1)).filter(i => i >= 0)
+    if (!again.length) break
+    console.log(`[roster] ${slug}: متنِ ${again.length} آگهی خوانده نشد — تلاشِ دوباره (دورِ ${round}/۲)`)
+    await sleep(3000 * round)
+    for (const i of again) {
+      if (opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
+      const t = await readText(posts[i])
+      if (!t.failed) texts[i] = t
+      await sleep(1200 * round)
+    }
+  }
+  for (let i = 0; i < texts.length; i++) {
+    const p = posts[i]
+    let { title, desc } = texts[i]
+    if (texts[i].failed) textMissing++
+    if (texts[i].meta) metaText++
+    // فاز ۳۴۴ — متنِ یکسان‌شده برای همهٔ منابع (مدل، قاعده، AI، دروازه‌ها) و برای نامِ نمایشی.
+    title = normFa(title); desc = normFa(desc)
     const txt = `${title}\n${desc}`
     rows.push({
       post: p, title, desc, cand: extractSignature(title, desc, name), addr: new Set([...addressTokens(txt), ...contextNoiseTokens(txt)]), trusted: signatureTrusted(title, desc, name),
-      hard: hardBanTokens(txt), descKeys: new Set(deEmoji(desc).split(/[^\u0621-\u06ccA-Za-z]+/).filter(Boolean).map(keyOf)),
+      hard: hardBanTokens(txt), descLines: textLines(desc),
     })
-    try { opts.onProgress?.(i + 1, maxDetails) } catch {}
   }
+  if (textMissing) console.error(`[roster] ${slug}: ⚠ متنِ ${textMissing} آگهی پس از ۳ تلاش هم از دیوار خوانده نشد — بی‌نام می‌مانند تا سینکِ بعد`)
 
   // ── ماشین‌لرنینگ (فلایویل): پیش از فازِ AI، نام‌های «مورد اعتماد» را همین‌جا نسبت بده ──
   // فاز ۲۷۴ (فیدبک: «چرا ماشین‌لرنینگ AI را کم نمی‌کند؟») — ریشه: lexicon فقط بعد از فازِ AI
@@ -379,7 +548,7 @@ export async function buildAgencyRoster(
   // تو کار هست». ریشه: نامِ آشغال (چه از heuristic چه از AI) با learnName وزن می‌گرفت و سینکِ
   // بعد «پیش از» qwen از واژه‌نامهٔ آموخته (resolved) بازتولید می‌شد؛ حذفِ رکورد، وزنِ آموخته را
   // پاک نمی‌کرد. حالا با AI روشن: نه resolved، نه lex، نه یادگیری — qwen تنها مرجع است.
-  const { model: _aiM, provider: _aiP } = resolveAgent([['content', 'text'], ['chat', 'text']])
+  const { model: _aiM, provider: _aiP } = resolveAgent(ROSTER_AGENT)
   const AI_NAMING = !!_aiM && aiActive('roster', _aiP)
   if (!AI_NAMING && !lexiconPruned) { lexiconPruned = true; try { const p = await pruneLearned(); if (p.length) console.log(`[roster] ML lexicon pruned: ${p.length} junk names (${p.slice(0, 8).join('، ')})`) } catch {} }
   // نام‌های آموخته هم از همان دروازهٔ اعتبار رد می‌شوند (اگر prune به هر دلیل نرسیده باشد).
@@ -405,6 +574,8 @@ export async function buildAgencyRoster(
   // (AI_NAMING بالاتر محاسبه شد — پیش از فازِ ML.)
   let aiMap: Record<number, string> = {}
   const aiAsked = new Set<number>()   // فاز ۳۴۱ — ردیف‌هایی که AI حکم داده (نام یا «بی‌امضا»)
+  const aiStats = { failedBatches: 0, budgetHit: false, gaveUp: false, skippedSig: 0 }   // فاز ۳۴۴ — برای پنل
+  const nameCounts = { aiNamed: 0, aiRejected: 0 }
   if (AI_NAMING && opts.useAI !== false) {
     // فاز ۱۹۶ (فیدبک: «شناساییِ AI را دوبار انجام داده، خواندنِ فهرست را ۴ بار») — نامِ AI هم مثلِ متن
     // در کشِ ازسرگیری می‌ماند؛ پاسِ بعدی فقط ردیف‌های نپرسیده را می‌پرسد، نه ۴۵ فراخوانِ تکراری.
@@ -418,32 +589,49 @@ export async function buildAgencyRoster(
       // AIِ روشن = «حرفِ آخر»: همهٔ ادهای کش‌نشده به AI می‌روند، نه فقط resolvedنشده‌ها. چون
       // واژه‌نامهٔ آموخته (resolved) از پنجرهٔ خرابِ بی‌مدل آلوده شده بود («جهانگرد»ِ ۲۵فایلی)،
       // اگر resolvedها را از AI معاف کنیم آلودگی باقی می‌مانَد. qwen روی سرورِ خودِ مالک است (رایگان).
+      // فاز ۳۴۴ — آگهیِ دارای «امضای قطعی» («کارشناس خانم خسروی»، «X هستم»، «نقش: X»، فهرستِ سفید) با قاعده حل
+      // شده و به AI نمی‌رود: هم زمان/هزینه کم می‌شود، هم «نه»ِ اشتباهِ AI نمی‌تواند با آن درگیر شود.
+      else if (r.trusted) aiStats.skippedSig++
+      else if (!r.desc.trim()) { /* بی‌متن (یا فقط متادیتای انتشار): چیزی برای خواندن نیست — نام از عنوان ساخته نمی‌شود */ }
       else pending.push({ idx, row: r })
     })
-    const chunksTotal = Math.ceil(pending.length / 12)
-    const aiDeadline = Date.now() + 8 * 60_000
-    let emptyStreak = 0, chunkNo = 0
-    for (let i = 0; i < pending.length; i += 12) {
-      chunkNo++
-      if (Date.now() > aiDeadline) { console.log('[roster] AI phase budget hit — continuing without AI'); break }
-      if (opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
-      const slice = pending.slice(i, i + 12)
+    // فاز ۳۴۴ (پورت از خودروجت، فاز ۳۵۰) — «یک آگهی در هر درخواست»، ۳ درخواستِ هم‌زمان: مدلِ کوچک وقتی ۱۲ آگهی
+    // را در یک پیام می‌گرفت شماره‌ها را قاطی می‌کرد یا بعضی را جا می‌انداخت؛ آگهیِ تکی کوتاه و بی‌ابهام است.
+    // بودجهٔ ۱۵ دقیقه؛ آنچه نرسید در سینکِ بعد (از کش) ادامه می‌یابد و تا آن‌وقت قاعده/ماشین جایش را پر می‌کند.
+    const CONC = 3
+    const chunksTotal = pending.length
+    const aiDeadline = Date.now() + 15 * 60_000
+    let failStreak = 0, doneCount = 0, next = 0, stopped = false
+    const ask = async (slice: typeof pending): Promise<number> => {
       const chunk = slice.map(p2 => ({ i: p2.idx, title: p2.row.title, desc: p2.row.desc }))
       try {
-        const res = await (opts.f?.ai || aiCanonical)(chunk)
+        const res = await (opts.f?.ai || aiCanonical)(chunk, name)
         const got = res.map
-        // پاسخِ قدیمیِ بی‌answered (تستِ تزریقی): هر ردیفِ دسته پاسخ‌گرفته حساب می‌شود، مثلِ رفتارِ قبلی.
+        // پاسخِ قدیمیِ بی‌answered (تستِ تزریقی): اگر نامی داد، کلِ دسته پاسخ‌گرفته حساب می‌شود.
         const answered = new Set(res.answered ?? (Object.keys(got).length ? slice.map(p2 => p2.idx) : []))
         Object.assign(aiMap, got)
         for (const i2 of answered) aiAsked.add(i2)
-        emptyStreak = answered.size === 0 ? emptyStreak + 1 : 0
         // چک‌پوینتِ نام‌ها: فقط ردیفِ پاسخ‌گرفته ذخیره می‌شود ('' = «AI گفت بی‌امضاست»)؛ ردیفِ پاسخِ خراب
-        // ذخیره نمی‌شود تا سینکِ بعد دوباره پرسیده شود (قبلاً تایم‌اوت هم '' ذخیره و برای همیشه «بی‌نام» می‌شد).
+        // ذخیره نمی‌شود تا سینکِ بعد دوباره پرسیده شود.
         for (const p2 of slice) { if (!answered.has(p2.idx)) continue; try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '', aiv: AI_PROMPT_V }) } catch {} }
-      } catch { emptyStreak++ }
-      try { opts.onCluster?.(chunkNo, chunksTotal) } catch {}
-      if (emptyStreak >= 3) { console.log('[roster] AI returned nothing 3 chunks in a row — skipping rest (heuristic continues)'); break }
+        return answered.size
+      } catch { return 0 }
     }
+    const worker = async () => {
+      while (!stopped && next < pending.length) {
+        if (Date.now() > aiDeadline) { if (!aiStats.budgetHit) console.log('[roster] AI phase budget hit — continuing without AI'); aiStats.budgetHit = true; stopped = true; break }
+        if (opts.shouldStop && await opts.shouldStop()) { stopped = true; break }
+        const item = pending[next++]
+        const n = await ask([item])
+        if (n === 0) { aiStats.failedBatches++; failStreak++ } else failStreak = 0
+        doneCount++
+        try { opts.onCluster?.(doneCount, chunksTotal) } catch {}
+        // ۸ شکستِ پیاپی = AI عملاً در دسترس نیست → بقیه بدونِ AI (پنل این را نشان می‌دهد)
+        if (failStreak >= 8) { if (!aiStats.gaveUp) console.log('[roster] AI failed 8 ads in a row — skipping rest (heuristic continues)'); aiStats.gaveUp = true; stopped = true }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONC, pending.length) }, worker))
+    if (opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
   }
 
   // خوشه‌بندی — اولویت: (۱) AI، (۲) نامِ مورد اعتمادِ ML (short-circuit)، (۳) lexiconِ موضعِ امضا، (۴) heuristic.
@@ -461,8 +649,13 @@ export async function buildAgencyRoster(
     // فاز ۳۴۳ (فیدبکِ مالک: «شمس را از عنوانِ آگهی آورده — محلهٔ شمس‌آباد»). دو قانونِ همگانی برای «همهٔ» منابع
     // (AI، امضای قطعی، مدل): (۱) بانِ سخت (تکهٔ نامِ محله/مقدارِ مشخصه)، (۲) نام باید در «متنِ» آگهی باشد؛ عنوانِ
     // دیوار جای امضای مشاور نیست (متراژ/محله/قیمت است). AI عنوان را هم می‌بیند و «شمس» را از «۱۶۵ متر / شمس آباد» برمی‌داشت.
-    const srcOk = (n: string) => !!n && !hitsBan(n, r.hard) && n.split(/\s+/).every(w => r.descKeys.has(keyOf(w)))
-    const cand = r.cand.map(c => validName(c, name, r.trusted ? undefined : r.addr, { trustPerson: r.trusted })).filter(c => srcOk(c))
+    const srcOk = (n: string) => !!n && !hitsBan(n, r.hard) && nameOccurrences(n.split(/\s+/).filter(Boolean).map(w => keyOf(w).toLowerCase()), r.descLines).length > 0
+    const candAll = r.cand.map(c => validName(c, name, r.trusted ? undefined : r.addr, { trustPerson: r.trusted })).filter(c => srcOk(c))
+    // فاز ۳۴۴ — حدسِ بی‌پشتوانهٔ ماشین (نه امضای قطعی) فقط وقتی «معتبر» است که یا شکلِ نامِ آدم داشته باشد یا در موضعِ
+    // امضا باشد («کارشناس فروش جهت راهنمایی نقی») — همان معیارِ دروازهٔ نامِ AI. فقط حدسِ معتبر می‌تواند با AI «توافق»
+    // کند؛ وگرنه «هوشمند»ِ «کلید هوشمند» (حدسِ ضعیفِ ماشین) جوابِ اشتباهِ AI را تأیید می‌کرد.
+    const inSig = (c: string) => nameOccurrences(c.split(/\s+/).filter(Boolean).map(w => keyOf(w).toLowerCase()), r.descLines).some(inSignaturePosition)
+    const cand = candAll.filter(c => r.trusted || personLike(c) || inSig(c))
     const candKeys = new Set(cand.map(c => keyOf(c)))
     const lexRaw = validName(lexiconMatch(r.desc, learned), name, r.addr)
     // lexicon فقط وقتی معتبر است که نامِ آموخته‌شده در موضعِ امضایِ همین آگهی باشد (جزوِ cand)،
@@ -477,8 +670,11 @@ export async function buildAgencyRoster(
     // حالا هر سه منبع فقط وقتی معتبرند که نام در **موضعِ امضای همین آگهی** باشد.
     // (تعمیمِ کنترل‌شدهٔ واژه‌نامه به آگهی‌های بی‌امضا، پس از خوشه‌بندی و فقط برای مشاورِ
     //  «تثبیت‌شده در همین آژانس» انجام می‌شود — پایین‌تر.)
+    // فاز ۳۴۴ — نامِ AI از دروازهٔ «واژه‌به‌واژه در متن + (توافق با ماشین | موضعِ امضا | نامِ کاملِ آدم)» می‌گذرد.
     const aiRaw = validName(aiMap[idx] || '', name, r.addr)
-    const ai = srcOk(aiRaw) ? aiRaw : ''
+    const ai = srcOk(aiRaw) ? gateAiName(aiRaw, r.desc, candKeys) : ''
+    if (aiMap[idx] && !ai) nameCounts.aiRejected++
+    if (ai) nameCounts.aiNamed++
     const res = resolved[idx] && candKeys.has(keyOf(resolved[idx])) ? resolved[idx] : ''
     // اولویت: AIِ متن‌آگاه → نامِ تثبیت‌شدهٔ ML (در موضعِ امضا) → lexiconِ موضعِ امضا → heuristic.
     // ترتیب عوض شد: استخراجِ متن (که حالا برچسب‌زنِ توکن است) بر واژه‌نامهٔ آموخته
@@ -515,7 +711,10 @@ export async function buildAgencyRoster(
     if (ai || cand.length) freshKeys.add(k)
     fileCount.set(k, (fileCount.get(k) || 0) + 1)
     let c = clusters.get(k)
-    if (!c) { c = { key: k, name: chosen, tokens: [], posts: [] }; clusters.set(k, c) }
+    if (!c) { c = { key: k, name: chosen, tokens: [], posts: [], src: { ai: 0, sig: 0, machine: 0, claim: 0 } }; clusters.set(k, c) }
+    // منبعِ تصمیم برای پنل: AI؛ یا امضای صریح با قاعده؛ یا ماشین (AI این آگهی را نخواند یا خاموش است).
+    const how: keyof NameSrc = ai && keyOf(ai) === k ? 'ai' : r.trusted ? 'sig' : 'machine'
+    c.src![how]++
     c.tokens.push(r.post.token); c.posts.push(r.post)
   })
 
@@ -532,6 +731,7 @@ export async function buildAgencyRoster(
   // در سینکِ بعدی «غایب» حساب و پاک می‌شدند.
   const pinned = new Set(opts.pinnedKeys || [])
   const mergeInto = (small: RosterAdvisor, host: RosterAdvisor) => {
+    if (small.src && host.src) for (const k2 of ['ai', 'sig', 'machine', 'claim'] as const) host.src[k2] += small.src[k2]
     host.tokens.push(...small.tokens); host.posts.push(...small.posts)
     fileCount.set(host.key, (fileCount.get(host.key) || 0) + (fileCount.get(small.key) || 0))
     if (strongKeys.has(small.key)) strongKeys.add(host.key)
@@ -598,9 +798,13 @@ export async function buildAgencyRoster(
       const r = rows[idx]
       const hit = validName(lexiconMatch(r.desc, established.map(c => ({ name: c.name }))), name, r.addr)
       if (!hit || hitsBan(hit, r.hard)) continue
+      // فاز ۳۴۴ — نامِ تک‌کلمه‌ای (که ممکن است واژهٔ عادی هم باشد: «هوشمند/امین/صادق») فقط در موضعِ امضای همان
+      // آگهی آن را تصاحب می‌کند، نه هرجای متن («کلید هوشمند» آگهیِ مشاورِ «هوشمند» نیست).
+      if (!hit.includes(' ') && !nameOccurrences([keyOf(hit).toLowerCase()], r.descLines).some(inSignaturePosition)) continue
       const host = clusters.get(keyOf(hit))
       if (!host) continue
       host.tokens.push(r.post.token); host.posts.push(r.post)
+      if (host.src) host.src.claim++
       fileCount.set(host.key, (fileCount.get(host.key) || 0) + 1)
       claimed.push(idx)
     }
@@ -624,7 +828,18 @@ export async function buildAgencyRoster(
   }
 
   const advisors = [...clusters.values()].sort((a, b) => b.tokens.length - a.tokens.length)
-  return { ok: true, slug, agencyName: name, total: posts.length, scanned: rows.length, advisors, unnamed }
+  const sum = (k2: keyof NameSrc) => advisors.reduce((t, a) => t + (a.src?.[k2] || 0), 0)
+  const byTok = new Map(rows.map(r => [r.post.token, r]))
+  const nameStats: NameStats = {
+    aiOn: AI_NAMING && opts.useAI !== false, model: AI_NAMING ? (_aiM || '') : '', rows: rows.length, aiAnswered: aiAsked.size,
+    aiNamed: nameCounts.aiNamed, aiRejected: nameCounts.aiRejected,
+    byAI: sum('ai'), bySig: sum('sig'), byMachine: sum('machine'), byClaim: sum('claim'), unnamed: unnamed.tokens.length,
+    skippedSig: aiStats.skippedSig, failedBatches: aiStats.failedBatches, gaveUp: aiStats.gaveUp, budgetHit: aiStats.budgetHit,
+    metaText, textMissing,
+    unnamedSigLike: unnamed.tokens.filter(t => { const r = byTok.get(t); return !!r && !!signatureLikeLine(r.desc) }).length,
+  }
+  console.log(`[roster] names: AI ${nameStats.aiOn ? 'on' : 'OFF'} model=${nameStats.model || '-'} sigSkipped=${nameStats.skippedSig} unnamedSigLike=${nameStats.unnamedSigLike} answered=${nameStats.aiAnswered}/${nameStats.rows} byAI=${nameStats.byAI} bySig=${nameStats.bySig} byMachine=${nameStats.byMachine} claim=${nameStats.byClaim} unnamed=${nameStats.unnamed} failed=${nameStats.failedBatches} meta=${metaText} textMissing=${textMissing}`)
+  return { ok: true, slug, agencyName: name, total: posts.length, scanned: rows.length, advisors, unnamed, nameStats }
 }
 
 // ── عیب‌یابی: n آگهیِ واقعی را اسکرپ می‌کند و می‌گوید چند تا «متنِ خالی» دارند (واکشیِ دیوار fail
@@ -632,7 +847,7 @@ export async function buildAgencyRoster(
 export async function debugRoster(slugOrUrl: string, n = 30): Promise<any> {
   const slug = (divarProfileSlug(slugOrUrl) || String(slugOrUrl || '').trim())
   let gapModel = ''
-  try { const { model } = resolveAgent([['content', 'text'], ['chat', 'text']]); gapModel = model || '' } catch { /* بدونِ مدل */ }
+  try { const { model } = resolveAgent(ROSTER_AGENT); gapModel = model || '' } catch { /* بدونِ مدل */ }
 
   const { posts, name, reason } = await fetchDivarProfileTokens(slug)
   if (!posts.length) return { ok: false, error: reason || 'آگهی‌ای یافت نشد', gapModel }
@@ -642,6 +857,7 @@ export async function debugRoster(slugOrUrl: string, n = 30): Promise<any> {
   for (let i = 0; i < Math.min(n, posts.length); i++) {
     const p = posts[i]; let title = p.title || '', desc = ''
     try { const d = await fetchDivarPost(p.token); title = (d.title || title || '').trim(); desc = (d.description || '').trim() } catch {}
+    if (isDivarMetaText(desc)) desc = ''
     rows.push({ i, token: p.token, title, desc })
     await sleep(600)
   }
@@ -651,7 +867,7 @@ export async function debugRoster(slugOrUrl: string, n = 30): Promise<any> {
   try {
     for (let i = 0; i < rows.length; i += 12) {
       const chunk = rows.slice(i, i + 12).map(r => ({ i: r.i, title: r.title, desc: r.desc }))
-      const res = await aiCanonical(chunk)
+      const res = await aiCanonical(chunk, name)
       Object.assign(aiMap, res.map)
       if (!aiRaw) aiRaw = res.raw
     }
