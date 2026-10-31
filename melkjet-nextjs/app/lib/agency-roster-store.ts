@@ -34,6 +34,8 @@ export interface RosterAdvisor {
   graduating?: boolean   // در صفِ «ساختِ حساب» روی اینستنسِ ۰
   transferFrom?: string  // فاز ۲۷۷ — ownerِ موقتِ مبدأ تا وقتی انتقالِ فایل‌ها تمام نشده (ازسرگیریِ امن)
   src?: { ai: number; sig: number; machine: number; claim: number }   // فاز ۳۴۴ — چه کسی نام را داد (پنل)
+  aliases?: string[]     // فاز ۳۴۴ج — کلیدِ خوشه‌هایی که در همین مشاور ادغام شده‌اند (سینکِ بعد به همین رکورد نگاشت می‌شوند)
+  mergedInto?: { id: string; key: string }   // فاز ۳۴۴ج — این رکورد در مشاورِ آژانسِ دیگری ادغام شده (همان حساب/شماره)
 }
 // کارِ صفِ «ساختِ حساب» — سنگین (انتقالِ فایل‌ها)، روی اینستنسِ ۰ اجرا می‌شود تا درخواستِ ادمین قفل نشود.
 export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; attempts?: number; prepared?: boolean; error?: string }   // attempts: شمارِ خطاهای گذرا؛ prepared: بخشِ آنی (حساب+شماره) انجام شده (۲۸ سپتامبر)   // فاز ۱۹۹ — claim برای صفِ at-least-once
@@ -700,6 +702,11 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // حساب نگاشت می‌شود تا فایل‌ها به حسابِ موجود بروند، نه رکوردِ تکراری. فقط برای حساب‌دارها و
     // تنها وقتی یک میزبانِ سازگار باشد (همان محافظهٔ nameCompatible که جای دیگر هم به‌کار می‌رود).
     const gradRecs = recs.filter(r => r.phone)
+    // فاز ۳۴۴ج — خوشه‌ای که ادمین قبلاً در مشاورِ دیگری ادغام کرده (aliases) به همان رکورد نگاشت می‌شود، نه مشاورِ تازه.
+    for (const a of roster.advisors) {
+      const host = recs.find(r => r.key !== a.key && (r.aliases || []).includes(a.key))
+      if (host && !recs.some(r => r.key === a.key)) a.key = host.key
+    }
     for (const a of roster.advisors) {
       if (recs.some(r => r.key === a.key)) continue
       const hosts = gradRecs.filter(r => nameCompatible(r.name, a.name))
@@ -1251,6 +1258,13 @@ export async function phoneConflicts(): Promise<{ phone: string; legit: boolean;
 // مشاورِ `from` را در `to` ادغام می‌کند: آگهی‌های from زیرِ مالکِ to می‌روند، دادهٔ advisorِ حسابِ from
 // (اگر جدا بود) به حسابِ to منتقل می‌شود، توکن‌ها یکی می‌شوند و رکوردِ from حذف می‌شود. `to` (مشاورِ
 // موجود با حساب/شماره) میزبان می‌ماند.
+// فاز ۳۴۴ج (فیدبکِ مالک: «ادغام می‌شود ولی به اکانتِ مقصد هیچی نمی‌رود، و سینکِ بعد دوباره می‌آید») — دو ریشه:
+// (۱) مشاورِ بی‌حساب آگهی‌هایش را زیرِ ownerِ موقت (adv:slug:key) در شاردِ advisor دارد، نه به‌صورتِ آگهیِ منتشرشده؛
+//     ادغامِ قبلی فقط __ownerPhoneِ آگهی‌های «منتشرشده» را عوض می‌کرد (که برای ownerِ موقت وجود ندارد) ⇒ moved=0.
+//     حالا همان انتقالِ تست‌شدهٔ «ساخت حساب» (reassignListings: کپیِ per-فایلِ اتمی + رکوردِ ایمپورت؛ انتشار با جارو).
+// (۲) ادغام فقط ردیف را پاک می‌کرد؛ سینکِ بعد همان خوشه را از متنِ آگهی‌ها دوباره می‌ساخت. حالا «حافظه» دارد:
+//     هم‌آژانس ⇒ کلیدِ مبدأ در `aliases`ِ مقصد (سینک خوشه را به مقصد نگاشت می‌کند)؛ آژانسِ دیگر ⇒ رکوردِ مبدأ به
+//     همان شماره/حسابِ مقصد وصل می‌ماند (`mergedInto`) تا آگهی‌های این آژانس هم زیرِ همان حساب ایمپورت شوند.
 export async function mergeAdvisorInto(fromId: string, fromKey: string, toId: string, toKey: string): Promise<{ ok: boolean; error?: string; moved?: number }> {
   if (fromId === toId && fromKey === toKey) return { ok: false, error: 'مبدأ و مقصد یکی‌اند' }
   const fromScrape = await getScrape(fromId); const toScrape = await getScrape(toId)
@@ -1258,17 +1272,52 @@ export async function mergeAdvisorInto(fromId: string, fromKey: string, toId: st
   const from = fromScrape.advisors.find(a => a.key === fromKey)
   const to = toScrape.advisors.find(a => a.key === toKey)
   if (!from || !to) return { ok: false, error: 'مشاور یافت نشد' }
+  const isPhone = (x: string) => /^0\d{10}$/.test(x)
+  const toOwner = to.phone || to.owner
+  const fromOwner = from.phone || from.transferFrom || from.owner
   let moved = 0
-  const toOwner = to.phone || to.owner, fromOwner = from.phone || from.owner
   if (fromOwner && toOwner && fromOwner !== toOwner) {
-    try { const { reassignListingOwnerPhone } = await import('./scraper-store'); moved = await reassignListingOwnerPhone(fromOwner, toOwner) } catch {}
-    // اگر هر دو حسابِ واقعی (موبایل) داشتند، دادهٔ advisorِ from به to (idempotent).
-    if (/^0\d{10}$/.test(fromOwner) && /^0\d{10}$/.test(toOwner)) {
-      try { const { mergeAdvisorData } = await import('./advisor-store'); const r = await mergeAdvisorData(fromOwner, toOwner); moved += r.listings } catch {}
+    try {
+      if (isPhone(fromOwner) && isPhone(toOwner)) {
+        // هر دو حسابِ واقعی: دادهٔ advisor + آگهی‌های منتشرشده (idempotent)
+        const { mergeAdvisorData } = await import('./advisor-store'); moved += (await mergeAdvisorData(fromOwner, toOwner)).listings
+      } else {
+        // مبدأ بی‌حساب (ownerِ موقت) ⇒ همان انتقالِ «ساخت حساب»: فایل‌ها + رکوردِ ایمپورت به حسابِ مقصد
+        moved += await reassignListings(fromOwner, toOwner, fromScrape.id)
+      }
+      const { reassignListingOwnerPhone } = await import('./scraper-store'); await reassignListingOwnerPhone(fromOwner, toOwner)
+    } catch (e: any) {
+      // انتقال per-فایل اتمی است: هرچه رفته رفته، باقی با زدنِ دوبارهٔ ادغام می‌رود. ردیف را نگه می‌داریم.
+      console.error(`[roster] merge transfer failed ${fromOwner} → ${toOwner}: ${String(e?.message || e)}`)
+      return { ok: false, error: `انتقالِ فایل‌ها نیمه‌کاره ماند (${moved} فایل رفت) — دوباره «ادغام» را بزن تا باقی برود: ${String(e?.message || e).slice(0, 120)}` }
     }
   }
-  await mutateScrape(toId, s => { if (!s) return; const t = s.advisors.find(a => a.key === toKey); if (t) t.tokens = [...new Set([...(t.tokens || []), ...(from.tokens || [])])].slice(0, 100) })
-  await mutateScrape(fromId, s => { if (s) s.advisors = s.advisors.filter(a => a.key !== fromKey) })
+  const fromAliases = [from.key, ...(from.aliases || [])]
+  if (fromId === toId) {
+    await mutateScrape(toId, s => {
+      if (!s) return
+      const t = s.advisors.find(a => a.key === toKey)
+      if (t) {
+        t.tokens = [...new Set([...(t.tokens || []), ...(from.tokens || [])])].slice(0, 100)
+        t.aliases = [...new Set([...(t.aliases || []), ...fromAliases])].filter(k => k !== t.key)
+        t.listingCount = (t.listingCount || 0) + (from.listingCount || 0)
+      }
+      s.advisors = s.advisors.filter(a => a.key !== fromKey)
+    })
+  } else {
+    await mutateScrape(toId, s => { if (!s) return; const t = s.advisors.find(a => a.key === toKey); if (t) t.tokens = [...new Set([...(t.tokens || []), ...(from.tokens || [])])].slice(0, 100) })
+    // آژانسِ دیگر: رکورد می‌ماند ولی به همان حساب وصل است (سینکِ این آژانس آگهی‌ها را زیرِ همان شماره می‌آورد)
+    await mutateScrape(fromId, s => {
+      if (!s) return
+      const r = s.advisors.find(a => a.key === fromKey)
+      if (r) {
+        r.name = to.name; r.owner = toOwner; r.graduating = false; delete r.transferFrom
+        if (to.phone) { r.phone = to.phone; r.graduatedAt = r.graduatedAt || Date.now() }
+        r.mergedInto = { id: toId, key: toKey }
+      }
+    })
+  }
+  console.log(`[roster] merge ${fromScrape.slug}:${fromKey} → ${toScrape.slug}:${toKey} moved=${moved}`)
   return { ok: true, moved }
 }
 
