@@ -104,6 +104,23 @@ export function UnnamedExplain({ id }: { id: string }) {
         <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(rows.length)} آگهی (آن‌ها که «خطِ امضا» دارند اول)</span>
         <button onClick={() => setRows(null)} style={{ marginInlineStart: 'auto', background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>بستن</button>
       </div>
+      {/* فاز ۳۴۴د (فیدبکِ مالک: «این چیه؟») — آگهی‌هایی که خوانندهٔ قدیمی به‌جای متنِ آگهی «تاریخِ انتشار» را ذخیره کرده بود
+          (یا متنشان اصلاً نیامده): توضیحِ ساده + دکمهٔ «همین الان دوباره بخوان» به‌جای برچسبِ فنیِ بی‌توضیح. */}
+      {(() => {
+        const stale = rows.filter(x => x.metaText || x.noText).length
+        const old = rows.filter(x => x.oldText && !x.metaText && !x.noText).length
+        if (!stale && !old) return null
+        return (
+          <div style={{ fontSize: 12.5, lineHeight: 2, background: 'rgba(231,161,74,.09)', border: '1px solid rgba(231,161,74,.35)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)' }}>
+            {stale > 0 && <div>⛔ <b>{fa(stale)} آگهی</b> اصلاً «متن» ندارند: خوانندهٔ قدیمیِ دیوار به‌جای توضیحاتِ آگهی فقط خطِ «انتشار آگهی / آخرین نردبان» (تاریخ) را برداشته بود — پس نه AI و نه ماشین چیزی برای پیدا کردنِ نام نداشتند.</div>}
+            {old > 0 && <div>📄 <b>{fa(old)} آگهی</b> با خوانندهٔ قدیمی خوانده شده‌اند و ممکن است متنشان ناقص باشد.</div>}
+            <div style={{ color: 'var(--muted)' }}>خوانندهٔ جدید متنِ خودِ فروشنده را می‌خواند؛ این آگهی‌ها در همگام‌سازیِ بعد خودکار دوباره خوانده می‌شوند.</div>
+            <button onClick={async () => {
+              try { const q = await fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync', id }) }); setMsg(q.ok ? '🔄 همگام‌سازیِ این آژانس در صف رفت — متن‌ها از دیوار دوباره خوانده و به AI داده می‌شوند (چند دقیقه).' : 'خطا در صف‌گذاری') } catch (e: any) { setMsg(String(e?.message || e)) }
+            }} style={{ marginTop: 6, background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 12px', color: '#1a1400', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>🔄 همین الان دوباره از دیوار بخوان</button>
+          </div>
+        )
+      })()}
       {msg && <div style={{ fontSize: 12.5, color: '#5fd98a', background: 'rgba(95,217,138,.08)', border: '1px solid rgba(95,217,138,.3)', borderRadius: 8, padding: '7px 10px', lineHeight: 1.9 }}>{msg}</div>}
       {!rows.length && <div style={{ fontSize: 12, color: 'var(--faint)' }}>آگهیِ بی‌نامی نیست.</div>}
       {rows.map(r => (
@@ -111,7 +128,7 @@ export function UnnamedExplain({ id }: { id: string }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12 }}>
             <a href={`https://divar.ir/v/${r.token}`} target="_blank" rel="noreferrer" dir="ltr" style={{ color: 'var(--gold)', fontSize: 11.5 }}>{r.token} ↗</a>
             <span style={{ color: 'var(--text)', fontWeight: 700, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }}>{r.title}</span>
-            {r.metaText && <span style={RED}>⛔ متن = تاریخِ انتشار</span>}
+            {r.metaText && <span style={RED} title="به‌جای متنِ آگهی فقط تاریخِ انتشار/نردبانِ دیوار ذخیره شده بود">⛔ متن ندارد (فقط تاریخِ انتشار)</span>}
             {r.noText && <span style={RED}>⚠ متن خوانده نشده</span>}
             {r.oldText && <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--faint)' }} title="با خوانشِ قدیمیِ دیوار ذخیره شده — در سینک‌های بعد تازه می‌شود">خوانشِ قدیمی</span>}
             {r.sigLine && <span style={RED} title={r.sigLine}>⚠ خطِ امضا دارد</span>}

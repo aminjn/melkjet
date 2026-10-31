@@ -275,7 +275,7 @@ export async function explainUnnamed(id: string, limit = 100): Promise<{ ok: boo
     const c = cache[token]
     const base = { token, title: c?.title || '', ai: '', aiAsked: false, aiRejected: false, machine: '', signature: false }
     if (!c || !c.desc) { rows.push({ ...base, text: '', noText: true, reason: 'متنِ این آگهی در دست نیست — یا دیوار جواب نداد/کند بود، یا «توضیحات» فقط تاریخِ انتشار/نردبان بود (ذخیره نمی‌شود). سینکِ بعد دوباره از دیوار می‌خواند.' }); continue }
-    if (isDivarMetaText(c.desc)) { rows.push({ ...base, text: c.desc, metaText: true, reason: 'این «توضیحات» نیست — تاریخِ انتشار/نردبانِ دیوار است که خوانندهٔ قدیمی به‌جای متنِ آگهی برداشته بود؛ سینکِ بعد از دیوار دوباره خوانده و به AI داده می‌شود.' }); continue }
+    if (isDivarMetaText(c.desc)) { rows.push({ ...base, text: c.desc, metaText: true, reason: 'این آگهی متن ندارد: خوانندهٔ قدیمی به‌جای توضیحاتِ فروشنده فقط تاریخِ انتشار/نردبانِ دیوار را ذخیره کرده بود. همگام‌سازیِ بعد (یا دکمهٔ «دوباره از دیوار بخوان») متنِ واقعی را می‌خواند و به AI می‌دهد.' }); continue }
     const title = normFa(c.title || ''), desc = normFa(c.desc)
     const txt = `${title}\n${desc}`
     const addr = new Set([...addressTokens(txt), ...contextNoiseTokens(txt)])
