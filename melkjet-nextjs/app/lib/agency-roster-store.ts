@@ -572,6 +572,29 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
 }
 
 // ── سینکِ کاملِ یک اسکرپِ آژانس: خوشه‌بندی + ایمپورتِ هر خوشه زیرِ ownerِ درست ──
+// فاز ۳۴۴ه (فیدبکِ مالک: «بیش از ۱۰ دقیقه است ساخت حساب زدم، ساخته نمی‌شود») — مسابقهٔ «نوشتنِ اسنپ‌شاتِ کهنه»:
+// syncRoster فهرستِ مشاوران را «اولِ» سینک می‌خواند و «آخرِ» سینک کاملش را بازنویسی می‌کرد. هر چه ادمین در این فاصله
+// کرده بود (ساخت حساب ⇒ شماره/owner/graduating، ادغام، حذف) با نسخهٔ کهنه پاک می‌شد: شمارهٔ تازه می‌پرید و ردیف ابدی
+// «در حال ساخت حساب…» می‌ماند (کار در صف prepared بود و دیگر دوباره آماده نمی‌شد). سینک‌های طولانی‌ترِ فاز ۳۴۴ (AI
+// تک‌آگهی، بازخوانیِ متن) این پنجره را بزرگ کرد. حالا هنگامِ نوشتن، فیلدهای «حساب» از نسخهٔ «زنده» گرفته می‌شوند و
+// رکوردی که ادمین وسطِ سینک حذف/ادغام کرده دوباره زنده نمی‌شود.
+const LIVE_FIELDS = ['phone', 'owner', 'graduating', 'graduatedAt', 'transferFrom', 'aliases', 'mergedInto'] as const
+export function mergeLiveAdvisors(live: RosterAdvisor[], recs: RosterAdvisor[], snapKeys: Set<string>): RosterAdvisor[] {
+  const cur = new Map((live || []).map(a => [a.key, a]))
+  const out: RosterAdvisor[] = []
+  for (const r of recs) {
+    const c = cur.get(r.key)
+    if (!c && snapKeys.has(r.key)) continue          // وسطِ سینک حذف/ادغام شد — زنده‌اش نکن
+    if (c) {
+      const m: any = { ...r }
+      for (const f of LIVE_FIELDS) { if ((c as any)[f] === undefined) delete m[f]; else m[f] = (c as any)[f] }
+      if (c.phone) m.name = c.name                     // نامِ حساب‌دار دستِ ادمین است
+      out.push(m as RosterAdvisor)
+    } else out.push(r)
+  }
+  return out
+}
+
 export async function syncRoster(id: string, onProgress?: (done: number, total: number) => void, opts196?: { budgetMs?: number; f?: { profileTokens?: any; post?: any; ai?: any }; fetchPost?: any }): Promise<{ ok: boolean; error?: string; advisors: number; total: number; unnamed: number }> {
   // مدل و پیکرهٔ دسته‌بندِ نام را یک‌بار به حافظه بیاور (اگر نبود، بی‌صدا رد می‌شود).
   try { const { primeNameModel } = await import('./roster-name-model'); await primeNameModel() } catch {}
@@ -696,6 +719,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
     const recs = [...scrape.advisors]
+    const snapKeys344 = new Set(scrape.advisors.map(a => a.key))   // فاز ۳۴۴ه — برای تشخیصِ حذف/ادغامِ وسطِ سینک
     // فاز ۳۲۳ — ضدِ «دوتاشدنِ مشاورِ graduateشده» (مثلِ «جهانگرد»ِ حساب‌دار + «جهانگرد»ِ ۲۵فایلیِ تازه):
     // اگر کلیدِ خوشهٔ تازه با هیچ رکوردی دقیق یکی نیست ولی نامش با «دقیقاً یک» رکوردِ حساب‌دار
     // سازگار است (نامِ کوتاه/کاملِ همان شخص: «جهانگرد» ↔ «علی جهانگرد»)، کلیدِ خوشه به کلیدِ همان
@@ -787,7 +811,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       const wasStopped = stopFlag || (await getScrape(id))?.stopRequested === true
       await mutateScrape(id, s2 => {
         if (!s2) return
-        s2.advisors = recs; s2.running = false
+        s2.advisors = mergeLiveAdvisors(s2.advisors, recs, snapKeys344); s2.running = false
         // فاز ۲۹۷ض — «بودجه تمام شد» = پیشرفتِ واقعی (بخشی ایمپورت شد)؛ پس شمارندهٔ تلاش بخشیده
         // می‌شود (این همان بخششی است که قبلاً اشتباهاً پیش از ایمپورت انجام می‌شد).
         if (wasStopped) { s2.runRequested = false; s2.stopRequested = false; s2.runAttempts = 0; s2.lastError = 'با دکمهٔ توقف متوقف شد' }
@@ -802,7 +826,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     const cityNow = await cityOfScrape({ id, agencyOwner: scrape.agencyOwner, agencyPhone: scrape.agencyPhone, advisors: recs }).catch(() => '')
     await mutateScrape(id, s => {
       if (!s) return
-      s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
+      s.advisors = mergeLiveAdvisors(s.advisors, recs, snapKeys344); s.agencyName = roster.agencyName || s.agencyName
       if (cityNow) s.city = cityNow
       s.running = false; s.runRequested = false; s.retryPending = false; s.runAttempts = 0; s.stopRequested = false; s.lastRun = Date.now(); s.lastOkAt = Date.now(); s.lastError = ''
       if (s.runStartedAt) s.lastOkMs = Date.now() - s.runStartedAt
@@ -1099,8 +1123,16 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
   // و پنل برای آنها دقیقه‌ها «در حال ساخت حساب…» می‌ماند (فیدبکِ ۲۸ سپتامبر).
   {
     let did = 0
+    // فاز ۳۴۴ه — کاری که «prepared» است ولی شماره‌اش روی رکورد نیست (نسخهٔ کهنهٔ یک سینک پاکش کرده بود) دوباره آماده می‌شود.
+    const lostPhone = new Set<string>()
     for (const job of preJobs) {
-      if (job.prepared || job.startedAt) continue
+      if (!job.prepared || job.startedAt || job.key === '__agency__') continue
+      const sc = await getScrape(job.id)
+      const rec = sc?.advisors.find(a => a.key === job.key)
+      if (rec && rec.phone !== job.phone) lostPhone.add(job.jid)
+    }
+    for (const job of preJobs) {
+      if ((job.prepared && !lostPhone.has(job.jid)) || job.startedAt) continue
       try {
         const r = await graduateAdvisor(job.id, job.key, job.phone, job.role, { deferTransfer: true })
         if (r.ok) {

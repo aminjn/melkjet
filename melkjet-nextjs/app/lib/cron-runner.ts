@@ -193,6 +193,7 @@ let moderating = false
 let moderatingSince = 0
 let rosterRunning = false
 let graduateRunning = false   // فاز ۱۷۶ — صفِ ساختِ حساب، مستقل از سینکِ رُستر
+let graduateSince = 0
 let enrichSweeping = false    // فاز ۱۹۱ — جارویِ تحلیلِ هوشمند
 let autoSiting = false        // فاز ۲۹۶ — سایت‌سازِ خودکارِ اهالیِ دایرکتوری
 
@@ -240,8 +241,14 @@ async function queueTick(): Promise<void> {
     // ۳) سینکِ «هوش آژانس»: یک اسکرپِ سررسیده در هر تیک (fire-and-forget؛ چند دقیقه طول می‌کشد،
     //    قفلِ rosterRunning از هم‌پوشانی جلوگیری می‌کند تا دیوار بمباران نشود).
     //    فاز ۱۷۶ (پورت از خودروجت): «ساختِ حساب» (graduate) قفلِ جداگانه دارد تا پشتِ سینکِ چنددقیقه‌ای گیر نکند.
+    // فاز ۳۴۴ه — قفلِ صفِ ساختِ حساب هم نگهبانِ «گیرکرده» دارد (مثلِ بقیهٔ قفل‌ها): اگر یک انتقال آویزان بماند،
+    // پس از ۲۰ دقیقه قفل آزاد و فریاد زده می‌شود تا صف تا ابد نایستد (قانونِ شمارهٔ یک).
+    if (graduateRunning && lockStuck(graduateSince, Date.now(), 20 * 60_000)) {
+      console.error('[cron] graduate queue stuck >20min — releasing lock so next tick retries')
+      graduateRunning = false
+    }
     if (!graduateRunning) {
-      graduateRunning = true
+      graduateRunning = true; graduateSince = Date.now()
       ;(async () => {
         try {
           const { processGraduateQueue, repairOrphanPublishes } = await import('./agency-roster-store')
