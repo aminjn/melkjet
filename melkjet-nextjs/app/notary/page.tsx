@@ -9,7 +9,7 @@ import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
   Shell, useProDesk, Kpi, LoginGate, SectionCard, Modal, btnGold,
   JalaliPicker, ProCalendar, FileField, FileLink, ProAiTool,
-  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
+  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, ProLoading
 } from '@/app/components/prodesk/ProDeskKit'
 import { jToday, jKey, jLabel } from '@/app/lib/jalali'
 import { FA_DIGITS, faDigit } from '@/app/lib/digits'
@@ -156,7 +156,7 @@ function Register({ records, post }: { records: ProRecord[]; post: (p: any) => P
 }
 
 export default function NotaryPage() {
-  const { data, authed, loading, post } = useProDesk(ROLE)
+  const { data, authed, loading, error, reload, post } = useProDesk(ROLE)
   const [view, setView] = useState('dashboard')
   const [issueReq, setIssueReq] = useState<ProRequest | null>(null)
   const [today] = useState(() => jToday(new Date()))
@@ -178,7 +178,7 @@ export default function NotaryPage() {
   return (
     <Shell cfg={shell} active={view} setActive={setView} title={nav.find(n => n.id === view)?.label || 'داشبورد'}>
       {issueReq && <IssueModal req={issueReq} post={post} onClose={() => setIssueReq(null)} today={today} />}
-      {!data ? <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--muted)' }}>در حال بارگذاری…</div> :
+      {!data ? <ProLoading error={error} onRetry={reload} /> :
         view === 'dashboard' ? (
           <>
             <div style={{ marginBottom: 16 }}><EmpireCard /></div>

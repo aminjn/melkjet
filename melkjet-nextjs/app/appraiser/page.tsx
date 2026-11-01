@@ -9,7 +9,7 @@ import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
   Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, Modal, btnGold,
   JalaliPicker, ProCalendar, FileField, FileLink, ProAiTool,
-  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, type JDate,
+  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, type JDate, ProLoading
 } from '@/app/components/prodesk/ProDeskKit'
 import { jToday, jKey, jLabel } from '@/app/lib/jalali'
 import ReportStudio from './ReportStudio'
@@ -135,7 +135,7 @@ function Reports({ records, post }: { records: ProRecord[]; post: (p: any) => Pr
 }
 
 export default function AppraiserPage() {
-  const { data, authed, loading, post } = useProDesk(ROLE)
+  const { data, authed, loading, error, reload, post } = useProDesk(ROLE)
   const [view, setView] = useState('dashboard')
   const [reportReq, setReportReq] = useState<ProRequest | null>(null)
   const [today] = useState(() => jToday(new Date()))
@@ -160,7 +160,7 @@ export default function AppraiserPage() {
   return (
     <Shell cfg={shell} active={view} setActive={setView} title={nav.find(n => n.id === view)?.label || 'داشبورد'}>
       {reportReq && <ReportModal req={reportReq} post={post} onClose={() => setReportReq(null)} />}
-      {!data ? <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--muted)' }}>در حال بارگذاری…</div> :
+      {!data ? <ProLoading error={error} onRetry={reload} /> :
         view === 'dashboard' ? (
           <>
             <div style={{ marginBottom: 16 }}><EmpireCard /></div>

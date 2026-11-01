@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import PanelLoadError from '@/app/components/PanelLoadError'
 import { listingHref } from '@/app/lib/listing-url'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import MessagesPanel from '@/app/components/MessagesPanel'
@@ -313,6 +314,7 @@ export default function AgencyPage() {
   const [myName, setMyName] = useState('')
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
+  const [loadErr, setLoadErr] = useState('')   // فاز ۳۴۵ — خطای بارگذاری ≠ «وارد نشده»
   const [busy, setBusy] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [search, setSearch] = useState('')
@@ -372,15 +374,17 @@ export default function AgencyPage() {
   }, [refreshLinks])
 
   const refresh = useCallback(async () => {
+    setLoadErr('')
+    const ctl = new AbortController(); const tmo = setTimeout(() => ctl.abort(), 30_000)
     try {
-      const r = await fetch('/api/agency')
+      const r = await fetch('/api/agency', { cache: 'no-store', signal: ctl.signal })
       if (r.status === 401) { setUnauth(true); setLoading(false); return }
       const d = await r.json().catch(() => null)
       // فاز ۵۵: جوابِ غیرموفق (مثلاً 403ِ گیتِ پلن) داده نیست — PlanLock سراسری قفل را نشان می‌دهد؛ کرش نکن
-      if (!r.ok || !d || !d.stats) { return }
+      if (!r.ok || !d || !d.stats) { setLoadErr((d && d.error) || `خطای سرور (${r.status})`); return }
       setData(d); setUnauth(false)
       setProf({ name: d.stats.profile.name || '', branches: d.stats.profile.branches || '' })
-    } catch {} finally { setLoading(false) }
+    } catch (e: any) { setLoadErr(e?.name === 'AbortError' ? 'پاسخِ سرور بیش از ۳۰ ثانیه طول کشید' : 'اتصال به سرور برقرار نشد') } finally { clearTimeout(tmo); setLoading(false) }
   }, [])
   useEffect(() => { refresh() }, [refresh])
   // مقادیرِ نرخِ پیش‌فرض را با دادهٔ سرور هم‌گام کن
@@ -459,6 +463,7 @@ export default function AgencyPage() {
   const toggleTheme = () => { const html = document.documentElement; if (theme === 'dark') { html.classList.add('light'); setTheme('light') } else { html.classList.remove('light'); setTheme('dark') } }
 
   if (loading) return <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>در حال بارگذاری پنل آژانس…</div>
+  if (!unauth && !data && loadErr) return <PanelLoadError error={loadErr} onRetry={() => { setLoading(true); refresh() }} font={FONT} />
   if (unauth || !data) return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>
       <div style={{ ...card, padding: '40px 44px', textAlign: 'center', maxWidth: 380 }}>

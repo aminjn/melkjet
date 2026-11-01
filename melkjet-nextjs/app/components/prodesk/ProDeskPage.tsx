@@ -6,7 +6,7 @@ import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
   Shell, useProDesk, Kpi, RequestsInbox, RecordsPanel, LoginGate, SectionCard,
-  type ShellCfg, type Terms, type RecTerms, type ProStats,
+  type ShellCfg, type Terms, type RecTerms, type ProStats, ProLoading
 } from './ProDeskKit'
 
 // پیکربندیِ یک میزِ کارِ شغلی — هر داشبورد (معمار/پیمانکار/…) فقط این را می‌دهد.
@@ -25,7 +25,7 @@ export interface ProDeskConfig {
 }
 
 export default function ProDeskPage({ cfg }: { cfg: ProDeskConfig }) {
-  const { data, authed, loading, post } = useProDesk(cfg.role)
+  const { data, authed, loading, error, reload, post } = useProDesk(cfg.role)
   const [view, setView] = useState('dashboard')
 
   if (!loading && !authed) return <LoginGate />
@@ -44,7 +44,7 @@ export default function ProDeskPage({ cfg }: { cfg: ProDeskConfig }) {
   return (
     <Shell cfg={shell} active={view} setActive={setView} title={title}>
       {!data ? (
-        <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--muted)' }}>در حال بارگذاری…</div>
+        <ProLoading error={error} onRetry={reload} />
       ) : view === 'dashboard' ? (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 14, marginBottom: 20 }}>

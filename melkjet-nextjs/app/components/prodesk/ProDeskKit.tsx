@@ -40,12 +40,19 @@ export function useProDesk(role: string) {
   const [data, setData] = useState<ProData | null>(null)
   const [authed, setAuthed] = useState(true)
   const [loading, setLoading] = useState(true)
+  // فاز ۳۴۵ — قبلاً پاسخِ غیرِ ok (۵۰۰/۴۰۳) یا قطعِ شبکه هیچ حالتی نداشت: data تهی می‌ماند و ۷ پنلِ تخصصی تا ابد
+  // «در حال بارگذاری…» نشان می‌دادند. حالا علتِ خطا نگه داشته می‌شود و `ProLoading` دکمهٔ «تلاشِ دوباره» دارد.
+  const [error, setError] = useState('')
   const reload = useCallback(async () => {
+    const ctl = new AbortController()
+    const t = setTimeout(() => ctl.abort(), 30_000)
     try {
-      const r = await fetch(`/api/prodesk?role=${encodeURIComponent(role)}`, { cache: 'no-store' })
+      const r = await fetch(`/api/prodesk?role=${encodeURIComponent(role)}`, { cache: 'no-store', signal: ctl.signal })
       if (r.status === 401) { setAuthed(false); setLoading(false); return }
-      if (r.ok) { setData(await r.json()); setAuthed(true) }
-    } catch {} finally { setLoading(false) }
+      if (r.ok) { setData(await r.json()); setAuthed(true); setError('') }
+      else { const d = await r.json().catch(() => ({} as any)); setError(d?.error || `خطای سرور (${r.status})`) }
+    } catch (e: any) { setError(e?.name === 'AbortError' ? 'پاسخِ سرور بیش از ۳۰ ثانیه طول کشید' : 'اتصال برقرار نشد') }
+    finally { clearTimeout(t); setLoading(false) }
   }, [role])
   useEffect(() => { reload() }, [reload])
   const post = useCallback(async (payload: any) => {
@@ -56,7 +63,19 @@ export function useProDesk(role: string) {
       await reload(); return d
     } catch { alert('اتصال برقرار نشد'); return null }
   }, [role, reload])
-  return { data, authed, loading, reload, post }
+  return { data, authed, loading, error, reload, post }
+}
+
+// فاز ۳۴۵ — جای «در حال بارگذاری…»ِ ابدی: بارگذاری، یا خطا با «تلاشِ دوباره».
+export function ProLoading({ error, onRetry }: { error?: string; onRetry?: () => void }) {
+  if (!error) return <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--muted)' }}>در حال بارگذاری…</div>
+  return (
+    <div style={{ textAlign: 'center', padding: '70px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <div style={{ color: '#e06666', fontSize: 14, fontWeight: 700 }}>اطلاعاتِ پنل بارگذاری نشد</div>
+      <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>{error}</div>
+      {onRetry && <button onClick={onRetry} style={{ background: 'var(--gold)', border: 'none', borderRadius: 10, padding: '9px 18px', color: '#1a1400', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🔄 تلاشِ دوباره</button>}
+    </div>
+  )
 }
 
 // ── چرومِ پنل (سایدبار + هدر) ─────────────────────────────────────────────────

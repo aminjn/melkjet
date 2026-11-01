@@ -8,7 +8,7 @@ import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
   Shell, useProDesk, Kpi, LoginGate, SectionCard, Modal, btnGold, ProAiTool, ProLoanCalc, ProCreditScore,
-  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
+  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, ProLoading
 } from '@/app/components/prodesk/ProDeskKit'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
@@ -129,7 +129,7 @@ function Applicants({ requests, post }: { requests: ProRequest[]; post: (p: any)
 }
 
 export default function FinancePage() {
-  const { data, authed, loading, post } = useProDesk(ROLE)
+  const { data, authed, loading, error, reload, post } = useProDesk(ROLE)
   const [view, setView] = useState('dashboard')
   if (!loading && !authed) return <LoginGate />
 
@@ -148,7 +148,7 @@ export default function FinancePage() {
 
   return (
     <Shell cfg={shell} active={view} setActive={setView} title={nav.find(n => n.id === view)?.label || 'داشبورد'}>
-      {!data ? <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--muted)' }}>در حال بارگذاری…</div> :
+      {!data ? <ProLoading error={error} onRetry={reload} /> :
         view === 'dashboard' ? (
           <>
             <div style={{ marginBottom: 16 }}><EmpireCard /></div>

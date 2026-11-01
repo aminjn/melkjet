@@ -9,7 +9,7 @@ import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import ImageUpload from '@/app/components/ImageUpload'
 import {
   Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, FileField, FileLink, ProAiTool,
-  money, fa, card, inputStyle, FONT, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
+  money, fa, card, inputStyle, FONT, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, ProLoading
 } from '@/app/components/prodesk/ProDeskKit'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
@@ -171,7 +171,7 @@ function Inquiries({ requests, post }: { requests: ProRequest[]; post: (p: any) 
 }
 
 export default function ArchitectPage() {
-  const { data, authed, loading, post } = useProDesk(ROLE)
+  const { data, authed, loading, error, reload, post } = useProDesk(ROLE)
   const [view, setView] = useState('dashboard')
   if (!loading && !authed) return <LoginGate />
 
@@ -191,7 +191,7 @@ export default function ArchitectPage() {
 
   return (
     <Shell cfg={shell} active={view} setActive={setView} title={nav.find(n => n.id === view)?.label || 'داشبورد'}>
-      {!data ? <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--muted)' }}>در حال بارگذاری…</div> :
+      {!data ? <ProLoading error={error} onRetry={reload} /> :
         view === 'dashboard' ? (
           <>
             <div style={{ marginBottom: 16 }}><EmpireCard /></div>
