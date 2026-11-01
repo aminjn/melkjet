@@ -616,8 +616,10 @@ export async function buildAgencyRoster(
     const aiDeadline = Date.now() + 15 * 60_000
     let failStreak = 0, doneCount = 0, next = 0, stopped = false
     const ask = async (slice: typeof pending): Promise<number> => {
-      const chunk = slice.map(p2 => ({ i: p2.idx, title: p2.row.title, desc: p2.row.desc }))
       try {
+        // داخلِ try: هر خطای غیرمنتظره در ساختِ درخواست فقط همین آگهی را «بی‌پاسخ» می‌کند، نه کلِ سینک را.
+        const chunk = slice.filter(Boolean).map(p2 => ({ i: p2.idx, title: p2.row.title, desc: p2.row.desc }))
+        if (!chunk.length) return 0
         const res = await (opts.f?.ai || aiCanonical)(chunk, name)
         const got = res.map
         // پاسخِ قدیمیِ بی‌answered (تستِ تزریقی): اگر نامی داد، کلِ دسته پاسخ‌گرفته حساب می‌شود.
@@ -634,7 +636,12 @@ export async function buildAgencyRoster(
       while (!stopped && next < pending.length) {
         if (Date.now() > aiDeadline) { if (!aiStats.budgetHit) console.log('[roster] AI phase budget hit — continuing without AI'); aiStats.budgetHit = true; stopped = true; break }
         if (opts.shouldStop && await opts.shouldStop()) { stopped = true; break }
+        // فاز ۳۴۴ح (اسکرین‌شاتِ مالک: «Cannot read properties of undefined (reading 'idx')» روی ده‌ها آژانس) — مسابقهٔ کارگرها:
+        // شرطِ while «پیش از» awaitِ shouldStop چک می‌شد؛ در همان فاصله کارگرِ دیگر آخرین آگهی را برمی‌داشت و این کارگر
+        // pending[next++] = undefined می‌گرفت ⇒ ask([undefined]) ⇒ کلِ سینک می‌افتاد. برداشتن «بعد از» همهٔ awaitها و با چک.
+        if (next >= pending.length) break
         const item = pending[next++]
+        if (!item) break
         const n = await ask([item])
         if (n === 0) { aiStats.failedBatches++; failStreak++ } else failStreak = 0
         doneCount++
