@@ -35,10 +35,11 @@ export interface RosterAdvisor {
   transferFrom?: string  // فاز ۲۷۷ — ownerِ موقتِ مبدأ تا وقتی انتقالِ فایل‌ها تمام نشده (ازسرگیریِ امن)
   src?: { ai: number; sig: number; machine: number; claim: number }   // فاز ۳۴۴ — چه کسی نام را داد (پنل)
   aliases?: string[]     // فاز ۳۴۴ج — کلیدِ خوشه‌هایی که در همین مشاور ادغام شده‌اند (سینکِ بعد به همین رکورد نگاشت می‌شوند)
+  mergePending?: { id: string; key: string; name: string }   // فاز ۳۴۴ز — ادغام در صف (پنل «⏳ در حالِ ادغام با X»)
   mergedInto?: { id: string; key: string }   // فاز ۳۴۴ج — این رکورد در مشاورِ آژانسِ دیگری ادغام شده (همان حساب/شماره)
 }
 // کارِ صفِ «ساختِ حساب» — سنگین (انتقالِ فایل‌ها)، روی اینستنسِ ۰ اجرا می‌شود تا درخواستِ ادمین قفل نشود.
-export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; startedAt?: number; attempts?: number; prepared?: boolean; error?: string }   // attempts: شمارِ خطاهای گذرا؛ prepared: بخشِ آنی (حساب+شماره) انجام شده (۲۸ سپتامبر)   // فاز ۱۹۹ — claim برای صفِ at-least-once
+export interface GradJob { jid: string; id: string; key: string; phone: string; role: string; at: number; mergeTo?: { id: string; key: string; name: string }; startedAt?: number; attempts?: number; prepared?: boolean; error?: string }   // attempts: شمارِ خطاهای گذرا؛ prepared: بخشِ آنی (حساب+شماره) انجام شده (۲۸ سپتامبر)   // فاز ۱۹۹ — claim برای صفِ at-least-once
 export interface RosterScrape {
   id: string
   slug: string
@@ -179,6 +180,18 @@ async function mutateQueue<R>(fn: (jobs: GradJob[]) => R): Promise<R> {
   await ensureRosterShards()
   return kvMutate<{ jobs?: GradJob[] }, R>(QK, { jobs: [] }, box => { box.jobs = box.jobs || []; return fn(box.jobs) })
 }
+// فاز ۳۴۴ز — شناسهٔ آژانس‌هایی که «واقعاً» در حالِ سینک‌اند (همان منطقِ anyScrapeRunning، ولی فهرست).
+export async function runningScrapeIds(): Promise<Set<string>> {
+  const now = Date.now()
+  if (!pgEnabled()) return new Set(Object.values(fileLoad().scrapes).filter(s => !!s.running && !isStale(s, now)).map(s => s.id))
+  await ensureRosterShards()
+  const out = new Set<string>()
+  for (const r of (await kvGetPrefixField<boolean>('roster:s:', 'running')).filter(r => r.data === true)) {
+    const s = await kvGet<RosterScrape | null>(r.key, null)
+    if (s?.id && !isStale(s, now)) out.add(s.id)
+  }
+  return out
+}
 export async function anyScrapeRunning(): Promise<boolean> {
   const now = Date.now()
   if (!pgEnabled()) return Object.values(fileLoad().scrapes).some(s => !!s.running && !isStale(s, now))
@@ -247,7 +260,7 @@ export async function listScrapes(): Promise<RosterScrape[]> {
   return Object.values(db.scrapes)
     .map(s => isStale(s, now) ? { ...s, running: false, lastError: s.lastError || 'همگام‌سازی نیمه‌کاره ماند — خودکار از همان‌جا ادامه می‌یابد' } : s)
     // فاز ۱۹۹ — پرچمِ یتیمِ «در حال ساخت»: اگر کاری در صف نیست، پرچم در نمایش خاموش می‌شود (خودترمیم)
-    .map(s => ({ ...s, advisors: (s.advisors || []).map(a => a.graduating && !q.some(j => j.id === s.id && j.key === a.key) ? { ...a, graduating: false } : a) }))
+    .map(s => ({ ...s, advisors: (s.advisors || []).map(a => (a.graduating || a.mergePending) && !q.some(j => j.id === s.id && j.key === a.key) ? { ...a, graduating: false, mergePending: undefined } : a) }))
     .map(s => s.agencyGraduating && !q.some(j => j.id === s.id && j.key === '__agency__') ? { ...s, agencyGraduating: false } : s)
     // فاز ۳۴۴و — وضعیتِ صف برای پنل (علتِ خطای گذرا دیگر فقط در لاگِ سرور نیست)
     .map(s => { const js = q.filter(j => j.id === s.id); return js.length ? { ...s, gradJobs: js.map(j => ({ key: j.key, prepared: !!j.prepared, error: j.error || '', attempts: j.attempts || 0 })) } : s })
@@ -588,7 +601,7 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
 // «در حال ساخت حساب…» می‌ماند (کار در صف prepared بود و دیگر دوباره آماده نمی‌شد). سینک‌های طولانی‌ترِ فاز ۳۴۴ (AI
 // تک‌آگهی، بازخوانیِ متن) این پنجره را بزرگ کرد. حالا هنگامِ نوشتن، فیلدهای «حساب» از نسخهٔ «زنده» گرفته می‌شوند و
 // رکوردی که ادمین وسطِ سینک حذف/ادغام کرده دوباره زنده نمی‌شود.
-const LIVE_FIELDS = ['phone', 'owner', 'graduating', 'graduatedAt', 'transferFrom', 'aliases', 'mergedInto'] as const
+const LIVE_FIELDS = ['phone', 'owner', 'graduating', 'graduatedAt', 'transferFrom', 'aliases', 'mergedInto', 'mergePending'] as const
 export function mergeLiveAdvisors(live: RosterAdvisor[], recs: RosterAdvisor[], snapKeys: Set<string>): RosterAdvisor[] {
   const cur = new Map((live || []).map(a => [a.key, a]))
   const out: RosterAdvisor[] = []
@@ -1074,10 +1087,9 @@ let _orphanCursor = 0
 const _agencyHealChecked = new Set<string>()
 export async function healAgencyLegacyFiles(): Promise<number> {
   const scrapes = await listScrapes()
-  if (scrapes.some(s => s.running)) return 0
   const q = await getQueue()
   for (const s of scrapes) {
-    if (_agencyHealChecked.has(s.id)) continue
+    if (_agencyHealChecked.has(s.id) || s.running) continue
     if (!s.agencyPhone || s.agencyTransferFrom || s.agencyOwner !== s.agencyPhone) { _agencyHealChecked.add(s.id); continue }
     if (q.some(j => j.id === s.id && j.key === '__agency__')) continue
     const legacy = `agency:${s.slug}`
@@ -1169,6 +1181,7 @@ export async function prepareGraduateJobs(only?: { id: string; key: string }): P
   let did = 0
   for (const job of jobs) {
     if (only && (job.id !== only.id || job.key !== only.key)) continue
+    if (job.mergeTo) continue   // ادغام «بخشِ آنی» ندارد — کلِ کارش انتقالِ فایل‌هاست (پایین)
     const sc = await getScrape(job.id)
     if (!sc) continue
     const isAgency = job.key === '__agency__'
@@ -1206,14 +1219,16 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
   // سنگینِ فایل‌ها تا پایانِ سینک صبر می‌کند تا با آن سرِ استخر/قفل نجنگد و timeout نخورد.
   const preJobs = await getQueue()
   if (!preJobs.length) return { ran: false }
-  const syncRunning = await anyScrapeRunning()
   // «بخشِ آنی» برای همهٔ کارهای منتظر همیشه اول (ایدمپوتنت؛ کرون هم جدا صدایش می‌زند).
   const did = await prepareGraduateJobs()
-  // وسطِ سینک انتقالِ سنگین اجرا نمی‌شود (رقابتِ استخر/قفل — درسِ ۳۰ اوت)؛ فقط بخشِ آنی.
-  if (syncRunning) return { ran: did > 0 }
+  // فاز ۳۴۴ز («ساخت حساب و ادغام یک ساعت طول می‌کشد») — قبلاً انتقال/ادغام تا وقتی «هیچ» آژانسی در حالِ سینک نبود صبر
+  // می‌کرد؛ با ۱۳۲ آژانس و سینکِ تقریباً بی‌وقفه یعنی ساعت‌ها. حالا فقط صبر برای سینکِ «همان» آژانس (مبدأ و مقصدِ ادغام)
+  // — چون آن سینک ممکن است وسطِ انتقال فایلِ تازه زیرِ ownerِ موقت بنشاند. انتقال per-فایل و روی شاردهای کوچک است؛
+  // و reassignListingOwnerPhone دیگر کلِ جدولِ آگهی‌ها را قفل نمی‌کند — پس رقابتِ استخرِ ۳۰ اوت این‌جا تکرار نمی‌شود.
+  const busy = await runningScrapeIds()
   const job = await mutateQueue(jobs => {
     const now = Date.now()
-    const j = jobs.find(x => !x.startedAt || now - x.startedAt > 10 * 60_000)
+    const j = jobs.find(x => (!x.startedAt || now - x.startedAt > 10 * 60_000) && !busy.has(x.id) && !(x.mergeTo && busy.has(x.mergeTo.id)))
     if (j) j.startedAt = now
     return j ? { ...j } : null
   })
@@ -1226,8 +1241,21 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
     mutateQueue(jobs => { const j = jobs.find(x => x.jid === job.jid); if (j) j.startedAt = Date.now() }).catch(() => {})
   }, 2 * 60_000)
   try {
-    console.log(`[roster] graduate job start key=${job.key} phone=${job.phone}`)
+    console.log(`[roster] ${job.mergeTo ? 'merge' : 'graduate'} job start key=${job.key} phone=${job.phone}${job.mergeTo ? ` → ${job.mergeTo.name}` : ''}`)
     const t0 = Date.now()
+    if (job.mergeTo) {
+      // فاز ۳۴۴ز — ادغام دیگر داخلِ درخواستِ HTTP نیست (آن‌جا با timeout می‌مرد و «۲۰ بار زدم، هیچ اتفاقی نیفتاد»)؛
+      // کارِ صف است، روی اینستنسِ ۰، بیرونِ سینک. انتقال per-فایل اتمی است ⇒ شکستِ نیمه‌راه با تلاشِ بعدی کامل می‌شود.
+      const m = await mergeAdvisorInto(job.id, job.key, job.mergeTo.id, job.mergeTo.key)
+      console.log(`[roster] merge job end ok=${m.ok} moved=${m.moved ?? 0} ms=${Date.now() - t0}${m.error ? ' err=' + m.error : ''}`)
+      if (!m.ok && /نیمه‌کاره/.test(m.error || '') && (job.attempts || 0) < 8) {
+        await mutateQueue(jobs => { const j = jobs.find(x => x.jid === job.jid); if (j) { j.startedAt = undefined; j.attempts = (j.attempts || 0) + 1; j.error = (m.error || '').slice(0, 160) } })
+        return { ran: true, ok: false, error: m.error }
+      }
+      await mutateQueue(jobs => { const i = jobs.findIndex(x => x.jid === job.jid); if (i >= 0) jobs.splice(i, 1) })
+      if (!m.ok) await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) { rec.graduating = false; delete rec.mergePending } s.lastError = `ادغام ناموفق: ${m.error || 'خطا'}` } })
+      return { ran: true, ok: m.ok, error: m.error }
+    }
     const r = await graduateAdvisor(job.id, job.key, job.phone, job.role)
     console.log(`[roster] graduate job end ok=${r.ok} moved=${r.moved ?? 0} ms=${Date.now() - t0}${r.error ? ' err=' + r.error : ''}`)
     await mutateQueue(jobs => { const i = jobs.findIndex(x => x.jid === job.jid); if (i >= 0) jobs.splice(i, 1) })   // فاز ۱۹۹: حذف فقط بعدِ اتمام
@@ -1249,7 +1277,7 @@ export async function processGraduateQueue(): Promise<{ ran: boolean; ok?: boole
       await mutateQueue(jobs => { const j = jobs.find(x => x.jid === job.jid); if (j) { j.startedAt = undefined; j.attempts = (j.attempts || 0) + 1 } })
     } else {
       await mutateQueue(jobs => { const i = jobs.findIndex(x => x.jid === job.jid); if (i >= 0) jobs.splice(i, 1) })
-      await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) rec.graduating = false; if (job.key === '__agency__') s.agencyGraduating = false; s.lastError = `ساختِ حساب ناموفق: ${msg}` } })
+      await mutateScrape(job.id, s => { if (s) { const rec = s.advisors.find(a => a.key === job.key); if (rec) { rec.graduating = false; delete rec.mergePending } if (job.key === '__agency__') s.agencyGraduating = false; s.lastError = `ساختِ حساب ناموفق: ${msg}` } })
     }
     return { ran: true, ok: false, error: msg }
   } finally { clearInterval(beat) }
@@ -1312,9 +1340,9 @@ export async function phoneConflict(phone: string, exceptId: string, exceptKey: 
   const p = String(phone).replace(/[۰-۹٠-٩]/g, d => String(d.charCodeAt(0) >= 0x06f0 ? d.charCodeAt(0) - 0x06f0 : d.charCodeAt(0) - 0x0660)).replace(/\D/g, '')
   if (!p) return null
   const self = (await getScrape(exceptId))?.advisors.find(a => a.key === exceptKey)?.name || ''
+  // فاز ۳۴۴ز — listScrapes خودش همهٔ ردیف‌ها را دارد؛ getScrapeِ دوباره برای ۱۳۲ آژانس، کلیک را ثانیه‌ها کند می‌کرد.
   for (const sc of await listScrapes()) {
-    const full = await getScrape(sc.id)
-    for (const a of (full?.advisors || [])) {
+    for (const a of (sc.advisors || [])) {
       if (!a.phone || String(a.phone) !== p) continue
       if (sc.id === exceptId && a.key === exceptKey) continue
       if (self && nameCompatible(self, a.name)) continue      // همان شخص با نامِ کوتاه/کامل
@@ -1328,8 +1356,7 @@ export async function phoneConflict(phone: string, exceptId: string, exceptKey: 
 export async function phoneConflicts(): Promise<{ phone: string; legit: boolean; who: PhoneConflict[] }[]> {
   const by = new Map<string, PhoneConflict[]>()
   for (const sc of await listScrapes()) {
-    const full = await getScrape(sc.id)
-    for (const a of (full?.advisors || [])) {
+    for (const a of (sc.advisors || [])) {
       if (!a.phone) continue
       const k = String(a.phone)
       const g = by.get(k) || []; g.push({ id: sc.id, slug: sc.slug || sc.id, key: a.key, name: a.name }); by.set(k, g)
@@ -1356,6 +1383,27 @@ export async function phoneConflicts(): Promise<{ phone: string; legit: boolean;
 // (۲) ادغام فقط ردیف را پاک می‌کرد؛ سینکِ بعد همان خوشه را از متنِ آگهی‌ها دوباره می‌ساخت. حالا «حافظه» دارد:
 //     هم‌آژانس ⇒ کلیدِ مبدأ در `aliases`ِ مقصد (سینک خوشه را به مقصد نگاشت می‌کند)؛ آژانسِ دیگر ⇒ رکوردِ مبدأ به
 //     همان شماره/حسابِ مقصد وصل می‌ماند (`mergedInto`) تا آگهی‌های این آژانس هم زیرِ همان حساب ایمپورت شوند.
+// فاز ۳۴۴ز — «ادغام‌ها را ۲۰ بار زدم، نیم ساعت هیچ اتفاقی نیفتاد»: ادغام داخلِ درخواستِ HTTP (اینستنسِ سرویس‌ده) اجرا می‌شد —
+// انتقالِ فایل‌ها + بازنویسیِ مالکِ آگهی‌های منتشرشده — و از مهلتِ درخواست می‌گذشت؛ هیچ ردی هم در پنل نمی‌ماند. حالا مثلِ
+// «ساخت حساب» در صف می‌رود: ردیف همان لحظه «⏳ در حالِ ادغام با X» می‌شود و کارِ سنگین روی اینستنسِ ۰ انجام می‌شود.
+export async function enqueueMerge(fromId: string, fromKey: string, toId: string, toKey: string): Promise<{ ok: boolean; error?: string; queued?: boolean }> {
+  if (fromId === toId && fromKey === toKey) return { ok: false, error: 'مبدأ و مقصد یکی‌اند' }
+  const to = (await getScrape(toId))?.advisors.find(a => a.key === toKey)
+  if (!to) return { ok: false, error: 'مشاورِ مقصد یافت نشد' }
+  const v = await mutateScrape(fromId, s => {
+    const r = s?.advisors.find(a => a.key === fromKey)
+    if (!r) return false
+    r.graduating = true; r.mergePending = { id: toId, key: toKey, name: to.name }
+    return true
+  })
+  if (!v) return { ok: false, error: 'مشاور یافت نشد' }
+  await mutateQueue(jobs => {
+    if (jobs.some(j => j.id === fromId && j.key === fromKey)) return
+    jobs.push({ jid: 'mrg_' + Math.random().toString(36).slice(2, 8), id: fromId, key: fromKey, phone: to.phone || '', role: 'advisor', at: Date.now(), mergeTo: { id: toId, key: toKey, name: to.name } })
+  })
+  return { ok: true, queued: true }
+}
+
 export async function mergeAdvisorInto(fromId: string, fromKey: string, toId: string, toKey: string): Promise<{ ok: boolean; error?: string; moved?: number }> {
   if (fromId === toId && fromKey === toKey) return { ok: false, error: 'مبدأ و مقصد یکی‌اند' }
   const fromScrape = await getScrape(fromId); const toScrape = await getScrape(toId)
@@ -1402,7 +1450,7 @@ export async function mergeAdvisorInto(fromId: string, fromKey: string, toId: st
       if (!s) return
       const r = s.advisors.find(a => a.key === fromKey)
       if (r) {
-        r.name = to.name; r.owner = toOwner; r.graduating = false; delete r.transferFrom
+        r.name = to.name; r.owner = toOwner; r.graduating = false; delete r.transferFrom; delete r.mergePending
         if (to.phone) { r.phone = to.phone; r.graduatedAt = r.graduatedAt || Date.now() }
         r.mergedInto = { id: toId, key: toKey }
       }

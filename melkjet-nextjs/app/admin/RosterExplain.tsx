@@ -68,6 +68,12 @@ export function UnnamedExplain({ id }: { id: string }) {
     } catch (e: any) { setErr(String(e?.message || e)) }
     setBusy(false)
   }
+  // فاز ۳۴۴ز — وقتی نه AI نه ماشین نامی داده، آخرین واژهٔ «خطِ امضا» (پس از «:» یا لقب) پیش‌پرِ کادر می‌شود تا ادمین فقط تأیید کند.
+  const sigGuess = (line?: string) => {
+    const t = String(line || '').replace(/\u200c/g, ' ').split(/[:：]/).pop() || ''
+    const w = t.replace(/[^\p{L}\s]/gu, ' ').split(/\s+/).filter(x => x && !/^(خانم|آقای|آقا|دکتر|مهندس|سرکار|جناب|مشاور|کارشناس|شما)$/.test(x))
+    return w.slice(-2).join(' ')
+  }
   // «✅ این نام است» → فهرستِ سفید (سراسری؛ نقش/لقب را سرور خودش جدا می‌کند — «کارشناس خانم X» ⇒ «X»).
   const whitelist = async (guess: string) => {
     const name = (window.prompt('نامِ مشاور (فقط نام — بدونِ «کارشناس/خانم/آقای»):', guess) || '').trim()
@@ -141,7 +147,7 @@ export function UnnamedExplain({ id }: { id: string }) {
           <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--text)', lineHeight: 1.8 }}>علت: {r.reason}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
             {!!r.text && <button onClick={() => setOpenTok(openTok === r.token ? '' : r.token)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{openTok === r.token ? 'بستنِ متن' : 'متنی که به AI رفت'}</button>}
-            {!r.metaText && !r.noText && <button onClick={() => whitelist(r.ai || r.machine)} style={{ background: 'transparent', border: '1px solid rgba(95,217,138,.45)', borderRadius: 8, padding: '3px 9px', color: '#5fd98a', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✅ این نام است</button>}
+            {!r.metaText && !r.noText && <button onClick={() => whitelist(r.ai || r.machine || sigGuess(r.sigLine))} style={{ background: 'transparent', border: '1px solid rgba(95,217,138,.45)', borderRadius: 8, padding: '3px 9px', color: '#5fd98a', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✅ این نام است</button>}
           </div>
           {openTok === r.token && <pre style={{ marginTop: 6, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12, lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px', maxHeight: 280, overflow: 'auto', direction: 'rtl' }}>{r.text}</pre>}
         </div>

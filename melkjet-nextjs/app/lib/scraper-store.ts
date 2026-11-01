@@ -1349,13 +1349,20 @@ export async function deleteListingsByOwnerPhone(phone: string): Promise<number>
 }
 
 export async function reassignListingOwnerPhone(from: string, to: string): Promise<number> {
-  return mutate(db => {
-    let n = 0
-    for (const it of db.items) {
-      if (it.type === 'listing' && it.meta?.['__ownerPhone'] === from) { it.meta['__ownerPhone'] = to; n++ }
-    }
-    return n
-  })
+  // فاز ۳۴۴ز («ساخت حساب و ادغام یک ساعت طول می‌کشد») — قبلاً `mutate`ِ کامل بود: کلِ جدولِ آگهی‌ها (~۱۶۶MB) زیرِ قفلِ سراسریِ
+  // scraper_meta خوانده و diff می‌شد، برای هر ادغام — حتی وقتی هیچ آگهیِ منتشرشده‌ای نداشت (حالتِ عادیِ مشاورِ بی‌حساب).
+  // حالا شناسه‌ها از کشِ خواندن (بی‌قفل) پیدا و فقط همان ردیف‌ها با mutateSome (قفلِ ریزدانه) عوض می‌شوند.
+  const ids = (await load()).items.filter(it => it.type === 'listing' && it.meta?.['__ownerPhone'] === from).map(it => it.id)
+  if (!ids.length) return 0
+  let n = 0
+  for (let i = 0; i < ids.length; i += 50) {
+    n += await mutateSome(ids.slice(i, i + 50), ({ items }) => {
+      let c = 0
+      for (const it of items) if (it.type === 'listing' && it.meta?.['__ownerPhone'] === from) { it.meta['__ownerPhone'] = to; c++ }
+      return c
+    })
+  }
+  return n
 }
 
 // تمدیدِ آگهی برای ۳۰ روزِ دیگر

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, prepareGraduateJobs, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, mergeAdvisorInto, listDueRosters, explainUnnamed } from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, prepareGraduateJobs, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, enqueueMerge, listDueRosters, explainUnnamed } from '@/app/lib/agency-roster-store'
 import { getCronBeat } from '@/app/lib/cron-heartbeat'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { rosterCities } from '@/app/lib/agency-roster-city'
@@ -107,9 +107,10 @@ export async function POST(req: NextRequest) {
         error: `این شماره از قبل به «${cf.name}» در آژانسِ ${cf.slug} داده شده. اگر همان شخص است، دوباره با تأیید بزنید.`,
         conflict: cf,
       }, { status: 409 })
-      const r = await mergeAdvisorInto(String(b.id), String(b.key), cf.id, cf.key)
-      if (r.ok) logAudit(who(s), 'ادغامِ مشاورِ هم‌شماره', `${b.key} → «${cf.name}» (${r.moved || 0} آگهی)`)
-      return NextResponse.json({ ...r, merged: true }, { status: r.ok ? 200 : 400 })
+      // فاز ۳۴۴ز — ادغام در صف (نه داخلِ همین درخواست که با timeout می‌مرد)
+      const r = await enqueueMerge(String(b.id), String(b.key), cf.id, cf.key)
+      if (r.ok) logAudit(who(s), 'ادغامِ مشاورِ هم‌شماره (در صف)', `${b.key} → «${cf.name}»`)
+      return NextResponse.json({ ...r, merged: true, mergeQueued: true, into: cf.name }, { status: r.ok ? 200 : 400 })
     }
     const r = await enqueueGraduate(String(b.id), String(b.key), String(b.phone), b.role ? String(b.role) : undefined)
     if (r.ok) { const sc = await getScrape(String(b.id)); logAudit(who(s), 'درخواستِ ساختِ حسابِ مشاور از آژانس', `${sc?.slug || ''} · ${b.key} → ${b.phone}`) }
@@ -136,9 +137,9 @@ export async function POST(req: NextRequest) {
           error: `این شماره از قبل به «${cf.name}» در آژانسِ ${cf.slug} داده شده.`, conflict: cf,
         }, { status: 409 })
         // فاز ۳۳۶ح — تأییدِ کاربر = «همین شخص» → ادغام در مشاورِ موجود، نه رکوردِ دوم.
-        const r = await mergeAdvisorInto(String(b.id), String(b.key), cf.id, cf.key)
-        if (r.ok) logAudit(who(s), 'ادغامِ مشاورِ هم‌شماره', `${b.key} → «${cf.name}» (${r.moved || 0} آگهی)`)
-        return NextResponse.json({ ...r, merged: true }, { status: r.ok ? 200 : 400 })
+        const r = await enqueueMerge(String(b.id), String(b.key), cf.id, cf.key)
+        if (r.ok) logAudit(who(s), 'ادغامِ مشاورِ هم‌شماره (در صف)', `${b.key} → «${cf.name}»`)
+        return NextResponse.json({ ...r, merged: true, mergeQueued: true, into: cf.name }, { status: r.ok ? 200 : 400 })
       }
     }
     const r = await editAdvisor(String(b.id), String(b.key), {

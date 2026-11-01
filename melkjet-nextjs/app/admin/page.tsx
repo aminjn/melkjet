@@ -2579,7 +2579,7 @@ function AgencyRosterPanel() {
       j = await post({ action: 'graduate', id, key, phone: ph, force: true })
     }
     if (j.ok) {
-      if (j.merged) setMsg(`✅ ادغام شد — با مشاورِ هم‌شماره یکی شد${j.moved ? ` (${fa(j.moved)} آگهی منتقل شد)` : ''}.`)
+      if (j.merged) setMsg(`⏳ ادغام با «${j.into || 'مشاورِ هم‌شماره'}» در صف رفت — ردیف تا پایانِ انتقالِ فایل‌ها «در حالِ ادغام» می‌ماند و بعد خودش حذف می‌شود. لازم نیست دوباره بزنید.`)
       else if (j.instant) setMsg('✅ حساب ساخته شد — انتقالِ فایل‌ها در پس‌زمینه انجام می‌شود (اگر همگام‌سازی در جریان باشد، بعد از پایانش). لازم نیست دوباره بزنید.')
       else setMsg('⏳ در صفِ ساختِ حساب — تا یک دقیقهٔ دیگر روی سرور ساخته می‌شود. لازم نیست دوباره بزنید.')
       load()
@@ -2598,7 +2598,7 @@ function AgencyRosterPanel() {
       if (!confirm(`${j.error}\n\nاگر همان شخص است تأیید کن.`)) { setMsg('لغو شد'); return }
       j = await post({ action: 'edit-advisor', id, key, name: nm, phone: ph, force: true })
     }
-    if (j.ok) { setMsg(j.merged ? `✅ ادغام شد — این مشاور با مشاورِ هم‌شماره یکی شد${j.moved ? ` (${fa(j.moved)} آگهی منتقل شد)` : ''}.` : j.queued ? '✅ حساب در حالِ ساخت است — چند لحظهٔ دیگر در «کاربران» می‌آید و آگهی‌هایش منتشر می‌شود.' : `✅ ذخیره شد${j.moved ? ` — ${fa(j.moved)} فایل منتقل شد` : ''}`); load() }
+    if (j.ok) { setMsg(j.merged ? `⏳ ادغام با «${j.into || 'مشاورِ هم‌شماره'}» در صف رفت — ردیف تا پایانِ انتقالِ فایل‌ها «در حالِ ادغام» می‌ماند. لازم نیست دوباره بزنید.` : j.queued ? '✅ حساب در حالِ ساخت است — چند لحظهٔ دیگر در «کاربران» می‌آید و آگهی‌هایش منتشر می‌شود.' : `✅ ذخیره شد${j.moved ? ` — ${fa(j.moved)} فایل منتقل شد` : ''}`); load() }
     else setMsg('❌ ' + (j.error || 'خطا'))
   }
   // انتخابِ گروهی: پاک‌سازیِ مشاورانِ جعلی نباید ۲۰ بار کلیک و تأیید باشد.
@@ -2812,7 +2812,7 @@ function AgencyRosterPanel() {
                       {a.phone
                         ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {a.phone}{a.graduating ? <span dir="rtl" style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 11 }}> · انتقالِ فایل‌ها در صف</span> : null}</span>
                         : a.graduating
-                          ? <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>⏳ در حالِ ساختِ حساب…{(() => { const e = (s.gradJobs || []).find((j: any) => j.key === a.key)?.error; return e ? <span style={{ fontWeight: 400, color: '#e06666', fontSize: 11 }}> (تلاشِ دوباره: {e.slice(0, 80)})</span> : null })()}</span>
+                          ? <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{a.mergePending ? `⏳ در حالِ ادغام با «${a.mergePending.name}»…` : '⏳ در حالِ ساختِ حساب…'}{(() => { const e = (s.gradJobs || []).find((j: any) => j.key === a.key)?.error; return e ? <span style={{ fontWeight: 400, color: '#e06666', fontSize: 11 }}> (تلاشِ دوباره: {e.slice(0, 80)})</span> : null })()}</span>
                           : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="۰۹… یا ثابت ۰۲۱…" value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
                             <button onClick={() => graduate(s.id, a.key)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب</button></>}
                       <button onClick={() => editAdvisorUi(s.id, a.key, a)} title="ویرایشِ نام و شماره" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: 'var(--gold)', fontSize: 11.5, cursor: 'pointer' }}>ویرایش</button>
