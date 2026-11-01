@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { ownerShards } from './owner-shards'
 import { getProfile } from './profile-store'
 
 // استور پنل «مالک/فروشنده» — per-owner (مثل materials-store). هر کاربر فقط دادهٔ خودش.
@@ -68,6 +69,11 @@ async function withDb<R>(fn: (db: DB) => R): Promise<R> {
   if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { owners: {} }, fn)
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
+// فاز ۳۴۵ج — «هر مالک ردیفِ خودش» (owner-shards). بلابِ `owner` یخ‌زده (rollback)؛ حالتِ فایل دست‌نخورده.
+const SH = ownerShards<OwnerData, DB>({ legacyKey: KV_KEY, field: 'owners', prefix: 'ush:owner:', marker: 'owner_shard_v1' })
+const loadOwnerDb = async (o: string): Promise<DB> => pgEnabled() ? SH.loadOwnerDb(o) : fileLoad()
+const withOwnerDb = async <R,>(o: string, fn: (db: DB) => R): Promise<R> => pgEnabled() ? SH.withOwnerDb(o, fn) : withDb(fn)
+const loadAllDb = async (): Promise<DB> => pgEnabled() ? SH.loadAllDb() : fileLoad()
 
 const PROP_STATUSES: PropStatus[] = ['active', 'sold', 'rented', 'draft']
 
@@ -87,13 +93,13 @@ function applyOwner(db: DB, o: string): boolean {
 }
 
 export async function getOwner(owner: string): Promise<OwnerData> {
-  const db = await load()
+  const db = await loadOwnerDb(owner)
   // اگر seed/پاک‌سازی لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی جدید بود ذخیره می‌شد).
   if (!applyOwner(db, owner)) return db.owners[owner]
-  return withDb(d => { applyOwner(d, owner); return d.owners[owner] })
+  return withOwnerDb(owner, d => { applyOwner(d, owner); return d.owners[owner] })
 }
 async function mutate(owner: string, fn: (o: OwnerData) => void): Promise<OwnerData> {
-  return withDb(db => { if (!db.owners[owner]) db.owners[owner] = seed(); fn(db.owners[owner]); return db.owners[owner] })
+  return withOwnerDb(owner, db => { if (!db.owners[owner]) db.owners[owner] = seed(); fn(db.owners[owner]); return db.owners[owner] })
 }
 
 export async function ownerStats(owner: string) {
@@ -165,7 +171,7 @@ export async function addInquiry(owner: string, input: { propertyId: string; nam
   let created!: Inquiry
   await mutate(owner, o => { created = { id: id('q_'), propertyId: input.propertyId, name: input.name, phone: input.phone, message: input.message, customerPhone: input.customerPhone || input.phone, status: 'new', createdAt: Date.now() }; o.inquiries.unshift(created) })
   let title = ''
-  try { const db = await load(); title = db.owners[owner]?.properties?.find(p => p.id === input.propertyId)?.title || '' } catch {}
+  try { const db = await loadOwnerDb(owner); title = db.owners[owner]?.properties?.find(p => p.id === input.propertyId)?.title || '' } catch {}
   const msg = '\ud83d\udce9 \u0627\u0633\u062a\u0639\u0644\u0627\u0645\u0650 \u062a\u0627\u0632\u0647 \u0627\u0632 ' + input.name + (title ? ' \u062f\u0631\u0628\u0627\u0631\u0647\u0654 \u00ab' + title + '\u00bb' : '')
   import('./notif-store').then(m => m.addNotif(owner, msg, 'inquiry')).catch(() => {})
   return created
@@ -184,7 +190,7 @@ export async function answerInquiry(owner: string, qid: string, reply: string): 
     let who = '\u0645\u0627\u0644\u06a9'
     let title = ''
     try {
-      const db = await load(); const od = db.owners[owner]
+      const db = await loadOwnerDb(owner); const od = db.owners[owner]
       who = getProfile(owner).businessName || od?.profile?.name || who
       title = od?.properties?.find(p => p.id === r.propertyId)?.title || ''
     } catch {}
@@ -200,7 +206,7 @@ export type MyPropertyInquiry = Inquiry & { ownerName: string; propertyTitle: st
 export async function listMyPropertyInquiries(phone: string): Promise<MyPropertyInquiry[]> {
   const me = String(phone || '').replace(/\D/g, '')
   if (!me) return []
-  const db = await load()
+  const db = await loadAllDb()
   const out: MyPropertyInquiry[] = []
   for (const [owner, od] of Object.entries(db.owners)) {
     for (const q of od.inquiries || []) {
@@ -213,7 +219,7 @@ export async function listMyPropertyInquiries(phone: string): Promise<MyProperty
   return out.sort((a, b) => b.createdAt - a.createdAt)
 }
 export async function listReceivedPropertyInquiries(owner: string): Promise<Array<Inquiry & { propertyTitle: string }>> {
-  const db = await load()
+  const db = await loadOwnerDb(owner)
   const od = db.owners[owner]
   if (!od) return []
   return (od.inquiries || [])

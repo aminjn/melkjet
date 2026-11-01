@@ -5,6 +5,7 @@ import { getAccount } from './account-store'
 import { getProfile } from './profile-store'
 import { getProduct as getCatalogProduct, listCategories as listCatalogCategories } from './catalog-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { ownerShards } from './owner-shards'
 
 // Per-owner (per-profile) store for the «بازار مصالح» seller dashboard.
 // دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
@@ -117,6 +118,11 @@ async function withDb<R>(fn: (db: DB) => R): Promise<R> {
   if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { shops: {} }, fn)
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
+// فاز ۳۴۵ج — «هر مالک ردیفِ خودش» (owner-shards). بلابِ `materials` یخ‌زده (rollback)؛ حالتِ فایل دست‌نخورده.
+const SH = ownerShards<Shop, DB>({ legacyKey: KV_KEY, field: 'shops', prefix: 'ush:materials:', marker: 'materials_shard_v1' })
+const loadOwnerDb = async (o: string): Promise<DB> => pgEnabled() ? SH.loadOwnerDb(o) : fileLoad()
+const withOwnerDb = async <R,>(o: string, fn: (db: DB) => R): Promise<R> => pgEnabled() ? SH.withOwnerDb(o, fn) : withDb(fn)
+const loadAllDb = async (): Promise<DB> => pgEnabled() ? SH.loadAllDb() : fileLoad()
 
 const ORDER_STATUSES: OrderStatus[] = ['pending', 'preparing', 'shipped', 'delivered', 'canceled']
 
@@ -147,15 +153,15 @@ function applyShop(db: DB, owner: string): boolean {
 }
 
 export async function getShop(owner: string): Promise<Shop> {
-  const db = await load()
+  const db = await loadOwnerDb(owner)
   // اگر seed/backfill لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی changed بود ذخیره می‌شد).
   if (!applyShop(db, owner)) return db.shops[owner]
-  return withDb(d => { applyShop(d, owner); return d.shops[owner] })
+  return withOwnerDb(owner, d => { applyShop(d, owner); return d.shops[owner] })
 }
 
 // خواندنیِ فقط‌خواندنی برای سایتِ منتشرشده (بدونِ ساختِ فروشگاهِ جدید).
 export async function shopProductsOf(owner: string): Promise<{ products: Product[]; slug: string; name: string } | null> {
-  const db = await load()
+  const db = await loadOwnerDb(owner)
   const shop = db.shops[owner]
   if (!shop) return null
   const p = getProfile(owner)
@@ -164,7 +170,7 @@ export async function shopProductsOf(owner: string): Promise<{ products: Product
 
 // یافتنِ فروشگاه از روی slug عمومی → مالک (شمارهٔ تلفن) و فروشگاه.
 export async function shopBySlug(slug: string): Promise<{ owner: string; shop: Shop } | null> {
-  const db = await load()
+  const db = await loadAllDb()
   for (const [owner, shop] of Object.entries(db.shops)) {
     if (shop.slug === slug) return { owner, shop }
   }
@@ -233,14 +239,14 @@ function normName(s: string): string { return (s || '').replace(/‌/g, '').repl
 
 // تعدادِ فروشندهٔ هر کالای مرجع (برای نشانِ «بدون فروشنده / N فروشنده» در نرخِ روز).
 export async function sellerCountsByCatalog(): Promise<Record<string, number>> {
-  const db = await load(); const out: Record<string, number> = {}
+  const db = await loadAllDb(); const out: Record<string, number> = {}
   for (const shop of Object.values(db.shops)) if (shop.slug) for (const p of shop.products) if (p.active && p.catalogId) out[p.catalogId] = (out[p.catalogId] || 0) + 1
   return out
 }
 
 // فروشندگانِ یک کالای مرجع (کاتالوگ) — برای صفحهٔ محصولِ عمومی و مقایسهٔ قیمت.
 export async function sellersOfCatalog(catalogId: string) {
-  const db = await load()
+  const db = await loadAllDb()
   const out: { slug: string; name: string; logo: string; city: string; rating: number; price: number; discountPct: number; stock: number; unit: string }[] = []
   for (const [owner, shop] of Object.entries(db.shops)) {
     if (!shop.slug) continue
@@ -262,7 +268,7 @@ export async function sellersOfCatalog(catalogId: string) {
 // فقط فروشندهٔ واقعیِ مصالح: کالای فعال دارد یا نقشِ حسابش «مصالح» است.
 // بدونِ این فیلتر هر حسابِ املاک/مشاوری که یک‌بار پنل را باز کرده بود اینجا ظاهر می‌شد.
 export async function listPublicShops(opts?: { city?: string; category?: string; search?: string; withPhone?: boolean }) {
-  const db = await load()
+  const db = await loadAllDb()
   const out: any[] = []
   for (const [owner, shop] of Object.entries(db.shops)) {
     if (!shop.slug) continue
@@ -300,7 +306,7 @@ export async function publicShopFacets() {
 
 // ── نرخِ روزِ مصالح: تجمیعِ قیمتِ محصولاتِ فعالِ همهٔ فروشگاه‌ها بر اساسِ نامِ کالا ──
 export async function materialPriceIndex(opts?: { category?: string; search?: string }) {
-  const db = await load()
+  const db = await loadAllDb()
   const byKey = new Map<string, { name: string; category: string; unit: string; prices: number[]; sellers: Set<string>; lastAt: number }>()
   for (const [owner, shop] of Object.entries(db.shops)) {
     for (const p of shop.products) {
@@ -330,7 +336,7 @@ export async function materialPriceIndex(opts?: { category?: string; search?: st
 }
 
 async function mutate(owner: string, fn: (s: Shop) => void): Promise<Shop> {
-  return withDb(db => { if (!db.shops[owner]) db.shops[owner] = emptyShop(owner); fn(db.shops[owner]); return db.shops[owner] })
+  return withOwnerDb(owner, db => { if (!db.shops[owner]) db.shops[owner] = emptyShop(owner); fn(db.shops[owner]); return db.shops[owner] })
 }
 
 // ماه/سالِ شمسیِ یک زمان‌مُهر (برای گروه‌بندیِ فروش بر اساسِ ماه).
@@ -408,7 +414,7 @@ export async function shopStats(owner: string) {
 // ---- محصولات ----
 // گِیتِ ضدتکراریِ محصول در یک فروشگاه: همان کالای مرجع (catalogId) یا همان نام+واحدِ نرمال‌شده.
 export async function findShopProductTwin(owner: string, input: { name?: string; unit?: string; catalogId?: string }): Promise<Product | null> {
-  const s = (await load()).shops[owner]
+  const s = (await loadOwnerDb(owner)).shops[owner]
   if (!s) return null
   const nrm = (x?: string) => (x || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
   const name = nrm(input.name), unit = nrm(input.unit)
@@ -468,6 +474,7 @@ export async function updateProduct(owner: string, productId: string, patch: any
 // فاز ۲۹۸ه — حذفِ کاملِ فروشگاهِ مصالحِ یک مالک (محصولات/سفارش‌ها/استعلام‌ها) هنگامِ حذفِ حساب.
 export async function deleteMaterialsData(owner: string): Promise<boolean> {
   const o = String(owner || '').trim(); if (!o) return false
+  if (pgEnabled()) return SH.deleteOwner(o)
   return withDb(db => { const had = !!db.shops[o]; delete db.shops[o]; return had })
 }
 
@@ -563,14 +570,14 @@ export async function answerInquiry(owner: string, inquiryId: string, reply: str
 // استعلام‌هایی که به فروشگاهِ خودِ کاربر رسیده. عمدا از getShop استفاده نمی‌شود چون آن
 // برای کاربرِ بدونِ فروشگاه یک فروشگاهِ خالی می‌سازد؛ اینجا فقط می‌خوانیم.
 export async function listReceivedInquiries(owner: string): Promise<Inquiry[]> {
-  const db = await load()
+  const db = await loadOwnerDb(owner)
   return (db.shops[owner]?.inquiries || []).slice().sort((a, b) => b.createdAt - a.createdAt)
 }
 
 export async function listMyInquiries(phone: string): Promise<Array<Inquiry & { shopName: string; shopSlug: string }>> {
   const me = String(phone || '').replace(/\D/g, '')
   if (!me) return []
-  const db = await load()
+  const db = await loadAllDb()
   const out: Array<Inquiry & { shopName: string; shopSlug: string }> = []
   for (const [owner, shop] of Object.entries(db.shops)) {
     for (const q of shop.inquiries || []) {

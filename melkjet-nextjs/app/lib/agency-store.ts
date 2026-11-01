@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto'
 import { getProfile, saveProfile } from './profile-store'
 import { getAccount } from './account-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { ownerShards } from './owner-shards'
 import { aiFor, agentModel, agentProvider } from './gapgpt'
 import { mlFirst } from './ml-gateway'
 const { chatCompleteSafe } = aiFor('پنلِ آژانس (تحلیل)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
@@ -64,6 +65,11 @@ async function withDb<R>(fn: (db: DB) => R): Promise<R> {
   if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { agencies: {} }, fn)
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
+// فاز ۳۴۵ج — «هر مالک ردیفِ خودش» (owner-shards). بلابِ `agency` یخ‌زده (rollback)؛ حالتِ فایل دست‌نخورده.
+const SH = ownerShards<AgencyData, DB>({ legacyKey: KV_KEY, field: 'agencies', prefix: 'ush:agency:', marker: 'agency_shard_v1' })
+const loadOwnerDb = async (o: string): Promise<DB> => pgEnabled() ? SH.loadOwnerDb(o) : fileLoad()
+const withOwnerDb = async <R,>(o: string, fn: (db: DB) => R): Promise<R> => pgEnabled() ? SH.withOwnerDb(o, fn) : withDb(fn)
+const loadAllDb = async (): Promise<DB> => pgEnabled() ? SH.loadAllDb() : fileLoad()
 
 export const STAGES: Stage[] = ['new', 'assigned', 'visit', 'negotiation', 'closed', 'lost']
 const LISTING_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
@@ -108,16 +114,16 @@ function applyAgency(db: DB, o: string): boolean {
 
 // فهرست‌هایی که روی همهٔ آژانس‌ها می‌چرخند با یک خواندن. getAgency در حلقه علاوه بر واکشیِ
 // سندِ کامل، برای آژانسِ seed‌نشده یک نوشتنِ کامل هم می‌کند — این مسیر فقط می‌خواند.
-export async function allAgencyProfiles(): Promise<Record<string, AgencyData>> { return (await load()).agencies || {} }
+export async function allAgencyProfiles(): Promise<Record<string, AgencyData>> { return (await loadAllDb()).agencies || {} }
 
 export async function getAgency(o: string): Promise<AgencyData> {
-  const db = await load()
+  const db = await loadOwnerDb(o)
   // اگر seed/پاک‌سازی لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی تغییر بود ذخیره می‌شد).
   if (!applyAgency(db, o)) return db.agencies[o]
-  return withDb(d => { applyAgency(d, o); return d.agencies[o] })
+  return withOwnerDb(o, d => { applyAgency(d, o); return d.agencies[o] })
 }
 async function mutate(o: string, fn: (a: AgencyData) => void): Promise<AgencyData> {
-  return withDb(db => { if (!db.agencies[o]) db.agencies[o] = seed(); fn(db.agencies[o]); return db.agencies[o] })
+  return withOwnerDb(o, db => { if (!db.agencies[o]) db.agencies[o] = seed(); fn(db.agencies[o]); return db.agencies[o] })
 }
 
 export async function agencyStats(o: string) {
@@ -289,7 +295,7 @@ export async function addDeal(o: string, input: { title: string; amount: number;
 
 // فاز ۱۲۲ — نظارتِ سوپرادمین: خلاصهٔ کارِ همهٔ آژانس‌ها
 export async function agencyWorkSummary(): Promise<Record<string, { leads: number; listings: number; agents: number; deals: number }>> {
-  const db = await load()
+  const db = await loadAllDb()
   const out: Record<string, { leads: number; listings: number; agents: number; deals: number }> = {}
   for (const [o, a] of Object.entries(db.agencies)) out[o] = { leads: (a.leads || []).length, listings: (a.listings || []).length, agents: (a.agents || []).length, deals: (a.deals || []).length }
   return out

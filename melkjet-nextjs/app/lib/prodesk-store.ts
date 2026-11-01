@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { pgEnabled, kvGet, kvMutate } from './db'
+import { pgEnabled, kvGet, kvMutate, kvGetPrefix, pgTx } from './db'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 import { getProfile } from './profile-store'
 
@@ -72,21 +72,76 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
+// ── فاز ۳۴۵ج — «هر متخصص ردیفِ خودش» ───────────────────────────────────────────────────────────────
+// همهٔ درخواست‌ها/رکوردهای «هفت صنف و همهٔ متخصصان» در یک ردیفِ kv('prodesk') بود؛ هر بازکردنِ پنل ۳ بار کلش را
+// می‌خواند و هر ثبت کلش را زیرِ FOR UPDATE بازنویسی می‌کرد. حالا `ush:prodesk:{تلفن}` = {requests, records}ِ همان
+// متخصص (همهٔ صنف‌هایش). بلابِ قدیمی یخ‌زده (rollback)، مهاجرتِ یک‌باره و ایدمپوتنت. حالتِ فایل دست‌نخورده.
+const PD_PREFIX = 'ush:prodesk:'
+const PD_MARK = 'prodesk_shard_v1'
+let pdMigrated = false
+let pdAll: { at: number; db: DB } | null = null
+let pdMigrating: Promise<void> | null = null
+async function pdEnsureMigrated(): Promise<void> {
+  if (pdMigrated) return
+  if (pdMigrating) return pdMigrating
+  pdMigrating = (async () => {
+    try { if ((await kvGet<{ done?: boolean }>(PD_MARK, {})).done) { pdMigrated = true; return } } catch { return }
+    await pgTx(async (client) => {
+      await client.query(`SET LOCAL statement_timeout = '180s'`)
+      await client.query(`INSERT INTO kv(key, data) VALUES($1, '{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [PD_MARK])
+      const m = await client.query('SELECT data FROM kv WHERE key = $1 FOR UPDATE', [PD_MARK])
+      if (m.rows[0]?.data?.done) return
+      const lb = await client.query('SELECT data FROM kv WHERE key = $1', [KV_KEY])
+      const legacy = (lb.rows[0]?.data || {}) as Partial<DB>
+      const by: Record<string, DB> = {}
+      for (const r of legacy.requests || []) { const o = norm(r.owner); if (o) (by[o] ||= { requests: [], records: [] }).requests.push(r) }
+      for (const r of legacy.records || []) { const o = norm(r.owner); if (o) (by[o] ||= { requests: [], records: [] }).records.push(r) }
+      for (const [o, d] of Object.entries(by)) await client.query(`INSERT INTO kv(key, data) VALUES($1, $2) ON CONFLICT(key) DO NOTHING`, [PD_PREFIX + o, JSON.stringify(d)])
+      await client.query('UPDATE kv SET data = $2, updated_at = now() WHERE key = $1', [PD_MARK, JSON.stringify({ done: true, at: Date.now(), n: Object.keys(by).length })])
+      console.log(`[prodesk] per-owner migration: ${Object.keys(by).length} owners split from legacy blob`)
+    })
+    pdMigrated = true
+  })().finally(() => { pdMigrating = null })
+  return pdMigrating
+}
+const fixDb = (d: any): DB => ({ requests: Array.isArray(d?.requests) ? d.requests : [], records: Array.isArray(d?.records) ? d.records : [] })
+async function loadOwner(owner: string): Promise<DB> {
+  if (!pgEnabled()) return fileLoad()
+  await pdEnsureMigrated()
+  return fixDb(await kvGet<DB | null>(PD_PREFIX + norm(owner), null))
+}
+async function mutateOwner<R>(owner: string, fn: (db: DB) => R): Promise<R> {
+  if (!pgEnabled()) return mutate(fn)
+  await pdEnsureMigrated()
+  const r = await kvMutate<DB, R>(PD_PREFIX + norm(owner), { requests: [], records: [] }, d => { const f = fixDb(d); d.requests = f.requests; d.records = f.records; return fn(d) })
+  pdAll = null   // نوشتنِ خودی ⇒ کشِ «همه» کهنه است
+  return r
+}
+async function loadAllOwners(): Promise<DB> {
+  if (!pgEnabled()) return fileLoad()
+  await pdEnsureMigrated()
+  if (pdAll && Date.now() - pdAll.at < 20_000) return pdAll.db
+  const out: DB = { requests: [], records: [] }
+  for (const { data } of await kvGetPrefix<DB>(PD_PREFIX)) { const f = fixDb(data); out.requests.push(...f.requests); out.records.push(...f.records) }
+  pdAll = { at: Date.now(), db: out }
+  return out
+}
+
 const owns = (owner: string, role: string) => (x: { owner: string; role: string }) => norm(x.owner) === norm(owner) && x.role === role
 
 // ── درخواست‌ها ──────────────────────────────────────────────────────────────
 export async function listRequests(owner: string, role: string): Promise<ProRequest[]> {
-  return (await load()).requests.filter(owns(owner, role)).sort((a, b) => b.createdAt - a.createdAt)
+  return (await loadOwner(owner)).requests.filter(owns(owner, role)).sort((a, b) => b.createdAt - a.createdAt)
 }
 export interface RequestInput { clientName: string; clientPhone?: string; customerPhone?: string; kind?: string; detail?: string; status?: ReqStatus; amount?: number; meta?: Record<string, any> }
 export async function addRequest(owner: string, role: string, input: RequestInput): Promise<ProRequest> {
   const now = Date.now()
   const r: ProRequest = { id: id(), owner, role, clientName: input.clientName || 'بدون‌نام', clientPhone: input.clientPhone, customerPhone: input.customerPhone, kind: input.kind, detail: input.detail, status: input.status || 'new', amount: input.amount, meta: input.meta, createdAt: now, updatedAt: now }
-  await mutate(db => { db.requests.push(r) })
+  await mutateOwner(owner, db => { db.requests.push(r) })
   return r
 }
 export async function updateRequest(owner: string, role: string, rid: string, patch: Partial<RequestInput & { status: ReqStatus }>): Promise<ProRequest | null> {
-  return mutate(db => {
+  return mutateOwner(owner, db => {
     const r = db.requests.find(x => x.id === rid && norm(x.owner) === norm(owner) && x.role === role)
     if (!r) return null
     Object.assign(r, patch, { updatedAt: Date.now() })
@@ -94,7 +149,7 @@ export async function updateRequest(owner: string, role: string, rid: string, pa
   })
 }
 export async function deleteRequest(owner: string, role: string, rid: string): Promise<boolean> {
-  return mutate(db => { const n = db.requests.length; db.requests = db.requests.filter(x => !(x.id === rid && norm(x.owner) === norm(owner) && x.role === role)); return db.requests.length !== n })
+  return mutateOwner(owner, db => { const n = db.requests.length; db.requests = db.requests.filter(x => !(x.id === rid && norm(x.owner) === norm(owner) && x.role === role)); return db.requests.length !== n })
 }
 
 // Two-way inquiry.
@@ -126,7 +181,7 @@ export async function addPublicRequest(owner: string, role: string, input: Reque
 }
 
 export async function answerRequest(owner: string, role: string, rid: string, reply: string): Promise<ProRequest | null> {
-  const r = await mutate(db => {
+  const r = await mutateOwner(owner, db => {
     const x = db.requests.find(q => q.id === rid && norm(q.owner) === norm(owner) && q.role === role)
     if (!x) return null
     x.reply = reply; x.repliedAt = Date.now(); x.status = 'answered'; x.updatedAt = Date.now()
@@ -144,7 +199,7 @@ export type MyProRequest = ProRequest & { proName: string; roleLabel: string }
 export async function listMyProRequests(phone: string): Promise<MyProRequest[]> {
   const me = norm(phone)
   if (!me) return []
-  const db = await load()
+  const db = await loadAllOwners()
   return db.requests
     .filter(r => norm(r.customerPhone || '') === me)
     .map(r => ({ ...r, proName: proName(r.owner), roleLabel: PRO_ROLE_LABEL[r.role] || 'متخصص' }))
@@ -155,7 +210,7 @@ export async function listMyProRequests(phone: string): Promise<MyProRequest[]> 
 export async function listReceivedProRequests(phone: string): Promise<Array<ProRequest & { roleLabel: string }>> {
   const me = norm(phone)
   if (!me) return []
-  const db = await load()
+  const db = await loadOwner(phone)
   return db.requests
     .filter(r => norm(r.owner) === me && !!r.customerPhone)
     .map(r => ({ ...r, roleLabel: PRO_ROLE_LABEL[r.role] || 'متخصص' }))
@@ -165,17 +220,17 @@ export async function listReceivedProRequests(phone: string): Promise<Array<ProR
 
 // ── رکوردهای کاری ────────────────────────────────────────────────────────────
 export async function listRecords(owner: string, role: string): Promise<ProRecord[]> {
-  return (await load()).records.filter(owns(owner, role)).sort((a, b) => b.createdAt - a.createdAt)
+  return (await loadOwner(owner)).records.filter(owns(owner, role)).sort((a, b) => b.createdAt - a.createdAt)
 }
 export interface RecordInput { title: string; subtitle?: string; kind?: string; status?: RecStatus; amount?: number; tags?: string[]; cover?: string; meta?: Record<string, any> }
 export async function addRecord(owner: string, role: string, input: RecordInput): Promise<ProRecord> {
   const now = Date.now()
   const r: ProRecord = { id: id(), owner, role, title: input.title || 'بدون‌عنوان', subtitle: input.subtitle, kind: input.kind, status: input.status || 'active', amount: input.amount, tags: input.tags || [], cover: input.cover, meta: input.meta, createdAt: now, updatedAt: now }
-  await mutate(db => { db.records.push(r) })
+  await mutateOwner(owner, db => { db.records.push(r) })
   return r
 }
 export async function updateRecord(owner: string, role: string, rid: string, patch: Partial<RecordInput & { status: RecStatus }>): Promise<ProRecord | null> {
-  return mutate(db => {
+  return mutateOwner(owner, db => {
     const r = db.records.find(x => x.id === rid && norm(x.owner) === norm(owner) && x.role === role)
     if (!r) return null
     Object.assign(r, patch, { updatedAt: Date.now() })
@@ -183,13 +238,13 @@ export async function updateRecord(owner: string, role: string, rid: string, pat
   })
 }
 export async function deleteRecord(owner: string, role: string, rid: string): Promise<boolean> {
-  return mutate(db => { const n = db.records.length; db.records = db.records.filter(x => !(x.id === rid && norm(x.owner) === norm(owner) && x.role === role)); return db.records.length !== n })
+  return mutateOwner(owner, db => { const n = db.records.length; db.records = db.records.filter(x => !(x.id === rid && norm(x.owner) === norm(owner) && x.role === role)); return db.records.length !== n })
 }
 
 // ── آمارِ داشبورد ─────────────────────────────────────────────────────────────
 export interface ProStats { total: number; open: number; done: number; records: number; revenue: number; recent: ProRequest[] }
 export async function proStats(owner: string, role: string): Promise<ProStats> {
-  const db = await load()
+  const db = await loadOwner(owner)
   const reqs = db.requests.filter(owns(owner, role))
   const recs = db.records.filter(owns(owner, role))
   const done = reqs.filter(r => r.status === 'done')

@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { ownerShards } from './owner-shards'
 
 // استور پنل «خریدار» — per-owner (هر کاربر فقط دادهٔ خودش).
 // دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
@@ -88,6 +89,11 @@ async function withDb<R>(fn: (db: DB) => R): Promise<R> {
   if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { buyers: {} }, fn)
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
+// فاز ۳۴۵ج — «هر مالک ردیفِ خودش» (owner-shards). بلابِ `buyer` یخ‌زده (rollback)؛ حالتِ فایل دست‌نخورده.
+const SH = ownerShards<BuyerData, DB>({ legacyKey: KV_KEY, field: 'buyers', prefix: 'ush:buyer:', marker: 'buyer_shard_v1' })
+const loadOwnerDb = async (o: string): Promise<DB> => pgEnabled() ? SH.loadOwnerDb(o) : fileLoad()
+const withOwnerDb = async <R,>(o: string, fn: (db: DB) => R): Promise<R> => pgEnabled() ? SH.withOwnerDb(o, fn) : withDb(fn)
+const loadAllDb = async (): Promise<DB> => pgEnabled() ? SH.loadAllDb() : fileLoad()
 
 // حسابِ خریدار خالی شروع می‌شود — هیچ دادهٔ نمونه/فیک نیست؛ همه‌چیز همان است که خودِ کاربر می‌سازد.
 // شناختِ کاربر از راهِ آنبوردینگ (پروفایل/ترجیح‌ها) و رفتارِ واقعی (REOS) اتفاق می‌افتد، نه دادهٔ ساختگی.
@@ -140,15 +146,15 @@ function applyBuyer(db: DB, o: string): boolean {
 }
 
 export async function getBuyer(o: string): Promise<BuyerData> {
-  const db = await load()
+  const db = await loadOwnerDb(o)
   // اگر seed/backfill لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی dirty بود ذخیره می‌شد).
   if (!applyBuyer(db, o)) return db.buyers[o]
-  return withDb(d => { applyBuyer(d, o); return d.buyers[o] })
+  return withOwnerDb(o, d => { applyBuyer(d, o); return d.buyers[o] })
 }
 
 // خواندنِ پروفایل بدونِ ساختنِ رکورد (برای REOS/loadUser — تا برای نقش‌های دیگر رکوردِ خریدار ساخته نشود).
 export async function peekBuyerProfile(o: string): Promise<BuyerProfile | null> {
-  const db = await load()
+  const db = await loadOwnerDb(o)
   return db.buyers[o]?.profile || null
 }
 // عنوانِ گفتگو از اولین پیامِ کاربر
@@ -157,7 +163,7 @@ function chatTitleFrom(messages: AiMsg[]): string {
   return first.trim().slice(0, 40) || 'گفتگوی جدید'
 }
 async function mutate(o: string, fn: (b: BuyerData) => void): Promise<BuyerData> {
-  return withDb(db => { if (!db.buyers[o]) db.buyers[o] = seed(); fn(db.buyers[o]); return db.buyers[o] })
+  return withOwnerDb(o, db => { if (!db.buyers[o]) db.buyers[o] = seed(); fn(db.buyers[o]); return db.buyers[o] })
 }
 
 export async function buyerStats(o: string) {
