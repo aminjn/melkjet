@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { pgEnabled, kvGet, kvMutate } from './db'
+import { pgEnabled, kvGet, kvMutate, kvSet, kvDelete, pgTx } from './db'
 import { FA_DIGITS, faDigit } from '../lib/digits'
 
 const DATA_FILE = join(process.cwd(), '.builder-data.json')
@@ -50,13 +50,90 @@ async function withDb<R>(fn: (db: DB) => R): Promise<R> {
 }
 function ownerOf(db: DB, owner: string): OwnerData { if (!db[owner]) db[owner] = { projects: [] }; return db[owner] }
 
-export async function listProjects(owner: string): Promise<Project[]> { return (await load())[owner]?.projects || [] }
-export async function getProject(owner: string, pid: string): Promise<Project | null> { return ((await load())[owner]?.projects || []).find(p => p.id === pid) || null }
+// ── فاز ۳۴۵ — شاردِ سازنده‌ها: «هر سازنده ردیفِ خودش» (الگوی فاز ۲۵۹ advisor و ۲۹۱ roster) ─────────────────
+// فیدبکِ مالک: «انبوه‌سازها و خیلی از پنل‌ها روی "در حال بارگذاری پروژه…" می‌مانند». ریشه: کلِ پروژه‌های «همهٔ»
+// سازنده‌ها (هر پروژه تا ۵۰۰ واحد، وارداتِ خودکارِ پرشین‌سازه برای هزاران حساب) در «یک» ردیفِ kv('builder') بود؛ هر
+// بازکردنِ پنل کلِ آن را می‌خواند و هر وارداتِ پروژه کلش را زیرِ FOR UPDATE بازنویسی می‌کرد ⇒ timeout ⇒ پاسخِ ۵۰۰ و
+// پنلی که برای خطا هیچ حالتی نداشت. حالا `builder:{owner}`؛ بلابِ قدیمی یخ‌زده (rollback) و مهاجرتِ یک‌باره و ایدمپوتنت.
+// جست‌وجوی «پروژهٔ پابلیک با hashId» (صفحهٔ عمومیِ پروژه) با ایندکسِ کوچکِ `builder_hidx` (hashId → مالک).
+const OWNER_PREFIX = 'builder:'
+const MIGRATED_KEY = 'builder_migrated_v2'      // بی «:» تا در اسکنِ prefix نیاید
+const HIDX_KEY = 'builder_hidx'                  // بی «:»
+const shardKey = (o: string) => OWNER_PREFIX + o
+let pgMigrated = false
+let migrating: Promise<void> | null = null
+async function ensureMigratedPg(): Promise<void> {
+  if (!pgEnabled() || pgMigrated) return
+  if (migrating) return migrating
+  migrating = (async () => {
+    try { if ((await kvGet<{ done?: boolean }>(MIGRATED_KEY, {})).done) { pgMigrated = true; return } } catch { return }
+    await pgTx(async (client) => {
+      await client.query(`SET LOCAL statement_timeout = '180s'`)
+      await client.query(`INSERT INTO kv(key, data) VALUES($1, '{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [MIGRATED_KEY])
+      const m = await client.query('SELECT data FROM kv WHERE key = $1 FOR UPDATE', [MIGRATED_KEY])
+      if (m.rows[0]?.data?.done) return
+      const lb = await client.query('SELECT data FROM kv WHERE key = $1', [KV_KEY])
+      const legacy = (lb.rows[0]?.data || {}) as DB
+      const hidx: Record<string, string> = {}
+      let n = 0
+      for (const [owner, data] of Object.entries(legacy)) {
+        if (!data || typeof data !== 'object') continue
+        await client.query(`INSERT INTO kv(key, data) VALUES($1, $2) ON CONFLICT(key) DO NOTHING`, [shardKey(owner), JSON.stringify(data)])
+        for (const pr of data.projects || []) if (pr.source?.hashId) hidx[pr.source.hashId] = owner
+        n++
+      }
+      await client.query(`INSERT INTO kv(key, data) VALUES($1, $2) ON CONFLICT(key) DO UPDATE SET data = kv.data || EXCLUDED.data, updated_at = now()`, [HIDX_KEY, JSON.stringify(hidx)])
+      await client.query('UPDATE kv SET data = $2, updated_at = now() WHERE key = $1', [MIGRATED_KEY, JSON.stringify({ done: true, at: Date.now(), n })])
+      console.log(`[builder] per-owner migration: ${n} owners split from legacy blob`)
+    })
+    pgMigrated = true
+  })().finally(() => { migrating = null })
+  return migrating
+}
+// خواندنِ «فقط همین مالک» — به شکلِ DB تا بدنهٔ توابعِ قبلی دست‌نخورده بماند.
+async function loadOwnerDb(owner: string): Promise<DB> {
+  if (!pgEnabled()) return fileLoad()
+  await ensureMigratedPg()
+  const d = await kvGet<OwnerData | null>(shardKey(owner), null)
+  return d ? { [owner]: d } : {}
+}
+// خواندن-تغییر-نوشتنِ «فقط همین مالک» زیرِ قفلِ ردیفِ خودش.
+async function withOwnerDb<R>(owner: string, fn: (db: DB) => R): Promise<R> {
+  if (!pgEnabled()) return withDb(fn)
+  await ensureMigratedPg()
+  return kvMutate<OwnerData, R>(shardKey(owner), { projects: [] }, d => {
+    const db: DB = { [owner]: d }
+    const r = fn(db)
+    const nd = db[owner]
+    if (nd && nd !== d) { for (const k of Object.keys(d)) delete (d as any)[k]; Object.assign(d, nd) }
+    return r
+  })
+}
+let _hidx: { at: number; map: Record<string, string> } | null = null
+async function hashOwner(hashId: string): Promise<string | null> {
+  if (!pgEnabled()) { const db = fileLoad(); for (const o of Object.keys(db)) if ((db[o].projects || []).some(p => p.source?.hashId === hashId)) return o; return null }
+  await ensureMigratedPg()
+  if (!_hidx || Date.now() - _hidx.at > 60_000) _hidx = { at: Date.now(), map: await kvGet<Record<string, string>>(HIDX_KEY, {}) }
+  return _hidx.map[hashId] || null
+}
+async function indexHashes(owner: string, projects: Project[]): Promise<void> {
+  if (!pgEnabled()) return
+  const add: Record<string, string> = {}
+  for (const p of projects) if (p.source?.hashId) add[p.source.hashId] = owner
+  if (!Object.keys(add).length) return
+  await kvMutate<Record<string, string>, void>(HIDX_KEY, {}, m => { Object.assign(m, add) })
+  if (_hidx) Object.assign(_hidx.map, add)
+}
+
+export async function listProjects(owner: string): Promise<Project[]> { return (await loadOwnerDb(owner))[owner]?.projects || [] }
+export async function getProject(owner: string, pid: string): Promise<Project | null> { return ((await loadOwnerDb(owner))[owner]?.projects || []).find(p => p.id === pid) || null }
 
 // واحدهای واقعیِ یک پروژهٔ پابلیک (بر اساسِ hashIdِ پرشین سازه) — از موجودیِ سازنده، اگر ثبت کرده باشد.
 // خروجی: نگاشتِ «شمارهٔ واحد» → وضعیت، تا صفحهٔ عمومی موجود/رزرو/فروخته/مشارکت را درست نشان دهد.
 export async function unitStatusesForHash(hashId: string): Promise<{ byNumber: Record<string, UnitStatus>; counts: Record<UnitStatus, number> } | null> {
-  const db = await load()
+  const ho = await hashOwner(hashId)
+  if (!ho) return null
+  const db = await loadOwnerDb(ho)
   for (const owner of Object.keys(db)) {
     const p = (db[owner].projects || []).find(x => x.source?.hashId === hashId)
     if (p && p.units.length) {
@@ -70,7 +147,9 @@ export async function unitStatusesForHash(hashId: string): Promise<{ byNumber: R
 }
 // واحدِ یک پروژه را با hashId + شمارهٔ واحد، «رزرو» می‌کند (درخواستِ خریدِ داخلِ سایت).
 export async function reserveUnitByHash(hashId: string, unitNumber: string, buyer?: string): Promise<boolean> {
-  return withDb(db => {
+  const ho = await hashOwner(hashId)
+  if (!ho) return false
+  return withOwnerDb(ho, db => {
     for (const owner of Object.keys(db)) {
       const p = (db[owner].projects || []).find(x => x.source?.hashId === hashId)
       if (p) { const u = p.units.find(x => x.number === unitNumber); if (u && u.status === 'available') { u.status = 'reserved'; if (buyer) u.buyer = buyer; u.soldVia = 'site'; return true } return false }
@@ -81,16 +160,16 @@ export async function reserveUnitByHash(hashId: string, unitNumber: string, buye
 
 export async function addProject(owner: string, name: string, location: string): Promise<Project> {
   const p: Project = { id: id(), name, location, phase: 'فاز ۱', progress: 0, units: [], investors: [], milestones: [], monthlySales: [], createdAt: Date.now() }
-  return withDb(db => { const o = ownerOf(db, owner); o.projects.unshift(p); return p })
+  return withOwnerDb(owner, db => { const o = ownerOf(db, owner); o.projects.unshift(p); return p })
 }
 export async function updateProject(owner: string, pid: string, patch: Partial<Pick<Project, 'name' | 'location' | 'phase' | 'progress'>>): Promise<Project | null> {
-  return withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null; Object.assign(p, patch); return p })
+  return withOwnerDb(owner, db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null; Object.assign(p, patch); return p })
 }
 export async function addUnit(owner: string, pid: string, u: Omit<Unit, 'id'>): Promise<Unit | null> {
-  return withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null; const unit: Unit = { ...u, id: id() }; p.units.push(unit); return unit })
+  return withOwnerDb(owner, db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null; const unit: Unit = { ...u, id: id() }; p.units.push(unit); return unit })
 }
 export async function updateUnit(owner: string, pid: string, uid: string, patch: Partial<Unit>): Promise<Unit | null> {
-  return withDb(db => {
+  return withOwnerDb(owner, db => {
     const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
     const u = p.units.find(x => x.id === uid); if (!u) return null
     Object.assign(u, patch); return u
@@ -99,20 +178,21 @@ export async function updateUnit(owner: string, pid: string, uid: string, patch:
 // فاز ۲۹۸ه — حذفِ همهٔ دادهٔ سازندهٔ یک مالک (پروژه‌ها/واحدها/سرمایه‌گذاران) هنگامِ حذفِ حساب.
 export async function deleteBuilderData(owner: string): Promise<boolean> {
   const o = String(owner || '').trim(); if (!o) return false
+  if (pgEnabled()) { await ensureMigratedPg(); const had = !!(await kvGet<OwnerData | null>(shardKey(o), null)); if (had) await kvDelete(shardKey(o)); return had }
   return withDb(db => { const had = !!db[o]; delete db[o]; return had })
 }
 
 export async function deleteUnit(owner: string, pid: string, uid: string): Promise<void> {
-  await withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; p.units = p.units.filter(x => x.id !== uid) })
+  await withOwnerDb(owner, db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; p.units = p.units.filter(x => x.id !== uid) })
 }
 export async function addInvestor(owner: string, pid: string, inv: Omit<Investor, 'id'>): Promise<Investor | null> {
-  return withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null; const v: Investor = { ...inv, id: id() }; p.investors.unshift(v); return v })
+  return withOwnerDb(owner, db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null; const v: Investor = { ...inv, id: id() }; p.investors.unshift(v); return v })
 }
 export async function deleteInvestor(owner: string, pid: string, vid: string): Promise<void> {
-  await withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; p.investors = p.investors.filter(x => x.id !== vid) })
+  await withOwnerDb(owner, db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; p.investors = p.investors.filter(x => x.id !== vid) })
 }
 export async function updateMilestone(owner: string, pid: string, mid: string, status: Milestone['status']): Promise<void> {
-  await withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; const m = p.milestones.find(x => x.id === mid); if (m) { m.status = status } })
+  await withOwnerDb(owner, db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; const m = p.milestones.find(x => x.id === mid); if (m) { m.status = status } })
 }
 
 // نردبانِ مراحلِ ساخت (مطابقِ مراحلِ پرشین سازه). مرحلهٔ فعلیِ پروژه = «در حال انجام».
@@ -137,7 +217,7 @@ function milestonesForPhase(label: string): { milestones: Milestone[]; progress:
 // واحدها از تعدادِ طبقه/واحدِ واقعی ساخته می‌شوند (همه «موجود»، بدونِ خریدارِ فیک) تا
 // سازنده خودش بفروشد. اگر سازنده‌ای در پرشین سازه نباشد، خالی می‌ماند.
 export async function ensureImported(owner: string): Promise<void> {
-  const db = await load()
+  const db = await loadOwnerDb(owner)
   // اگر با نسخهٔ فعلیِ منطقِ import واردشده، رد کن؛ وگرنه دوباره وارد کن (خودکار، بدونِ rm).
   if (db[owner]?.importVersion === IMPORT_VERSION) return
   let projects: Project[] = []
@@ -172,7 +252,8 @@ export async function ensureImported(owner: string): Promise<void> {
       }
     }
   } catch { /* اگر پرشین سازه در دسترس نبود، خالی */ }
-  await withDb(db => { db[owner] = { projects, imported: true, importVersion: IMPORT_VERSION } })
+  await withOwnerDb(owner, db => { db[owner] = { projects, imported: true, importVersion: IMPORT_VERSION } })
+  try { await indexHashes(owner, projects) } catch (e) { console.error('[builder] hash index update failed:', String((e as Error)?.message || e).slice(0, 120)) }
 }
 
 // آمار محاسبه‌شده برای داشبورد
@@ -193,7 +274,7 @@ export async function projectStats(p: Project) {
 
 // تنظیمِ هزینه‌های پروژه (Financial Tracking)
 export async function setProjectFinance(owner: string, pid: string, patch: ProjectFinance): Promise<Project | null> {
-  return withDb(db => {
+  return withOwnerDb(owner, db => {
     const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
     const cur = p.finance || {}
     p.finance = {
@@ -207,7 +288,7 @@ export async function setProjectFinance(owner: string, pid: string, patch: Proje
 
 // تنظیمِ برنامهٔ پرداختِ مرحله‌ایِ یک واحد (پیش‌فروش)
 export async function setUnitPlan(owner: string, pid: string, uid: string, stages: Omit<PaymentStage, 'id'>[]): Promise<Unit | null> {
-  return withDb(db => {
+  return withOwnerDb(owner, db => {
     const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
     const u = p.units.find(x => x.id === uid); if (!u) return null
     u.plan = stages.map(s => ({ id: id(), label: String(s.label || 'قسط'), amount: Math.max(0, Number(s.amount) || 0), due: s.due, paid: !!s.paid }))
@@ -215,7 +296,7 @@ export async function setUnitPlan(owner: string, pid: string, uid: string, stage
   })
 }
 export async function toggleUnitStage(owner: string, pid: string, uid: string, stageId: string): Promise<Unit | null> {
-  return withDb(db => {
+  return withOwnerDb(owner, db => {
     const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
     const u = p.units.find(x => x.id === uid); if (!u || !u.plan) return null
     const s = u.plan.find(x => x.id === stageId); if (s) s.paid = !s.paid

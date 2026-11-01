@@ -141,6 +141,10 @@ export default function BuilderPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  // فاز ۳۴۵ — «در حال بارگذاری پروژه…» تا ابد: خطای سرور/پاسخِ خالی هیچ حالتی نداشت. حالا loading | ready | empty | error.
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading')
+  const [loadErr, setLoadErr] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   // ── Load full project by id ──
   const loadProject = useCallback(async (id: string) => {
@@ -153,15 +157,22 @@ export default function BuilderPage() {
 
   // ── On mount: list projects, pick first, load it ──
   useEffect(() => {
-    fetch('/api/builder')
-      .then(r => r.json())
+    let alive = true
+    setLoadState('loading'); setLoadErr('')
+    const ctl = new AbortController()
+    const t = setTimeout(() => ctl.abort(), 30_000)
+    fetch('/api/builder', { cache: 'no-store', signal: ctl.signal })
+      .then(async r => { if (!r.ok) throw new Error(`خطای سرور (${r.status})`); return r.json() })
       .then((d: { projects: Project[] }) => {
+        if (!alive) return
         const list = Array.isArray(d.projects) ? d.projects : []
         setProjects(list.map(p => ({ id: p.id, name: p.name, location: p.location })))
-        if (list[0]) { setPid(list[0].id); setProject(list[0]) }
+        if (list[0]) { setPid(list[0].id); setProject(list[0]); setLoadState('ready') } else setLoadState('empty')
       })
-      .catch(() => {})
-  }, [])
+      .catch((e: any) => { if (!alive) return; setLoadErr(e?.name === 'AbortError' ? 'پاسخِ سرور بیش از ۳۰ ثانیه طول کشید' : String(e?.message || e)); setLoadState('error') })
+      .finally(() => clearTimeout(t))
+    return () => { alive = false; clearTimeout(t); ctl.abort() }
+  }, [reloadKey])
 
   // ── Fetch display name for article authorship ──
   useEffect(() => {
@@ -213,7 +224,7 @@ export default function BuilderPage() {
       if (!r.ok || !d.project) { alert(d.error || 'برای ساخت پروژه باید وارد شوید'); return }
       const p: Project = d.project
       setProjects(prev => [{ id: p.id, name: p.name, location: p.location }, ...prev])
-      setPid(p.id); setProject(p)
+      setPid(p.id); setProject(p); setLoadState('ready')
     } catch {} finally { setBusy(false) }
   }
 
@@ -511,7 +522,21 @@ export default function BuilderPage() {
           ) : view === 'support' ? (
             <SupportPanel panel="builder" />
           ) : !project ? (
-            <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '80px 0', fontSize: 14 }}>در حال بارگذاری پروژه…</div>
+            loadState === 'error' ? (
+              <div style={{ textAlign: 'center', padding: '70px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <div style={{ color: '#e06666', fontSize: 14, fontWeight: 700 }}>پروژه‌ها بارگذاری نشد</div>
+                <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>{loadErr}</div>
+                <button onClick={() => setReloadKey(k => k + 1)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 10, padding: '9px 18px', color: '#1a1400', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🔄 تلاشِ دوباره</button>
+              </div>
+            ) : loadState === 'empty' ? (
+              <div style={{ textAlign: 'center', padding: '70px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <div style={{ color: 'var(--text)', fontSize: 15, fontWeight: 700 }}>هنوز پروژه‌ای ندارید</div>
+                <div style={{ color: 'var(--muted)', fontSize: 12.5, maxWidth: 420, lineHeight: 1.9 }}>اولین پروژه را بسازید تا موجودیِ واحدها، پیش‌فروش، سرمایه‌گذاران و پیشرفتِ ساخت این‌جا نمایش داده شود.</div>
+                <button onClick={createProject} disabled={busy} style={{ background: 'var(--gold)', border: 'none', borderRadius: 10, padding: '9px 18px', color: '#1a1400', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>＋ ساختِ پروژهٔ جدید</button>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '80px 0', fontSize: 14 }}>در حال بارگذاری پروژه…</div>
+            )
           ) : (
             <>
               {view === 'overview' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><EmpireCard /><OverviewView project={project} s={s} onMilestone={(mid, status) => post({ action: 'milestone', pid, mid, status })} busy={busy} /><ReosInvestorTool defaultMode="construction" /><ReosPanelSection title="املاکِ پیشنهادیِ REOS" subtitle="فرصت‌های مرتبط با بازار" /></div>}
