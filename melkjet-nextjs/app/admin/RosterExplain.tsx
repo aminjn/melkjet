@@ -50,7 +50,7 @@ export function SrcBadge({ src }: { src?: { ai: number; sig: number; machine: nu
 
 interface ExRow {
   token: string; title: string; text: string; ai: string; aiAsked: boolean; aiRejected: boolean
-  machine: string; signature: boolean; reason: string; sigLine?: string; oldText?: boolean; metaText?: boolean; noText?: boolean
+  machine: string; signature: boolean; reason: string; sigLine?: string; oldText?: boolean; metaText?: boolean; noText?: boolean; wl?: string[]
 }
 
 export function UnnamedExplain({ id }: { id: string }) {
@@ -67,6 +67,22 @@ export function UnnamedExplain({ id }: { id: string }) {
       if (!j.ok) setErr(j.error || 'خطا'); else setRows(j.rows || [])
     } catch (e: any) { setErr(String(e?.message || e)) }
     setBusy(false)
+  }
+  const normTxt = (t: string) => String(t || '').replace(/[\u0640\u064B-\u065F\u0670\u200D\u200E\u200F]/g, '').replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/\u200c/g, ' ')
+  // فاز ۳۴۴ط — حذفِ ورودیِ اشتباهِ فهرستِ سفید (مثلِ «قدیمی» که امضای واقعیِ «مجید شاکری» را کنار می‌زد)
+  const unWhitelist = async (name: string) => {
+    if (!window.confirm(`«${name}» از فهرستِ سفید حذف شود؟`)) return
+    try {
+      const cur = await (await fetch('/api/admin/roster-name-rules', { cache: 'no-store' })).json()
+      const rules = cur?.rules || { blacklist: [], whitelist: [] }
+      const r = await fetch('/api/admin/roster-name-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blacklist: rules.blacklist, whitelist: (rules.whitelist || []).filter((w: string) => normTxt(w).trim() !== normTxt(name).trim()) }) })
+      const j = await r.json()
+      if (!j.ok) { setMsg(j.error || 'خطا'); return }
+      let queued = false
+      try { const q = await fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync', id }) }); queued = q.ok } catch {}
+      setMsg(`🗑 «${name}» از فهرستِ سفید حذف شد.${queued ? ' 🔄 همگام‌سازیِ این آژانس در صف رفت.' : ''}`)
+      setRows(rs => (rs || []).map(x => x.wl ? { ...x, wl: x.wl.filter((w: string) => w !== name) } : x))
+    } catch (e: any) { setMsg(String(e?.message || e)) }
   }
   // فاز ۳۴۴ز — وقتی نه AI نه ماشین نامی داده، آخرین واژهٔ «خطِ امضا» (پس از «:» یا لقب) پیش‌پرِ کادر می‌شود تا ادمین فقط تأیید کند.
   const sigGuess = (line?: string) => {
@@ -88,8 +104,9 @@ export function UnnamedExplain({ id }: { id: string }) {
       const saved = String((j?.rules?.whitelist || []).find((w: string) => name.includes(w) && w.length > 1) || name)
       // فاز ۳۴۴ب (فیدبکِ مالک: «می‌زنم این نام است، انگار هیچ اتفاقی نمی‌افتد») — همهٔ آگهی‌های همین فهرست که این نام
       // در متنشان هست همان لحظه کنار می‌روند و شمرده می‌شوند، و همگام‌سازیِ همین آژانس فوراً در صف می‌رود تا اثرش دیده شود.
-      const words = saved.replace(/\u200c/g, ' ').split(/\s+/).filter(Boolean)
-      const has = (t: string) => { const tt = (t || '').replace(/\u200c/g, ' '); return words.every(w => tt.includes(w)) }
+      // فاز ۳۴۴ط — متنِ آگهی کشیده/اعراب/ی‌کِ عربی دارد («مجـید شـاکری»)؛ بی‌یکسان‌سازی شمارش «صفر آگهی» می‌گفت.
+      const words = normTxt(saved).split(/\s+/).filter(Boolean)
+      const has = (t: string) => { const tt = normTxt(t); return words.every(w => tt.includes(w)) }
       const hit = (rows || []).filter(x => has(x.text)).length
       setRows(rs => (rs || []).filter(x => !has(x.text)))
       let queued = false
@@ -141,7 +158,10 @@ export function UnnamedExplain({ id }: { id: string }) {
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 5, fontSize: 11.5, color: 'var(--muted)' }}>
             <span>AI: {r.ai ? <b style={{ color: r.aiRejected ? '#e7674a' : '#5fd98a' }}>«{r.ai}»{r.aiRejected ? ' (رد شد)' : ''}</b> : r.aiAsked ? 'بی‌امضا' : <span style={{ color: 'var(--faint)' }}>نپرسیده</span>}</span>
-            <span>ماشین: {r.machine ? <b style={{ color: 'var(--text)' }}>«{r.machine}»</b> : '—'}{r.signature ? ' (امضای صریح)' : ''}</span>
+            <span>ماشین: {r.machine ? <b style={{ color: 'var(--text)' }}>«{r.machine}»</b> : '—'}{r.signature ? ((r.wl || []).includes(r.machine) ? ' (از فهرستِ سفید)' : ' (امضای صریح)') : ''}</span>
+            {(r.wl || []).length > 0 && <span>فهرستِ سفید در این آگهی: {(r.wl || []).map((w: string) => (
+              <span key={w} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginInlineEnd: 6 }}>«{w}»<button onClick={() => unWhitelist(w)} title="حذف از فهرستِ سفید" style={{ background: 'transparent', border: 'none', color: '#e06666', cursor: 'pointer', fontSize: 11.5, padding: 0, fontFamily: 'inherit' }}>✖</button></span>
+            ))}</span>}
           </div>
           {r.sigLine && <div style={{ marginTop: 4, fontSize: 11.5, color: '#e7674a' }}>خطِ امضا: «{r.sigLine}»</div>}
           <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--text)', lineHeight: 1.8 }}>علت: {r.reason}</div>

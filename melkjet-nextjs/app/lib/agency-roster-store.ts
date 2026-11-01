@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { cacheRemote } from './listing-image'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete, kvGetPrefix, kvGetPrefixField } from './db'
-import { buildAgencyRoster, extractSignature, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V } from './agency-roster'
+import { buildAgencyRoster, extractSignature, whitelistHits, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V } from './agency-roster'
 import { validName, keyOf, addressTokens, contextNoiseTokens, normFa } from './agency-name-lexicon'
 import { isDivarMetaText } from './divar-text'
 import { importDivarToken } from './advisor-divar-import'
@@ -274,6 +274,7 @@ export interface UnnamedExplain {
   token: string; title: string; text: string
   ai: string; aiAsked: boolean; aiRejected: boolean
   machine: string; signature: boolean
+  wl?: string[]     // فاز ۳۴۴ط — نام‌های «فهرستِ سفید» که در همین آگهی پیدا شدند (پنل اجازهٔ حذفِ ورودیِ اشتباه را می‌دهد)
   reason: string
   sigLine?: string   // خطِ امضای ظاهری در آگهیِ بی‌نام (اولویتِ بررسی)
   oldText?: boolean  // متن با خوانشِ قدیمیِ دیوار ذخیره شده (در سینک‌های بعد تازه می‌شود)
@@ -314,7 +315,8 @@ export async function explainUnnamed(id: string, limit = 100): Promise<{ ok: boo
     else if (aiAsked) reason = 'AI گفت امضا ندارد و ماشین هم نامی پیدا نکرد'
     else if (machine) reason = `AI این آگهی را (هنوز) نپرسیده؛ حدسِ ماشین («${machine}») شکلِ نام نداشت یا در یک آگهی بود`
     else reason = 'AI این آگهی را (هنوز) نپرسیده و ماشین هم نامی پیدا نکرد'
-    rows.push({ ...base, text: c.desc, ai: aiRaw, aiAsked, aiRejected: !!aiRaw && !ai, machine, signature: strong, reason, sigLine: signatureLikeLine(desc) || undefined, oldText: (c.dv || 0) < 4 || undefined })
+    const wl = whitelistHits(normFa(`${c.title || ''}\n${c.desc}`))
+    rows.push({ ...base, text: c.desc, ai: aiRaw, aiAsked, aiRejected: !!aiRaw && !ai, machine, signature: strong, reason, wl: wl.length ? wl : undefined, sigLine: signatureLikeLine(desc) || undefined, oldText: (c.dv || 0) < 4 || undefined })
   }
   // آگهی‌هایی که «خطِ امضا» دارند ولی بی‌نام ماندند، اول (همان‌ها که احتمالاً نامشان از دست رفته)
   rows.sort((x, y) => Number(!!y.sigLine) - Number(!!x.sigLine))

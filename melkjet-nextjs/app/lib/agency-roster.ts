@@ -84,19 +84,31 @@ export function signatureTrusted(title: string, desc: string, agencyName = ''): 
   return !!v && !hitsBan(v, hardBanTokens(`${title || ''}\n${desc || ''}`))
 }
 // نام‌های فهرستِ سفیدِ مدیریتی که «دنبالهٔ واژه‌به‌واژه»شان در متن آمده.
-function whitelistHits(raw: string): string[] {
+// فاز ۳۴۴ط (اسکرین‌شاتِ مالک: امضا «مشاور فعال منطقه مجید شاکری» بود ولی ماشین «قدیمی» را «امضای صریح» گفت) — وقتی چند
+// نامِ فهرستِ سفید در یک آگهی پیدا شود، قبلاً «ترتیبِ فهرست» برنده بود؛ یک ورودیِ اشتباه («قدیمی» از «قدیمی تا نوساز»)
+// نامِ واقعیِ امضا را کنار می‌زد. حالا رتبه: (۱) در موضعِ امضا (پس از نقش/لقب، تنها روی خط، پیش از «هستم»)، (۲) شکلِ نامِ
+// واقعی (validName — واژهٔ نوفه/ملکی مثلِ «قدیمی» آخر)، (۳) چندواژه‌ای، (۴) پایین‌تر در متن (امضا معمولاً آخرِ آگهی است).
+export function whitelistHits(raw: string): string[] {
   const _wl = nameRuleWhitelistRaw()
   if (!_wl.length) return []
   const words = raw.split(/[^ء-یA-Za-z]+/).filter(Boolean).map(keyOf)
-  const hits: string[] = []
+  const lines = textLines(raw)
+  const hits: { name: string; sig: boolean; real: boolean; n: number; at: number }[] = []
   for (const wname of _wl) {
     const wk = wname.split(/\s+/).filter(Boolean).map(keyOf).filter(Boolean)
     if (!wk.length) continue
     for (let i = 0; i + wk.length <= words.length; i++) {
-      if (wk.every((k, j) => k === words[i + j])) { hits.push(wname.replace(/\s+/g, ' ').trim()); break }
+      if (wk.every((k, j) => k === words[i + j])) {
+        const name = wname.replace(/\s+/g, ' ').trim()
+        let sig = false
+        try { sig = nameOccurrences(wk.map(k => k.toLowerCase()), lines).some(inSignaturePosition) } catch {}
+        hits.push({ name, sig, real: !!validName(name, '', undefined, { trustPerson: true }), n: wk.length, at: i })
+        break
+      }
     }
   }
-  return [...new Set(hits)]
+  hits.sort((x, y) => (+y.sig - +x.sig) || (+y.real - +x.real) || (y.n - x.n) || (y.at - x.at))
+  return [...new Set(hits.map(h => h.name))]
 }
 
 // ── فاز ۳۴۴ (پورت از خودروجت، فازهای ۳۳۹/۳۴۵ج/۳۴۷/۳۴۸/۳۵۲) — دروازهٔ نامِ AI: «در متن» و «در موضعِ امضا» ──
