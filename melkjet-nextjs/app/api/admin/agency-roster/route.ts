@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, prepareGraduateJobs, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, enqueueMerge, listDueRosters, explainUnnamed, setAdName, unrejectName } from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, prepareGraduateJobs, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, enqueueMerge, listDueRosters, explainUnnamed, setAdName, unrejectName, unconfirmName } from '@/app/lib/agency-roster-store'
 import { getCronBeat } from '@/app/lib/cron-heartbeat'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { rosterCities } from '@/app/lib/agency-roster-city'
@@ -132,6 +132,11 @@ export async function POST(req: NextRequest) {
   if (action === 'set-ad-name') {
     if (!b.id || !b.token) return NextResponse.json({ error: 'id/token لازم است' }, { status: 400 })
     const r = await setAdName(String(b.id), String(b.token), String(b.name ?? ''))
+    return NextResponse.json(r, { status: r.ok ? 200 : 400 })
+  }
+  if (action === 'unconfirm-name') {
+    if (!b.id || !b.name) return NextResponse.json({ error: 'id/name لازم است' }, { status: 400 })
+    const r = await unconfirmName(String(b.id), String(b.name))
     return NextResponse.json(r, { status: r.ok ? 200 : 400 })
   }
   if (action === 'unreject-name') {

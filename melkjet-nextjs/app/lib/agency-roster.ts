@@ -487,6 +487,7 @@ export async function buildAgencyRoster(
   slugOrUrl: string,
   opts: { useAI?: boolean; maxDetails?: number; onProgress?: (done: number, total: number) => void;
     cached?: Record<string, { title: string; desc: string; name?: string; aiv?: number; dv?: number; rjs?: string }>;   // توکن→متن + نامِ AI (ازسرگیری؛ dv=4: متن از ویجتِ توضیحات)
+    confirmed?: string[];   // فاز ۳۴۶د — نام‌هایی که ادمین در همین آژانس تأیید کرده (آگهیِ بی‌نامِ AI که این نام را دارد به او می‌رود)
     rejected?: string[];   // فاز ۳۴۶ج — کلیدِ نام‌هایی که ادمین در همین آژانس حذف کرده (هرگز مشاور نمی‌شوند؛ به AI هم گفته می‌شود)
     manual?: Record<string, string>;   // فاز ۳۴۶ب — نامی که ادمین برای همان آگهی تأیید کرده (بر AI مقدم؛ '' = بی‌مشاور)
     pinnedKeys?: string[];   // فاز ۲۷۹ — کلیدِ مشاورهایی که حسابِ واقعی دارند: در ادغام همیشه میزبان می‌مانند
@@ -592,6 +593,10 @@ export async function buildAgencyRoster(
   const rejectedNames = [...new Map((opts.rejected || []).filter(k => k && !/^[A-Za-z0-9_:-]+$/.test(k)).map(k => [keyOf(k), k] as const)).values()].slice(-40)
   let rejectedByAdmin = 0
   const rjSig = [...rejectedKeys].sort().join('|')
+  // فاز ۳۴۶د — نام‌های تأییدشدهٔ همین آژانس (بلندتر اول: «امیر پاشا» پیش از «امیر»)؛ ردشده‌ها کنار.
+  const confirmedList = [...new Map((opts.confirmed || []).filter(n => n && !rejectedKeys.has(keyOf(n))).map(n => [keyOf(n), n.replace(/\s+/g, ' ').trim()] as const)).values()]
+    .sort((a, b) => b.split(' ').length - a.split(' ').length || b.length - a.length)
+  let byConfirmed = 0
   rows.forEach((r, idx) => {
     const hit = opts.cached?.[r.post.token]
     // فاز ۳۴۶ب — حکمِ ادمین برای همین آگهی بر AI مقدم است و آگهی دیگر پرسیده نمی‌شود.
@@ -650,20 +655,25 @@ export async function buildAgencyRoster(
   const fileCount = new Map<string, number>()
   const unnamed: { tokens: string[]; posts: BrandPost[] } = { tokens: [], posts: [] }
   rows.forEach((r, idx) => {
-    const raw = String(aiMap[idx] || '').replace(/\s+/g, ' ').trim()
-    // تنها بررسی: ضدِ توهم — نام باید واژه‌به‌واژه در متنِ همین آگهی باشد.
+    let raw = String(aiMap[idx] || '').replace(/\s+/g, ' ').trim()
+    const occurs = (n: string) => nameOccurrences(n.split(' ').map(w => keyOf(w).toLowerCase()).filter(Boolean), r.descLines).length > 0
     // تنها بررسی (برای جوابِ AI): ضدِ توهم — نام باید واژه‌به‌واژه در متن باشد. حکمِ ادمین (manual) معاف است.
-    const ok = !!raw && (manualIdx.has(idx) || nameOccurrences(raw.split(' ').map(w => keyOf(w).toLowerCase()).filter(Boolean), r.descLines).length > 0)
+    let ok = !!raw && (manualIdx.has(idx) || occurs(raw))
     if (raw && !ok) nameCounts.aiRejected++
     // فاز ۳۴۶ج — نامی که ادمین در همین آژانس حذف کرده، دیگر هرگز مشاور نمی‌شود (جز با تأییدِ صریحِ همان آگهی).
-    if (ok && !manualIdx.has(idx) && rejectedKeys.has(keyOf(raw))) { rejectedByAdmin++; unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); return }
+    if (ok && !manualIdx.has(idx) && rejectedKeys.has(keyOf(raw))) { rejectedByAdmin++; ok = false }
+    // فاز ۳۴۶د (فیدبکِ مالک: «کلی امیر پاشا هست، باید دونه‌دونه بزنم؟ قبلاً با یک کلیک مشاور می‌ساخت یا ادغام می‌کرد») — نامی که ادمین
+    // در همین آژانس «تأیید» کرده، هر آگهیِ همین آژانس را که AI برایش نامی نداد (یا نامش رد شد) و این نام در متنش هست می‌گیرد.
+    // جوابِ نام‌دارِ AI را بازنویسی نمی‌کند، و فقط داخلِ همین آژانس است (نه فهرستِ سفیدِ سراسریِ قدیمی که «سند آزاد» را هم می‌گرفت).
+    let viaConfirmed = false
+    if (!ok && !manualIdx.has(idx)) { const hit = confirmedList.find(occurs); if (hit) { raw = hit; ok = true; viaConfirmed = true; byConfirmed++ } }
     if (!ok) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); return }
     nameCounts.aiNamed++
     const k = keyOf(raw)
     fileCount.set(k, (fileCount.get(k) || 0) + 1)
     let c = clusters.get(k)
     if (!c) { c = { key: k, name: raw, tokens: [], posts: [], src: { ai: 0, sig: 0, machine: 0, claim: 0 } }; clusters.set(k, c) }
-    c.src![manualIdx.has(idx) ? 'sig' : 'ai']++   // sig = فاز ۳۴۶ب: تأییدِ ادمین برای همین آگهی
+    c.src![manualIdx.has(idx) || viaConfirmed ? 'sig' : 'ai']++   // sig = فاز ۳۴۶ب/د: تأییدِ ادمین (همین آگهی یا نامِ تأییدشدهٔ آژانس)
     c.tokens.push(r.post.token); c.posts.push(r.post)
   })
 
@@ -703,7 +713,7 @@ export async function buildAgencyRoster(
     metaText, textMissing,
     unnamedSigLike: unnamed.tokens.filter(t => { const r = byTok.get(t); return !!r && !!signatureLikeLine(r.desc) }).length,
   }
-  console.log(`[roster] names (AI-only): model=${nameStats.model || '-'} answered=${nameStats.aiAnswered}/${nameStats.rows} named=${nameStats.byAI} rejected=${nameStats.aiRejected} adminRejected=${rejectedByAdmin} unnamed=${nameStats.unnamed} unnamedSigLike=${nameStats.unnamedSigLike} meta=${metaText} textMissing=${textMissing}`)
+  console.log(`[roster] names (AI-only): model=${nameStats.model || '-'} answered=${nameStats.aiAnswered}/${nameStats.rows} named=${nameStats.byAI} rejected=${nameStats.aiRejected} adminRejected=${rejectedByAdmin} byConfirmed=${byConfirmed} unnamed=${nameStats.unnamed} unnamedSigLike=${nameStats.unnamedSigLike} meta=${metaText} textMissing=${textMissing}`)
   return { ok: true, slug, agencyName: name, total: posts.length, scanned: rows.length, advisors, unnamed, nameStats }
 }
 

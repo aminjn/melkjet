@@ -2615,10 +2615,15 @@ function AgencyRosterPanel() {
 
   // فاز ۳۴۶ب/ج — تعیینِ دستیِ مشاورِ «یک آگهی» (بر AI مقدم؛ ماشین‌لرنینگ یاد می‌گیرد) + برگرداندنِ نامِ حذف‌شده.
   const setAdNameFor = async (id: string, token: string) => {
-    const v = window.prompt('نامِ مشاورِ این آگهی (فقط نام). خالی بگذار = «این آگهی مشاور ندارد»:', '')
+    const v = window.prompt('نامِ مشاورِ این آگهی (فقط نام) — همهٔ آگهی‌های این آژانس که این نام را دارند هم به او می‌روند. خالی = «این آگهی مشاور ندارد»:', '')
     if (v === null) return
     const j = await post({ action: 'set-ad-name', id, token, name: v.trim() })
-    if (j.ok) { setMsg(j.name ? `✅ مشاورِ آگهیِ ${token}: «${j.name}» — همگام‌سازیِ این آژانس در صف رفت` : `✅ آگهیِ ${token} بی‌مشاور ثبت شد — همگام‌سازی در صف رفت`); load() } else setMsg('❌ ' + (j.error || 'خطا'))
+    if (j.ok) { setMsg(j.name ? `✅ «${j.name}» برای این آژانس تأیید شد — ${(j.matched || 1).toLocaleString('fa-IR')} آگهی این نام را دارند و همه به «${j.name}» می‌روند. همگام‌سازی در صف رفت` : `✅ آگهیِ ${token} بی‌مشاور ثبت شد — همگام‌سازی در صف رفت`); load() } else setMsg('❌ ' + (j.error || 'خطا'))
+  }
+  const unconfirmName = async (id: string, name: string) => {
+    if (!confirm(`«${name}» از تأییدشده‌های این آژانس برداشته شود؟ (از این به بعد فقط AI درباره‌اش تصمیم می‌گیرد)`)) return
+    const j = await post({ action: 'unconfirm-name', id, name })
+    if (j.ok) { setMsg(`✅ «${name}» برداشته شد — همگام‌سازی در صف رفت`); load() } else setMsg('❌ ' + (j.error || 'خطا'))
   }
   const unrejectName = async (id: string, name: string) => {
     if (!confirm(`«${name}» دوباره می‌تواند مشاور باشد؟`)) return
@@ -2846,6 +2851,15 @@ function AgencyRosterPanel() {
                   </div>
                   <DivarLinks tokens={s.unnamedTokens} onEdit={t => setAdNameFor(s.id, t)} />
                   {(s.lastUnnamed || 0) > 0 && <UnnamedExplain id={s.id} />}
+                  {(s.confirmedNames || []).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 11.5, color: 'var(--muted)' }}>
+                      <span title="نام‌هایی که برای این آژانس تأیید کرده‌اید؛ هر آگهی که AI برایش نامی نداد و این نام را دارد به او می‌رود">✅ تأییدشده‌ها:</span>
+                      {(s.confirmedNames as string[]).map((n: string) => (
+                        <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 999, border: '1px solid rgba(95,217,138,.45)', color: '#5fd98a' }}>{n}
+                          <button onClick={() => unconfirmName(s.id, n)} title="برداشتن" style={{ background: 'transparent', border: 'none', color: '#e06666', cursor: 'pointer', fontSize: 11, padding: 0, fontFamily: 'inherit' }}>✖</button></span>
+                      ))}
+                    </div>
+                  )}
                   {(s.rejectedNames || []).length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 11.5, color: 'var(--muted)' }}>
                       <span title="نام‌هایی که حذف کرده‌اید؛ در این آژانس دیگر مشاور نمی‌شوند">🚫 حذف‌شده‌ها:</span>

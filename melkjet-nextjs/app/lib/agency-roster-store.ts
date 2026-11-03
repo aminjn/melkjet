@@ -68,6 +68,7 @@ export interface RosterScrape {
   lastTotal?: number
   lastUnnamed?: number
   unnamedTokens?: string[]   // توکنِ آگهی‌های بی‌امضا (به آژانس) — سقفِ ۱۰۰
+  confirmedNames?: string[]   // فاز ۳۴۶د — نام‌هایی که ادمین در همین آژانس تأیید کرده: هر آگهیِ بی‌نامِ AI که این نام را دارد به او می‌رود
   rejectedNames?: string[]   // فاز ۳۴۶ج — نام‌هایی که ادمین «حذف» کرده: در همین آژانس دیگر هرگز مشاور نمی‌شوند (به AI هم گفته می‌شود)
   adNames?: Record<string, string>   // فاز ۳۴۶ب — نامِ مشاورِ هر آگهی که ادمین در «چرا بی‌نام؟» تأیید کرده (بر AI مقدم؛ '' = بی‌مشاور)
   nameStats?: import('./agency-roster').NameStats   // فاز ۳۴۴ — «تصمیم با AI بود یا امضا یا ماشین» در آخرین سینک
@@ -303,6 +304,8 @@ export async function explainUnnamed(id: string, limit = 100): Promise<{ ok: boo
     const desc = normFa(c.desc)
     const manual = s.adNames?.[token]
     if (manual !== undefined) { rows.push({ ...base, text: c.desc, manual, reason: manual ? `ادمین تأیید کرد: «${manual}» — در همگام‌سازیِ بعد به همین مشاور می‌رود` : 'ادمین گفت این آگهی مشاور ندارد', oldText: (c.dv || 0) < 4 || undefined }); continue }
+    const confHit = (s.confirmedNames || []).find(n => { const ks = n.split(/\s+/).map(w => keyOf(w).toLowerCase()).filter(Boolean); return descLinesOf(normFa(c.desc)).some(l => l.some((_, i) => ks.every((k, j) => l[i + j] === k))) })
+    if (confHit) { rows.push({ ...base, text: c.desc, manual: confHit, reason: `«${confHit}» را برای این آژانس تأیید کرده‌اید و در متنِ این آگهی هست — در همگام‌سازیِ بعد به همین مشاور می‌رود`, oldText: (c.dv || 0) < 4 || undefined }); continue }
     const aiRaw = typeof c.name === 'string' ? c.name.trim() : ''
     const aiAsked = c.name !== undefined && (c.aiv || 0) >= AI_PROMPT_V
     if (aiRaw && (s.rejectedNames || []).some(x => keyOf(x) === keyOf(aiRaw))) { rows.push({ ...base, text: c.desc, ai: aiRaw, aiAsked, aiRejected: true, reason: `AI گفت «${aiRaw}» ولی شما این نام را حذف کرده‌اید — نامِ مشاور حساب نمی‌شود`, sigLine: signatureLikeLine(normFa(c.desc)) || undefined }); continue }
@@ -322,7 +325,7 @@ export async function explainUnnamed(id: string, limit = 100): Promise<{ ok: boo
 // — ادمین نامِ مشاورِ «همین آگهی» را تأیید/اصلاح می‌کند. این قاعده نیست (هیچ آگهیِ دیگری را لمس نمی‌کند): حکمِ انسان برای یک آگهی
 // است، بر جوابِ AI مقدم می‌شود، به ماشین‌لرنینگ یاد داده می‌شود (learnName 'admin')، و همگام‌سازیِ همان آژانس فوراً در صف می‌رود.
 // روی ردیفِ آژانس (mutateScrape، اتمی) ذخیره می‌شود — نه کشِ ردیف‌ها که سینکِ در حالِ اجرا در پایان بازنویسی‌اش می‌کند.
-export async function setAdName(id: string, token: string, name: string): Promise<{ ok: boolean; error?: string; name?: string }> {
+export async function setAdName(id: string, token: string, name: string): Promise<{ ok: boolean; error?: string; name?: string; matched?: number }> {
   const nm = normFa(String(name || '')).replace(/\s+/g, ' ').trim().slice(0, 40)
   const tk = String(token || '').trim()
   if (!tk) return { ok: false, error: 'توکنِ آگهی لازم است' }
@@ -331,6 +334,8 @@ export async function setAdName(id: string, token: string, name: string): Promis
     const m = { ...(s.adNames || {}) }
     m[tk] = nm
     if (nm && s.rejectedNames?.length) s.rejectedNames = s.rejectedNames.filter(k => keyOf(k) !== keyOf(nm))   // تأییدِ صریح ردِ قبلی را برمی‌دارد
+    // فاز ۳۴۶د — تأییدِ نام برای کلِ همین آژانس (یک کلیک، نه آگهی‌به‌آگهی)
+    if (nm) s.confirmedNames = [...(s.confirmedNames || []).filter(n => keyOf(n) !== keyOf(nm)), nm].slice(-300)
     const keys = Object.keys(m)
     if (keys.length > 5000) for (const k of keys.slice(0, keys.length - 5000)) delete m[k]
     s.adNames = m
@@ -338,8 +343,25 @@ export async function setAdName(id: string, token: string, name: string): Promis
   })
   if (!ok) return { ok: false, error: 'آژانس پیدا نشد' }
   if (nm) { try { const { learnName } = await import('./agency-roster-ml'); await learnName(nm, 'admin') } catch {} }
+  // چند آگهیِ این آژانس این نام را در متن دارند (همان چیزی که در سینکِ بعد به او می‌رسد)
+  let matched = 0
+  if (nm) {
+    try {
+      const ks = nm.split(' ').map(w => keyOf(w).toLowerCase()).filter(Boolean)
+      const cache = await loadRowCache(id)
+      for (const c of Object.values(cache)) if (c?.desc && descLinesOf(normFa(c.desc)).some(l => l.some((_, i) => ks.every((k, j) => l[i + j] === k)))) matched++
+    } catch {}
+  }
   await requestRun(id)
-  return { ok: true, name: nm }
+  return { ok: true, name: nm, matched }
+}
+// فاز ۳۴۶د — برداشتنِ نام از «تأییدشده‌ها»ی همین آژانس.
+export async function unconfirmName(id: string, name: string): Promise<{ ok: boolean; error?: string }> {
+  const k = keyOf(String(name || ''))
+  const ok = await mutateScrape(id, s => { if (!s) return false; s.confirmedNames = (s.confirmedNames || []).filter(x => keyOf(x) !== k); return true })
+  if (!ok) return { ok: false, error: 'آژانس پیدا نشد' }
+  await requestRun(id)
+  return { ok: true }
 }
 // فاز ۳۴۶ج — برگرداندنِ نامی که اشتباهی حذف شده بود (از فهرستِ «ردشده»ها) + همگام‌سازیِ فوری.
 export async function unrejectName(id: string, name: string): Promise<{ ok: boolean; error?: string }> {
@@ -756,7 +778,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // فاز ۲۷۹ — مشاورهای دارای حساب «سنجاق» می‌شوند: در ادغامِ نامِ کوتاه/بلند همیشه میزبان
     // می‌مانند تا کلیدشان عوض نشود؛ وگرنه در همین سینک «غایب» حساب و فایل‌هایشان پاک می‌شد.
     const pinnedKeys = (scrape.advisors || []).filter(a => a.phone).map(a => a.key)
-    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow, onCluster, pinnedKeys, f: opts196?.f, shouldStop, manual: scrape.adNames, rejected: scrape.rejectedNames })
+    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog, cached: rowCache, onRow, onCluster, pinnedKeys, f: opts196?.f, shouldStop, manual: scrape.adNames, rejected: scrape.rejectedNames, confirmed: scrape.confirmedNames })
     // فاز ۱۹۶ — flushِ نهاییِ کشِ ازسرگیری: ذخیرهٔ throttled (هر ۵ث) دُمِ کش (و نام‌های AI) را جا می‌گذاشت
     // → پاسِ بعد دوباره از دیوار می‌خواند و AI را دوباره می‌پرسید. (خودِ تستِ شبیه‌سازی این را گرفت.)
     await saveRowCache(id, rowCache).catch(() => {})
@@ -1111,6 +1133,7 @@ export async function removeAdvisor(id: string, key: string): Promise<{ ok: bool
     // فاز ۳۴۶ج (فیدبکِ مالک: «وقتی حذف می‌کنم چرا نمی‌فهمد و دوباره می‌آورد؟») — حذف = «این نامِ مشاور نیست»: نام در همین آژانس
     // ردشده ثبت می‌شود؛ سینکِ بعد آگهی‌هایش بی‌نام می‌مانند و به AI گفته می‌شود این واژه نامِ مشاور نیست (تا نامِ درست را پیدا کند).
     const rec = s.advisors.find(a => a.key === key)
+    if (rec) s.confirmedNames = (s.confirmedNames || []).filter(n => keyOf(n) !== keyOf(rec.name))
     if (rec) s.rejectedNames = [...new Set([...(s.rejectedNames || []), rec.name, ...(keyOf(rec.name) !== rec.key ? [rec.key] : [])].filter(Boolean))].slice(-500)
     s.advisors = s.advisors.filter(a => a.key !== key)
     return s.advisors.length < before ? { ok: true } : { ok: false, error: 'مشاور یافت نشد' }

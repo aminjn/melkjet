@@ -81,12 +81,16 @@ export function UnnamedExplain({ id }: { id: string }) {
       const r = await fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-ad-name', id, token, name }) })
       const j = await r.json()
       if (!j.ok) { setMsg(j.error || 'خطا'); return }
-      setRows(rs => (rs || []).map(x => x.token === token ? { ...x, manual: j.name, reason: j.name ? `ادمین تأیید کرد: «${j.name}» — در همگام‌سازیِ بعد به همین مشاور می‌رود` : 'ادمین گفت این آگهی مشاور ندارد' } : x))
-      setMsg(j.name ? `✅ مشاورِ این آگهی «${j.name}» ثبت شد و به ماشین‌لرنینگ یاد داده شد. 🔄 همگام‌سازیِ این آژانس در صف رفت — چند دقیقهٔ دیگر در فهرستِ مشاوران می‌آید.` : '✖ ثبت شد: این آگهی مشاور ندارد. 🔄 همگام‌سازی در صف رفت.')
+      // فاز ۳۴۶د — تأییدِ نام برای کلِ آژانس: همهٔ آگهی‌های این فهرست که همین نام را در متن دارند هم علامت می‌خورند
+      const nt = (t: string) => String(t || '').replace(/[\u0640\u064B-\u065F\u0670\u200D\u200E\u200F]/g, '').replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/\u200c/g, ' ')
+      const words = nt(j.name || '').split(/\s+/).filter(Boolean)
+      const has = (t: string) => !!words.length && words.every(w => nt(t).includes(w))
+      setRows(rs => (rs || []).map(x => x.token === token || (j.name && has(x.text)) ? { ...x, manual: j.name, reason: j.name ? `تأییدشده: «${j.name}» — در همگام‌سازیِ بعد به همین مشاور می‌رود` : 'ادمین گفت این آگهی مشاور ندارد' } : x))
+      setMsg(j.name ? `✅ «${j.name}» برای این آژانس تأیید شد — ${fa(j.matched || 1)} آگهیِ این آژانس این نام را در متن دارند و همه به «${j.name}» می‌روند (اگر مشاورِ «${j.name}» از قبل هست، در همان ادغام می‌شوند). ماشین‌لرنینگ هم یاد گرفت. 🔄 همگام‌سازی در صف رفت.` : '✖ ثبت شد: این آگهی مشاور ندارد. 🔄 همگام‌سازی در صف رفت.')
     } catch (e: any) { setMsg(String(e?.message || e)) }
   }
   const confirmName = (r: ExRow) => {
-    const name = (window.prompt('نامِ مشاورِ همین آگهی (فقط نام — بدونِ «کارشناس/خانم/آقای»):', r.manual || r.ai || sigGuess(r.sigLine)) || '').trim()
+    const name = (window.prompt('نامِ مشاور (فقط نام — بدونِ «کارشناس/خانم/آقای»). همهٔ آگهی‌های این آژانس که این نام را دارند به او می‌روند:', r.manual || r.ai || sigGuess(r.sigLine)) || '').trim()
     if (name) setAdName(r.token, name)
   }
   if (!rows) return (
@@ -139,7 +143,7 @@ export function UnnamedExplain({ id }: { id: string }) {
           <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--text)', lineHeight: 1.8 }}>علت: {r.reason}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
             {!!r.text && <button onClick={() => setOpenTok(openTok === r.token ? '' : r.token)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{openTok === r.token ? 'بستنِ متن' : 'متنی که به AI رفت'}</button>}
-            {!r.metaText && !r.noText && <button onClick={() => confirmName(r)} style={{ background: 'transparent', border: '1px solid rgba(95,217,138,.45)', borderRadius: 8, padding: '3px 9px', color: '#5fd98a', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{r.ai && !r.aiRejected && r.manual === undefined ? `✅ «${r.ai}» درست است` : '✅ مشاورِ این آگهی…'}</button>}
+            {!r.metaText && !r.noText && <button onClick={() => confirmName(r)} style={{ background: 'transparent', border: '1px solid rgba(95,217,138,.45)', borderRadius: 8, padding: '3px 9px', color: '#5fd98a', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{r.ai && !r.aiRejected && r.manual === undefined ? `✅ «${r.ai}» درست است` : '✅ این نام مشاور است…'}</button>}
             {!r.metaText && !r.noText && r.ai && !r.aiRejected && r.manual === undefined && <button onClick={() => setAdName(r.token, r.ai)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '3px 10px', color: '#1a1400', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>تأییدِ فوری</button>}
             {!r.metaText && !r.noText && <button onClick={() => { if (window.confirm('این آگهی مشاور ندارد (به خودِ آژانس برود)؟')) setAdName(r.token, '') }} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✖ مشاور ندارد</button>}
           </div>
