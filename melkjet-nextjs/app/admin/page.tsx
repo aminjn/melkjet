@@ -2392,7 +2392,7 @@ const PTYPE_LABEL: Record<string, string> = { pros: 'مشاور', agency: 'آژ�
 
 interface DivarPro { slug: string; url: string; name?: string; listingCount?: number; source: string }
 // لینکِ آگهی‌های یک مشاور در دیوار (برای بازبینی + برداشتِ دستیِ شماره).
-function DivarLinks({ tokens }: { tokens?: string[] }) {
+function DivarLinks({ tokens, onEdit }: { tokens?: string[]; onEdit?: (token: string) => void }) {
   if (!tokens || !tokens.length) return null
   return (
     <details>
@@ -2403,7 +2403,7 @@ function DivarLinks({ tokens }: { tokens?: string[] }) {
             style={{ fontSize: 11, direction: 'ltr', padding: '3px 8px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', textDecoration: 'none' }}>
             {t} ↗
           </a>
-        ))}
+        )).flatMap((el, i) => onEdit ? [el, <button key={tokens[i] + ':e'} onClick={() => onEdit(tokens[i])} title="مشاورِ این آگهی را خودت تعیین کن (AI و ماشین‌لرنینگ از آن یاد می‌گیرند)" style={{ fontSize: 11, padding: '3px 7px', borderRadius: 6, background: 'transparent', border: '1px dashed var(--line2)', color: 'var(--gold)', cursor: 'pointer', fontFamily: 'inherit', marginInlineStart: -4 }}>✎ مشاور</button>] : [el])}
       </div>
     </details>
   )
@@ -2613,8 +2613,20 @@ function AgencyRosterPanel() {
     setMsg(`✅ ${keys.length.toLocaleString('fa-IR')} مشاور حذف شد`); load()
   }
 
+  // فاز ۳۴۶ب/ج — تعیینِ دستیِ مشاورِ «یک آگهی» (بر AI مقدم؛ ماشین‌لرنینگ یاد می‌گیرد) + برگرداندنِ نامِ حذف‌شده.
+  const setAdNameFor = async (id: string, token: string) => {
+    const v = window.prompt('نامِ مشاورِ این آگهی (فقط نام). خالی بگذار = «این آگهی مشاور ندارد»:', '')
+    if (v === null) return
+    const j = await post({ action: 'set-ad-name', id, token, name: v.trim() })
+    if (j.ok) { setMsg(j.name ? `✅ مشاورِ آگهیِ ${token}: «${j.name}» — همگام‌سازیِ این آژانس در صف رفت` : `✅ آگهیِ ${token} بی‌مشاور ثبت شد — همگام‌سازی در صف رفت`); load() } else setMsg('❌ ' + (j.error || 'خطا'))
+  }
+  const unrejectName = async (id: string, name: string) => {
+    if (!confirm(`«${name}» دوباره می‌تواند مشاور باشد؟`)) return
+    const j = await post({ action: 'unreject-name', id, name })
+    if (j.ok) { setMsg(`✅ «${name}» برگشت — همگام‌سازی در صف رفت`); load() } else setMsg('❌ ' + (j.error || 'خطا'))
+  }
   const removeAdvisor = async (id: string, key: string, name: string) => {
-    if (!confirm(`«${name}» از این فهرست حذف شود؟ (اگر حساب ساخته شده، خودِ حساب و فایل‌هایش می‌مانند)`)) return
+    if (!confirm(`«${name}» حذف شود؟ از این به بعد «${name}» در این آژانس دیگر مشاور حساب نمی‌شود و آگهی‌هایش به «بی‌نام» می‌روند (AI هم این را می‌فهمد). اگر حساب ساخته شده، خودِ حساب و فایل‌هایش می‌مانند.`)) return
     const j = await post({ action: 'remove-advisor', id, key })
     if (j.ok) { setMsg('✅ حذف شد'); load() } else setMsg('❌ ' + (j.error || 'خطا'))
   }
@@ -2818,7 +2830,7 @@ function AgencyRosterPanel() {
                       <button onClick={() => editAdvisorUi(s.id, a.key, a)} title="ویرایشِ نام و شماره" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: 'var(--gold)', fontSize: 11.5, cursor: 'pointer' }}>ویرایش</button>
                       <button onClick={() => removeAdvisor(s.id, a.key, a.name)} title="حذف از فهرست" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: '#e06666', fontSize: 11.5, cursor: 'pointer' }}>حذف</button>
                     </div>
-                    <DivarLinks tokens={a.tokens} />
+                    <DivarLinks tokens={a.tokens} onEdit={t => setAdNameFor(s.id, t)} />
                   </div>
                 ))}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 8px', background: 'var(--bg2)', borderRadius: 8, borderTop: '1px dashed var(--line2)' }}>
@@ -2832,8 +2844,17 @@ function AgencyRosterPanel() {
                       : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="۰۹… یا ثابت ۰۲۱…" value={phones[`${s.id}:__agency__`] || ''} onChange={e => setPhone(`${s.id}:__agency__`, e.target.value)} />
                         <button onClick={() => graduate(s.id, '__agency__')} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب آژانس</button></>}
                   </div>
-                  <DivarLinks tokens={s.unnamedTokens} />
+                  <DivarLinks tokens={s.unnamedTokens} onEdit={t => setAdNameFor(s.id, t)} />
                   {(s.lastUnnamed || 0) > 0 && <UnnamedExplain id={s.id} />}
+                  {(s.rejectedNames || []).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 11.5, color: 'var(--muted)' }}>
+                      <span title="نام‌هایی که حذف کرده‌اید؛ در این آژانس دیگر مشاور نمی‌شوند">🚫 حذف‌شده‌ها:</span>
+                      {(s.rejectedNames as string[]).filter((n: string) => !/^[A-Za-z0-9_:-]+$/.test(n)).map((n: string) => (
+                        <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 999, border: '1px solid var(--line2)' }}>{n}
+                          <button onClick={() => unrejectName(s.id, n)} title="برگرداندن" style={{ background: 'transparent', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 11, padding: 0, fontFamily: 'inherit' }}>↩</button></span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

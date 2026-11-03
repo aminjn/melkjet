@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, prepareGraduateJobs, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, enqueueMerge, listDueRosters, explainUnnamed } from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, prepareGraduateJobs, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, enqueueMerge, listDueRosters, explainUnnamed, setAdName, unrejectName } from '@/app/lib/agency-roster-store'
 import { getCronBeat } from '@/app/lib/cron-heartbeat'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { rosterCities } from '@/app/lib/agency-roster-city'
@@ -127,6 +127,17 @@ export async function POST(req: NextRequest) {
       catch (e) { console.error('[roster] graduate instant (api) failed:', String((e as Error)?.message || e).slice(0, 160)) }
     }
     return NextResponse.json({ ...r, instant }, { status: r.ok ? 200 : 400 })
+  }
+  // فاز ۳۴۶ب — «چرا بی‌نام؟» → «✅ مشاورِ این آگهی»: حکمِ ادمین برای «همین یک آگهی» + همگام‌سازیِ فوری
+  if (action === 'set-ad-name') {
+    if (!b.id || !b.token) return NextResponse.json({ error: 'id/token لازم است' }, { status: 400 })
+    const r = await setAdName(String(b.id), String(b.token), String(b.name ?? ''))
+    return NextResponse.json(r, { status: r.ok ? 200 : 400 })
+  }
+  if (action === 'unreject-name') {
+    if (!b.id || !b.name) return NextResponse.json({ error: 'id/name لازم است' }, { status: 400 })
+    const r = await unrejectName(String(b.id), String(b.name))
+    return NextResponse.json(r, { status: r.ok ? 200 : 400 })
   }
   if (action === 'edit-advisor') {
     if (!b.id || !b.key) return NextResponse.json({ error: 'id/key لازم است' }, { status: 400 })

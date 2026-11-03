@@ -56,7 +56,8 @@ try {
   // ── خودترمیم: ردیف‌هایی که «پیش از» این فیکس گیر کرده‌اند (کار prepared، شماره روی رکورد نیست) ──
   sc = await S.getScrape(id)
   const PH2 = '09120003446'
-  // رادمهر حذف شد؛ یک سینکِ تازه برش می‌گرداند تا مشاورِ دومِ بی‌حساب داشته باشیم
+  // رادمهر حذف شد؛ فاز ۳۴۶ج: حذف = «این نام نیست» ⇒ اول صریحاً برگردانده می‌شود، بعد سینکِ تازه برش می‌گرداند
+  await S.unrejectName(id, 'رادمهر')
   await S.syncRoster(id, undefined, { budgetMs: 60000, f, fetchPost })
   sc = await S.getScrape(id)
   const rd3 = sc.advisors.find(a => a.name === 'رادمهر' && !a.phone)

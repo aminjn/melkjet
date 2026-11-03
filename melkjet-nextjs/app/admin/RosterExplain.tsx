@@ -25,7 +25,7 @@ export function NameStatsLine({ st }: { st?: NameStatsLite }) {
         : <span style={RED} title="پنل → API و مدل‌های AI → مدلِ RosterAgent + روشن‌کردنِ بخشِ روستر">⚠ AI خاموش — بدونِ AI هیچ نامی تعیین نمی‌شود</span>}
       {!!st.skippedSig && <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--muted)' }} title="امضای صریح با قاعده حل شد و به AI نرفت">✍ {fa(st.skippedSig)} امضای قطعی</span>}
       <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--muted)' }} title="منبعِ نامِ آگهی‌های نام‌دار">
-        نام‌دار با AI: {fa(st.byAI)}{st.bySig || st.byMachine || st.byClaim ? ` (سینکِ قدیمی: امضا ${fa(st.bySig)} · ماشین ${fa(st.byMachine)} · چسبیده ${fa(st.byClaim)})` : ''}
+        نام‌دار با AI: {fa(st.byAI)}{st.bySig ? ` · تأییدِ ادمین ${fa(st.bySig)}` : ''}{st.byMachine || st.byClaim ? ` (سینکِ قدیمی: ماشین ${fa(st.byMachine)} · چسبیده ${fa(st.byClaim)})` : ''}
       </span>
       {st.aiRejected > 0 && <span style={{ ...chip, background: 'rgba(231,161,74,.12)', color: '#e7a14a' }} title="نامی که AI داد ولی واژه‌به‌واژه در متنِ آگهی نبود (ضدِ توهم)">✗ {fa(st.aiRejected)} نامِ AI رد شد</span>}
       {st.aiOn && pending > 0 && (st.budgetHit || st.gaveUp) && <span style={RED}>⏳ {fa(pending)} آگهی هنوز به AI نرسید{st.gaveUp ? ' (AI پشتِ‌سرِهم جواب نداد)' : ' (سقفِ زمان)'} — سینکِ بعد</span>}
@@ -38,7 +38,7 @@ export function NameStatsLine({ st }: { st?: NameStatsLite }) {
 
 export function SrcBadge({ src }: { src?: { ai: number; sig: number; machine: number; claim: number } }) {
   if (!src) return null
-  const parts: [string, number, string][] = [['🤖 AI', src.ai, '#5fd98a'], ['✍ امضا', src.sig, '#60a5fa'], ['⚙ ماشین', src.machine, '#e7a14a'], ['🔗 چسبیده', src.claim, 'var(--muted)']]
+  const parts: [string, number, string][] = [['🤖 AI', src.ai, '#5fd98a'], ['👤 تأییدِ ادمین', src.sig, '#60a5fa'], ['⚙ ماشین', src.machine, '#e7a14a'], ['🔗 چسبیده', src.claim, 'var(--muted)']]
   const shown = parts.filter(p => p[1] > 0)
   if (!shown.length) return null
   return (
@@ -50,7 +50,7 @@ export function SrcBadge({ src }: { src?: { ai: number; sig: number; machine: nu
 
 interface ExRow {
   token: string; title: string; text: string; ai: string; aiAsked: boolean; aiRejected: boolean
-  machine: string; signature: boolean; reason: string; sigLine?: string; oldText?: boolean; metaText?: boolean; noText?: boolean; wl?: string[]
+  machine: string; signature: boolean; reason: string; sigLine?: string; oldText?: boolean; metaText?: boolean; noText?: boolean; wl?: string[]; manual?: string
 }
 
 export function UnnamedExplain({ id }: { id: string }) {
@@ -68,51 +68,26 @@ export function UnnamedExplain({ id }: { id: string }) {
     } catch (e: any) { setErr(String(e?.message || e)) }
     setBusy(false)
   }
-  const normTxt = (t: string) => String(t || '').replace(/[\u0640\u064B-\u065F\u0670\u200D\u200E\u200F]/g, '').replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/\u200c/g, ' ')
-  // فاز ۳۴۴ط — حذفِ ورودیِ اشتباهِ فهرستِ سفید (مثلِ «قدیمی» که امضای واقعیِ «مجید شاکری» را کنار می‌زد)
-  const unWhitelist = async (name: string) => {
-    if (!window.confirm(`«${name}» از فهرستِ سفید حذف شود؟`)) return
-    try {
-      const cur = await (await fetch('/api/admin/roster-name-rules', { cache: 'no-store' })).json()
-      const rules = cur?.rules || { blacklist: [], whitelist: [] }
-      const r = await fetch('/api/admin/roster-name-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blacklist: rules.blacklist, whitelist: (rules.whitelist || []).filter((w: string) => normTxt(w).trim() !== normTxt(name).trim()) }) })
-      const j = await r.json()
-      if (!j.ok) { setMsg(j.error || 'خطا'); return }
-      let queued = false
-      try { const q = await fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync', id }) }); queued = q.ok } catch {}
-      setMsg(`🗑 «${name}» از فهرستِ سفید حذف شد.${queued ? ' 🔄 همگام‌سازیِ این آژانس در صف رفت.' : ''}`)
-      setRows(rs => (rs || []).map(x => x.wl ? { ...x, wl: x.wl.filter((w: string) => w !== name) } : x))
-    } catch (e: any) { setMsg(String(e?.message || e)) }
-  }
-  // فاز ۳۴۴ز — وقتی نه AI نه ماشین نامی داده، آخرین واژهٔ «خطِ امضا» (پس از «:» یا لقب) پیش‌پرِ کادر می‌شود تا ادمین فقط تأیید کند.
+  // فاز ۳۴۴ز — پیش‌پرِ کادر: آخرین واژهٔ «خطِ امضا» (پس از «:» یا لقب) وقتی AI نامی نداده.
   const sigGuess = (line?: string) => {
     const t = String(line || '').replace(/\u200c/g, ' ').split(/[:：]/).pop() || ''
     const w = t.replace(/[^\p{L}\s]/gu, ' ').split(/\s+/).filter(x => x && !/^(خانم|آقای|آقا|دکتر|مهندس|سرکار|جناب|مشاور|کارشناس|شما)$/.test(x))
     return w.slice(-2).join(' ')
   }
-  // «✅ این نام است» → فهرستِ سفید (سراسری؛ نقش/لقب را سرور خودش جدا می‌کند — «کارشناس خانم X» ⇒ «X»).
-  const whitelist = async (guess: string) => {
-    const name = (window.prompt('نامِ مشاور (فقط نام — بدونِ «کارشناس/خانم/آقای»):', guess) || '').trim()
-    if (!name) return
+  // فاز ۳۴۶ب (اسکرین‌شاتِ مالک: AI «فخاری» گفته بود ولی «نمی‌توانم بزنم که بفهمد این واقعاً مشاور است») — حکمِ ادمین برای «همین آگهی»:
+  // بر AI مقدم، به ماشین‌لرنینگ یاد داده می‌شود و همگام‌سازیِ همین آژانس فوراً در صف می‌رود. هیچ آگهیِ دیگری را لمس نمی‌کند.
+  const setAdName = async (token: string, name: string) => {
     try {
-      const cur = await (await fetch('/api/admin/roster-name-rules', { cache: 'no-store' })).json()
-      const rules = cur?.rules || { blacklist: [], whitelist: [] }
-      const r = await fetch('/api/admin/roster-name-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blacklist: rules.blacklist, whitelist: [...rules.whitelist, name] }) })
+      const r = await fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-ad-name', id, token, name }) })
       const j = await r.json()
       if (!j.ok) { setMsg(j.error || 'خطا'); return }
-      // نامی که واقعاً ذخیره شد (سرور نقش/لقب را جدا می‌کند: «کارشناس خانم X» ⇒ «X»)
-      const saved = String((j?.rules?.whitelist || []).find((w: string) => name.includes(w) && w.length > 1) || name)
-      // فاز ۳۴۴ب (فیدبکِ مالک: «می‌زنم این نام است، انگار هیچ اتفاقی نمی‌افتد») — همهٔ آگهی‌های همین فهرست که این نام
-      // در متنشان هست همان لحظه کنار می‌روند و شمرده می‌شوند، و همگام‌سازیِ همین آژانس فوراً در صف می‌رود تا اثرش دیده شود.
-      // فاز ۳۴۴ط — متنِ آگهی کشیده/اعراب/ی‌کِ عربی دارد («مجـید شـاکری»)؛ بی‌یکسان‌سازی شمارش «صفر آگهی» می‌گفت.
-      const words = normTxt(saved).split(/\s+/).filter(Boolean)
-      const has = (t: string) => { const tt = normTxt(t); return words.every(w => tt.includes(w)) }
-      const hit = (rows || []).filter(x => has(x.text)).length
-      setRows(rs => (rs || []).filter(x => !has(x.text)))
-      let queued = false
-      try { const q = await fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync', id }) }); queued = q.ok } catch {}
-      setMsg(`✅ «${saved}» در فهرستِ سفید ثبت شد — ${fa(hit)} آگهیِ این فهرست این نام را دارند و به «${saved}» می‌رسند. ${queued ? '🔄 همگام‌سازیِ این آژانس در صف رفت (چند دقیقهٔ دیگر در فهرستِ مشاوران می‌آید).' : 'برای اعمال، «همگام‌سازی الان» را بزن.'}`)
+      setRows(rs => (rs || []).map(x => x.token === token ? { ...x, manual: j.name, reason: j.name ? `ادمین تأیید کرد: «${j.name}» — در همگام‌سازیِ بعد به همین مشاور می‌رود` : 'ادمین گفت این آگهی مشاور ندارد' } : x))
+      setMsg(j.name ? `✅ مشاورِ این آگهی «${j.name}» ثبت شد و به ماشین‌لرنینگ یاد داده شد. 🔄 همگام‌سازیِ این آژانس در صف رفت — چند دقیقهٔ دیگر در فهرستِ مشاوران می‌آید.` : '✖ ثبت شد: این آگهی مشاور ندارد. 🔄 همگام‌سازی در صف رفت.')
     } catch (e: any) { setMsg(String(e?.message || e)) }
+  }
+  const confirmName = (r: ExRow) => {
+    const name = (window.prompt('نامِ مشاورِ همین آگهی (فقط نام — بدونِ «کارشناس/خانم/آقای»):', r.manual || r.ai || sigGuess(r.sigLine)) || '').trim()
+    if (name) setAdName(r.token, name)
   }
   if (!rows) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -157,12 +132,16 @@ export function UnnamedExplain({ id }: { id: string }) {
             {r.sigLine && <span style={RED} title={r.sigLine}>⚠ خطِ امضا دارد</span>}
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 5, fontSize: 11.5, color: 'var(--muted)' }}>
+            {r.manual !== undefined && <span>👤 ادمین: <b style={{ color: '#60a5fa' }}>{r.manual ? `«${r.manual}»` : 'بی‌مشاور'}</b></span>}
             <span>AI: {r.ai ? <b style={{ color: r.aiRejected ? '#e7674a' : '#5fd98a' }}>«{r.ai}»{r.aiRejected ? ' (رد شد)' : ''}</b> : r.aiAsked ? 'بی‌امضا' : <span style={{ color: 'var(--faint)' }}>نپرسیده</span>}</span>
           </div>
           {r.sigLine && <div style={{ marginTop: 4, fontSize: 11.5, color: '#e7674a' }}>خطِ امضا: «{r.sigLine}»</div>}
           <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--text)', lineHeight: 1.8 }}>علت: {r.reason}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
             {!!r.text && <button onClick={() => setOpenTok(openTok === r.token ? '' : r.token)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{openTok === r.token ? 'بستنِ متن' : 'متنی که به AI رفت'}</button>}
+            {!r.metaText && !r.noText && <button onClick={() => confirmName(r)} style={{ background: 'transparent', border: '1px solid rgba(95,217,138,.45)', borderRadius: 8, padding: '3px 9px', color: '#5fd98a', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{r.ai && !r.aiRejected && r.manual === undefined ? `✅ «${r.ai}» درست است` : '✅ مشاورِ این آگهی…'}</button>}
+            {!r.metaText && !r.noText && r.ai && !r.aiRejected && r.manual === undefined && <button onClick={() => setAdName(r.token, r.ai)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '3px 10px', color: '#1a1400', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>تأییدِ فوری</button>}
+            {!r.metaText && !r.noText && <button onClick={() => { if (window.confirm('این آگهی مشاور ندارد (به خودِ آژانس برود)؟')) setAdName(r.token, '') }} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✖ مشاور ندارد</button>}
           </div>
           {openTok === r.token && <pre style={{ marginTop: 6, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12, lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px', maxHeight: 280, overflow: 'auto', direction: 'rtl' }}>{r.text}</pre>}
         </div>
