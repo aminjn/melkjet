@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { cacheRemote } from './listing-image'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete, kvGetPrefix, kvGetPrefixField } from './db'
-import { buildAgencyRoster, extractSignature, whitelistHits, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V } from './agency-roster'
+import { buildAgencyRoster, extractSignature, whitelistHits, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V, AI_INCOMPLETE_ERROR } from './agency-roster'
 import { validName, keyOf, addressTokens, contextNoiseTokens, normFa } from './agency-name-lexicon'
 import { isDivarMetaText } from './divar-text'
 import { importDivarToken } from './advisor-divar-import'
@@ -296,27 +296,17 @@ export async function explainUnnamed(id: string, limit = 100): Promise<{ ok: boo
     const base = { token, title: c?.title || '', ai: '', aiAsked: false, aiRejected: false, machine: '', signature: false }
     if (!c || !c.desc) { rows.push({ ...base, text: '', noText: true, reason: 'متنِ این آگهی در دست نیست — یا دیوار جواب نداد/کند بود، یا «توضیحات» فقط تاریخِ انتشار/نردبان بود (ذخیره نمی‌شود). سینکِ بعد دوباره از دیوار می‌خواند.' }); continue }
     if (isDivarMetaText(c.desc)) { rows.push({ ...base, text: c.desc, metaText: true, reason: 'این آگهی متن ندارد: خوانندهٔ قدیمی به‌جای توضیحاتِ فروشنده فقط تاریخِ انتشار/نردبانِ دیوار را ذخیره کرده بود. همگام‌سازیِ بعد (یا دکمهٔ «دوباره از دیوار بخوان») متنِ واقعی را می‌خواند و به AI می‌دهد.' }); continue }
-    const title = normFa(c.title || ''), desc = normFa(c.desc)
-    const txt = `${title}\n${desc}`
-    const addr = new Set([...addressTokens(txt), ...contextNoiseTokens(txt)])
-    const cand = extractSignature(title, desc, ag)
-    const machine = cand[0] || ''
-    const dLines = descLinesOf(desc)
-    const candKeys = new Set(cand.map(x => acceptName(x, ag, addr, dLines)).filter(Boolean).map(keyOf))
-    const aiRaw = typeof c.name === 'string' ? c.name : ''
+    // فاز ۳۴۶ — نام «فقط» با AI: علت هم فقط از جوابِ AI می‌آید (حدسِ ماشین/فهرستِ سفید دیگر در تصمیم نیستند).
+    const desc = normFa(c.desc)
+    const aiRaw = typeof c.name === 'string' ? c.name.trim() : ''
     const aiAsked = c.name !== undefined && (c.aiv || 0) >= AI_PROMPT_V
-    const ai = aiRaw ? gateAiName(acceptName(aiRaw, ag, addr, dLines), desc, candKeys) : ''
-    const strong = signatureTrusted(title, desc, ag)
+    const inText = !!aiRaw && descLinesOf(desc).some(l => { const ks = aiRaw.split(/\s+/).map(w => keyOf(w).toLowerCase()); return l.some((_, i2) => ks.every((k, j2) => l[i2 + j2] === k)) })
     let reason: string
-    if (ai) reason = `AI «${ai}» گفت؛ این نام فقط در همین یک آگهی بود (کمتر از ۲ آگهی) → به «بی‌نام» رفت`
-    else if (aiRaw) reason = `AI گفت «${aiRaw}» ولی رد شد (در متن نبود، یا واژهٔ آگهی/محله/نامِ آژانس است، یا وسطِ جمله بود)`
-    else if (machine && strong) reason = `امضای «${machine}» دیده شد؛ این نام فقط در همین یک آگهی بود (کمتر از ۲ آگهی) → به «بی‌نام» رفت`
-    else if (aiAsked && machine) reason = `AI گفت امضا ندارد؛ حدسِ ماشین («${machine}») چون امضای صریح نبود، کنار گذاشته شد`
-    else if (aiAsked) reason = 'AI گفت امضا ندارد و ماشین هم نامی پیدا نکرد'
-    else if (machine) reason = `AI این آگهی را (هنوز) نپرسیده؛ حدسِ ماشین («${machine}») شکلِ نام نداشت یا در یک آگهی بود`
-    else reason = 'AI این آگهی را (هنوز) نپرسیده و ماشین هم نامی پیدا نکرد'
-    const wl = whitelistHits(normFa(`${c.title || ''}\n${c.desc}`))
-    rows.push({ ...base, text: c.desc, ai: aiRaw, aiAsked, aiRejected: !!aiRaw && !ai, machine, signature: strong, reason, wl: wl.length ? wl : undefined, sigLine: signatureLikeLine(desc) || undefined, oldText: (c.dv || 0) < 4 || undefined })
+    if (!aiAsked) reason = 'AI هنوز این آگهی را نخوانده — پاسِ بعدِ همگام‌سازی می‌خواند'
+    else if (aiRaw && !inText) reason = `AI گفت «${aiRaw}» ولی این نام واژه‌به‌واژه در متنِ آگهی نیست (ضدِ توهم) → بی‌نام`
+    else if (aiRaw) reason = `AI «${aiRaw}» گفت — در همگام‌سازیِ بعد به همین نام می‌رود`
+    else reason = 'AI متن را خواند و گفت امضای مشاور ندارد'
+    rows.push({ ...base, text: c.desc, ai: aiRaw, aiAsked, aiRejected: !!aiRaw && !inText, reason, sigLine: signatureLikeLine(desc) || undefined, oldText: (c.dv || 0) < 4 || undefined })
   }
   // آگهی‌هایی که «خطِ امضا» دارند ولی بی‌نام ماندند، اول (همان‌ها که احتمالاً نامشان از دست رفته)
   rows.sort((x, y) => Number(!!y.sigLine) - Number(!!x.sigLine))
@@ -740,6 +730,14 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // (آن‌جا پیشرفتِ واقعی رخ داده)؛ خطای گذرای ایمپورت حالا می‌شمارد و بعد از ۸ بار «با علتِ
     // واقعی» تسلیم می‌شود تا در پنل دیده شود، نه این‌که ابدی بچرخد.
     console.log(`[roster] scrape+AI done: rows=${roster.scanned} advisors=${roster.advisors.length} unnamed=${roster.unnamed.tokens.length}`)
+    // فاز ۳۴۶ — AI هنوز همهٔ آگهی‌ها را نخوانده: فهرست بازنویسی نمی‌شود (نیمی AI، نیمی خالی = مشاورانِ پریده)؛ جواب‌ها کش
+    // شده‌اند و مثلِ «بودجهٔ زمانی» پاسِ بعد خودکار ادامه می‌دهد. پیشرفت ⇒ شمارندهٔ تلاش بخشیده می‌شود؛ بی‌پیشرفت ⇒ می‌شمارد (سقفِ ۸).
+    if (!roster.ok && roster.error === AI_INCOMPLETE_ERROR) {
+      done = true
+      const pr = roster.aiProgress
+      await patchScrape(id, { running: false, ...(pr && pr.askedNow > 0 ? { runAttempts: 0 } : {}), lastError: `AI ${pr ? `${pr.asked.toLocaleString('fa-IR')}/${pr.total.toLocaleString('fa-IR')} ` : ''}آگهی را خوانده — ادامه خودکار در پاسِ بعد` })
+      return { ok: false, error: roster.error, advisors: 0, total: roster.total, unnamed: 0 }
+    }
     if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, retryPending: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
@@ -756,8 +754,16 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       const host = recs.find(r => r.key !== a.key && (r.aliases || []).includes(a.key))
       if (host && !recs.some(r => r.key === a.key)) a.key = host.key
     }
+    // فاز ۳۴۶ (اسکرین‌شاتِ مالک: دو «امیر» پشتِ سرِ هم — یکی حساب‌دار با ۰ فایل، یکی بی‌حساب با ۳۴ فایل) — رکوردِ حساب‌دار با
+    // «همان نام» ولی کلیدِ دیگر (نامِ ویرایش‌شده، یا کلیدِ قدیمیِ پیش از یکسان‌سازیِ ی/ک) میزبان نمی‌شد، چون یک ردیفِ بی‌حسابِ
+    // هم‌کلید از سینکِ قبل وجود داشت و حلقه «continue» می‌کرد. حالا نامِ دقیقاً برابر با «یک» حساب‌دار همیشه به همان حساب می‌رود؛
+    // ردیفِ بی‌حسابِ تکراری در هرسِ پایین تخلیه می‌شود. (جز وقتی آن ردیف خودش در حالِ ساختِ حساب/ادغام است.)
     for (const a of roster.advisors) {
-      if (recs.some(r => r.key === a.key)) continue
+      if (recs.some(r => r.key === a.key && r.phone)) continue
+      const same = recs.find(r => r.key === a.key)
+      const exact = gradRecs.filter(r => keyOf(r.name) === a.key || keyOf(r.key) === a.key)
+      if (exact.length === 1 && !(same && (same.graduating || same.mergePending))) { a.key = exact[0].key; continue }
+      if (same) continue
       const hosts = gradRecs.filter(r => nameCompatible(r.name, a.name))
       if (hosts.length === 1) a.key = hosts[0].key
     }

@@ -1,6 +1,7 @@
 // فاز ۳۴۴ه — «بیش از ۱۰ دقیقه است ساخت حساب زدم، ساخته نمی‌شود» (فیدبکِ مالک).
 // مسابقه: ادمین وسطِ سینک «ساخت حساب»/حذف می‌زند و نوشتنِ پایانیِ سینک (از اسنپ‌شاتِ اولِ سینک) آن را پاک می‌کرد.
 // Run: node --import ./scripts/reos-loader.mjs scripts/roster-graduate-race-344e-test.mjs
+const { fakeAi } = await import('./roster-fake-ai.mjs')   // فاز ۳۴۶ — نام فقط از AI
 const S = await import('../app/lib/agency-roster-store.ts')
 const { accountExists } = await import('../app/lib/account-store.ts')
 let pass = 0, fail = 0
@@ -25,7 +26,7 @@ const ok = (n, c) => { if (c) { pass++; console.log('  ✓', n) } else { fail++;
 const T = 'فروش آپارتمان'
 const D = { a1: 'نوساز\nکارشناس فروش خانم کاظمی', a2: 'فول\nکارشناس فروش خانم کاظمی', b1: 'نوساز\nمشاور فروش آقای رادمهر', b2: 'فول\nمشاور فروش آقای رادمهر' }
 let hook = null
-const f = {
+const f = { ai: fakeAi,
   profileTokens: async () => { if (hook) { const h = hook; hook = null; await h() } return { posts: Object.keys(D).map(t => ({ token: t, title: T })), name: 'املاک تستِ مسابقه' } },
   post: async (t) => ({ title: T, description: D[t], images: [] }),
 }

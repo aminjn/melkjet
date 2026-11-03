@@ -2519,9 +2519,11 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
     // که کاربر گاهی بین نام و فامیل فاصله می‌گذارد و گاهی نه») — ادغام روی کلیدِ بی‌فاصله.
     {
       const { buildAgencyRoster } = await import('../app/lib/agency-roster.ts')
+      // فاز ۳۴۶ — نام فقط از AI؛ «AI»ِ تست همان نامِ امضاشدهٔ متن را می‌دهد. ادغامِ نامِ کوتاه/کامل همان قانونِ ۲۷۹ است.
+      const ai279 = async (ch) => ({ map: Object.fromEntries(ch.map(it => [it.i, (it.desc.match(/محمد ?پرنده|محمدی|محمد/) || [''])[0]])), raw: '', answered: ch.map(it => it.i) })
       const mk = (ads, pinnedKeys) => buildAgencyRoster('testagency279', {
-        useAI: false, pinnedKeys,
-        f: {
+        useAI: true, pinnedKeys,
+        f: { ai: ai279,
           profileTokens: async () => ({ posts: ads.map(a => ({ token: a.token, title: a.title })), name: 'املاک تست' }),
           post: async (t) => { const a = ads.find(x => x.token === t); return { title: a.title, description: a.desc } },
         },
@@ -2551,7 +2553,9 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
     {
       const { buildAgencyRoster } = await import('../app/lib/agency-roster.ts')
       const { learnName, resetMl } = await import('../app/lib/agency-roster-ml.ts')
-      const run = (ads) => buildAgencyRoster('t280', { useAI: false, f: {
+      // فاز ۳۴۶ — «AI»ِ تست فقط نامِ خطِ امضا («… هستم مشاور» / «مشاور فروش: X») را می‌دهد؛ واژه‌نامهٔ آموخته در تصمیم نیست.
+      const ai280 = async (ch) => ({ map: Object.fromEntries(ch.map(it => [it.i, (it.desc.match(/(محمد پرنده) هستم|مشاور فروش: ([\u0621-\u06cc]+)/) || []).slice(1).find(Boolean) || ''])), raw: '', answered: ch.map(it => it.i) })
+      const run = (ads) => buildAgencyRoster('t280', { useAI: true, f: { ai: ai280,
         profileTokens: async () => ({ posts: ads.map(a => ({ token: a.token, title: a.title })), name: 'مسکن دیپلمات' }),
         post: async (t) => { const a = ads.find(x => x.token === t); return { title: a.title, description: a.desc } },
       } })
@@ -2570,8 +2574,9 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
         { token: 'a2', title: 'واحد ۸۰', desc: 'مشاور فروش: کاملی' },
         { token: 'a3', title: 'واحد ۷۰', desc: 'این واحد را کاملی برای بازدید آماده کرده است.' },
       ])
-      ok('مشاورِ تثبیت‌شده آگهیِ بی‌امضای خودش را می‌گیرد (قدرتِ واژه‌نامه حفظ شد)',
-        r2.advisors.length === 1 && r2.advisors[0].tokens.length === 3)
+      // فاز ۳۴۶ — «تعمیمِ واژه‌نامه» حذف شد: آگهیِ بی‌امضا فقط با حکمِ AI نام می‌گیرد (اینجا AI گفت بی‌امضا).
+      ok('فقط AI: آگهیِ بی‌امضا (AI گفت بی‌نام) به مشاور نمی‌چسبد',
+        r2.advisors.length === 1 && r2.advisors[0].tokens.length === 2 && r2.unnamed.tokens.includes('a3'))
       await resetMl()
     }
     // فاز ۱۷۰ (قیفِ ورود): retryِ پیامکِ OTP — گذرا=دوباره، قطعی=هرگز (پیامکِ تکراری ممنوع)
@@ -2883,7 +2888,8 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       const f = {
         profileTokens: async () => ({ posts: tokens.map(t => ({ token: t, title: 'آپارتمان ' + t })), name: 'املاک تستِ عمیق', reason: '' }),
         post: async (t) => { rowFetches++; const i = tokens.indexOf(t); return { title: 'آپارتمان ' + t, description: i % 3 === 2 ? 'نوساز فول' : i % 2 === 0 ? 'نوساز، کارشناس فروش جهت راهنمایی محمدی' : 'تک‌واحدی، مشاور فروش: خانم کامرانی', images: [] } },
-        ai: async (chunk) => { aiCalls++; return { map: {}, raw: '' } },
+        // فاز ۳۴۶ — نام فقط از AI: «AI»ِ تست نامِ امضای متن را می‌دهد و هر آگهی را صریحاً «پاسخ‌داده» اعلام می‌کند.
+        ai: async (chunk) => { aiCalls += chunk.length; const m = {}; for (const it of chunk) { const x = it.desc.match(/محمدی|کامرانی/); if (x) m[it.i] = x[0] } return { map: m, raw: '', answered: chunk.map(it => it.i) } },
       }
       const fetchPost = async (t) => { importFetches++; return { title: 'آپارتمان ' + t, description: 'x', images: [], facts: [], amenities: [], price: 5_000_000_000, deal: 'sale', city: 'تهران', neighborhood: 'تست', location: 'تهران، تست' } }
       const r196 = await addScrape({ slug: 'deeptest196', useAI: true })
@@ -2895,8 +2901,8 @@ console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جل�
       ok('پاسِ قطع‌شده: درخواست زنده می‌ماند و خودکار دوباره صف می‌شود', p1.ok === false && s1.runRequested === true && (await listDueRosters(Date.now())).some(x => x.id === id196))
       ok('پیشرفتِ واقعی (رسیدن به ایمپورت) شمارندهٔ تلاش را می‌بخشد — کیلِ دیپلوی به give-up نمی‌رسد', (s1.runAttempts || 0) === 0)
       const rowsAfterP1 = rowFetches, aiAfterP1 = aiCalls
-      // فاز ۲۹۷خ — شناساییِ نام ML-only شد: AI دیگر «اصلاً» پرسیده نمی‌شود (گپ غیرفعال).
-      ok('پاسِ ۱ همهٔ ردیف‌ها را خواند و AI هرگز پرسیده نشد (ML-only — فاز ۲۹۷خ)', rowsAfterP1 === N && aiAfterP1 === 0)
+      // فاز ۳۴۶ — نام فقط با AI: پاسِ ۱ هر آگهی را یک‌بار از AI می‌پرسد (و جواب کش می‌شود).
+      ok('پاسِ ۱ همهٔ ردیف‌ها را خواند و AI هر آگهی را دقیقاً یک‌بار پرسید (فقط AI — فاز ۳۴۶)', rowsAfterP1 === N && aiAfterP1 === N)
       // پاسِ ۲: بودجهٔ کافی → باید کامل شود، بدونِ «هیچ» خواندنِ دوباره از دیوار و بدونِ AI تکراری
       const p2 = await syncRoster(id196, undefined, { budgetMs: 600_000, f, fetchPost })
       const s2 = await getScrape(id196)

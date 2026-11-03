@@ -1,5 +1,6 @@
 // فاز ۳۴۴ز — «ادغام‌ها را ۲۰ بار زدم، نیم ساعت هیچ اتفاقی نیفتاد» + «ساخت حساب و ادغام یک ساعت طول می‌کشد» + «خانم‌رامندی».
 // Run: node --import ./scripts/reos-loader.mjs scripts/roster-merge-queue-344g-test.mjs
+const { fakeAi } = await import('./roster-fake-ai.mjs')   // فاز ۳۴۶ — نام فقط از AI
 const S = await import('../app/lib/agency-roster-store.ts')
 const A = await import('../app/lib/advisor-store.ts')
 const R = await import('../app/lib/agency-roster.ts')
@@ -19,7 +20,7 @@ ok('«خانمها/خانم‌ها/خانمی» شکسته نمی‌شوند', n
 // ── ادغام در صف ──
 const T = 'فروش آپارتمان'
 const D = { a1: 'نوساز\nکارشناس فروش خانم کاظمی', a2: 'فول\nکارشناس فروش خانم کاظمی', b1: 'نوساز\nمشاور فروش آقای رادمهر', b2: 'فول\nمشاور فروش آقای رادمهر' }
-const f = { profileTokens: async () => ({ posts: Object.keys(D).map(t => ({ token: t, title: T })), name: 'املاک صفِ ادغام' }), post: async (t) => ({ title: T, description: D[t], images: [] }) }
+const f = { ai: fakeAi, profileTokens: async () => ({ posts: Object.keys(D).map(t => ({ token: t, title: T })), name: 'املاک صفِ ادغام' }), post: async (t) => ({ title: T, description: D[t], images: [] }) }
 const fetchPost = async (t) => ({ title: T, description: D[t] || '', images: [], facts: [], amenities: [] })
 const ids = []
 try {

@@ -375,6 +375,9 @@ export const ROSTER_AGENT: [string, 'text'][] = [['roster', 'text'], ['content',
 // نسخهٔ پرامپتِ نام‌گذاری؛ با هر تغییرِ معنادارِ پرامپت بالا برود تا جواب‌های کش‌شدهٔ قدیمی دوباره پرسیده شوند.
 // ۲ = حکمِ واقعیِ AI (فاز ۳۴۱)؛ ۳ = قواعدِ عنوان/محله/مشخصه (فاز ۳۴۳)؛ ۴ = پرامپتِ «بازخوانی»، تک‌آگهی، متنِ ویجت (فاز ۳۴۴).
 export const AI_PROMPT_V = 4
+// فاز ۳۴۶ — کدهای خطای «AI-only» (agency-roster-store رفتارِ سینک را از روی همین‌ها تعیین می‌کند).
+export const AI_OFF_ERROR = 'هوش مصنوعیِ نام‌گذاری روشن/تنظیم نیست — بدونِ AI هیچ نامی تعیین نمی‌شود (پنل → API و مدل‌های AI → بخشِ روستر)'
+export const AI_INCOMPLETE_ERROR = 'AI هنوز همهٔ آگهی‌ها را نخوانده — ادامه خودکار در پاسِ بعد'
 export async function aiCanonical(items: { i: number; title: string; desc: string }[], agencyName = ''): Promise<{ map: Record<number, string>; raw: string; answered?: number[] }> {
   const { model, provider } = resolveAgent(ROSTER_AGENT)
   if (!model) return { map: {}, raw: '(هیچ مدلی تنظیم نشده)', answered: [] }
@@ -465,6 +468,7 @@ export function signatureLikeLine(text: string): string {
 export interface RosterAdvisor { key: string; name: string; tokens: string[]; posts: BrandPost[]; src?: NameSrc }
 export interface AgencyRoster {
   ok: boolean; error?: string
+  aiProgress?: { asked: number; total: number; askedNow: number }   // فاز ۳۴۶ — وقتی AI همه را نخوانده (error=AI_INCOMPLETE_ERROR)
   slug: string; agencyName?: string
   total: number; scanned: number
   advisors: RosterAdvisor[]
@@ -489,6 +493,11 @@ export async function buildAgencyRoster(
   const base: AgencyRoster = { ok: false, slug, total: 0, scanned: 0, advisors: [], unnamed: { tokens: [], posts: [] } }
   if (!slug || !/^[A-Za-z0-9_-]{2,}$/.test(slug)) return { ...base, error: 'slug/لینکِ برند نامعتبر است' }
 
+  // فاز ۳۴۶ — بدونِ AI هیچ نامی تعیین نمی‌شود؛ پیش از هر خواندنی از دیوار بایست تا فهرستِ فعلی دست‌نخورده بماند.
+  const { model: _aiM, provider: _aiP } = resolveAgent(ROSTER_AGENT)
+  const AI_NAMING = (!!_aiM && aiActive('roster', _aiP)) || !!opts.f?.ai
+  if (!AI_NAMING || opts.useAI === false) return { ...base, error: AI_OFF_ERROR }
+
   const { posts, name, reason } = await (opts.f?.profileTokens || fetchDivarProfileTokens)(slug)
   if (!posts.length) return { ...base, agencyName: name, error: reason === 'unreachable' ? 'به دیوار نرسید (پروکسی؟)' : 'آگهی‌ای یافت نشد' }
 
@@ -501,7 +510,7 @@ export async function buildAgencyRoster(
   const maxDetails = Math.max(1, Math.min(opts.maxDetails ?? 3000, posts.length))
   // برای هر آگهی: عنوان + توضیحات را می‌گیریم و کاندیدای امضا را می‌سازیم.
   // `addr` = توکن‌های آدرسِ همین آگهی؛ هیچ منبعی (AI/lexicon/heuristic) اجازه ندارد از آنها اسم بسازد.
-  const rows: { post: BrandPost; title: string; desc: string; cand: string[]; addr: Set<string>; trusted: boolean; hard: Set<string>; descLines: string[][] }[] = []
+  const rows: { post: BrandPost; title: string; desc: string; descLines: string[][] }[] = []
   let metaText = 0, textMissing = 0
   // فاز ۳۴۴ (باگی که خودروجت هم داشت: «۱۰ آگهی، متنِ هیچ‌کدام خوانده نشده — سینک درست نمی‌کند») — وقتی خواندنِ متنِ
   // یک آگهی از دیوار شکست می‌خورد (throttle/۴۲۹/تایم‌اوت)، آگهی بی‌صدا «بی‌متن» می‌ماند و در همین سینک دیگر تلاش
@@ -553,222 +562,99 @@ export async function buildAgencyRoster(
     if (texts[i].meta) metaText++
     // فاز ۳۴۴ — متنِ یکسان‌شده برای همهٔ منابع (مدل، قاعده، AI، دروازه‌ها) و برای نامِ نمایشی.
     title = normFa(title); desc = normFa(desc)
-    const txt = `${title}\n${desc}`
-    rows.push({
-      post: p, title, desc, cand: extractSignature(title, desc, name), addr: new Set([...addressTokens(txt), ...contextNoiseTokens(txt)]), trusted: signatureTrusted(title, desc, name),
-      hard: hardBanTokens(txt), descLines: textLines(desc),
-    })
+    rows.push({ post: p, title, desc, descLines: textLines(desc) })
   }
   if (textMissing) console.error(`[roster] ${slug}: ⚠ متنِ ${textMissing} آگهی پس از ۳ تلاش هم از دیوار خوانده نشد — بی‌نام می‌مانند تا سینکِ بعد`)
 
-  // ── ماشین‌لرنینگ (فلایویل): پیش از فازِ AI، نام‌های «مورد اعتماد» را همین‌جا نسبت بده ──
-  // فاز ۲۷۴ (فیدبک: «چرا ماشین‌لرنینگ AI را کم نمی‌کند؟») — ریشه: lexicon فقط بعد از فازِ AI
-  // مصرف می‌شد، پس هر آگهی حتی با نامِ آموخته باز به AI می‌رفت. حالا: نامِ تثبیت‌شده (وزن≥۲،
-  // یعنی حداقل دوبار دیده/تأییدشده) که در متنِ آگهی باشد، آن آگهی را قطعی نسبت می‌دهد و از AI
-  // حذف می‌کند. با هر اجرا مشاورهای پایدار تثبیت می‌شوند → فراخوانِ AI کم و کمتر می‌شود.
-  // فاز ۲۷۵ — واژه‌نامهٔ آموخته یک‌بار در هر پروسه از اسم‌های آشغالِ گذشته پاک می‌شود (خودترمیمی؛
-  // نسخهٔ زندهٔ تولید «لوکیشن/منطقه/دوخواب/…» را با وزنِ بالا یاد گرفته بود و هر اجرا بازتولید می‌کرد).
-  // فاز ۳۲۳ — «ماشین‌لرنینگ از حلقه خارج می‌شود وقتی AIِ خودِ مالک روشن است».
-  // فیدبکِ مالک: «دری‌وری‌ها را پاک می‌کنم، همگام می‌کنم، دوباره برمی‌گردند — ماشین‌لرنینگ هنوز
-  // تو کار هست». ریشه: نامِ آشغال (چه از heuristic چه از AI) با learnName وزن می‌گرفت و سینکِ
-  // بعد «پیش از» qwen از واژه‌نامهٔ آموخته (resolved) بازتولید می‌شد؛ حذفِ رکورد، وزنِ آموخته را
-  // پاک نمی‌کرد. حالا با AI روشن: نه resolved، نه lex، نه یادگیری — qwen تنها مرجع است.
-  const { model: _aiM, provider: _aiP } = resolveAgent(ROSTER_AGENT)
-  const AI_NAMING = !!_aiM && aiActive('roster', _aiP)
-  if (!AI_NAMING && !lexiconPruned) { lexiconPruned = true; try { const p = await pruneLearned(); if (p.length) console.log(`[roster] ML lexicon pruned: ${p.length} junk names (${p.slice(0, 8).join('، ')})`) } catch {} }
-  // نام‌های آموخته هم از همان دروازهٔ اعتبار رد می‌شوند (اگر prune به هر دلیل نرسیده باشد).
-  // با AI روشن خالی می‌مانند تا واژه‌نامهٔ آلوده روی تصمیم اثر نگذارد.
-  const learned = AI_NAMING ? [] : (await knownNames(1)).filter(l => !!strictName(l.name))   // تطبیقِ موضعِ امضا (گیت‌شده با candKeys)
-  const trusted = AI_NAMING ? [] : learned.filter(l => l.weight >= 2)  // فقط تثبیت‌شده‌ها مجازند AI را short-circuit کنند
-  const resolved: Record<number, string> = {}
-  if (!AI_NAMING) rows.forEach((r, idx) => {
-    // نامِ آموخته هرجای متن پذیرفته می‌شود جز آن‌جا که توکنِ آدرسِ همین آگهی است.
-    const m = validName(lexiconMatch(r.desc, trusted), name, r.addr)   // فاز ۳۴۳ — فقط متنِ آگهی، نه عنوان
-    if (m) resolved[idx] = m
-  })
-
-  // پالایشِ AI (اختیاری) — نامِ کانونی جای بهترین کاندیدای heuristic را می‌گیرد.
-  // فاز ۱۹۴ (فیدبک: «کلاً گیر کرده») — این فاز تا ۴۵ فراخوانِ AI دارد و قبلاً بی‌صدا بود؛ حالا:
-  // پیشرفتِ per-chunk + اگر ۳ تکهٔ پیاپی هیچ نامی نداد (AI مرده/کلیدِ خراب) بقیه skip می‌شود
-  // (heuristic + نام‌های آموخته‌شده کار را ادامه می‌دهند) + سقفِ ۸ دقیقه برای کلِ فاز.
-  // فاز ۳۲۲ — AIِ نام‌گذاری دوباره «قابلِ روشن‌کردن از پنل» شد (بدونِ دیپلوی): مالک می‌تواند مدلِ
-  // AIِ خودش را (رویِ سرورِ خودش، سازگار با OpenAI) وصل کند. روشن می‌شود اگر: (۱) اتصالِ AI روشن و
-  // بخشِ «نام‌گذاریِ مشاور (روستر)» فعال باشد، (۲) به ایجنتِ محتوا/چت مدلی تخصیص داده شده باشد.
-  // اگر هیچ‌کدام تنظیم نشده بود، دقیقاً مثلِ قبل ML-only می‌مانَد (aiCanonical خودش map خالی می‌دهد).
-  // مسیر: پنل → API و مدل‌های AI → افزودنِ ارائه‌دهنده (baseUrl+کلید) + تخصیصِ مدل + روشن‌کردنِ بخشِ روستر.
-  // (AI_NAMING بالاتر محاسبه شد — پیش از فازِ ML.)
-  let aiMap: Record<number, string> = {}
-  const aiAsked = new Set<number>()   // فاز ۳۴۱ — ردیف‌هایی که AI حکم داده (نام یا «بی‌امضا»)
-  const aiStats = { failedBatches: 0, budgetHit: false, gaveUp: false, skippedSig: 0 }   // فاز ۳۴۴ — برای پنل
+  // ── فاز ۳۴۶ — نامِ مشاور «فقط» با هوش مصنوعی (دستورِ صریحِ مالک) ──
+  // «صد تا چیز گذاشتی؛ همه را پاک کن، فقط هوش مصنوعی تشخیص بدهد. ماشین‌لرنینگ را پاک نکن، فقط یاد بگیرد و هیچ دخالتی
+  // نداشته باشد.» ریشهٔ «هی بدتر می‌شود»: لایه‌های قاعده (فهرستِ سفید، گازِتیر، حدسِ مدلِ آماری، واژه‌نامهٔ آموخته، پاسِ
+  // «چسبیده») هرکدام جای AI تصمیم می‌گرفتند — «آزاد» از «سند آزاد» با فهرستِ سفید، و آگهیِ «امضای قطعی» اصلاً به AI نمی‌رفت.
+  // حالا: «هر» آگهیِ دارای متن به AI می‌رود و نامِ هر آگهی «فقط» جوابِ AI است. تنها بررسی، ضدِ توهم است: نامی که AI داد
+  // باید واژه‌به‌واژه در متنِ همان آگهی آمده باشد (نامِ ساختگی/چسبانده پذیرفته نمی‌شود). ماشین‌لرنینگ فقط از جواب‌های AI
+  // یاد می‌گیرد (learnName + بازآموزیِ شبانه) و در تصمیم هیچ نقشی ندارد.
+  // AI خاموش/تنظیم‌نشده ⇒ سینک با خطای روشن می‌ایستد و فهرستِ فعلیِ مشاوران دست‌نخورده می‌ماند (نه این‌که ماشین جایش را بگیرد).
+  // AI همهٔ آگهی‌ها را نخوانده (سقفِ زمان/خطا) ⇒ هیچ‌چیز بازنویسی نمی‌شود؛ جواب‌ها کش شده‌اند و سینکِ بعد از همان‌جا ادامه می‌دهد.
+  const aiMap: Record<number, string> = {}
+  const aiAsked = new Set<number>()   // ردیف‌هایی که AI حکم داده (نام یا «بی‌امضا»)
+  const aiStats = { failedBatches: 0, budgetHit: false, gaveUp: false, skippedSig: 0 }
   const nameCounts = { aiNamed: 0, aiRejected: 0 }
-  if (AI_NAMING && opts.useAI !== false) {
-    // فاز ۱۹۶ (فیدبک: «شناساییِ AI را دوبار انجام داده، خواندنِ فهرست را ۴ بار») — نامِ AI هم مثلِ متن
-    // در کشِ ازسرگیری می‌ماند؛ پاسِ بعدی فقط ردیف‌های نپرسیده را می‌پرسد، نه ۴۵ فراخوانِ تکراری.
-    const pending: { idx: number; row: (typeof rows)[number] }[] = []
-    rows.forEach((r, idx) => {
-      const cachedName = opts.cached?.[r.post.token]?.name
-      // نامِ خالیِ کش‌شده فقط اگر از «پاسخِ واقعیِ AI» آمده باشد (aiv=2) حکم است؛ خالیِ قدیمی ممکن است
-      // از تایم‌اوت/پاسخِ خراب ذخیره شده باشد → یک بار دوباره پرسیده می‌شود.
-      // فاز ۳۴۳ — نسخهٔ پرامپت (AI_PROMPT_V): جوابِ پرامپتِ قدیمی (مثلِ «شمس» از عنوان) یک بار دوباره پرسیده می‌شود.
-      if (cachedName !== undefined && (opts.cached?.[r.post.token]?.aiv || 0) >= AI_PROMPT_V) { aiMap[idx] = cachedName; aiAsked.add(idx) }
-      // AIِ روشن = «حرفِ آخر»: همهٔ ادهای کش‌نشده به AI می‌روند، نه فقط resolvedنشده‌ها. چون
-      // واژه‌نامهٔ آموخته (resolved) از پنجرهٔ خرابِ بی‌مدل آلوده شده بود («جهانگرد»ِ ۲۵فایلی)،
-      // اگر resolvedها را از AI معاف کنیم آلودگی باقی می‌مانَد. qwen روی سرورِ خودِ مالک است (رایگان).
-      // فاز ۳۴۴ — آگهیِ دارای «امضای قطعی» («کارشناس خانم خسروی»، «X هستم»، «نقش: X»، فهرستِ سفید) با قاعده حل
-      // شده و به AI نمی‌رود: هم زمان/هزینه کم می‌شود، هم «نه»ِ اشتباهِ AI نمی‌تواند با آن درگیر شود.
-      else if (r.trusted) aiStats.skippedSig++
-      else if (!r.desc.trim()) { /* بی‌متن (یا فقط متادیتای انتشار): چیزی برای خواندن نیست — نام از عنوان ساخته نمی‌شود */ }
-      else pending.push({ idx, row: r })
-    })
-    // فاز ۳۴۴ (پورت از خودروجت، فاز ۳۵۰) — «یک آگهی در هر درخواست»، ۳ درخواستِ هم‌زمان: مدلِ کوچک وقتی ۱۲ آگهی
-    // را در یک پیام می‌گرفت شماره‌ها را قاطی می‌کرد یا بعضی را جا می‌انداخت؛ آگهیِ تکی کوتاه و بی‌ابهام است.
-    // بودجهٔ ۱۵ دقیقه؛ آنچه نرسید در سینکِ بعد (از کش) ادامه می‌یابد و تا آن‌وقت قاعده/ماشین جایش را پر می‌کند.
+  const pending: { idx: number; row: (typeof rows)[number] }[] = []
+  rows.forEach((r, idx) => {
+    const hit = opts.cached?.[r.post.token]
+    // جوابِ کش‌شدهٔ AI (همین نسخهٔ پرامپت) حکم است — حتی خالی. وگرنه دوباره پرسیده می‌شود.
+    if (hit?.name !== undefined && (hit.aiv || 0) >= AI_PROMPT_V) { aiMap[idx] = hit.name; aiAsked.add(idx) }
+    else if (!r.desc.trim()) { /* بی‌متن: چیزی برای خواندن نیست — بی‌نام */ }
+    else pending.push({ idx, row: r })
+  })
+  {
+    // «یک آگهی در هر درخواست»، ۳ درخواستِ هم‌زمان، بودجهٔ ۱۵ دقیقه در هر پاس؛ ۸ شکستِ پیاپی ⇒ توقفِ این پاس.
     const CONC = 3
     const chunksTotal = pending.length
     const aiDeadline = Date.now() + 15 * 60_000
     let failStreak = 0, doneCount = 0, next = 0, stopped = false
-    const ask = async (slice: typeof pending): Promise<number> => {
+    const ask = async (item: (typeof pending)[number]): Promise<boolean> => {
       try {
-        // داخلِ try: هر خطای غیرمنتظره در ساختِ درخواست فقط همین آگهی را «بی‌پاسخ» می‌کند، نه کلِ سینک را.
-        const chunk = slice.filter(Boolean).map(p2 => ({ i: p2.idx, title: p2.row.title, desc: p2.row.desc }))
-        if (!chunk.length) return 0
-        const res = await (opts.f?.ai || aiCanonical)(chunk, name)
+        const res = await (opts.f?.ai || aiCanonical)([{ i: item.idx, title: item.row.title, desc: item.row.desc }], name)
         const got = res.map
-        // پاسخِ قدیمیِ بی‌answered (تستِ تزریقی): اگر نامی داد، کلِ دسته پاسخ‌گرفته حساب می‌شود.
-        const answered = new Set(res.answered ?? (Object.keys(got).length ? slice.map(p2 => p2.idx) : []))
-        Object.assign(aiMap, got)
-        for (const i2 of answered) aiAsked.add(i2)
-        // چک‌پوینتِ نام‌ها: فقط ردیفِ پاسخ‌گرفته ذخیره می‌شود ('' = «AI گفت بی‌امضاست»)؛ ردیفِ پاسخِ خراب
-        // ذخیره نمی‌شود تا سینکِ بعد دوباره پرسیده شود.
-        for (const p2 of slice) { if (!answered.has(p2.idx)) continue; try { opts.onRow?.(p2.row.post.token, { title: p2.row.title, desc: p2.row.desc, name: got[p2.idx] ?? '', aiv: AI_PROMPT_V }) } catch {} }
-        return answered.size
-      } catch { return 0 }
+        const answered = new Set(res.answered ?? (Object.keys(got).length ? [item.idx] : []))
+        if (!answered.has(item.idx)) return false
+        if (got[item.idx]) aiMap[item.idx] = got[item.idx]
+        aiAsked.add(item.idx)
+        try { opts.onRow?.(item.row.post.token, { title: item.row.title, desc: item.row.desc, name: got[item.idx] ?? '', aiv: AI_PROMPT_V }) } catch {}
+        return true
+      } catch { return false }
     }
     const worker = async () => {
       while (!stopped && next < pending.length) {
-        if (Date.now() > aiDeadline) { if (!aiStats.budgetHit) console.log('[roster] AI phase budget hit — continuing without AI'); aiStats.budgetHit = true; stopped = true; break }
+        if (Date.now() > aiDeadline) { if (!aiStats.budgetHit) console.log('[roster] AI phase budget hit — ادامه در پاسِ بعد'); aiStats.budgetHit = true; stopped = true; break }
         if (opts.shouldStop && await opts.shouldStop()) { stopped = true; break }
-        // فاز ۳۴۴ح (اسکرین‌شاتِ مالک: «Cannot read properties of undefined (reading 'idx')» روی ده‌ها آژانس) — مسابقهٔ کارگرها:
-        // شرطِ while «پیش از» awaitِ shouldStop چک می‌شد؛ در همان فاصله کارگرِ دیگر آخرین آگهی را برمی‌داشت و این کارگر
-        // pending[next++] = undefined می‌گرفت ⇒ ask([undefined]) ⇒ کلِ سینک می‌افتاد. برداشتن «بعد از» همهٔ awaitها و با چک.
+        // فاز ۳۴۴ح — برداشت «بعد از» همهٔ awaitها و با چکِ دوباره (مسابقهٔ کارگرها).
         if (next >= pending.length) break
         const item = pending[next++]
         if (!item) break
-        const n = await ask([item])
-        if (n === 0) { aiStats.failedBatches++; failStreak++ } else failStreak = 0
+        const ok = await ask(item)
+        if (!ok) { aiStats.failedBatches++; failStreak++ } else failStreak = 0
         doneCount++
         try { opts.onCluster?.(doneCount, chunksTotal) } catch {}
-        // ۸ شکستِ پیاپی = AI عملاً در دسترس نیست → بقیه بدونِ AI (پنل این را نشان می‌دهد)
-        if (failStreak >= 8) { if (!aiStats.gaveUp) console.log('[roster] AI failed 8 ads in a row — skipping rest (heuristic continues)'); aiStats.gaveUp = true; stopped = true }
+        if (failStreak >= 8) { if (!aiStats.gaveUp) console.log('[roster] AI failed 8 ads in a row — این پاس متوقف شد'); aiStats.gaveUp = true; stopped = true }
       }
     }
     await Promise.all(Array.from({ length: Math.min(CONC, pending.length) }, worker))
     if (opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
+    const left = pending.filter(p2 => !aiAsked.has(p2.idx)).length
+    if (left > 0) {
+      const askedNow = pending.length - left
+      console.log(`[roster] ${slug}: AI ${askedNow}/${pending.length} آگهیِ تازه را خواند — ${left} مانده؛ فهرست بازنویسی نمی‌شود، پاسِ بعد ادامه می‌دهد`)
+      return { ...base, agencyName: name, total: posts.length, scanned: rows.length, error: AI_INCOMPLETE_ERROR, aiProgress: { asked: aiAsked.size, total: rows.filter(r => r.desc.trim()).length, askedNow } }
+    }
   }
 
-  // خوشه‌بندی — اولویت: (۱) AI، (۲) نامِ مورد اعتمادِ ML (short-circuit)، (۳) lexiconِ موضعِ امضا، (۴) heuristic.
   const clusters = new Map<string, RosterAdvisor>()
-  const strongKeys = new Set<string>()   // خوشه‌هایی با «سیگنالِ قویِ نام» — نه حدسِ تنها
-  const trustedKeys = new Set<string>()  // فاز ۳۴۳ — خوشه‌هایی که دست‌کم یک امضای قطعیِ شخص («خانم X»، «X هستم») دارند
-  const freshKeys = new Set<string>()     // خوشه‌هایی که این اجرا واقعاً از متن استخراج شدند (نه پژواکِ lexicon)
-  const fileCount = new Map<string, number>()   // برای وزن‌دهیِ یادگیری بر اساسِ تعدادِ فایل
+  const fileCount = new Map<string, number>()
   const unnamed: { tokens: string[]; posts: BrandPost[] } = { tokens: [], posts: [] }
-  const unnamedIdx: number[] = []   // فاز ۲۸۰ — برای پاسِ دومِ «تعمیمِ کنترل‌شدهٔ واژه‌نامه»
   rows.forEach((r, idx) => {
-    // کاندیداهای «موضعِ امضا»یِ همین آگهی (heuristic) — تنها جایی که یک اسم واقعاً امضای مشاور است.
-    // نامِ trusted (سیگنالِ قطعیِ شخص) banned/آدرس را دور می‌زند — وگرنه «منطقه خانم اسدی» که
-    // «اسدی» را به addr می‌برد، همین‌جا نامِ درست را می‌کُشت و آگهی بی‌نام می‌ماند.
-    // فاز ۳۴۳ (فیدبکِ مالک: «شمس را از عنوانِ آگهی آورده — محلهٔ شمس‌آباد»). دو قانونِ همگانی برای «همهٔ» منابع
-    // (AI، امضای قطعی، مدل): (۱) بانِ سخت (تکهٔ نامِ محله/مقدارِ مشخصه)، (۲) نام باید در «متنِ» آگهی باشد؛ عنوانِ
-    // دیوار جای امضای مشاور نیست (متراژ/محله/قیمت است). AI عنوان را هم می‌بیند و «شمس» را از «۱۶۵ متر / شمس آباد» برمی‌داشت.
-    const srcOk = (n: string) => !!n && !hitsBan(n, r.hard) && nameOccurrences(n.split(/\s+/).filter(Boolean).map(w => keyOf(w).toLowerCase()), r.descLines).length > 0
-    const candAll = r.cand.map(c => r.trusted ? validName(c, name, undefined, { trustPerson: true }) : acceptName(c, name || '', r.addr, r.descLines)).filter(c => srcOk(c))
-    // فاز ۳۴۴ — حدسِ بی‌پشتوانهٔ ماشین (نه امضای قطعی) فقط وقتی «معتبر» است که یا شکلِ نامِ آدم داشته باشد یا در موضعِ
-    // امضا باشد («کارشناس فروش جهت راهنمایی نقی») — همان معیارِ دروازهٔ نامِ AI. فقط حدسِ معتبر می‌تواند با AI «توافق»
-    // کند؛ وگرنه «هوشمند»ِ «کلید هوشمند» (حدسِ ضعیفِ ماشین) جوابِ اشتباهِ AI را تأیید می‌کرد.
-    const inSig = (c: string) => nameOccurrences(c.split(/\s+/).filter(Boolean).map(w => keyOf(w).toLowerCase()), r.descLines).some(inSignaturePosition)
-    const cand = candAll.filter(c => r.trusted || personLike(c) || inSig(c))
-    const candKeys = new Set(cand.map(c => keyOf(c)))
-    const lexRaw = validName(lexiconMatch(r.desc, learned), name, r.addr)
-    // lexicon فقط وقتی معتبر است که نامِ آموخته‌شده در موضعِ امضایِ همین آگهی باشد (جزوِ cand)،
-    // نه هر جای متن — وگرنه «ایران/ایرانی» در آدرس، آگهیِ مشاورِ دیگری («لشگری») را می‌دزدد.
-    const lex = lexRaw && candKeys.has(keyOf(lexRaw)) ? lexRaw : ''
-    // فاز ۲۸۰ — «قانونِ موضع» برای همهٔ منابع، بدونِ استثنا:
-    // پیش‌تر دو درِ پشتی باز مانده بود که نامِ آموخته می‌توانست از هرجای متن آگهی را تصاحب کند:
-    // (۱) `lexFull` (نامِ چندکلمه‌ای هرجای متن) و (۲) `resolved` (نامِ تثبیت‌شدهٔ ML، بدونِ هیچ
-    // شرطِ موضعی). همین دومی باعث شد آگهیِ `gaHRMEeD` — که امضایش «محمد پرنده هستم مشاور» است
-    // و کلمهٔ «فلاحی» فقط در **عنوان** («اپارتمان فلاحی 2شخصی ساز…») آمده — به مشاورِ جعلیِ
-    // «فلاحی» برسد. یعنی همان باگِ اصلی (خواندن از هرجای متن) در مسیرِ ML زنده مانده بود.
-    // حالا هر سه منبع فقط وقتی معتبرند که نام در **موضعِ امضای همین آگهی** باشد.
-    // (تعمیمِ کنترل‌شدهٔ واژه‌نامه به آگهی‌های بی‌امضا، پس از خوشه‌بندی و فقط برای مشاورِ
-    //  «تثبیت‌شده در همین آژانس» انجام می‌شود — پایین‌تر.)
-    // فاز ۳۴۴ — نامِ AI از دروازهٔ «واژه‌به‌واژه در متن + (توافق با ماشین | موضعِ امضا | نامِ کاملِ آدم)» می‌گذرد.
-    const aiRaw = acceptName(aiMap[idx] || '', name || '', r.addr, r.descLines)
-    const ai = srcOk(aiRaw) ? gateAiName(aiRaw, r.desc, candKeys) : ''
-    if (aiMap[idx] && !ai) nameCounts.aiRejected++
-    if (ai) nameCounts.aiNamed++
-    const res = resolved[idx] && candKeys.has(keyOf(resolved[idx])) ? resolved[idx] : ''
-    // اولویت: AIِ متن‌آگاه → نامِ تثبیت‌شدهٔ ML (در موضعِ امضا) → lexiconِ موضعِ امضا → heuristic.
-    // ترتیب عوض شد: استخراجِ متن (که حالا برچسب‌زنِ توکن است) بر واژه‌نامهٔ آموخته
-    // مقدم شد. تا امروز `res`/`lex` بالاتر بودند، پس مدل هرگز نوبتش نمی‌رسید و هر سینک
-    // همان نام‌های آموختهٔ قدیمی («رگبار»، «کارگزاری») را دوباره می‌چسباند.
-    // نقشِ درستِ واژه‌نامه پرکردنِ جای خالی است، نه نقضِ چیزی که از متن خوانده شده.
-    // واژه‌نامه از تصمیمِ تک‌آگهی حذف شد. مدل حالا آموخته که در آگهیِ بی‌امضا سکوت
-    // کند؛ ولی تا وقتی `res`/`lex` اینجا بودند، همان سکوت را با نامِ آموختهٔ قدیمی
-    // («تهاتربااپارتمان»، «چت دیوار») پر می‌کردند و هر سینک آشغال را بازتولید می‌کرد.
-    // تعمیمِ واژه‌نامه به آگهی‌های بی‌امضا همچنان پایین‌تر انجام می‌شود، ولی فقط
-    // برای مشاورِ «تثبیت‌شده در همین آژانس» — که همان رفتارِ درست است.
-    // فاز ۳۲۳ب — تعادل (فیدبک: «qwen خیلی‌ها را بی‌نام کرد و درصد افتاد؛ مدل انگار نمی‌فهمد»):
-    // qwen3.8-27b در این استخراج ضعیف است و اغلب خالی برمی‌گرداند، پس «qwenِ تنها» پوشش را می‌کشت.
-    // راهِ درست: qwen اولویت دارد، ولی heuristic (استخراجِ امضا) جای خالی را پر می‌کند تا پوشش بالا
-    // بماند — دقیقاً مثلِ قبل. تفاوتِ کلیدی با قبل: «واژه‌نامهٔ آموختهٔ تاریخی» و «یادگیری» با AI روشن
-    // خاموش‌اند (پایین‌تر)، و همین بود که آشغال را «چسبان» می‌کرد (حذفِ خوشه، وزنِ آموخته را پاک
-    // نمی‌کرد و سینکِ بعد بازتولید می‌شد). پس پوشش حفظ می‌شود، بدونِ برگشتِ آشغالِ قدیمی.
-    // فاز ۳۴۱ (فیدبکِ مالک: «سند تعاونی و فن‌کوئل را مشاور تشخیص داده؛ امکان ندارد AI این را بگوید —
-    // هنوز ماشین دارد انجام می‌دهد»). درست بود: وقتی AI آگهی را خواند و گفت «امضای مشاور ندارد»، همین خط
-    // جای خالی را با حدسِ مدلِ آماری (cand[0]) پر می‌کرد — یعنی «نه»ِ AI عملاً نادیده گرفته می‌شد.
-    // حالا حکمِ AI نهایی است؛ فقط سیگنالِ قطعیِ شخص («خانم X»، «X هستم»، «کارشناس: X» — r.trusted) می‌تواند
-    // جای سکوتِ AI را بگیرد. پوشش از دست نمی‌رود: آگهیِ بی‌امضای مشاوری که در همین آژانس امضای دیگری دارد
-    // در «پاسِ دوم» (پایین‌تر) به او می‌چسبد. وقتی AI خاموش است یا این ردیف را نپرسیده، رفتار مثلِ قبل است.
-    const aiSaidNone = aiAsked.has(idx) && !ai
-    const chosen = ai || (aiSaidNone && !r.trusted ? '' : cand[0])
-    if (!chosen) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); unnamedIdx.push(idx); return }
-    const k = keyOf(chosen)
-    // «سیگنالِ قوی» = نامِ آموختهٔ تثبیت‌شده در موضعِ امضا، یا توافقِ مستقلِ AI و heuristic.
-    // نامِ trusted (امضای قطعیِ شخص) «سیگنالِ قوی» است → از تنزلِ MIN_FILES معاف؛ یک آگهیِ
-    // صریحِ «خانم اسدی مشاور» مشاورِ واقعی است، نه نوفهٔ تک‌فایلی.
-    if (res || lex || (ai && candKeys.has(keyOf(ai))) || r.trusted) strongKeys.add(k)
-    if (r.trusted && cand.some(c2 => keyOf(c2) === k)) trustedKeys.add(k)
-    // «تازه» = این اجرا از متن استخراج شد (AI یا heuristic)، نه صرفاً پژواکِ نامِ از قبل آموخته.
-    if (ai || cand.length) freshKeys.add(k)
+    const raw = String(aiMap[idx] || '').replace(/\s+/g, ' ').trim()
+    // تنها بررسی: ضدِ توهم — نام باید واژه‌به‌واژه در متنِ همین آگهی باشد.
+    const ok = !!raw && nameOccurrences(raw.split(' ').map(w => keyOf(w).toLowerCase()).filter(Boolean), r.descLines).length > 0
+    if (raw && !ok) nameCounts.aiRejected++
+    if (!ok) { unnamed.tokens.push(r.post.token); unnamed.posts.push(r.post); return }
+    nameCounts.aiNamed++
+    const k = keyOf(raw)
     fileCount.set(k, (fileCount.get(k) || 0) + 1)
     let c = clusters.get(k)
-    if (!c) { c = { key: k, name: chosen, tokens: [], posts: [], src: { ai: 0, sig: 0, machine: 0, claim: 0 } }; clusters.set(k, c) }
-    // منبعِ تصمیم برای پنل: AI؛ یا امضای صریح با قاعده؛ یا ماشین (AI این آگهی را نخواند یا خاموش است).
-    const how: keyof NameSrc = ai && keyOf(ai) === k ? 'ai' : r.trusted ? 'sig' : 'machine'
-    c.src![how]++
+    if (!c) { c = { key: k, name: raw, tokens: [], posts: [], src: { ai: 0, sig: 0, machine: 0, claim: 0 } }; clusters.set(k, c) }
+    c.src!.ai++
     c.tokens.push(r.post.token); c.posts.push(r.post)
   })
 
-  // ── ادغامِ «نامِ کوتاه» در «نامِ کامل» (فاز ۲۷۷ → بازنویسیِ ۲۷۹) ──
-  // فیدبکِ واقعی: «محمد» و «محمدپرنده» دو مشاور شده بودند، «حسنی‌منش» و «وحید حسنی‌منش» هم.
-  // علت (تشخیصِ خودِ کاربر): آگهی‌ها گاهی نام را با فاصله می‌نویسند و گاهی بی‌فاصله، و گاهی
-  // فقط نامِ کوچک یا فقط فامیل را امضا می‌کنند. پس مقایسه باید روی **کلیدِ بی‌فاصله** باشد،
-  // نه روی وجودِ فاصله در نام (نسخهٔ اولِ این ادغام همین اشتباه را داشت و «محمدپرنده»ی
-  // بی‌فاصله را اصلاً میزبان حساب نمی‌کرد).
-  // قاعده: کلیدِ کوتاه باید پیشوند یا پسوندِ کلیدِ بلند باشد و «باقی‌ماندهٔ» آن ≥۳ حرف —
-  // تا «محمد» در «محمدپرنده» ادغام شود ولی در «محمدی» (باقی‌مانده = «ی») هرگز.
-  // ایمنی: فقط وقتی **دقیقاً یک** میزبان کاندید باشد؛ و اگر یکی از دو طرف حسابِ واقعی دارد
-  // (graduate شده) همان میزبان می‌ماند — وگرنه کلیدِ خوشه عوض می‌شد و فایل‌های مشاورِ واقعی
-  // در سینکِ بعدی «غایب» حساب و پاک می‌شدند.
+  // ادغامِ «نامِ کوتاه» در «نامِ کامل» («محمد» ↔ «محمد پرنده»، «حسنی‌منش» ↔ «وحید حسنی‌منش») — تشخیصِ نام نیست، فقط یکی‌کردنِ
+  // دو صورتِ نامِ «همان» آدم که AI داده. فقط وقتی دقیقاً یک میزبان باشد؛ مشاورِ حساب‌دار (pinned) همیشه میزبان می‌ماند.
   const pinned = new Set(opts.pinnedKeys || [])
   const mergeInto = (small: RosterAdvisor, host: RosterAdvisor) => {
     if (small.src && host.src) for (const k2 of ['ai', 'sig', 'machine', 'claim'] as const) host.src[k2] += small.src[k2]
     host.tokens.push(...small.tokens); host.posts.push(...small.posts)
     fileCount.set(host.key, (fileCount.get(host.key) || 0) + (fileCount.get(small.key) || 0))
-    if (strongKeys.has(small.key)) strongKeys.add(host.key)
-    if (trustedKeys.has(small.key)) trustedKeys.add(host.key)
-    if (freshKeys.has(small.key)) freshKeys.add(host.key)
     clusters.delete(small.key)
     console.log(`[roster] merged «${small.name}» → «${host.name}» (${small.tokens.length} فایل)`)
   }
@@ -780,97 +666,25 @@ export async function buildAgencyRoster(
       return rest.length >= 3
     })
     if (hosts.length !== 1) continue
-    // اگر خوشهٔ کوتاه حسابِ واقعی دارد، جهتِ ادغام برعکس می‌شود (نامِ بلند در کوتاه).
     if (pinned.has(k) && !pinned.has(hosts[0].key)) mergeInto(hosts[0], c)
     else mergeInto(c, hosts[0])
   }
 
-  // ── فاز ۳۴۳ — «نامِ» خوشه‌ای که در عنوانِ بیشترِ آگهی‌هایش آمده، محله/برندِ آژانس است، نه مشاور ──
-  // نمونهٔ زنده: آژانسِ شمس‌آباد — «شمس» در عنوانِ هر ۹ آگهی. مشاورِ واقعی نامش را در امضای متن می‌نویسد،
-  // نه در عنوانِ همهٔ فایل‌ها. استثنا: مشاورِ دارای حساب (pinned) و خوشه‌ای که امضای قطعیِ شخص دارد.
-  const titleKeysOf = (t: string) => new Set(deEmoji(t || '').split(/[^\u0621-\u06ccA-Za-z]+/).filter(Boolean).map(keyOf))
-  const titleKeysByToken = new Map(rows.map(r => [r.post.token, titleKeysOf(r.title)]))
-  for (const [k, c] of [...clusters]) {
-    if (pinned.has(k) || trustedKeys.has(k) || c.tokens.length < 3) continue
-    const ws = c.name.split(/\s+/).map(keyOf)
-    const inTitle = c.tokens.filter(t => { const tk = titleKeysByToken.get(t); return !!tk && ws.every(w => tk.has(w)) }).length
-    if (inTitle / c.tokens.length >= 0.6) {
-      console.log(`[roster] «${c.name}» در عنوانِ ${inTitle}/${c.tokens.length} آگهی — محله/برند است، نه مشاور → بی‌نام`)
-      unnamed.tokens.push(...c.tokens); unnamed.posts.push(...c.posts)
-      clusters.delete(k)
-    }
-  }
-
-  // ── چرت‌وپرت‌زدایی (فیدبک: «چرت و پرت زیاد میاره») ──
-  // یک خوشه فقط وقتی «مشاورِ واقعی» است که یا ≥۲ آگهی امضا کرده باشد (مشاورِ واقعیِ آژانس چند
-  // فایل دارد، نه یکی)، یا سیگنالِ قویِ نام داشته باشد. تک‌فایلی‌هایِ با نامِ حدسیِ تنها
-  // (همین حالا / فقط / واقعی مستاجر / عکسها تزئینی / قطعی فایل …) → به سطلِ «بی‌نام/آژانس».
-  const MIN_FILES = 2
-  for (const [k, c] of [...clusters]) {
-    if (c.tokens.length >= MIN_FILES || strongKeys.has(k)) continue
-    unnamed.tokens.push(...c.tokens); unnamed.posts.push(...c.posts)
-    clusters.delete(k)
-  }
-
-  // ── پاسِ دوم: تعمیمِ کنترل‌شدهٔ واژه‌نامه به آگهی‌های بی‌امضا (فاز ۲۸۰) ──
-  // چرا لازم است: بعضی مشاورها در بعضی آگهی‌ها امضا نمی‌کنند و فقط وسطِ متن نامشان می‌آید
-  // («این واحد را رضایی آماده کرده»). قانونِ موضع اینها را بی‌نام می‌کند، که ضرر است.
-  // چرا امن است: این تعمیم فقط برای مشاوری مجاز است که **در همین آژانس و همین اجرا** دست‌کم
-  // یک آگهیِ امضاشده دارد (خوشه‌اش با سیگنالِ موضعی ساخته شده). پس یک نامِ آموختهٔ خرابِ
-  // گذشته («فلاحی») هرگز نمی‌تواند آگهی بگیرد، چون هیچ امضایی در این آژانس ندارد.
-  // این جایگزینِ اصولیِ آن دو درِ پشتیِ حذف‌شده است: قدرتِ واژه‌نامه حفظ می‌شود، بی‌آنکه
-  // بتواند از هیچ، مشاور بسازد.
-  // فاز ۳۲۳ب — این پاس حتی با AI روشن اجرا می‌شود: فقط به خوشه‌های «همین اجرا» (qwen/trusted) تعمیم
-  // می‌دهد، نه واژه‌نامهٔ تاریخیِ آلوده — پس آشغالِ قدیمی برنمی‌گردد ولی پوشش بالا می‌رود (آگهیِ بی‌امضای
-  // مشاوری که در همین آژانس امضای دیگری دارد، به او می‌چسبد). درخواستِ مالک: «درصدِ تشخیص باید بالا باشد».
-  if (unnamedIdx.length && clusters.size) {
-    const established = [...clusters.values()].filter(c => strongKeys.has(c.key) || c.tokens.length >= 2)
-    const claimed: number[] = []
-    for (const idx of unnamedIdx) {
-      const r = rows[idx]
-      const hit = validName(lexiconMatch(r.desc, established.map(c => ({ name: c.name }))), name, r.addr)
-      if (!hit || hitsBan(hit, r.hard)) continue
-      // فاز ۳۴۴ — نامِ تک‌کلمه‌ای (که ممکن است واژهٔ عادی هم باشد: «هوشمند/امین/صادق») فقط در موضعِ امضای همان
-      // آگهی آن را تصاحب می‌کند، نه هرجای متن («کلید هوشمند» آگهیِ مشاورِ «هوشمند» نیست).
-      if (!hit.includes(' ') && !nameOccurrences([keyOf(hit).toLowerCase()], r.descLines).some(inSignaturePosition)) continue
-      const host = clusters.get(keyOf(hit))
-      if (!host) continue
-      host.tokens.push(r.post.token); host.posts.push(r.post)
-      if (host.src) host.src.claim++
-      fileCount.set(host.key, (fileCount.get(host.key) || 0) + 1)
-      claimed.push(idx)
-    }
-    if (claimed.length) {
-      const drop = new Set(claimed.map(i => rows[i].post.token))
-      unnamed.tokens = unnamed.tokens.filter(t => !drop.has(t))
-      unnamed.posts = unnamed.posts.filter(p2 => !drop.has(p2.token))
-      console.log(`[roster] lexicon claimed ${claimed.length} unsigned ads for established advisors`)
-    }
-  }
-
-  // ── یادگیریِ تدریجی (موتورِ فلایویل) ──
-  // فقط از خوشه‌های «بازمانده و تازه‌استخراج‌شدهٔ این اجرا» یاد بگیر، با وزنِ برابرِ تعدادِ فایل:
-  // مشاورِ واقعی که چند آگهی امضا کرده سریع به آستانهٔ اعتماد (وزن≥۲) می‌رسد و دفعهٔ بعد بدونِ
-  // AI شناخته می‌شود؛ حدسِ تک‌فایلیِ فیلترشده اصلاً یاد گرفته نمی‌شود (نه آلودگی، نه خودتقویتیِ lexicon).
-  // با AI روشن اصلاً یاد نمی‌گیریم: qwen هر سینک از نو تصمیم می‌گیرد، و یادگیری همان حلقه‌ای بود
-  // که نامِ آشغال را «چسبان» می‌کرد (وزن می‌گرفت و سینکِ بعد بازتولید می‌شد).
-  if (!AI_NAMING) for (const c of clusters.values()) {
-    if (!freshKeys.has(c.key)) continue   // پژواکِ صرفِ lexicon وزن نمی‌گیرد (از خودتقویتی جلوگیری می‌کند)
-    try { await learnName(c.name, 'ai', fileCount.get(c.key) || 1) } catch {}
-  }
+  // ماشین‌لرنینگ «فقط یاد می‌گیرد»: نام‌های AI با وزنِ تعدادِ فایل به واژه‌نامه می‌روند (برای آموزشِ شبانه/آمار)، ولی
+  // واژه‌نامه دیگر در هیچ تصمیمی خوانده نمی‌شود.
+  for (const c of clusters.values()) { try { await learnName(c.name, 'ai', fileCount.get(c.key) || 1) } catch {} }
 
   const advisors = [...clusters.values()].sort((a, b) => b.tokens.length - a.tokens.length)
-  const sum = (k2: keyof NameSrc) => advisors.reduce((t, a) => t + (a.src?.[k2] || 0), 0)
   const byTok = new Map(rows.map(r => [r.post.token, r]))
   const nameStats: NameStats = {
-    aiOn: AI_NAMING && opts.useAI !== false, model: AI_NAMING ? (_aiM || '') : '', rows: rows.length, aiAnswered: aiAsked.size,
+    aiOn: true, model: _aiM || '', rows: rows.length, aiAnswered: aiAsked.size,
     aiNamed: nameCounts.aiNamed, aiRejected: nameCounts.aiRejected,
-    byAI: sum('ai'), bySig: sum('sig'), byMachine: sum('machine'), byClaim: sum('claim'), unnamed: unnamed.tokens.length,
-    skippedSig: aiStats.skippedSig, failedBatches: aiStats.failedBatches, gaveUp: aiStats.gaveUp, budgetHit: aiStats.budgetHit,
+    byAI: advisors.reduce((t, a) => t + a.tokens.length, 0), bySig: 0, byMachine: 0, byClaim: 0, unnamed: unnamed.tokens.length,
+    skippedSig: 0, failedBatches: aiStats.failedBatches, gaveUp: aiStats.gaveUp, budgetHit: aiStats.budgetHit,
     metaText, textMissing,
     unnamedSigLike: unnamed.tokens.filter(t => { const r = byTok.get(t); return !!r && !!signatureLikeLine(r.desc) }).length,
   }
-  console.log(`[roster] names: AI ${nameStats.aiOn ? 'on' : 'OFF'} model=${nameStats.model || '-'} sigSkipped=${nameStats.skippedSig} unnamedSigLike=${nameStats.unnamedSigLike} answered=${nameStats.aiAnswered}/${nameStats.rows} byAI=${nameStats.byAI} bySig=${nameStats.bySig} byMachine=${nameStats.byMachine} claim=${nameStats.byClaim} unnamed=${nameStats.unnamed} failed=${nameStats.failedBatches} meta=${metaText} textMissing=${textMissing}`)
+  console.log(`[roster] names (AI-only): model=${nameStats.model || '-'} answered=${nameStats.aiAnswered}/${nameStats.rows} named=${nameStats.byAI} rejected=${nameStats.aiRejected} unnamed=${nameStats.unnamed} unnamedSigLike=${nameStats.unnamedSigLike} meta=${metaText} textMissing=${textMissing}`)
   return { ok: true, slug, agencyName: name, total: posts.length, scanned: rows.length, advisors, unnamed, nameStats }
 }
 

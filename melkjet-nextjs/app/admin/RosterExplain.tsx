@@ -4,7 +4,7 @@ import { useState } from 'react'
 // فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۸–۳۵۲) — ابزارِ «دیدن و سنجیدن» برای مالک در پنلِ رُستر:
 //   • NameStatsLine: آمارِ آخرین سینک — AI روشن بود؟ با کدام مدل؟ هر نام از کجا آمد؟ + شاخص‌های قرمز
 //   • SrcBadge: منبعِ تصمیمِ هر مشاور (AI / امضا / ماشین / چسبیده)
-//   • UnnamedExplain: «🔍 چرا بی‌نام؟» — همان متنی که به AI رفته، جوابِ AI، حدسِ ماشین، علت، و «✅ این نام است»
+//   • UnnamedExplain: «🔍 چرا بی‌نام؟» — همان متنی که به AI رفته، جوابِ AI و علت (فاز ۳۴۶: نام فقط با AI؛ ماشین/فهرستِ سفید در تصمیم نیستند)
 const fa = (n: number) => Number(n || 0).toLocaleString('fa-IR')
 const chip: React.CSSProperties = { fontSize: 11, padding: '2px 9px', borderRadius: 999, fontWeight: 700, whiteSpace: 'nowrap' }
 const RED: React.CSSProperties = { ...chip, background: 'rgba(231,103,74,.14)', color: '#e7674a', fontWeight: 800 }
@@ -22,12 +22,12 @@ export function NameStatsLine({ st }: { st?: NameStatsLite }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6, fontSize: 11.5 }}>
       {st.aiOn
         ? <span style={{ ...chip, background: 'rgba(95,217,138,.12)', color: '#5fd98a' }} title="مدلِ RosterAgent یا مدلِ محتوا/چت">🤖 AI روشن{st.model ? ` · ${st.model}` : ''} — خواند {fa(st.aiAnswered)}/{fa(st.rows)}</span>
-        : <span style={RED} title="پنل → API و مدل‌های AI → مدلِ RosterAgent + روشن‌کردنِ بخشِ روستر">⚠ AI خاموش — نام‌ها را فقط قاعده/ماشین داد</span>}
+        : <span style={RED} title="پنل → API و مدل‌های AI → مدلِ RosterAgent + روشن‌کردنِ بخشِ روستر">⚠ AI خاموش — بدونِ AI هیچ نامی تعیین نمی‌شود</span>}
       {!!st.skippedSig && <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--muted)' }} title="امضای صریح با قاعده حل شد و به AI نرفت">✍ {fa(st.skippedSig)} امضای قطعی</span>}
       <span style={{ ...chip, background: 'var(--bg2)', color: 'var(--muted)' }} title="منبعِ نامِ آگهی‌های نام‌دار">
-        منبع: AI {fa(st.byAI)} · امضا {fa(st.bySig)} · ماشین {fa(st.byMachine)}{st.byClaim ? ` · چسبیده ${fa(st.byClaim)}` : ''}
+        نام‌دار با AI: {fa(st.byAI)}{st.bySig || st.byMachine || st.byClaim ? ` (سینکِ قدیمی: امضا ${fa(st.bySig)} · ماشین ${fa(st.byMachine)} · چسبیده ${fa(st.byClaim)})` : ''}
       </span>
-      {st.aiRejected > 0 && <span style={{ ...chip, background: 'rgba(231,161,74,.12)', color: '#e7a14a' }} title="نامِ AI که در متن/موضعِ امضا نبود">✗ {fa(st.aiRejected)} نامِ AI رد شد</span>}
+      {st.aiRejected > 0 && <span style={{ ...chip, background: 'rgba(231,161,74,.12)', color: '#e7a14a' }} title="نامی که AI داد ولی واژه‌به‌واژه در متنِ آگهی نبود (ضدِ توهم)">✗ {fa(st.aiRejected)} نامِ AI رد شد</span>}
       {st.aiOn && pending > 0 && (st.budgetHit || st.gaveUp) && <span style={RED}>⏳ {fa(pending)} آگهی هنوز به AI نرسید{st.gaveUp ? ' (AI پشتِ‌سرِهم جواب نداد)' : ' (سقفِ زمان)'} — سینکِ بعد</span>}
       {!!st.textMissing && <span style={RED} title="دیوار جواب نداد/کند بود؛ سینکِ بعد دوباره می‌خواند">⚠ متنِ {fa(st.textMissing)} آگهی خوانده نشد</span>}
       {!!st.unnamedSigLike && <span style={RED} title="آگهیِ بی‌نامی که خطِ امضا دارد — احتمالاً نامی از دست رفته؛ «چرا بی‌نام؟» را ببین">⚠ {fa(st.unnamedSigLike)} آگهیِ بی‌نام خطِ امضا دارند</span>}
@@ -158,16 +158,11 @@ export function UnnamedExplain({ id }: { id: string }) {
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 5, fontSize: 11.5, color: 'var(--muted)' }}>
             <span>AI: {r.ai ? <b style={{ color: r.aiRejected ? '#e7674a' : '#5fd98a' }}>«{r.ai}»{r.aiRejected ? ' (رد شد)' : ''}</b> : r.aiAsked ? 'بی‌امضا' : <span style={{ color: 'var(--faint)' }}>نپرسیده</span>}</span>
-            <span>ماشین: {r.machine ? <b style={{ color: 'var(--text)' }}>«{r.machine}»</b> : '—'}{r.signature ? ((r.wl || []).includes(r.machine) ? ' (از فهرستِ سفید)' : ' (امضای صریح)') : ''}</span>
-            {(r.wl || []).length > 0 && <span>فهرستِ سفید در این آگهی: {(r.wl || []).map((w: string) => (
-              <span key={w} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginInlineEnd: 6 }}>«{w}»<button onClick={() => unWhitelist(w)} title="حذف از فهرستِ سفید" style={{ background: 'transparent', border: 'none', color: '#e06666', cursor: 'pointer', fontSize: 11.5, padding: 0, fontFamily: 'inherit' }}>✖</button></span>
-            ))}</span>}
           </div>
           {r.sigLine && <div style={{ marginTop: 4, fontSize: 11.5, color: '#e7674a' }}>خطِ امضا: «{r.sigLine}»</div>}
           <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--text)', lineHeight: 1.8 }}>علت: {r.reason}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
             {!!r.text && <button onClick={() => setOpenTok(openTok === r.token ? '' : r.token)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '3px 9px', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{openTok === r.token ? 'بستنِ متن' : 'متنی که به AI رفت'}</button>}
-            {!r.metaText && !r.noText && <button onClick={() => whitelist(r.ai || r.machine || sigGuess(r.sigLine))} style={{ background: 'transparent', border: '1px solid rgba(95,217,138,.45)', borderRadius: 8, padding: '3px 9px', color: '#5fd98a', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>✅ این نام است</button>}
           </div>
           {openTok === r.token && <pre style={{ marginTop: 6, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12, lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px', maxHeight: 280, overflow: 'auto', direction: 'rtl' }}>{r.text}</pre>}
         </div>

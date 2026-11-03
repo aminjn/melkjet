@@ -1,5 +1,6 @@
 // فاز ۳۴۴و — «ساخت حساب آژانس را باید ۳۰ بار بزنم و ۱۵–۲۰ دقیقه طول می‌کشد» + «هنوز گیر کرده».
 // Run: node --import ./scripts/reos-loader.mjs scripts/roster-graduate-agency-344f-test.mjs
+const { fakeAi } = await import('./roster-fake-ai.mjs')   // فاز ۳۴۶ — نام فقط از AI
 const S = await import('../app/lib/agency-roster-store.ts')
 const A = await import('../app/lib/advisor-store.ts')
 const { accountExists } = await import('../app/lib/account-store.ts')
@@ -11,7 +12,7 @@ const D = {
   a1: 'نوساز\nکارشناس فروش خانم کاظمی', a2: 'فول\nکارشناس فروش خانم کاظمی',
   u1: 'آپارتمان نوساز فول امکانات با پارکینگ و انباری', u2: 'ملک کلنگی مناسب ساخت با سند تک برگ', u3: 'واحد دوخواب با ویوی ابدی و نورگیر',
 }
-const f = { profileTokens: async () => ({ posts: Object.keys(D).map(t => ({ token: t, title: T })), name: 'املاک تستِ آژانس' }), post: async (t) => ({ title: T, description: D[t], images: [] }) }
+const f = { ai: fakeAi, profileTokens: async () => ({ posts: Object.keys(D).map(t => ({ token: t, title: T })), name: 'املاک تستِ آژانس' }), post: async (t) => ({ title: T, description: D[t], images: [] }) }
 const fetchPost = async (t) => ({ title: T, description: D[t] || '', images: [], facts: [], amenities: [] })
 const ids = []
 try {

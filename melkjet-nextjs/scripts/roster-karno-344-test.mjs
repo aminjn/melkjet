@@ -7,6 +7,7 @@ import { addressTokens, contextNoiseTokens } from '../app/lib/agency-name-lexico
 import { gazetteerName } from '../app/lib/roster-ner.ts'
 import { isDivarMetaText } from '../app/lib/divar-text.ts'
 import { divarDescriptionWidget, parseDivarPostBody } from '../app/lib/divar-post.ts'
+const { fakeAi } = await import('./roster-fake-ai.mjs')   // فاز ۳۴۶ — نام فقط از AI
 const { saveAdminData, getAdminData } = await import('../app/lib/admin-store.ts')
 
 let pass = 0, fail = 0
@@ -71,16 +72,16 @@ const r = await buildAgencyRoster('s344', { useAI: true, f: {
   ai: async (ch) => {
     asked.push(...ch.map(it => it.i))
     const m = {}
-    for (const it of ch) m[it.i] = /رادمهر/.test(it.desc) ? 'رادمهر' : /هوشمند/.test(it.desc) ? 'هوشمند' : 'شمس'
+    for (const it of ch) m[it.i] = /رادمهر/.test(it.desc) ? 'رادمهر' : /کاظمی/.test(it.desc) ? 'کاظمی' : 'شمس'
     return { map: m, raw: '', answered: ch.map(it => it.i) }
   },
 } })
 const st = r.nameStats || {}
-ok('آگهی‌های امضای قطعی (کاظمی) به AI نرفتند', !asked.includes(0) && !asked.includes(1) && st.skippedSig === 2)
-ok('AI آگهی‌به‌آگهی پرسیده شد (هر درخواست یک آگهی)', asked.length === 3)
-ok('«کاظمی» (امضا) با ۲ فایل، منبع = امضا', r.advisors.some(a => a.name === 'کاظمی' && a.tokens.length === 2 && a.src?.sig === 2))
+// فاز ۳۴۶ — نام فقط با AI: امضای صریح هم به AI می‌رود (فقط آگهیِ بی‌متن/متادیتا نه)
+ok('همهٔ آگهی‌های دارای متن (۵) یکی‌یکی به AI رفتند؛ متادیتا نه', asked.length === 5 && !asked.includes(4) && st.skippedSig === 0)
+ok('«کاظمی» با ۲ فایل، منبع = AI', r.advisors.some(a => a.name === 'کاظمی' && a.tokens.length === 2 && a.src?.ai === 2))
 ok('«رادمهر» (AI در موضعِ امضا، کنارِ شماره) با ۲ فایل، منبع = AI', r.advisors.some(a => a.name === 'رادمهر' && a.tokens.length === 2 && a.src?.ai === 2))
-ok('«هوشمند» (AI، وسطِ جمله) رد شد', !r.advisors.some(a => a.name === 'هوشمند') && st.aiRejected >= 1)
+ok('ضدِ توهم: «شمس»ِ AI که در متن نیست رد شد', st.aiRejected >= 1)
 ok('آگهیِ فقط-متادیتا بی‌نام ماند و شمرده شد', r.unnamed.tokens.includes('k4') && st.metaText === 1)
 ok('هیچ «شمس»ی ساخته نشد', !r.advisors.some(a => /شمس/.test(a.name)))
 ok('آمار: AI روشن با مدلِ RosterAgent', st.aiOn === true && st.model === 'm')
@@ -93,11 +94,11 @@ ok('«مشاور تخصصی منطقه سعادتی» ⇒ «سعادتی» پذ�
 ok('ضدتست: «کارشناس منطقه پونک» ⇒ «پونک» (محله) رد', acc('پونک', 'نوساز\nکارشناس منطقه پونک') === '')
 ok('ضدتست: «مشاور منطقه سعادت آباد» ⇒ «سعادت» رد', acc('سعادت', 'نوساز\nمشاور منطقه سعادت آباد') === '')
 ok('ضدتست: «واقع در منطقه فراهانی» (آدرس، بی‌نقش) ⇒ رد', acc('فراهانی', 'نوساز\nواقع در خیابان اصلی منطقه فراهانی، پلاک ۴') === '')
-const rF = await buildAgencyRoster('s344f', { useAI: false, f: {
+const rF = await buildAgencyRoster('s344f', { useAI: true, f: { ai: fakeAi,
   profileTokens: async () => ({ posts: ['h0', 'h1', 'h2'].map(t => ({ token: t, title: 'فروش ۱۰۵ متر باغ فیض' })), name: AGM, reason: '' }),
   post: async (t) => ({ title: 'فروش ۱۰۵ متر باغ فیض', description: `قابل شخصی ${t}\nمشاور و کارشناس منطقه فراهانی`, images: [] }),
 } })
-ok('چرخهٔ کامل (بی‌AI): هر ۳ آگهیِ «منطقه فراهانی» ⇒ مشاورِ «فراهانی»', rF.advisors.some(a => a.name === 'فراهانی' && a.tokens.length === 3))
+ok('چرخهٔ کامل: AI «فراهانی» می‌گوید ⇒ هر ۳ آگهی به مشاورِ «فراهانی»', rF.advisors.some(a => a.name === 'فراهانی' && a.tokens.length === 3))
 
 console.log('── باگِ خودروجت: متنِ خوانده‌نشده + فهرستِ سفیدِ «با نقش» ──')
 const { sanitizeWhitelistName } = await import('../app/lib/agency-name-lexicon.ts')
@@ -107,12 +108,12 @@ ok('فهرستِ سفید: فقط نقش/لقب ⇒ خالی (ذخیره نمی�
 // خواندنِ متن: بارِ اول دیوار ۴۲۹ می‌دهد، تلاشِ دوباره در همان سینک موفق است
 let calls = 0
 const flaky = {}
-const r2 = await buildAgencyRoster('s344b', { useAI: false, f: {
+const r2 = await buildAgencyRoster('s344b', { useAI: true, f: { ai: fakeAi,
   profileTokens: async () => ({ posts: ['f0', 'f1'].map(t => ({ token: t, title: 'آپارتمان' })), name: AGM, reason: '' }),
   post: async (t) => { calls++; flaky[t] = (flaky[t] || 0) + 1; return flaky[t] === 1 && t === 'f1' ? { images: [], facts: [], amenities: [], reason: 'http_429' } : { title: 'آپارتمان', description: 'نوساز\nکارشناس خانم اسماعیلی', images: [] } },
 } })
 ok('متنی که بارِ اول خوانده نشد، در همان سینک دوباره خوانده شد (نامش آمد)', r2.advisors.some(a => a.name === 'اسماعیلی' && a.tokens.length === 2) && r2.nameStats.textMissing === 0 && flaky.f1 === 2)
-const r3 = await buildAgencyRoster('s344c', { useAI: false, f: {
+const r3 = await buildAgencyRoster('s344c', { useAI: true, f: { ai: fakeAi,
   profileTokens: async () => ({ posts: [{ token: 'g0', title: 'آپارتمان' }], name: AGM, reason: '' }),
   post: async () => ({ images: [], facts: [], amenities: [], reason: 'unreachable' }),
 } })

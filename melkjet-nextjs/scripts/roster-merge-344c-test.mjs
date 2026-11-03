@@ -1,5 +1,6 @@
 // فاز ۳۴۴ج — «ادغام می‌شود ولی به اکانتِ مقصد هیچی نمی‌رود، و سینکِ بعد دوباره می‌آید» (فیدبکِ مالک).
 // Run: node --import ./scripts/reos-loader.mjs scripts/roster-merge-344c-test.mjs
+const { fakeAi } = await import('./roster-fake-ai.mjs')   // فاز ۳۴۶ — نام فقط از AI
 const S = await import('../app/lib/agency-roster-store.ts')
 const A = await import('../app/lib/advisor-store.ts')
 const { accountExists } = await import('../app/lib/account-store.ts')
@@ -8,7 +9,7 @@ const ok = (n, c) => { if (c) { pass++; console.log('  ✓', n) } else { fail++;
 
 const T = 'فروش آپارتمان'
 const D = { a1: 'نوساز\nکارشناس فروش خانم کاظمی', a2: 'فول\nکارشناس فروش خانم کاظمی', b1: 'نوساز\nمشاور فروش آقای رادمهر', b2: 'فول\nمشاور فروش آقای رادمهر' }
-const f = { profileTokens: async () => ({ posts: Object.keys(D).map(t => ({ token: t, title: T })), name: 'املاک تستِ ادغام' }), post: async (t) => ({ title: T, description: D[t], images: [] }) }
+const f = { ai: fakeAi, profileTokens: async () => ({ posts: Object.keys(D).map(t => ({ token: t, title: T })), name: 'املاک تستِ ادغام' }), post: async (t) => ({ title: T, description: D[t], images: [] }) }
 const fetchPost = async (t) => ({ title: T, description: D[t] || '', images: [], facts: [], amenities: [] })
 const ids = []
 const cleanup = async () => { for (const id of ids) try { await S.removeScrape(id) } catch {} }
@@ -48,7 +49,7 @@ try {
 
   // ── آژانسِ دیگر: همان شخص در دو آژانس ──
   const D2 = { c1: 'نوساز\nمشاور فروش آقای رادمهر', c2: 'فول\nمشاور فروش آقای رادمهر' }
-  const f2 = { profileTokens: async () => ({ posts: Object.keys(D2).map(t => ({ token: t, title: T })), name: 'املاک دوم' }), post: async (t) => ({ title: T, description: D2[t], images: [] }) }
+  const f2 = { ai: fakeAi, profileTokens: async () => ({ posts: Object.keys(D2).map(t => ({ token: t, title: T })), name: 'املاک دوم' }), post: async (t) => ({ title: T, description: D2[t], images: [] }) }
   const add2 = await S.addScrape({ slug: 'MjMerge344d', agencyName: 'املاک دوم' })
   const id2 = add2.scrape?.id || (await S.listScrapes()).find(s => s.slug === 'MjMerge344d').id; ids.push(id2)
   await S.syncRoster(id2, undefined, { budgetMs: 60000, f: f2, fetchPost: async (t) => ({ title: T, description: D2[t] || '', images: [], facts: [], amenities: [] }) })
