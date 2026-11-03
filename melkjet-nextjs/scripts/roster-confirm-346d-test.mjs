@@ -31,6 +31,12 @@ try {
   ok('منبعِ این‌ها «تأییدِ ادمین» است', (ap?.src?.sig || 0) === 4)
   await S.syncRoster(id2, undefined, { budgetMs: 60000, f: mk('b', D2), fetchPost: fp(D2) })
   ok('آژانسِ دیگر اثر نگرفت (فقط همین آژانس)', !(await S.getScrape(id2)).advisors.some(a => a.name === 'امیر پاشا'))
+  // فاز ۳۴۶ه — درخواستِ دستی جلوی صف (نه پشتِ آژانس‌های زمان‌بندی‌شده)
+  await S.patchScrape(id2, { runRequested: true, lastRun: 1 })   // «قدیمی‌ترین» زمان‌بندی‌شده
+  await S.requestRun(id)
+  const due = await S.listDueRosters(Date.now())
+  ok('همگام‌سازیِ دستی اولِ صف است', due.findIndex(x => x.id === id) === 0 && due.some(x => x.id === id2))
+  await S.patchScrape(id2, { runRequested: false }); await S.patchScrape(id, { runRequested: false })
   // حذفِ همان مشاور ⇒ از تأییدشده‌ها هم برداشته می‌شود
   ok('حذفِ مشاور', (await S.removeAdvisor(id, ap.key)).ok)
   sc = await S.getScrape(id)

@@ -374,10 +374,11 @@ function extractSignatureAny(title: string, desc: string, agencyName = ''): stri
 export const ROSTER_AGENT: [string, 'text'][] = [['roster', 'text'], ['content', 'text'], ['chat', 'text']]
 // نسخهٔ پرامپتِ نام‌گذاری؛ با هر تغییرِ معنادارِ پرامپت بالا برود تا جواب‌های کش‌شدهٔ قدیمی دوباره پرسیده شوند.
 // ۲ = حکمِ واقعیِ AI (فاز ۳۴۱)؛ ۳ = قواعدِ عنوان/محله/مشخصه (فاز ۳۴۳)؛ ۴ = پرامپتِ «بازخوانی»، تک‌آگهی، متنِ ویجت (فاز ۳۴۴).
-export const AI_PROMPT_V = 5   // ۵ = فاز ۳۴۶ج: نمونه‌های زندهٔ «منطقه امیر پاشا»/«آرشیتکت هستی؟»/«بازدید= آزاد»/«جهان تاب»
+// فاز ۳۴۶ه — بالا بردنِ نسخه یعنی «همهٔ» آگهی‌های «همهٔ» آژانس‌ها دوباره پرسیده شوند (صفِ سریالِ ساعت‌ها). بهبودهای پرامپتِ ۳۴۶ج
+// فقط برای آگهی‌های تازه/نپرسیده و جواب‌های ردشده اعمال می‌شود؛ اشتباه‌های قبلی را ادمین با یک کلیک (تأیید/حذف) درست می‌کند.
+export const AI_PROMPT_V = 4
 // فاز ۳۴۶ — کدهای خطای «AI-only» (agency-roster-store رفتارِ سینک را از روی همین‌ها تعیین می‌کند).
 export const AI_OFF_ERROR = 'هوش مصنوعیِ نام‌گذاری روشن/تنظیم نیست — بدونِ AI هیچ نامی تعیین نمی‌شود (پنل → API و مدل‌های AI → بخشِ روستر)'
-export const AI_INCOMPLETE_ERROR = 'AI هنوز همهٔ آگهی‌ها را نخوانده — ادامه خودکار در پاسِ بعد'
 export async function aiCanonical(items: { i: number; title: string; desc: string }[], agencyName = '', notNames: string[] = []): Promise<{ map: Record<number, string>; raw: string; answered?: number[] }> {
   const { model, provider } = resolveAgent(ROSTER_AGENT)
   if (!model) return { map: {}, raw: '(هیچ مدلی تنظیم نشده)', answered: [] }
@@ -448,6 +449,8 @@ export interface NameStats {
   failedBatches: number  // آگهی‌هایی که AI به آن‌ها پاسخ نداد (تایم‌اوت/JSONِ خراب)
   gaveUp: boolean        // پس از شکست‌های پیاپی، بقیه بدونِ AI
   budgetHit: boolean     // سقفِ زمانیِ فازِ AI
+  aiLeft?: number        // فاز ۳۴۶ه — آگهی‌هایی که AI در این پاس نرسید بخواند (با جوابِ قبلی ماندند؛ پاسِ بعد ادامه)
+  aiAskedNow?: number    // آگهی‌هایی که AI همین پاس خواند
   metaText: number       // آگهی‌هایی که «متن»شان فقط متادیتای انتشارِ دیوار بود
   textMissing: number    // ⚠ آگهی‌هایی که متنشان پس از ۳ تلاش از دیوار خوانده نشد (throttle/تایم‌اوت) — سینکِ بعد دوباره
   unnamedSigLike: number // ⚠ آگهیِ بی‌نامی که «خطِ امضا» دارد (نقش/لقب + واژهٔ نام‌مانند) — باید ۰ باشد
@@ -473,7 +476,6 @@ export function signatureLikeLine(text: string): string {
 export interface RosterAdvisor { key: string; name: string; tokens: string[]; posts: BrandPost[]; src?: NameSrc }
 export interface AgencyRoster {
   ok: boolean; error?: string
-  aiProgress?: { asked: number; total: number; askedNow: number }   // فاز ۳۴۶ — وقتی AI همه را نخوانده (error=AI_INCOMPLETE_ERROR)
   slug: string; agencyName?: string
   total: number; scanned: number
   advisors: RosterAdvisor[]
@@ -592,6 +594,7 @@ export async function buildAgencyRoster(
   const rejectedKeys = new Set((opts.rejected || []).map(k => keyOf(k)))
   const rejectedNames = [...new Map((opts.rejected || []).filter(k => k && !/^[A-Za-z0-9_:-]+$/.test(k)).map(k => [keyOf(k), k] as const)).values()].slice(-40)
   let rejectedByAdmin = 0
+  let aiLeft = 0, aiAskedNow = 0
   const rjSig = [...rejectedKeys].sort().join('|')
   // فاز ۳۴۶د — نام‌های تأییدشدهٔ همین آژانس (بلندتر اول: «امیر پاشا» پیش از «امیر»)؛ ردشده‌ها کنار.
   const confirmedList = [...new Map((opts.confirmed || []).filter(n => n && !rejectedKeys.has(keyOf(n))).map(n => [keyOf(n), n.replace(/\s+/g, ' ').trim()] as const)).values()]
@@ -643,11 +646,18 @@ export async function buildAgencyRoster(
     }
     await Promise.all(Array.from({ length: Math.min(CONC, pending.length) }, worker))
     if (opts.shouldStop && await opts.shouldStop()) return { ...base, agencyName: name, error: 'متوقف شد' }
-    const left = pending.filter(p2 => !aiAsked.has(p2.idx)).length
-    if (left > 0) {
-      const askedNow = pending.length - left
-      console.log(`[roster] ${slug}: AI ${askedNow}/${pending.length} آگهیِ تازه را خواند — ${left} مانده؛ فهرست بازنویسی نمی‌شود، پاسِ بعد ادامه می‌دهد`)
-      return { ...base, agencyName: name, total: posts.length, scanned: rows.length, error: AI_INCOMPLETE_ERROR, aiProgress: { asked: aiAsked.size, total: rows.filter(r => r.desc.trim()).length, askedNow } }
+    // فاز ۳۴۶ه (فیدبکِ مالک: «شفیعی را تأیید کردم، همگام‌سازی زدم، هیچ افاقه‌ای نمی‌کند — چیزی که درست کار می‌کرد را چرا خراب می‌کنی؟»)
+    // — نسخهٔ ۳۴۶ تا وقتی AI «همهٔ» آگهی‌ها را نخوانده بود فهرست را اصلاً بازنویسی نمی‌کرد؛ پس هیچ تأیید/حذفی اثر نمی‌کرد. حالا فهرست
+    // همیشه نوشته می‌شود: آگهیِ نپرسیده با «آخرین جوابِ قبلیِ AI» (از کش، هر نسخه) سرِ جایش می‌ماند و پاسِ بعد ادامهٔ پرسش را می‌دهد.
+    aiLeft = pending.filter(p2 => !aiAsked.has(p2.idx)).length
+    aiAskedNow = pending.length - aiLeft
+    if (aiLeft > 0) {
+      for (const p2 of pending) {
+        if (aiAsked.has(p2.idx)) continue
+        const old = opts.cached?.[p2.row.post.token]?.name
+        if (old && !rejectedKeys.has(keyOf(old))) aiMap[p2.idx] = old
+      }
+      console.log(`[roster] ${slug}: AI ${aiAskedNow}/${pending.length} آگهی را در این پاس خواند — ${aiLeft} مانده (با جوابِ قبلی سرِ جا؛ پاسِ بعد ادامه)`)
     }
   }
 
@@ -710,7 +720,7 @@ export async function buildAgencyRoster(
     aiNamed: nameCounts.aiNamed, aiRejected: nameCounts.aiRejected,
     byAI: advisors.reduce((t, a) => t + (a.src?.ai || 0), 0), bySig: advisors.reduce((t, a) => t + (a.src?.sig || 0), 0), byMachine: 0, byClaim: 0, unnamed: unnamed.tokens.length,
     skippedSig: 0, failedBatches: aiStats.failedBatches, gaveUp: aiStats.gaveUp, budgetHit: aiStats.budgetHit,
-    metaText, textMissing,
+    metaText, textMissing, aiLeft, aiAskedNow,
     unnamedSigLike: unnamed.tokens.filter(t => { const r = byTok.get(t); return !!r && !!signatureLikeLine(r.desc) }).length,
   }
   console.log(`[roster] names (AI-only): model=${nameStats.model || '-'} answered=${nameStats.aiAnswered}/${nameStats.rows} named=${nameStats.byAI} rejected=${nameStats.aiRejected} adminRejected=${rejectedByAdmin} byConfirmed=${byConfirmed} unnamed=${nameStats.unnamed} unnamedSigLike=${nameStats.unnamedSigLike} meta=${metaText} textMissing=${textMissing}`)

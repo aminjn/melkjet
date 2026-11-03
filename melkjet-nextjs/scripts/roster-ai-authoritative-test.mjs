@@ -11,7 +11,7 @@ let pass = 0, fail = 0
 const ok = (n, c) => { if (c) { pass++; console.log('  ✓ ' + n) } else { fail++; console.log('  ✗ ' + n) } }
 
 const { saveAdminData, getAdminData } = await import('../app/lib/admin-store.ts')
-const { buildAgencyRoster, AI_PROMPT_V, AI_OFF_ERROR, AI_INCOMPLETE_ERROR } = await import('../app/lib/agency-roster.ts')
+const { buildAgencyRoster, AI_PROMPT_V, AI_OFF_ERROR } = await import('../app/lib/agency-roster.ts')
 const ADMIN_SNAPSHOT = JSON.parse(JSON.stringify(getAdminData()))
 const restore = () => { try { saveAdminData(ADMIN_SNAPSHOT) } catch {} }
 process.on('exit', restore)
@@ -57,7 +57,11 @@ const r5 = await buildAgencyRoster('s5', { useAI: true, f: shamsF(sayShams, 'ف�
 ok('AI «شمس» می‌گوید ولی در متن نیست ⇒ رد (ضدِ توهم)', !r5.advisors.some(a => a.name === 'شمس') && r5.nameStats.aiRejected === 8)
 // ۶: AI همه را نخوانده (پاسخِ خراب) ⇒ فهرست بازنویسی نمی‌شود، خطای «ادامه در پاسِ بعد»
 const r6 = await buildAgencyRoster('s6', { useAI: true, f: mkF(async () => ({ map: {}, raw: 'xx', answered: [] })) })
-ok('AI جواب نداد ⇒ AI_INCOMPLETE (بازنویسی نمی‌شود) + پیشرفت', !r6.ok && r6.error === AI_INCOMPLETE_ERROR && r6.aiProgress?.asked === 0 && r6.aiProgress?.total === 8)
+ok('AI جواب نداد ⇒ فهرست باز هم ساخته می‌شود و «۸ مانده» گزارش می‌شود (فاز ۳۴۶ه)', r6.ok && r6.nameStats.aiLeft === 8 && r6.nameStats.aiAskedNow === 0)
+// فاز ۳۴۶ه — آگهیِ نپرسیده «آخرین جوابِ قبلیِ AI» را نگه می‌دارد (نه این‌که مشاور تا پایانِ پرسش‌ها غیب شود)
+const cachedOld = Object.fromEntries(tokens.map((t, i) => [t, { title: 'آپارتمان ' + t, desc: i < 4 ? 'نوساز، کارشناس فروش جهت راهنمایی نقی' : 'نوساز فول امکانات', name: i < 4 ? 'نقی' : '', aiv: 1 }]))
+const r6b = await buildAgencyRoster('s6b', { useAI: true, cached: cachedOld, f: mkF(async () => ({ map: {}, raw: 'xx', answered: [] })) })
+ok('AI این پاس جواب نداد ⇒ «نقی» با جوابِ قبلی سرِ جا ماند', r6b.ok && r6b.advisors.some(a => a.name === 'نقی' && a.tokens.length === 4))
 // ۷: جوابِ کش‌شدهٔ نسخهٔ فعلی دوباره پرسیده نمی‌شود؛ بی‌نسخه دوباره
 const asked7 = []
 const cached = Object.fromEntries(tokens.map((t, i) => [t, { title: 'آپارتمان ' + t, desc: 'نوساز', name: '', ...(i < 4 ? { aiv: AI_PROMPT_V } : {}) }]))

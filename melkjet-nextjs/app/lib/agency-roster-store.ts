@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { cacheRemote } from './listing-image'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete, kvGetPrefix, kvGetPrefixField } from './db'
-import { buildAgencyRoster, extractSignature, whitelistHits, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V, AI_INCOMPLETE_ERROR } from './agency-roster'
+import { buildAgencyRoster, extractSignature, whitelistHits, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V } from './agency-roster'
 import { validName, keyOf, addressTokens, contextNoiseTokens, normFa } from './agency-name-lexicon'
 import { isDivarMetaText } from './divar-text'
 import { importDivarToken } from './advisor-divar-import'
@@ -70,6 +70,7 @@ export interface RosterScrape {
   unnamedTokens?: string[]   // توکنِ آگهی‌های بی‌امضا (به آژانس) — سقفِ ۱۰۰
   confirmedNames?: string[]   // فاز ۳۴۶د — نام‌هایی که ادمین در همین آژانس تأیید کرده: هر آگهیِ بی‌نامِ AI که این نام را دارد به او می‌رود
   rejectedNames?: string[]   // فاز ۳۴۶ج — نام‌هایی که ادمین «حذف» کرده: در همین آژانس دیگر هرگز مشاور نمی‌شوند (به AI هم گفته می‌شود)
+  requestedAt?: number   // فاز ۳۴۶ه — زمانِ آخرین درخواستِ دستیِ همگام‌سازی (اولویت در صف)
   adNames?: Record<string, string>   // فاز ۳۴۶ب — نامِ مشاورِ هر آگهی که ادمین در «چرا بی‌نام؟» تأیید کرده (بر AI مقدم؛ '' = بی‌مشاور)
   nameStats?: import('./agency-roster').NameStats   // فاز ۳۴۴ — «تصمیم با AI بود یا امضا یا ماشین» در آخرین سینک
   running?: boolean
@@ -416,7 +417,7 @@ export async function removeScrape(id: string): Promise<void> {
 // از دیوار گرفته شوند (کشِ کهنهٔ دورهٔ پروکسیِ مرده که متنِ خالی داشت، دیگر استفاده نمی‌شود).
 export async function requestRun(id: string): Promise<boolean> {
   let hadError = false
-  const ok = await mutateScrape(id, s => { if (!s) return false; hadError = !!s.lastError; s.runRequested = true; s.retryPending = false; s.stopRequested = false; s.runAttempts = 0; s.lastError = ''; if (isStale(s)) s.running = false; return true })   // فاز ۱۹۶ب: کلیکِ دستی = شروعِ تمیز
+  const ok = await mutateScrape(id, s => { if (!s) return false; hadError = !!s.lastError; s.runRequested = true; s.requestedAt = Date.now(); s.retryPending = false; s.stopRequested = false; s.runAttempts = 0; s.lastError = ''; if (isStale(s)) s.running = false; return true })   // فاز ۱۹۶ب: کلیکِ دستی = شروعِ تمیز
   // فاز ۱۹۸ — کش دائمی است (اینکرمنتال)؛ کلیکِ دستی هرگز کش را دور نمی‌ریزد. تازگی با چرخشِ ۱۴روزه تأمین می‌شود.
   void hadError
   return ok
@@ -499,7 +500,11 @@ export async function listDueRosters(now: number): Promise<RosterScrape[]> {
   })
   // فاز ۲۵۸ — ترتیبِ منصفانه: کم‌سابقه‌ترین اول (آژانسی که دیرترین‌بار تلاش شده، جلوتر) تا یک
   // آژانسِ بزرگ که هر بار بودجه‌اش تمام می‌شود، اسلات‌ها را از بقیه نگیرد و همه به‌نوبت پیش بروند.
-  return dueList.sort((a, b) => (a.lastRun || a.runStartedAt || a.createdAt || 0) - (b.lastRun || b.runStartedAt || b.createdAt || 0))
+  // فاز ۳۴۶ه — درخواستِ «دستیِ» ادمین (کلیکِ همگام‌سازی/تأییدِ نام/حذف) جلوی صف می‌رود؛ وگرنه پشتِ ده‌ها آژانسِ زمان‌بندی‌شده ساعت‌ها
+  // منتظر می‌ماند («همگام‌سازی زدم، هیچ افاقه‌ای نمی‌کند»).
+  const manual = (s: RosterScrape) => !!s.runRequested && (s.requestedAt || 0) > (s.lastRun || 0)
+  const at = (s: RosterScrape) => s.lastRun || s.runStartedAt || s.createdAt || 0
+  return dueList.sort((a, b) => (+manual(b) - +manual(a)) || (manual(a) ? (a.requestedAt || 0) - (b.requestedAt || 0) : at(a) - at(b)))
 }
 // تنظیمِ زمان‌بندیِ اختصاصیِ یک اسکرپ.
 export async function saveScrapeSchedule(id: string, patch: { autoSync?: boolean; startHour?: number; endHour?: number }): Promise<boolean> {
@@ -789,14 +794,6 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
     // (آن‌جا پیشرفتِ واقعی رخ داده)؛ خطای گذرای ایمپورت حالا می‌شمارد و بعد از ۸ بار «با علتِ
     // واقعی» تسلیم می‌شود تا در پنل دیده شود، نه این‌که ابدی بچرخد.
     console.log(`[roster] scrape+AI done: rows=${roster.scanned} advisors=${roster.advisors.length} unnamed=${roster.unnamed.tokens.length}`)
-    // فاز ۳۴۶ — AI هنوز همهٔ آگهی‌ها را نخوانده: فهرست بازنویسی نمی‌شود (نیمی AI، نیمی خالی = مشاورانِ پریده)؛ جواب‌ها کش
-    // شده‌اند و مثلِ «بودجهٔ زمانی» پاسِ بعد خودکار ادامه می‌دهد. پیشرفت ⇒ شمارندهٔ تلاش بخشیده می‌شود؛ بی‌پیشرفت ⇒ می‌شمارد (سقفِ ۸).
-    if (!roster.ok && roster.error === AI_INCOMPLETE_ERROR) {
-      done = true
-      const pr = roster.aiProgress
-      await patchScrape(id, { running: false, ...(pr && pr.askedNow > 0 ? { runAttempts: 0 } : {}), lastError: `AI ${pr ? `${pr.asked.toLocaleString('fa-IR')}/${pr.total.toLocaleString('fa-IR')} ` : ''}آگهی را خوانده — ادامه خودکار در پاسِ بعد` })
-      return { ok: false, error: roster.error, advisors: 0, total: roster.total, unnamed: 0 }
-    }
     if (!roster.ok) { done = true; const stopped = /متوقف/.test(roster.error || ''); await patchScrape(id, { running: false, runRequested: false, retryPending: false, runAttempts: 0, stopRequested: false, lastRun: Date.now(), lastError: stopped ? 'با دکمهٔ توقف متوقف شد' : (roster.error || 'خطا در خوشه‌بندی') }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
@@ -923,6 +920,12 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
       s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
       if (roster.nameStats) s.nameStats = roster.nameStats
+      // فاز ۳۴۶ه — AI هنوز همه را نخوانده: فهرست نوشته شد (تأییدها/حذف‌ها اثر کردند)، و اگر این پاس پیشرفت داشت، ادامه در صف می‌ماند.
+      const left = roster.nameStats?.aiLeft || 0
+      if (left > 0) {
+        if ((roster.nameStats?.aiAskedNow || 0) > 0) { s.runRequested = true; s.lastError = `AI هنوز ${left.toLocaleString('fa-IR')} آگهی را نخوانده — ادامه خودکار (فهرست با جواب‌های قبلی به‌روز است)` }
+        else s.lastError = `AI در این پاس جواب نداد — ${left.toLocaleString('fa-IR')} آگهی با جوابِ قبلی ماندند؛ همگام‌سازیِ بعد دوباره می‌پرسد`
+      }
     })
     console.log(`[roster] pass end OK: advisors=${recs.length} total=${roster.total} unnamed=${roster.unnamed.tokens.length}`)
     // فاز ۱۹۸ — کش دیگر پاک نمی‌شود (اینکرمنتال): فقط توکن‌هایی که دیگر در پروفایلِ دیوار نیستند هرس می‌شوند.
