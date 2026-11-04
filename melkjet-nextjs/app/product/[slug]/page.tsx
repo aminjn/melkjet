@@ -29,6 +29,21 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 }
 
+// Offer از آخرین قیمتِ مرجعِ کاتالوگ (ریال)؛ وگرنه AggregateOffer از قیمتِ واقعیِ فروشنده‌ها
+// (تومان → ریال ×۱۰)؛ وگرنه هیچ (undefined) — قیمتِ ساختگی هرگز.
+function productOffers(priceRial: number, sellers: { price: number; stock: number; slug: string }[], url: string) {
+  if (priceRial > 0) return { '@type': 'Offer', price: Math.round(priceRial), priceCurrency: 'IRR', availability: 'https://schema.org/InStock', url }
+  const priced = sellers.filter(s => s.price > 0)
+  if (!priced.length) return undefined
+  const prices = priced.map(s => s.price)
+  const inStock = priced.some(s => !(s.stock <= 0))
+  return {
+    '@type': 'AggregateOffer', priceCurrency: 'IRR', offerCount: priced.length,
+    lowPrice: Math.round(Math.min(...prices) * 10), highPrice: Math.round(Math.max(...prices) * 10),
+    availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock', url,
+  }
+}
+
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const id = await resolveId(slug)
@@ -42,10 +57,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const sellers = await sellersOfCatalog(id!)
   const related = relatedProducts(product.categoryId, id!, 8).map(p => ({ id: p.id, name: p.name, image: p.image || '', brand: p.brand || '' }))
 
-  // فاز ۲۵۴ (سئو): Product JSON-LD — نتایجِ ریچِ گوگل (قیمت/برند/دسته). قیمت از آخرین نقطهٔ تاریخچه
-  // (تومان → ریال ×۱۰ برای priceCurrency=IRR، هم‌روشِ صفحهٔ آگهی). فیلدهای خالی حذف می‌شوند.
-  const ph = product.priceHistory || []
-  const priceToman = ph.length ? Number(ph[ph.length - 1].price) : 0
+  // فاز ۲۵۴ (سئو): Product JSON-LD — نتایجِ ریچِ گوگل (قیمت/برند/دسته). قیمت از آخرین نقطهٔ تاریخچه.
+  // تاریخچهٔ قیمتِ کاتالوگ «ریال» است (ProductPageView برای نمایشِ تومان ÷۱۰ می‌کند) — پس مستقیم IRR.
+  const ph = (product.priceHistory || []).filter(p => Number(p.price) > 0)
+  const priceRial = ph.length ? Number(ph[ph.length - 1].price) : 0
   const url = `https://melkjet.com/product/${canonSlug}`
   const ld: Record<string, unknown> = {
     '@context': 'https://schema.org', '@type': 'Product', name: product.name, url,
@@ -53,9 +68,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     description: (product.description || product.name).slice(0, 300) || undefined,
     brand: product.brand ? { '@type': 'Brand', name: product.brand } : undefined,
     category: breadcrumb.map(b => b.name).filter(Boolean).join(' › ') || undefined,
-    offers: priceToman > 0 ? { '@type': 'Offer', price: Math.round(priceToman * 10), priceCurrency: 'IRR', availability: 'https://schema.org/InStock', url } : undefined,
+    offers: productOffers(priceRial, sellers, url),
   }
   Object.keys(ld).forEach(k => ld[k] === undefined && delete ld[k])
+  // گوگل Productِ بدونِ offers/review/aggregateRating را «نامعتبر» می‌شمارد (Search Console: «Either
+  // offers, review, or aggregateRating should be specified»). کالای بی‌قیمت و بی‌فروشنده را اصلاً
+  // Product اعلام نمی‌کنیم — قیمتِ ساختگی هم نمی‌گذاریم؛ بردکرامب سرِ جایش می‌ماند.
+  const emitProductLd = !!ld.offers
   const crumbLd = {
     '@context': 'https://schema.org', '@type': 'BreadcrumbList',
     itemListElement: [
@@ -66,7 +85,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     ],
   }
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+    {emitProductLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />}
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(crumbLd) }} />
     <ProductPageView product={product as any} breadcrumb={breadcrumb} sellers={sellers} related={related} />
   </>
