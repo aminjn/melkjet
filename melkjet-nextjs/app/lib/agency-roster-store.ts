@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { cacheRemote } from './listing-image'
 import { join } from 'path'
 import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete, kvGetPrefix, kvGetPrefixField } from './db'
-import { buildAgencyRoster, extractSignature, whitelistHits, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V } from './agency-roster'
+import { buildAgencyRoster, extractSignature, whitelistHits, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V, aiAnswerValid } from './agency-roster'
 import { validName, keyOf, addressTokens, contextNoiseTokens, normFa } from './agency-name-lexicon'
 import { isDivarMetaText } from './divar-text'
 import { importDivarToken } from './advisor-divar-import'
@@ -308,7 +308,7 @@ export async function explainUnnamed(id: string, limit = 100): Promise<{ ok: boo
     const confHit = (s.confirmedNames || []).find(n => { const ks = n.split(/\s+/).map(w => keyOf(w).toLowerCase()).filter(Boolean); return descLinesOf(normFa(c.desc)).some(l => l.some((_, i) => ks.every((k, j) => l[i + j] === k))) })
     if (confHit) { rows.push({ ...base, text: c.desc, manual: confHit, reason: `«${confHit}» را برای این آژانس تأیید کرده‌اید و در متنِ این آگهی هست — در همگام‌سازیِ بعد به همین مشاور می‌رود`, oldText: (c.dv || 0) < 4 || undefined }); continue }
     const aiRaw = typeof c.name === 'string' ? c.name.trim() : ''
-    const aiAsked = c.name !== undefined && (c.aiv || 0) >= AI_PROMPT_V
+    const aiAsked = c.name !== undefined && aiAnswerValid(c.aiv)
     if (aiRaw && (s.rejectedNames || []).some(x => keyOf(x) === keyOf(aiRaw))) { rows.push({ ...base, text: c.desc, ai: aiRaw, aiAsked, aiRejected: true, reason: `AI گفت «${aiRaw}» ولی شما این نام را حذف کرده‌اید — نامِ مشاور حساب نمی‌شود`, sigLine: signatureLikeLine(normFa(c.desc)) || undefined }); continue }
     const inText = !!aiRaw && descLinesOf(desc).some(l => { const ks = aiRaw.split(/\s+/).map(w => keyOf(w).toLowerCase()); return l.some((_, i2) => ks.every((k, j2) => l[i2 + j2] === k)) })
     let reason: string

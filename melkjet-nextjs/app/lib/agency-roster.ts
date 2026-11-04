@@ -376,16 +376,19 @@ export const ROSTER_AGENT: [string, 'text'][] = [['roster', 'text'], ['content',
 // ۲ = حکمِ واقعیِ AI (فاز ۳۴۱)؛ ۳ = قواعدِ عنوان/محله/مشخصه (فاز ۳۴۳)؛ ۴ = پرامپتِ «بازخوانی»، تک‌آگهی، متنِ ویجت (فاز ۳۴۴).
 // فاز ۳۴۶ه — بالا بردنِ نسخه یعنی «همهٔ» آگهی‌های «همهٔ» آژانس‌ها دوباره پرسیده شوند (صفِ سریالِ ساعت‌ها). بهبودهای پرامپتِ ۳۴۶ج
 // فقط برای آگهی‌های تازه/نپرسیده و جواب‌های ردشده اعمال می‌شود؛ اشتباه‌های قبلی را ادمین با یک کلیک (تأیید/حذف) درست می‌کند.
-export const AI_PROMPT_V = 4
+// ۶ = فاز ۳۴۶و: قاعدهٔ اشتباهِ نسخهٔ ۵ («کارشناس … منطقه X ⇒ X نامِ مشاور است») محله‌ها را مشاور کرد (هروی/دروس/اختیاریه…).
+// فقط جواب‌های «نسخهٔ ۵» دوباره پرسیده می‌شوند؛ جواب‌های نسخهٔ ۴ معتبر می‌مانند (بازپرسیِ کلِ ناوگان نه).
+export const AI_PROMPT_V = 6
+export const aiAnswerValid = (v?: number) => (v || 0) >= 4 && v !== 5
 // فاز ۳۴۶ — کدهای خطای «AI-only» (agency-roster-store رفتارِ سینک را از روی همین‌ها تعیین می‌کند).
 export const AI_OFF_ERROR = 'هوش مصنوعیِ نام‌گذاری روشن/تنظیم نیست — بدونِ AI هیچ نامی تعیین نمی‌شود (پنل → API و مدل‌های AI → بخشِ روستر)'
-export async function aiCanonical(items: { i: number; title: string; desc: string }[], agencyName = '', notNames: string[] = []): Promise<{ map: Record<number, string>; raw: string; answered?: number[] }> {
+export async function aiCanonical(items: { i: number; title: string; desc: string; loc?: string }[], agencyName = '', notNames: string[] = []): Promise<{ map: Record<number, string>; raw: string; answered?: number[] }> {
   const { model, provider } = resolveAgent(ROSTER_AGENT)
   if (!model) return { map: {}, raw: '(هیچ مدلی تنظیم نشده)', answered: [] }
   // اموجی/نماد را به فاصله تبدیل می‌کنیم تا اسمِ چسبیده به اموجی («♀️محمدی») برای AI هم خوانا شود.
   // نام اغلب در «ابتدای» معرفی یا «انتهای» آگهی است؛ گاهی وسط (پیش از فهرستِ امکانات/آدرس) — برشِ بزرگ‌تر.
   const clip = (s: string) => { const d = deEmoji(s || '').replace(/\s+/g, ' ').trim(); return d.length > 1800 ? d.slice(0, 500) + ' … ' + d.slice(-1200) : d }
-  const list = items.map(it => `${it.i}) ${deEmoji(it.title || '').slice(0, 80)} :: ${clip(it.desc)}`).join('\n')
+  const list = items.map(it => `${it.i}) ${deEmoji(it.title || '').slice(0, 80)}${it.loc ? ` [محل: ${deEmoji(it.loc).slice(0, 40)}]` : ''} :: ${clip(it.desc)}`).join('\n')
   // فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۹ — «AI ۸۳ آگهی را خواند ولی ۶ نام داد») — پرامپتِ قبلی با «کوچک‌ترین تردید =
   // خالی» مدل را به «بی‌نام» هل می‌داد، درحالی‌که امضای آژانس‌ها دقیقاً همان متنِ تکراری است («⭕️ کارشناس خانم
   // ستوده ⭕️» در همهٔ آگهی‌ها). حالا هدف «پیدا کردن» است، با نمونه‌های واقعی؛ و فهرستِ «چه چیزی نام نیست» (ملکی،
@@ -401,7 +404,8 @@ export async function aiCanonical(items: { i: number; title: string; desc: strin
     // فاز ۲۷۵ — نامِ کوچه/خیابان («بین فلاحی ۴۱ و ۴۳» → «فلاحی»).
     // فاز ۳۴۶ج — «منطقه X» در امضای قالبیِ آژانس‌ها نامِ مشاور است («کارشناس ملکی منطقه امیر پاشا» را AI بی‌امضا گفته بود).
     '(۵) نامِ معبر/محله اسمِ مشاور نیست: واژهٔ پس از «بین/خیابان/کوچه/بلوار/نبش/میدان/شهرک/فاز/پلاک» آدرس است، و نامِ محله‌ها (سعادت‌آباد، جنت‌آباد، شهرک‌غرب، پونک، نارمک، تهرانپارس، ونک، نیاوران، پاسداران، هروی، جهانتاب/جهان تاب، گیشا، صادقیه، اکباتان، شمس‌آباد، یوسف‌آباد، امیرآباد…) هم. ' +
-    'ولی بسیاری از آژانس‌ها امضای قالبیِ «کارشناس/مشاور … منطقه <نامِ آدم>» دارند: آنجا آنچه پس از «منطقه» آمده «نامِ مشاور» است اگر نامِ آدم باشد: «کارشناس تخصصی امور ملکی منطقه فخاری» → «فخاری»، «کارشناس ملکی منطقه امیر پاشا» → «امیر پاشا»، «کارشناس تخصصی امور ملکی منطقه عباسی» → «عباسی»؛ ولی «کارشناس منطقه پاسداران» → خالی (محله است). ' +
+    // فاز ۳۴۶و — نسخهٔ ۵ اینجا گفته بود «پس از منطقه = نامِ مشاور» و AI محله‌ها را مشاور کرد. «منطقه X» معمولاً محله/خیابان است.
+    'در «کارشناس/مشاور … منطقه X» تقریباً همیشه X نامِ محله یا خیابان است (دروس، هروی، اختیاریه، دیباجی، اندرزگو، ناطق نوری، وارسته، ذوالفقاری، نیلوفر…) → خالی. فقط وقتی X بی‌تردید نامِ خانوادگیِ یک آدم است و نامِ هیچ محله/خیابانی نیست (مثلِ «منطقه فخاری»، «منطقه امیر پاشا») آن را بده. محلِ خودِ آگهی (پس از «محل:») هرگز نامِ مشاور نیست. ' +
     '(۶) هر واژه‌ای که تکه‌ای از نامِ یک مکان است اسمِ آدم نیست: «شمس آباد» ⇒ «شمس» نه؛ «امیر آباد» ⇒ «امیر» نه؛ «برج X»/«شهرک X» ⇒ X نه. ' +
     '(۷) مقدارِ یک مشخصه اسم نیست: «وضعیت سند: تعاونی»، «سیستم سرمایش: فن کوئل»، «کف: سرامیک». ' +
     // فاز ۳۳۶و — «با سپاس» ⇒ «سپاس».
@@ -411,7 +415,7 @@ export async function aiCanonical(items: { i: number; title: string; desc: strin
     // فاز ۳۴۶ج — اشتباه‌های زندهٔ AI که مالک گزارش کرد.
     '(۱۱) صفت/واژهٔ عادی که شبیهِ اسم است، اسم نیست: «مشاور خوب صادق مهمترین گزینه است» (صادق = درستکار) → خالی؛ «با صداقت»، «پیام دهید»، «تماس یا پیام»، «سند آزاد»، «بازدید= آزاد»، «جهان تاب ۵۷ متر» (نامِ محله)، «عرب» (قوم)، «آرامش/آرادم» → هیچ‌کدام اسم نیستند. ' +
     '(۱۲) جملهٔ خطاب به خریدار («آرشیتکت هستی؟»، «دنبالِ خانه هستید؟»، «سرمایه‌گذار هستی؟») معرفیِ مشاور نیست؛ فقط «<نامِ آدم> هستم» معرفی است. ' +
-    (notNames.length ? `(۱۳) مدیر این واژه‌ها را قبلاً رد کرده و در این آژانس نامِ مشاور نیستند: ${notNames.map(n => `«${n}»`).join('، ')}. اگر نامِ واقعیِ دیگری در امضا هست همان را بده، وگرنه خالی. ` : '') +
+    (notNames.length ? `(۱۳) این واژه‌ها در این آژانس نامِ مشاور نیستند (مدیر رد کرده، یا نامِ محله‌هایی است که آگهی‌های این آژانس در آن‌هاست): ${notNames.map(n => `«${n}»`).join('، ')}. اگر نامِ واقعیِ دیگری در امضا هست همان را بده، وگرنه خالی. ` : '') +
     'خروجی فقط JSON برای «همهٔ» شماره‌ها، بدونِ توضیح: [{"i":<شماره>,"name":"<نام یا خالی>"}]'
   const out = await Promise.race([
     chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: list }], { temperature: 0, max_tokens: 1500 }, provider),
@@ -594,8 +598,19 @@ export async function buildAgencyRoster(
   const rejectedKeys = new Set((opts.rejected || []).map(k => keyOf(k)))
   const rejectedNames = [...new Map((opts.rejected || []).filter(k => k && !/^[A-Za-z0-9_:-]+$/.test(k)).map(k => [keyOf(k), k] as const)).values()].slice(-40)
   let rejectedByAdmin = 0
+  // فاز ۳۴۶و (اسکرین‌شاتِ مالک: «هروی/دروس/اختیاریه دروس/نیلوفر سران/دیباجی» مشاور شده بودند) — مکان‌ها: محله‌های گازِتیرِ سایت
+  // (geo-store) + «محل»ِ آگهی‌های همین آژانس (brand-landing) + واژه‌های نامِ آژانس. نامی که «کل»ش یا «یکی از واژه‌هایش» مکان است رد
+  // می‌شود (تأییدِ ادمین معاف است — «هروی» اگر واقعاً نامِ مشاور باشد با یک کلیک تأیید می‌شود).
+  const placeKeys = new Set<string>()
+  try { const { getAll } = await import('./geo-store'); for (const p of getAll()) for (const c of p.cities || []) for (const d of c.districts || []) { for (const n of [d.name, ...(d.neighborhoods || [])]) { const k = keyOf(n); if (k.length >= 3) placeKeys.add(k) } } } catch {}
+  const agencyPlaces = new Set<string>()
+  for (const p of posts) for (const part of String(p.location || '').split(/[،,/|\-]+|\s+در\s+/)) { const k = keyOf(part.replace(/^.*?\sدر\s/, '')); if (k.length >= 3 && !/\d|[۰-۹]/.test(part)) { placeKeys.add(k); agencyPlaces.add(part.trim()) } }
+  for (const w of String(name || '').split(/\s+/)) { const k = keyOf(w); if (k.length >= 3 && !/^(املاک|آژانس|مشاور|مشاورین|مشاوران|گروه|دفتر|مسکن|املاکِ|امللاک)$/.test(w)) placeKeys.add(k) }
+  const isPlaceName = (n: string) => { const ws = String(n || '').split(/\s+/).filter(Boolean); return placeKeys.has(keyOf(n)) || ws.some(w => placeKeys.has(keyOf(w))) }
+  const placeHints = [...agencyPlaces].slice(0, 25)
+  let placeRejected = 0
   let aiLeft = 0, aiAskedNow = 0
-  const rjSig = [...rejectedKeys].sort().join('|')
+  const rjSig = 'p1|' + [...rejectedKeys].sort().join('|')   // p1 = فاز ۳۴۶و: جوابِ «مکان» هم یک بار با راهنمای محل دوباره پرسیده می‌شود
   // فاز ۳۴۶د — نام‌های تأییدشدهٔ همین آژانس (بلندتر اول: «امیر پاشا» پیش از «امیر»)؛ ردشده‌ها کنار.
   const confirmedList = [...new Map((opts.confirmed || []).filter(n => n && !rejectedKeys.has(keyOf(n))).map(n => [keyOf(n), n.replace(/\s+/g, ' ').trim()] as const)).values()]
     .sort((a, b) => b.split(' ').length - a.split(' ').length || b.length - a.length)
@@ -607,7 +622,7 @@ export async function buildAgencyRoster(
     // جوابِ کش‌شدهٔ AI (همین نسخهٔ پرامپت) حکم است — حتی خالی. وگرنه دوباره پرسیده می‌شود.
     // فاز ۳۴۶ج — جوابی که ادمین «حذفش» کرده یک بار دیگر (با گفتنِ «این نام نیست») پرسیده می‌شود تا AI نامِ درستِ همان آگهی را پیدا کند؛
     // rjs = امضای فهرستِ حذف‌شده‌ها هنگامِ آن پرسش — تا همان آگهی در هر سینک دوباره پرسیده نشود.
-    else if (hit?.name !== undefined && (hit.aiv || 0) >= AI_PROMPT_V && !(hit.name && rejectedKeys.has(keyOf(hit.name)) && hit.rjs !== rjSig)) { aiMap[idx] = hit.name; aiAsked.add(idx) }
+    else if (hit?.name !== undefined && aiAnswerValid(hit.aiv) && !(hit.name && (rejectedKeys.has(keyOf(hit.name)) || isPlaceName(hit.name)) && hit.rjs !== rjSig)) { aiMap[idx] = hit.name; aiAsked.add(idx) }
     else if (!r.desc.trim()) { /* بی‌متن: چیزی برای خواندن نیست — بی‌نام */ }
     else pending.push({ idx, row: r })
   })
@@ -619,7 +634,7 @@ export async function buildAgencyRoster(
     let failStreak = 0, doneCount = 0, next = 0, stopped = false
     const ask = async (item: (typeof pending)[number]): Promise<boolean> => {
       try {
-        const res = await (opts.f?.ai || aiCanonical)([{ i: item.idx, title: item.row.title, desc: item.row.desc }], name, rejectedNames)
+        const res = await (opts.f?.ai || aiCanonical)([{ i: item.idx, title: item.row.title, desc: item.row.desc, loc: item.row.post.location }], name, [...rejectedNames, ...placeHints])
         const got = res.map
         const answered = new Set(res.answered ?? (Object.keys(got).length ? [item.idx] : []))
         if (!answered.has(item.idx)) return false
@@ -672,6 +687,8 @@ export async function buildAgencyRoster(
     if (raw && !ok) nameCounts.aiRejected++
     // فاز ۳۴۶ج — نامی که ادمین در همین آژانس حذف کرده، دیگر هرگز مشاور نمی‌شود (جز با تأییدِ صریحِ همان آگهی).
     if (ok && !manualIdx.has(idx) && rejectedKeys.has(keyOf(raw))) { rejectedByAdmin++; ok = false }
+    // فاز ۳۴۶و — نامِ محله (از گازِتیرِ محله‌های سایت + محلِ آگهی‌های همین آژانس) یا تکه‌ای از نامِ آژانس، نامِ مشاور نیست.
+    if (ok && !manualIdx.has(idx) && isPlaceName(raw)) { placeRejected++; ok = false }
     // فاز ۳۴۶د (فیدبکِ مالک: «کلی امیر پاشا هست، باید دونه‌دونه بزنم؟ قبلاً با یک کلیک مشاور می‌ساخت یا ادغام می‌کرد») — نامی که ادمین
     // در همین آژانس «تأیید» کرده، هر آگهیِ همین آژانس را که AI برایش نامی نداد (یا نامش رد شد) و این نام در متنش هست می‌گیرد.
     // جوابِ نام‌دارِ AI را بازنویسی نمی‌کند، و فقط داخلِ همین آژانس است (نه فهرستِ سفیدِ سراسریِ قدیمی که «سند آزاد» را هم می‌گرفت).
@@ -723,7 +740,7 @@ export async function buildAgencyRoster(
     metaText, textMissing, aiLeft, aiAskedNow,
     unnamedSigLike: unnamed.tokens.filter(t => { const r = byTok.get(t); return !!r && !!signatureLikeLine(r.desc) }).length,
   }
-  console.log(`[roster] names (AI-only): model=${nameStats.model || '-'} answered=${nameStats.aiAnswered}/${nameStats.rows} named=${nameStats.byAI} rejected=${nameStats.aiRejected} adminRejected=${rejectedByAdmin} byConfirmed=${byConfirmed} unnamed=${nameStats.unnamed} unnamedSigLike=${nameStats.unnamedSigLike} meta=${metaText} textMissing=${textMissing}`)
+  console.log(`[roster] names (AI-only): model=${nameStats.model || '-'} answered=${nameStats.aiAnswered}/${nameStats.rows} named=${nameStats.byAI} rejected=${nameStats.aiRejected} adminRejected=${rejectedByAdmin} place=${placeRejected} byConfirmed=${byConfirmed} unnamed=${nameStats.unnamed} unnamedSigLike=${nameStats.unnamedSigLike} meta=${metaText} textMissing=${textMissing}`)
   return { ok: true, slug, agencyName: name, total: posts.length, scanned: rows.length, advisors, unnamed, nameStats }
 }
 
