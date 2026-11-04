@@ -33,5 +33,16 @@ const ai2 = async (items) => { asked.push(...items.map(it => toks[it.i])); retur
 const cached = Object.fromEntries(toks.map(t => [t, { title: 'آپارتمان', desc: ads[t][1], name: said[t], aiv: t.startsWith('r') ? 4 : 5 }]))
 await buildAgencyRoster('s346f3', { useAI: true, cached, f: { ...f, ai: ai2 } })
 ok('جواب‌های نسخهٔ ۵ (قاعدهٔ اشتباه) دوباره پرسیده شدند؛ نسخهٔ ۴ نه', asked.length === 5 && !asked.includes('r1') && !asked.includes('r2'))
+// فاز ۳۴۶ز — نامی که در «عنوانِ» آگهی‌های همین آژانس آمده (خیابان/محلهٔ بیرونِ گازِتیر) مشاور نیست؛ نامِ واقعی سالم + «از متن»
+const ads2 = { a1: ['پاسداران شرقی / ۱۲۰ متر', 'نوساز\nکارشناس منطقه پاسداران شرقی'], a2: ['دیباجی جنوبی ۸۰ متری', 'فول\nکارشناس امور ملکی منطقه دیباجی'],
+  b1: ['آپارتمان ۹۰ متری', 'نوساز\n⭕ کارشناس فروش خانم زینالی ⭕'], b2: ['آپارتمان ۷۰ متری', 'فول\n⭕ کارشناس فروش خانم زینالی ⭕'] }
+const said2 = { a1: 'شرقی', a2: 'دیباجی', b1: 'زینالی', b2: 'زینالی' }
+const t2 = Object.keys(ads2)
+const f2 = { ai: async (items) => ({ map: Object.fromEntries(items.map(it => [it.i, said2[t2[it.i]]])), raw: '', answered: items.map(it => it.i) }),
+  profileTokens: async () => ({ posts: t2.map(t => ({ token: t, title: ads2[t][0] })), name: 'آژانس تست', reason: '' }), post: async (t) => ({ title: ads2[t][0], description: ads2[t][1], images: [] }) }
+const r3 = await buildAgencyRoster('s346g', { useAI: true, f: f2 })
+ok('«شرقی/دیباجی» (در عنوانِ آگهی‌های همین آژانس) مشاور نشدند', !r3.advisors.some(a => a.name === 'شرقی' || a.name === 'دیباجی'))
+const zn = r3.advisors.find(a => a.name === 'زینالی')
+ok('«زینالی» (فقط در امضا) سالم + سطرِ «از متن» ثبت شد', !!zn && zn.tokens.length === 2 && /کارشناس فروش خانم زینالی/.test(zn.evidence || ''))
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

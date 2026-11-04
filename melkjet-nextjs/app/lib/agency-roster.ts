@@ -477,7 +477,7 @@ export function signatureLikeLine(text: string): string {
   }
   return ''
 }
-export interface RosterAdvisor { key: string; name: string; tokens: string[]; posts: BrandPost[]; src?: NameSrc }
+export interface RosterAdvisor { key: string; name: string; tokens: string[]; posts: BrandPost[]; src?: NameSrc; evidence?: string }   // evidence — فاز ۳۴۶ز: سطری از متن که نام از آن آمد
 export interface AgencyRoster {
   ok: boolean; error?: string
   slug: string; agencyName?: string
@@ -606,11 +606,16 @@ export async function buildAgencyRoster(
   const agencyPlaces = new Set<string>()
   for (const p of posts) for (const part of String(p.location || '').split(/[،,/|\-]+|\s+در\s+/)) { const k = keyOf(part.replace(/^.*?\sدر\s/, '')); if (k.length >= 3 && !/\d|[۰-۹]/.test(part)) { placeKeys.add(k); agencyPlaces.add(part.trim()) } }
   for (const w of String(name || '').split(/\s+/)) { const k = keyOf(w); if (k.length >= 3 && !/^(املاک|آژانس|مشاور|مشاورین|مشاوران|گروه|دفتر|مسکن|املاکِ|امللاک)$/.test(w)) placeKeys.add(k) }
-  const isPlaceName = (n: string) => { const ws = String(n || '').split(/\s+/).filter(Boolean); return placeKeys.has(keyOf(n)) || ws.some(w => placeKeys.has(keyOf(w))) }
+  // فاز ۳۴۶ز (اسکرین‌شاتِ مالک: «شرقی/پاشا/… — کلی خیابان») — نامِ محله/خیابان تقریباً همیشه در «عنوانِ» آگهی‌های همان آژانس هست
+  // («هروی/فروش/۱۲۴ متری»، «پاسداران شرقی …»)، ولی نامِ مشاور در عنوان نمی‌آید. پس نامی که (واژه‌به‌واژه) در عنوانِ هر آگهیِ همین آژانس
+  // آمده، مکان/عبارتِ آگهی است نه مشاور. این سیگنال از دادهٔ خودِ آژانس است، نه فهرستِ دستی. تأییدِ ادمین معاف است.
+  const titleLines = rows.flatMap(r => textLines(r.title))
+  const inTitles = (n: string) => { const ks = String(n || '').split(/\s+/).filter(Boolean).map(w => keyOf(w).toLowerCase()); return ks.length > 0 && nameOccurrences(ks, titleLines).length > 0 }
+  const isPlaceName = (n: string) => { const ws = String(n || '').split(/\s+/).filter(Boolean); return placeKeys.has(keyOf(n)) || ws.some(w => placeKeys.has(keyOf(w))) || inTitles(n) }
   const placeHints = [...agencyPlaces].slice(0, 25)
   let placeRejected = 0
   let aiLeft = 0, aiAskedNow = 0
-  const rjSig = 'p1|' + [...rejectedKeys].sort().join('|')   // p1 = فاز ۳۴۶و: جوابِ «مکان» هم یک بار با راهنمای محل دوباره پرسیده می‌شود
+  const rjSig = 'p2|' + [...rejectedKeys].sort().join('|')   // p1 = فاز ۳۴۶و: جوابِ «مکان» هم یک بار با راهنمای محل دوباره پرسیده می‌شود
   // فاز ۳۴۶د — نام‌های تأییدشدهٔ همین آژانس (بلندتر اول: «امیر پاشا» پیش از «امیر»)؛ ردشده‌ها کنار.
   const confirmedList = [...new Map((opts.confirmed || []).filter(n => n && !rejectedKeys.has(keyOf(n))).map(n => [keyOf(n), n.replace(/\s+/g, ' ').trim()] as const)).values()]
     .sort((a, b) => b.split(' ').length - a.split(' ').length || b.length - a.length)
@@ -700,6 +705,7 @@ export async function buildAgencyRoster(
     fileCount.set(k, (fileCount.get(k) || 0) + 1)
     let c = clusters.get(k)
     if (!c) { c = { key: k, name: raw, tokens: [], posts: [], src: { ai: 0, sig: 0, machine: 0, claim: 0 } }; clusters.set(k, c) }
+    if (!c.evidence) { const ks = raw.split(' ').map(w => keyOf(w).toLowerCase()).filter(Boolean); const line = r.desc.split(/[\n\r]+/).find(l => nameOccurrences(ks, textLines(l)).length > 0); if (line) c.evidence = deEmoji(line).replace(/\s+/g, ' ').trim().slice(0, 90) }
     c.src![manualIdx.has(idx) || viaConfirmed ? 'sig' : 'ai']++   // sig = فاز ۳۴۶ب/د: تأییدِ ادمین (همین آگهی یا نامِ تأییدشدهٔ آژانس)
     c.tokens.push(r.post.token); c.posts.push(r.post)
   })

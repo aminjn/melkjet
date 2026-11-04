@@ -2835,6 +2835,7 @@ function AgencyRosterPanel() {
                       <button onClick={() => editAdvisorUi(s.id, a.key, a)} title="ویرایشِ نام و شماره" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: 'var(--gold)', fontSize: 11.5, cursor: 'pointer' }}>ویرایش</button>
                       <button onClick={() => removeAdvisor(s.id, a.key, a.name)} title="حذف از فهرست" style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 8px', color: '#e06666', fontSize: 11.5, cursor: 'pointer' }}>حذف</button>
                     </div>
+                    {a.evidence && <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }} title="سطری از متنِ آگهی که این نام از آن آمد">📄 از متن: «{a.evidence}»</div>}
                     <DivarLinks tokens={a.tokens} onEdit={t => setAdNameFor(s.id, t)} />
                   </div>
                 ))}

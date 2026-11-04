@@ -34,6 +34,7 @@ export interface RosterAdvisor {
   graduating?: boolean   // در صفِ «ساختِ حساب» روی اینستنسِ ۰
   transferFrom?: string  // فاز ۲۷۷ — ownerِ موقتِ مبدأ تا وقتی انتقالِ فایل‌ها تمام نشده (ازسرگیریِ امن)
   src?: { ai: number; sig: number; machine: number; claim: number }   // فاز ۳۴۴ — چه کسی نام را داد (پنل)
+  evidence?: string   // فاز ۳۴۶ز — سطری از متنِ آگهی که نام از آن آمد (پنل)
   aliases?: string[]     // فاز ۳۴۴ج — کلیدِ خوشه‌هایی که در همین مشاور ادغام شده‌اند (سینکِ بعد به همین رکورد نگاشت می‌شوند)
   mergePending?: { id: string; key: string; name: string }   // فاز ۳۴۴ز — ادغام در صف (پنل «⏳ در حالِ ادغام با X»)
   mergedInto?: { id: string; key: string }   // فاز ۳۴۴ج — این رکورد در مشاورِ آژانسِ دیگری ادغام شده (همان حساب/شماره)
@@ -839,6 +840,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       else if (!rec.phone && a.name) rec.name = a.name
       rec.tokens = a.tokens.slice(0, 100)   // لینکِ آگهی‌های دیوار برای بازبینی
       rec.src = a.src
+      rec.evidence = a.evidence
     }
     // هرسِ خودکار: رکوردهای قدیمی که این‌بار دیگر کشف نشدند و به حساب هم تبدیل نشده‌اند
     // (اسم‌های خرابِ نوفه از سینکِ قبلی) حذف می‌شوند تا لیست تمیز شود.
