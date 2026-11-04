@@ -65,6 +65,7 @@ export interface AdminData {
     httpPort?: number     // پورتِ inboundِ HTTPِ محلی (پیش‌فرض 10809)
     socksPort?: number    // پورتِ inboundِ SOCKSِ محلی (پیش‌فرض 10808)
     binPath?: string     // مسیرِ باینریِ Xray (اگر خالی، مسیرهای متداول امتحان می‌شوند)
+    goodKeys?: string[]  // فاز ۳۴۷: سرورهای سالم در آخرین «تستِ تک‌تک» (سریع‌ترین اول) → اولِ صف + fallback
   }
   ga4Id?: string          // فاز ۱۴۱: شناسهٔ Google Analytics 4 (G-…) — تگ در <head> همهٔ صفحات
   gapgpt?: {              // ارائه‌دهندهٔ پیش‌فرض (گپ) — همهٔ ایجنت‌ها مگر آن‌ها که provider خاص دارند

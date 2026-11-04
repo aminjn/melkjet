@@ -140,7 +140,16 @@ The VPS egress is restricted. Each external service has a different path:
 - **نصبِ باینری (یک‌بار روی سرور):** `sudo bash scripts/install-xray.sh` → `bin/xray`. اگر نبود،
   کارت وضعیتِ «نصب نیست» را با همین دستور نشان می‌دهد. کاملاً opt-in: تا روشن نشود، هیچ پروسه‌ای
   بالا نمی‌آید و رفتارِ فعلی عوض نمی‌شود. `.v2ray/` و `bin/xray` در gitignore (شاملِ کلیدِ سرورها).
-- تست: `node --import ./scripts/reos-loader.mjs scripts/v2ray-parse-test.mjs` (۲۶ تستِ پارس/کانفیگ).
+- تست: `node --import ./scripts/reos-loader.mjs scripts/v2ray-parse-test.mjs` (۴۶ تستِ پارس/کانفیگ).
+- **فاز ۳۴۷ («هر پروفایلی می‌گذارم کار نمی‌کند»):** پارسر ترنسپورت‌های جدید را نادیده می‌گرفت → Xray
+  بالا می‌آمد (۳۰ سرور) ولی سرورها اتصال را رد می‌کردند. حالا: httpupgrade، xhttp/splithttp(mode/extra)،
+  kcp، grpc multiMode/authority، allowInsecure/insecure، reality spx/pqv، ws.host، IPv6 [..]،
+  ss متنِ ساده، scheme با حروفِ بزرگ، اشتراکِ JSONِ Xray. observatory با `enableConcurrency` و
+  balancer با `fallbackTag`. **«تستِ تک‌تکِ سرورها»** (`testEachV2ray`، اکشنِ `test-each`): Xrayِ
+  موقت با یک inbound برای هر سرور، loglevel=info، خطا با شناسهٔ نشست (`taking detour [proxy-N]`) به
+  سرور نسبت داده و فارسی توضیح داده می‌شود (`explainXrayError`)؛ سالم‌ها در `v2ray.goodKeys` → کارگر
+  آن‌ها را اولِ صف می‌گذارد. لاگِ Xray حالا در status.json هم هست (قبلاً روی اینستنس‌های غیرکارگر خالی بود).
+  تست: `scripts/v2ray-each-test.mjs` با Xrayِ قلابیِ `scripts/v2ray-fake-xray.mjs`.
 
 ### رباتِ چندسکویی تلگرام + بله (فاز ۳۰۰)
 Bot APIِ بله (`tapi.bale.ai`) سازگار با تلگرام است، پس همان هستهٔ ۴۴۴خطیِ ربات (جستجو/آلارم/

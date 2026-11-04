@@ -4820,6 +4820,8 @@ function V2rayConfig() {
   const [showLog, setShowLog] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<React.ReactNode>('')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [each, setEach] = useState<any>(null)
 
   const inpStyle: React.CSSProperties = { direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   const refresh = () => fetch('/api/admin/v2ray', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
@@ -4853,7 +4855,20 @@ function V2rayConfig() {
     setMsg('در حالِ تست…')
     const d = await post({ action: 'test' })
     if (d.ok) setMsg(<span style={{ color: '#5fd98a' }}>✓ اتصال سالم — پینگ {Number(d.ms || 0).toLocaleString('fa-IR')}ms</span>)
-    else setMsg(<span style={{ color: '#e7674a' }}>تست ناموفق: {d.error === 'not-running' ? 'هنوز در حال اجرا نیست' : String(d.error || '')}</span>)
+    else setMsg(<span style={{ color: '#e7674a' }}>تست ناموفق: {d.error === 'not-running' ? 'هنوز در حال اجرا نیست' : (d.hint || String(d.error || ''))} — دکمهٔ «تستِ تک‌تکِ سرورها» دلیلِ دقیقِ هر سرور را نشان می‌دهد.</span>)
+  }
+  const testEach = async () => {
+    setMsg('در حالِ تستِ تک‌تکِ سرورها (تا ~۶۰ ثانیه)…'); setEach(null)
+    const d = await post({ action: 'test-each' })
+    if (!d.ok) {
+      setMsg(<span style={{ color: '#e7674a' }}>{d.error === 'xray-not-installed' ? 'باینریِ Xray نصب نیست.' : d.error === 'no-valid-servers' ? 'هیچ سرورِ معتبری از لینک پیدا نشد.' : d.error === 'busy' ? 'یک تستِ دیگر در جریان است.' : d.error === 'no-link' ? 'اول لینک را ذخیره کن.' : <span dir="ltr">{String(d.error || '')}</span>}</span>)
+      setEach(d); return
+    }
+    const okN = (d.results || []).filter((r: { ok: boolean }) => r.ok).length
+    setMsg(okN
+      ? <span style={{ color: '#5fd98a' }}>✓ {okN.toLocaleString('fa-IR')} از {(d.results || []).length.toLocaleString('fa-IR')} سرور سالم‌اند — سالم‌ها اولِ صف گذاشته شدند (تا ۴۵ ثانیهٔ دیگر اعمال می‌شود).</span>
+      : <span style={{ color: '#e7674a' }}>هیچ سروری از این هاست وصل نشد — دلیلِ هر سرور در جدولِ زیر است.</span>)
+    setEach(d); refresh()
   }
 
   const running = status?.running
@@ -4885,9 +4900,30 @@ function V2rayConfig() {
             <GoldButton onClick={() => saveApply(true)} disabled={busy}>{busy ? '…' : 'ذخیره و روشن'}</GoldButton>
             <button onClick={() => saveApply(false)} disabled={busy} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>خاموش کردن</button>
             <button onClick={test} disabled={busy || !running} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: running ? 'var(--text)' : 'var(--faint)', fontSize: 13, fontWeight: 700, cursor: running ? 'pointer' : 'not-allowed' }}>تستِ اتصال</button>
+            <button onClick={testEach} disabled={busy || !link.trim()} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>تستِ تک‌تکِ سرورها</button>
             <button onClick={() => setAdv(!adv)} style={{ padding: '9px 12px', borderRadius: 10, border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>{adv ? 'بستنِ پیشرفته' : 'تنظیماتِ پیشرفته'}</button>
           </div>
           {msg && <div style={{ marginTop: 10, fontSize: 12.5 }}>{msg}</div>}
+          {each?.results?.length > 0 && (
+            <div style={{ marginTop: 10, maxHeight: 320, overflow: 'auto', border: '1px solid var(--line)', borderRadius: 10 }}>
+              {each.xrayVersion && <div style={{ fontSize: 11, color: 'var(--faint)', padding: '6px 10px', borderBottom: '1px solid var(--line)' }}>Xray <span dir="ltr">{each.xrayVersion}</span></div>}
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {each.results.map((r: any) => (
+                <div key={r.tag} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 10px', borderBottom: '1px solid var(--line)', fontSize: 11.5 }}>
+                  <span style={{ color: r.ok ? '#5fd98a' : '#e7674a', flexShrink: 0 }}>{r.ok ? '✓' : '✗'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div><b>{r.name || r.tag}</b> <span dir="ltr" style={{ color: 'var(--faint)' }}>{r.protocol}/{r.network}/{r.security} {r.address}:{r.port}</span></div>
+                    {r.ok
+                      ? <div style={{ color: '#5fd98a' }}>پینگ {Number(r.ms || 0).toLocaleString('fa-IR')}ms</div>
+                      : <div style={{ color: 'var(--muted)' }}>{r.error}{r.detail && <div dir="ltr" style={{ color: 'var(--faint)', fontSize: 10.5, wordBreak: 'break-all', textAlign: 'left' }}>{r.detail}</div>}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {each?.log?.length > 0 && !each?.results?.length && (
+            <pre style={{ direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: 10, marginTop: 8, maxHeight: 220, overflow: 'auto', fontSize: 10.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{each.log.join('\n')}</pre>
+          )}
           {adv && (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
               <label style={{ fontSize: 12, color: 'var(--muted)' }}>پورتِ HTTP<br /><input type="number" value={httpPort} onChange={e => setHttpPort(Number(e.target.value) || 10809)} style={{ ...inpStyle, width: 110, marginTop: 4 }} /></label>

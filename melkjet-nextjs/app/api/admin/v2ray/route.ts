@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
-import { applyV2ray, stopV2ray, testV2ray, v2rayStatus, buildOutbounds } from '@/app/lib/v2ray'
+import { applyV2ray, stopV2ray, testV2ray, testEachV2ray, v2rayStatus, buildOutbounds } from '@/app/lib/v2ray'
 
 async function guard() {
   const s = await getSession()
@@ -22,7 +22,7 @@ export async function GET() {
 }
 
 // POST { link?, enabled?, httpPort?, socksPort?, binPath?, action? }
-// action: 'apply' (ذخیره + اجرا/ری‌لود) | 'stop' | 'test' | 'count' (فقط تعدادِ سرورِ لینک)
+// action: 'apply' (ذخیره + اجرا/ری‌لود) | 'stop' | 'test' | 'test-each' | 'count' (فقط تعدادِ سرورِ لینک)
 export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({} as any))
@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
   data.v2ray = data.v2ray || {}
 
   if (b.action === 'test') return NextResponse.json(await testV2ray())
+  // فاز ۳۴۷: تستِ تک‌تکِ سرورها با یک Xrayِ موقت — دلیلِ خرابیِ هر سرور + ذخیرهٔ سالم‌ها برای اولویت.
+  if (b.action === 'test-each') return NextResponse.json(await testEachV2ray())
   if (b.action === 'count') return NextResponse.json({ servers: (await buildOutbounds(String(b.link ?? data.v2ray.link ?? ''))).length })
 
   if (typeof b.link === 'string') data.v2ray.link = b.link.trim()
