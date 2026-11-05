@@ -2470,6 +2470,8 @@ function NameRulesPanel() {
 // ── پنلِ «رُسترِ آژانس»: یک لینک بده → مشاورها خودکار جدا و هر کدام حسابِ جدا ──
 function AgencyRosterPanel() {
   const [scrapes, setScrapes] = useState<any[]>([])
+  const scrapesRef = useRef<any[]>([])
+  scrapesRef.current = scrapes
   const [slug, setSlug] = useState('')
   const [name, setName] = useState('')
   const [msg, setMsg] = useState('')
@@ -2504,7 +2506,29 @@ function AgencyRosterPanel() {
     return `${fa(Math.round(m / 1440))} روز پیش`
   }
 
-  const load = () => fetch('/api/admin/agency-roster', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) { setScrapes(j.scrapes || []); if (j.settings) setSettings(j.settings) } })
+  // فاز ۳۴۶ط — سه حالت (بارگذاری/خطا/خالی): قبلاً شکستِ این درخواست «هنوز آژانسی اضافه نشده» نشان می‌داد.
+  const [loadState, setLoadState] = useState<'loading' | 'ok' | 'error'>('loading')
+  const [loadErr, setLoadErr] = useState('')
+  const load = () => fetch('/api/admin/agency-roster', { cache: 'no-store', signal: AbortSignal.timeout(45000) })
+    .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`); return j })
+    .then(j => { setScrapes(j.scrapes || []); if (j.settings) setSettings(j.settings); setLoadState('ok'); setLoadErr('') })
+    .catch((e: any) => { setLoadState(st => st === 'ok' ? 'ok' : 'error'); setLoadErr(e?.name === 'TimeoutError' ? 'سرور در ۴۵ ثانیه جواب نداد' : String(e?.message || e)) })
+  // فاز ۳۴۶ط — pollِ سبک: فقط وضعیتِ ردیف‌ها؛ ردیفی که سینکش تمام شد یا کارِ صف دارد، تکی تازه می‌شود.
+  const pollStatus = async () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+    const j = await fetch('/api/admin/agency-roster?status=1', { cache: 'no-store', signal: AbortSignal.timeout(20000) }).then(r => r.json()).catch(() => null)
+    if (!j?.ok) return
+    const st = new Map<string, any>((j.status || []).map((x: any) => [x.id, x]))
+    // تصمیم از روی «همین الانِ» فهرست (ref) — تابعِ به‌روزرسانیِ setState در React ممکن است دیرتر اجرا شود.
+    const list = scrapesRef.current
+    if (list.length !== st.size || list.some(x => !st.has(x.id))) { load(); return }
+    const refresh = list.filter(x => { const n = st.get(x.id); return (x.running && !n.running) || (x.lastRun !== n.lastRun && !n.running) || n.gradJobs?.length || x.gradJobs?.length || (x.advisors || []).some((a: any) => a.graduating || a.mergePending) }).map(x => x.id).slice(0, 5)
+    setScrapes(cur => cur.map(x => { const n = st.get(x.id); if (!n) return x; const { gradJobs, ...rest } = n; return { ...x, ...rest, gradJobs: gradJobs || undefined } }))
+    for (const id of refresh) {
+      const r = await fetch('/api/admin/agency-roster?id=' + encodeURIComponent(id), { cache: 'no-store' }).then(r => r.json()).catch(() => null)
+      if (r?.ok && r.scrape) setScrapes(list => list.map(x => x.id === id ? r.scrape : x))
+    }
+  }
   // شهرها مسیرِ جداگانه‌اند و یک‌بار گرفته می‌شوند — داخلِ pollِ ۴ثانیه‌ایِ سینک نیستند،
   // چون برای ردیف‌هایی که هنوز city ندارند شاردِ advisor می‌خوانند.
   const loadCities = () => { setCitiesBusy(true); return fetch('/api/admin/agency-roster?cities=1', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) setCities(j.cities || {}) }).catch(() => {}).finally(() => setCitiesBusy(false)) }
@@ -2550,7 +2574,8 @@ function AgencyRosterPanel() {
     adv: t.adv + (x.advisors || []).length, gap: t.gap + noAcc(x), files: t.files + (x.lastTotal || 0),
   }), { adv: 0, gap: 0, files: 0 }), [rows])
 
-  useEffect(() => { if (!scrapes.some(s => s.running || s.runRequested || s.agencyGraduating || (s.advisors || []).some((a: any) => a.graduating))) return; const id = setInterval(load, 4000); return () => clearInterval(id) }, [scrapes])
+  const pollOn = scrapes.some(s => s.running || s.runRequested || s.agencyGraduating || (s.advisors || []).some((a: any) => a.graduating || a.mergePending))
+  useEffect(() => { if (!pollOn) return; const id = setInterval(pollStatus, 6000); return () => clearInterval(id) }, [pollOn])
 
   const post = (body: any) => fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json())
   const add = async () => { if (!slug.trim()) return; setBusy(true); setMsg(''); try { const j = await post({ action: 'add', slug: slug.trim(), agencyName: name.trim() }); if (j.ok) { setSlug(''); setName(''); setMsg('✅ افزوده شد — «همگام‌سازی الان» را بزن'); load() } else setMsg('❌ ' + (j.error || 'خطا')) } finally { setBusy(false) } }
@@ -2877,7 +2902,11 @@ function AgencyRosterPanel() {
           )
         })}
         {!scrapes.length
-          ? <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 2px' }}>هنوز آژانسی اضافه نشده.</div>
+          ? (loadState === 'loading'
+            ? <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 2px' }}>در حالِ بارگذاری…</div>
+            : loadState === 'error'
+              ? <div style={{ fontSize: 12.5, color: '#e7674a', padding: '8px 2px' }}>فهرستِ آژانس‌ها بارگذاری نشد ({loadErr}). داده‌ها سرِ جایشان است. <button onClick={() => { setLoadState('loading'); load() }} style={{ marginInlineStart: 6, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>تلاشِ دوباره</button></div>
+              : <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 2px' }}>هنوز آژانسی اضافه نشده.</div>)
           : !rows.length && <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 2px' }}>با این فیلترها آژانسی نیست — «همه» را بزن.</div>}
       </div>
     </Card>

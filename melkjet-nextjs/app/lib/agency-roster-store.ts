@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from './fs-atomic'
 import { cacheRemote } from './listing-image'
 import { join } from 'path'
-import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete, kvGetPrefix, kvGetPrefixField } from './db'
+import { pgEnabled, kvGet, kvSet, kvMutate, kvDelete, kvGetPrefix, kvGetPrefixField, kvGetPrefixFields } from './db'
 import { buildAgencyRoster, extractSignature, whitelistHits, gateAiName, signatureTrusted, signatureLikeLine, acceptName, textLines as descLinesOf, AI_PROMPT_V, aiAnswerValid } from './agency-roster'
 import { validName, keyOf, addressTokens, contextNoiseTokens, normFa } from './agency-name-lexicon'
 import { isDivarMetaText } from './divar-text'
@@ -258,18 +258,44 @@ const cleanSlug = (s: string) => String(s || '').replace(/[​-‏‪-‮⁦-⁩
 const STALE_MS = 8 * 60 * 1000
 const isStale = (s: RosterScrape, now = Date.now()) => !!s.running && (now - (s.lastProgressAt || s.runStartedAt || 0) > STALE_MS)
 
+// نمایِ پنل برای یک ردیف (مشترکِ listScrapes / getScrapeView / listScrapeStatus).
+function viewOf<T extends Partial<RosterScrape> & { id: string }>(s0: T, q: GradJob[], now: number): T & { gradJobs?: { key: string; prepared: boolean; error: string; attempts: number }[] } {
+  let s: any = isStale(s0 as RosterScrape, now) ? { ...s0, running: false, lastError: s0.lastError || 'همگام‌سازی نیمه‌کاره ماند — خودکار از همان‌جا ادامه می‌یابد' } : s0
+  // فاز ۱۹۹ — پرچمِ یتیمِ «در حال ساخت»: اگر کاری در صف نیست، پرچم در نمایش خاموش می‌شود (خودترمیم)
+  if (s.advisors) s = { ...s, advisors: (s.advisors as RosterAdvisor[]).map(a => (a.graduating || a.mergePending) && !q.some(j => j.id === s.id && j.key === a.key) ? { ...a, graduating: false, mergePending: undefined } : a) }
+  if (s.agencyGraduating && !q.some(j => j.id === s.id && j.key === '__agency__')) s = { ...s, agencyGraduating: false }
+  // فاز ۳۴۴و — وضعیتِ صف برای پنل (علتِ خطای گذرا دیگر فقط در لاگِ سرور نیست)
+  const js = q.filter(j => j.id === s.id)
+  if (js.length) s = { ...s, gradJobs: js.map(j => ({ key: j.key, prepared: !!j.prepared, error: j.error || '', attempts: j.attempts || 0 })) }
+  return s
+}
 export async function listScrapes(): Promise<RosterScrape[]> {
   const now = Date.now()
   const db = await loadAll()
   const q = db.graduateQueue || []
-  return Object.values(db.scrapes)
-    .map(s => isStale(s, now) ? { ...s, running: false, lastError: s.lastError || 'همگام‌سازی نیمه‌کاره ماند — خودکار از همان‌جا ادامه می‌یابد' } : s)
-    // فاز ۱۹۹ — پرچمِ یتیمِ «در حال ساخت»: اگر کاری در صف نیست، پرچم در نمایش خاموش می‌شود (خودترمیم)
-    .map(s => ({ ...s, advisors: (s.advisors || []).map(a => (a.graduating || a.mergePending) && !q.some(j => j.id === s.id && j.key === a.key) ? { ...a, graduating: false, mergePending: undefined } : a) }))
-    .map(s => s.agencyGraduating && !q.some(j => j.id === s.id && j.key === '__agency__') ? { ...s, agencyGraduating: false } : s)
-    // فاز ۳۴۴و — وضعیتِ صف برای پنل (علتِ خطای گذرا دیگر فقط در لاگِ سرور نیست)
-    .map(s => { const js = q.filter(j => j.id === s.id); return js.length ? { ...s, gradJobs: js.map(j => ({ key: j.key, prepared: !!j.prepared, error: j.error || '', attempts: j.attempts || 0 })) } : s })
-    .sort((a, b) => b.createdAt - a.createdAt)
+  return Object.values(db.scrapes).map(s => viewOf(s, q, now)).sort((a, b) => b.createdAt - a.createdAt)
+}
+/** فاز ۳۴۶ط — یک ردیف با همان نمای پنل (برای تازه‌کردنِ «فقط» آژانسی که سینکش تمام شد). */
+export async function getScrapeView(id: string): Promise<RosterScrape | null> {
+  const s = await getScrapeRow(id)
+  return s ? viewOf(s, await getQueue(), Date.now()) : null
+}
+// فاز ۳۴۶ط («سایت یک‌دفعه کند می‌شود»): پنل هنگامِ هر سینک هر ۴ ثانیه کلِ listScrapes را می‌کشید — همهٔ ردیف‌ها با
+// مشاوران و توکن‌هایشان (چند مگابایت) از PG + سریال‌سازی روی اینستنسِ سرویس‌ده؛ و از ۳۴۶ه چون runRequested تا تمام‌شدنِ
+// AI می‌ماند، این poll عملاً همیشه روشن بود. حالا poll فقط همین فیلدهای کوچک را می‌گیرد (برش در خودِ PG).
+const STATUS_FIELDS = ['id', 'slug', 'agencyName', 'createdAt', 'running', 'runRequested', 'requestedAt', 'progress', 'lastRun', 'lastOkAt', 'lastError', 'lastProgressAt', 'runStartedAt', 'agencyGraduating', 'retryPending', 'runAttempts', 'stopRequested', 'nameStats'] as const
+export type RosterStatus = Pick<RosterScrape, 'id'> & Partial<Pick<RosterScrape, Exclude<(typeof STATUS_FIELDS)[number], 'id'>>> & { gradJobs?: { key: string; prepared: boolean; error: string; attempts: number }[] }
+export async function listScrapeStatus(): Promise<RosterStatus[]> {
+  const now = Date.now()
+  let rows: RosterStatus[]
+  if (!pgEnabled()) {
+    rows = Object.values(fileLoad().scrapes).map(s => Object.fromEntries(STATUS_FIELDS.filter(f => (s as any)[f] !== undefined).map(f => [f, (s as any)[f]])) as RosterStatus)
+  } else {
+    await ensureRosterShards()
+    rows = (await kvGetPrefixFields<RosterStatus>('roster:s:', [...STATUS_FIELDS])).map(r => r.data).filter(d => d?.id)
+  }
+  const q = await getQueue()
+  return rows.map(s => viewOf(s, q, now))
 }
 
 // فاز ۳۴۴ (پورت از خودروجت، فاز ۳۴۹–۳۵۲) — «چرا بی‌نام؟»: برای آگهی‌های بی‌نامِ یک آژانس، همان متنی که ذخیره شده و

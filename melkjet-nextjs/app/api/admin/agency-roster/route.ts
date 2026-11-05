@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, prepareGraduateJobs, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, enqueueMerge, listDueRosters, explainUnnamed, setAdName, unrejectName, unconfirmName } from '@/app/lib/agency-roster-store'
+import { listScrapes, addScrape, removeScrape, requestRun, requestStop, enqueueGraduate, prepareGraduateJobs, removeAdvisor, getScrape, getRosterSettings, saveRosterSettings, saveScrapeSchedule, phoneConflict, phoneConflicts, editAdvisor, enqueueMerge, listDueRosters, explainUnnamed, setAdName, unrejectName, unconfirmName, listScrapeStatus, getScrapeView } from '@/app/lib/agency-roster-store'
 import { getCronBeat } from '@/app/lib/cron-heartbeat'
 import { debugRoster } from '@/app/lib/agency-roster'
 import { rosterCities } from '@/app/lib/agency-roster-city'
@@ -28,10 +28,13 @@ export async function GET(req: NextRequest) {
     const force = req.nextUrl.searchParams.get('force') === '1'
     return NextResponse.json({ ok: true, cities: await rosterCities(list, force) }, { headers: { 'Cache-Control': 'no-store' } })
   }
+  // فاز ۳۴۶ط — pollِ سبکِ پنل: فقط فیلدهای وضعیت (نه مشاوران/توکن‌ها)، و ?id= برای تازه‌کردنِ «یک» ردیف.
+  if (req.nextUrl.searchParams.get('status')) return NextResponse.json({ ok: true, status: await listScrapeStatus() }, { headers: { 'Cache-Control': 'no-store' } })
+  const one = req.nextUrl.searchParams.get('id')
+  if (one) { const sc = await getScrapeView(one); return NextResponse.json(sc ? { ok: true, scrape: sc } : { ok: false, error: 'آژانس پیدا نشد' }, { headers: { 'Cache-Control': 'no-store' } }) }
   // ?health=1 → وضعیتِ کرون (آیا شبانه اجرا می‌شود؟). جدا از GETِ اصلی تا پولِ ۴ثانیه‌ای سنگین نشود.
   if (req.nextUrl.searchParams.get('health')) {
-    const [cron, due] = await Promise.all([getCronBeat(), listDueRosters(Date.now())])
-    const scrapes = await listScrapes()
+    const [cron, due, scrapes] = await Promise.all([getCronBeat(), listDueRosters(Date.now()), listScrapeStatus()])
     return NextResponse.json({
       ok: true, cron,
       dueNow: due.length,

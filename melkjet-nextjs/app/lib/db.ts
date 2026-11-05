@@ -246,6 +246,20 @@ export async function kvGetPrefixField<T>(prefix: string, field: string): Promis
   } finally { client.release() }
 }
 
+/** فاز ۳۴۶ط — چند فیلدِ سطحِ اولِ سندِ همهٔ کلیدهای یک prefix (برشِ سمتِ سرور). برای pollِ وضعیتِ
+ *  پنلِ روستر: به‌جای کشیدنِ سندهای چندمگابایتی (مشاوران + توکن‌ها) هر چند ثانیه، فقط چند فیلدِ کوچک. */
+export async function kvGetPrefixFields<T>(prefix: string, fields: string[]): Promise<{ key: string; data: T }[]> {
+  const client = await acquire()
+  try {
+    await ensureSchema(client)
+    const like = prefix.replace(/([%_\\])/g, '\\$1') + '%'
+    const r = await client.query(
+      `SELECT key, (SELECT jsonb_object_agg(f, data -> f) FROM unnest($2::text[]) AS f WHERE data ? f) AS d FROM kv WHERE key LIKE $1 ESCAPE '\\'`,
+      [like, fields])
+    return r.rows.map(x => ({ key: x.key as string, data: (x.d || {}) as T }))
+  } finally { client.release() }
+}
+
 /** حذفِ یک کلید از kv. */
 export async function kvDelete(key: string): Promise<void> {
   const client = await acquire()
