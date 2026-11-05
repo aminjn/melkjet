@@ -52,57 +52,69 @@ async function ensureSchema(client: PoolClient) {
   schemaOnce = ensureSchemaOnce(client).catch(e => { schemaOnce = null; throw e })
   return schemaOnce
 }
+// فاز ۳۴۶ی («کلاً هنگ می‌کند، حتی SSH») — pg_stat_activity زنده: `CREATE INDEX IF NOT EXISTS enrich_updated` پشتِ یک INSERT
+// منتظر مانده بود و همهٔ INSERTهای بعدی پشتِ «خودِ» آن صف کشیده بودند (blocked_by زنجیره‌ای). «IF NOT EXISTS» قفل را «پیش از»
+// بررسیِ وجود می‌گیرد: CREATE INDEX قفلِ SHARE (ضدِ نوشتن) و `ALTER TABLE … ADD COLUMN IF NOT EXISTS` قفلِ ACCESS EXCLUSIVE
+// (ضدِ همه‌چیز، حتی خواندن) — و این‌ها در «هر» بوتِ «هر» پروسه (هر دیپلوی = ۴ بار، هر ری‌استارتِ حافظه یک بار) اجرا می‌شدند.
+// پشتِ یک خواندنِ کاملِ ۴۰ثانیه‌ایِ listings، ALTERِ منتظر کلِ سایت را قفل می‌کرد. حالا اول فقط کاتالوگ خوانده می‌شود (بی‌قفل)
+// و DDL فقط برای چیزی که واقعاً نیست اجرا می‌شود، با lock_timeoutِ کوتاه تا هرگز صف نسازد.
 async function ensureSchemaOnce(client: PoolClient) {
-  await client.query(`CREATE TABLE IF NOT EXISTS kv (
+  const col = (t: string, c: string) => `EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('${t}') AND attname = '${c}' AND NOT attisdropped)`
+  const reg = (n: string) => `to_regclass('${n}') IS NOT NULL`
+  const have = (await client.query(`SELECT
+    ${reg('kv')} AS kv, ${reg('listings')} AS listings, ${reg('enrich')} AS enrich,
+    ${reg('listings_scraped')} AS i_scraped, ${reg('listings_type')} AS i_type, ${reg('listings_block_keys')} AS i_bk,
+    ${reg('listings_url')} AS i_url, ${reg('enrich_updated')} AS i_enrich, ${reg('listings_loc_norm_trgm')} AS i_trgm,
+    ${col('listings', 'block_keys')} AS c_bk, ${col('listings', 'loc_norm')} AS c_loc`)).rows[0] as Record<string, boolean>
+  if (Object.values(have).every(Boolean)) return   // مسیرِ عادیِ هر بوت: هیچ DDL، هیچ قفل
+  // DDL در تراکنشِ کوتاه با lock_timeout: اگر قفل در ۱۰ثانیه نرسید، شکست می‌خورد به‌جای این‌که پشتش صف بسازد.
+  const ddl = async (sql: string, optional = false) => {
+    try {
+      await client.query('BEGIN'); await client.query(`SET LOCAL lock_timeout = '10s'`)
+      await client.query(sql); await client.query('COMMIT')
+    } catch (e) {
+      try { await client.query('ROLLBACK') } catch {}
+      if (!optional) throw e
+      console.error('[db] schema: DDLِ اختیاری انجام نشد (بوتِ بعد دوباره):', String((e as Error)?.message || e).slice(0, 160))
+    }
+  }
+  if (!have.kv) await ddl(`CREATE TABLE IF NOT EXISTS kv (
     key text PRIMARY KEY,
     data jsonb NOT NULL DEFAULT '{}'::jsonb,
     updated_at timestamptz NOT NULL DEFAULT now()
   )`)
   // جدولِ نرمالِ آگهی‌ها (رفعِ دائمیِ گلوگاهِ تک‌بلاب): هر آگهی یک ردیفِ مستقل + ایندکس،
   // تا خواندن هدفمند و نوشتن تک‌ردیفی باشد (نه بازنویسیِ کلِ بلاب زیرِ قفلِ سراسری).
-  await client.query(`CREATE TABLE IF NOT EXISTS listings (
+  if (!have.listings) await ddl(`CREATE TABLE IF NOT EXISTS listings (
     id text PRIMARY KEY,
     scraped_at bigint NOT NULL DEFAULT 0,
     type text,
     status text,
     data jsonb NOT NULL
   )`)
-  await client.query(`CREATE INDEX IF NOT EXISTS listings_scraped ON listings(scraped_at DESC)`)
-  await client.query(`CREATE INDEX IF NOT EXISTS listings_type ON listings(type)`)
-  // SCALE-2M مرحلهٔ A — کلیدهای بلوکه‌کردنِ dedup روی خودِ ردیف (docs/SCALE-2M-DESIGN.md):
-  // تا هم‌ملک‌یابی به‌جای کشیدنِ کلِ جدول به حافظه، فقط ردیف‌های «هم‌بلوک» را با ایندکسِ GIN
-  // بگیرد (block_keys && $1). ستونِ سادهٔ text[] است (نه GENERATED — منطقِ blockKeys در JS است)،
-  // در زمانِ نوشتن از scraper-store پر می‌شود. DDLِ پایه، بدونِ نیاز به extension/superuser.
-  // فاز A فقط می‌سازد و پر می‌کند؛ هیچ مسیرِ خواندنی هنوز از آن استفاده نمی‌کند (رفتار عوض نمی‌شود).
-  await client.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS block_keys text[]`)
-  await client.query(`CREATE INDEX IF NOT EXISTS listings_block_keys ON listings USING gin (block_keys)`)
-  // SCALE-2M مرحلهٔ B — ایندکسِ url: تطبیقِ دقیقِ «همان آگهی دوباره اسکرپ شد» (existingByKey) به‌جای
-  // اسکنِ کلِ جدول، یک lookupِ ایندکس‌دار می‌شود. عبارت‌ایندکسِ پایه، بدونِ نیاز به extension.
-  await client.query(`CREATE INDEX IF NOT EXISTS listings_url ON listings ((data->>'url'))`)
-  // Enrichment deltas, one row per listing.
-  //
-  // The baseline stays in .enrich-data.json, which enrich-store reads synchronously
-  // at boot so its read API can stay synchronous on a hot path. These rows carry
-  // only the changes since that snapshot: writes became one small upsert instead of
-  // restringifying and fsyncing the whole ~52MB document per field (21,555 keys),
-  // and updated_at lets each pm2 instance pull the other instances' results
-  // incrementally instead of re-parsing 52MB whenever the file mtime moved.
-  await client.query(`CREATE TABLE IF NOT EXISTS enrich (
+  if (!have.i_scraped) await ddl(`CREATE INDEX IF NOT EXISTS listings_scraped ON listings(scraped_at DESC)`, true)
+  if (!have.i_type) await ddl(`CREATE INDEX IF NOT EXISTS listings_type ON listings(type)`, true)
+  // SCALE-2M مرحلهٔ A — کلیدهای بلوکه‌کردنِ dedup روی خودِ ردیف (docs/SCALE-2M-DESIGN.md): ستونِ سادهٔ text[]
+  // که در زمانِ نوشتن از scraper-store پر می‌شود + ایندکسِ GIN. (اجباری: نوشتنِ ردیف این ستون را می‌نویسد.)
+  if (!have.c_bk) await ddl(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS block_keys text[]`)
+  if (!have.i_bk) await ddl(`CREATE INDEX IF NOT EXISTS listings_block_keys ON listings USING gin (block_keys)`, true)
+  // SCALE-2M مرحلهٔ B — ایندکسِ url برای تطبیقِ «همان آگهی دوباره اسکرپ شد».
+  if (!have.i_url) await ddl(`CREATE INDEX IF NOT EXISTS listings_url ON listings ((data->>'url'))`, true)
+  // Enrichment deltas, one row per listing (baseline در .enrich-data.json؛ این ردیف‌ها فقط تغییراتِ پس از آن‌اند و
+  // updated_at به هر اینستنس اجازه می‌دهد نتیجهٔ بقیه را افزایشی بکشد).
+  if (!have.enrich) await ddl(`CREATE TABLE IF NOT EXISTS enrich (
     id text PRIMARY KEY,
     data jsonb NOT NULL DEFAULT '{}'::jsonb,
     updated_at timestamptz NOT NULL DEFAULT now()
   )`)
-  await client.query(`CREATE INDEX IF NOT EXISTS enrich_updated ON enrich(updated_at)`)
-  // ستونِ محاسباتیِ محلِ نرمال‌شده + ایندکسِ trigram: فیلترِ محله باید داخلِ دیتابیس اجرا شود،
-  // نه با کشیدنِ چند صد آگهیِ «تازه» به حافظه و فیلترِ درجا. GENERATED یعنی پستگرس خودش
-  // هنگام درج پرش می‌کند، پس هیچ‌کدام از مسیرهای درج تغییر نمی‌خواهد و از هم‌گامی خارج نمی‌شود.
-  // در محیطی که extension نیاز به superuser دارد و در دسترس نیست، خطا بلعیده می‌شود و
-  // listingsByLoc خالی برمی‌گرداند؛ یعنی رفتار به مسیرِ قبلی برمی‌گردد نه به خطا.
-  try {
-    await client.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`)
-    await client.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS loc_norm text GENERATED ALWAYS AS (translate(coalesce(data->>'location',''), chr(1610)||chr(1603)||chr(8204)||chr(8207)||chr(8206)||' ', chr(1740)||chr(1705))) STORED`)
-    await client.query(`CREATE INDEX IF NOT EXISTS listings_loc_norm_trgm ON listings USING gin (loc_norm gin_trgm_ops)`)
-  } catch { /* بدونِ دسترسیِ لازم: مسیرِ قدیمی کار می‌کند */ }
+  if (!have.i_enrich) await ddl(`CREATE INDEX IF NOT EXISTS enrich_updated ON enrich(updated_at)`, true)
+  // ستونِ محاسباتیِ محلِ نرمال‌شده + ایندکسِ trigram (فیلترِ محله داخلِ دیتابیس). بدونِ دسترسیِ extension/superuser
+  // خطا بلعیده می‌شود و listingsByLoc خالی برمی‌گرداند (مسیرِ قبلی).
+  if (!have.c_loc || !have.i_trgm) {
+    await ddl(`CREATE EXTENSION IF NOT EXISTS pg_trgm`, true)
+    if (!have.c_loc) await ddl(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS loc_norm text GENERATED ALWAYS AS (translate(coalesce(data->>'location',''), chr(1610)||chr(1603)||chr(8204)||chr(8207)||chr(8206)||' ', chr(1740)||chr(1705))) STORED`, true)
+    if (!have.i_trgm) await ddl(`CREATE INDEX IF NOT EXISTS listings_loc_norm_trgm ON listings USING gin (loc_norm gin_trgm_ops)`, true)
+  }
 }
 
 /** اجرای یک تابع داخلِ یک تراکنش (BEGIN/COMMIT با rollback خودکار). client خام برای کوئری‌های دلخواه. */
