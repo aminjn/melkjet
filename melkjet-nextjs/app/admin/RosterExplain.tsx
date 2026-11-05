@@ -84,7 +84,9 @@ export function UnnamedExplain({ id }: { id: string }) {
       // فاز ۳۴۶د — تأییدِ نام برای کلِ آژانس: همهٔ آگهی‌های این فهرست که همین نام را در متن دارند هم علامت می‌خورند
       const nt = (t: string) => String(t || '').replace(/[\u0640\u064B-\u065F\u0670\u200D\u200E\u200F]/g, '').replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/\u200c/g, ' ')
       const words = nt(j.name || '').split(/\s+/).filter(Boolean)
-      const has = (t: string) => !!words.length && words.every(w => nt(t).includes(w))
+      // «S H A Y G A N» (حرف‌به‌حرف فاصله‌دار) هم همان نام است — هم‌سو با joinSpacedLetters در سرور.
+      const joinSp = (t: string) => t.replace(/(?:^|(?<=\s))(\p{L})(?:\s+(\p{L}))(?:\s+\p{L})+(?=\s|$)/gu, m => m.replace(/\s+/g, ''))
+      const has = (t: string) => { const x = joinSp(nt(t)).toLowerCase(); return !!words.length && words.every(w => x.includes(w.toLowerCase())) }
       setRows(rs => (rs || []).map(x => x.token === token || (j.name && has(x.text)) ? { ...x, manual: j.name, reason: j.name ? `تأییدشده: «${j.name}» — در همگام‌سازیِ بعد به همین مشاور می‌رود` : 'ادمین گفت این آگهی مشاور ندارد' } : x))
       setMsg(j.name ? `✅ «${j.name}» برای این آژانس تأیید شد — ${fa(j.matched || 1)} آگهیِ این آژانس این نام را در متن دارند و همه به «${j.name}» می‌روند (اگر مشاورِ «${j.name}» از قبل هست، در همان ادغام می‌شوند). ماشین‌لرنینگ هم یاد گرفت. 🔄 همگام‌سازی در صف رفت.` : '✖ ثبت شد: این آگهی مشاور ندارد. 🔄 همگام‌سازی در صف رفت.')
     } catch (e: any) { setMsg(String(e?.message || e)) }

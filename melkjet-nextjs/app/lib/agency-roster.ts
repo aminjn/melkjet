@@ -126,8 +126,21 @@ const isPhoneTok = (t: string) => t.replace(/[۰-۹]/g, d => String('۰۱۲۳۴�
 // به واژه می‌چسباند («اسماعیلی____») و نامِ درستِ AI «در متن نیست» حساب می‌شد (خودروجت فاز ۳۵۲).
 export function textLines(text: string): string[][] {
   return deEmoji(normFa(String(text || ''))).split(/[\n\r]+/)
-    .map(l => l.split(/[^\p{L}\p{N}\p{M}\u200c]+/u).filter(Boolean).map(w => keyOf(w).toLowerCase()).filter(Boolean))
+    .map(l => joinSpacedLetters(l.split(/[^\p{L}\p{N}\p{M}\u200c]+/u).filter(Boolean)).map(w => keyOf(w).toLowerCase()).filter(Boolean))
     .filter(l => l.length)
+}
+// فاز ۳۴۶ح (اسکرین‌شاتِ مالک: «✦✦ S H A Y G A N ✦✦» — AI درست «SHAYGAN» گفت ولی ضدِ توهم ردش کرد، و تأییدِ ادمین هم فقط همان
+// یک آگهی را می‌گرفت؛ باید دونه‌دونه می‌زد) — نامِ «حرف‌به‌حرف فاصله‌دار» (تزئینیِ امضا) یک واژه است. دنباله‌ای از ≥۳ تک‌حرفِ پیاپی
+// به هم چسبانده می‌شود. در متنِ عادی سه تک‌حرفِ پشتِ‌سرِ‌هم پیش نمی‌آید («و» تنهاست)، پس واژه‌های معمولی دست نمی‌خورند.
+export function joinSpacedLetters(words: string[]): string[] {
+  const out: string[] = []
+  for (let i = 0; i < words.length;) {
+    let j = i
+    while (j < words.length && /^\p{L}$/u.test(words[j])) j++
+    if (j - i >= 3) { out.push(words.slice(i, j).join('')); i = j }
+    else { out.push(words[i]); i++ }
+  }
+  return out
 }
 // محلِ رخدادهای نام (به‌صورتِ واژه‌های کامل) در خطوطِ متن.
 function nameOccurrences(nameKeys: string[], lines: string[][]): { line: string[]; i: number; n: number }[] {
